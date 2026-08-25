@@ -1,0 +1,49 @@
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Courier New', Courier, monospace;
+    background-color: #1a1a2e;
+    color: #e0e0e0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+}
+
+#game-area {
+    text-align: center;
+    background-color: #16213e;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    border: 2px solid #0f3460;
+}
+
+#title {
+    color: #e94560;
+    font-size: 1.8rem;
+}
+
+#score {
+    font-size: 1.2rem;
+    margin: 1rem 0;
+}
+
+#click-btn {
+    background-color: #e94560;
+    color: white;
+    border: none;
+    padding: 0.8rem 2rem;
+    font-size: 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: transform 0.1s, background-color 0.2s;
+}
+
+#click-btn:hover {
+    background-color: #c73652;
+}
+
+#click-btn:active {
+    transform: scale(0.95);
+}
