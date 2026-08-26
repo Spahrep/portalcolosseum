@@ -1,0 +1,22 @@
+name: Deploy to GitHub Pages
+on:
+  push:
+    branches: [ main ]
+permissions:
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  url: ${{ github.actor }}-portalcolosseum.github.io
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-pages-artifact@v8
+        with:
+          path: '.'
+      - uses: actions/deploy-pages@v4
