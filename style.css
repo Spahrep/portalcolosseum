@@ -1,49 +1,101 @@
+/* Portal Colosseum Styles */
 body {
-    margin: 0;
-    padding: 0;
-    font-family: 'Courier New', Courier, monospace;
-    background-color: #1a1a2e;
-    color: #e0e0e0;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  font-family: 'Courier New', monospace;
+  background: url('/background.jpg') no-repeat center center fixed;
+  background-size: cover;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  color: #fff;
 }
 
-#game-area {
-    text-align: center;
-    background-color: #16213e;
-    padding: 2rem;
-    border-radius: 12px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    border: 2px solid #0f3460;
+#landing {
+  text-align: center;
 }
 
-#title {
-    color: #e94560;
-    font-size: 1.8rem;
+.logo {
+  max-width: 300px;
+  margin-bottom: 40px;
+  filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
 }
 
-#score {
-    font-size: 1.2rem;
-    margin: 1rem 0;
+.enter-button {
+  display: inline-block;
+  padding: 20px 60px;
+  background: linear-gradient(45deg, #ff6b35, #f79339);
+  color: white;
+  text-decoration: none;
+  font-size: 24px;
+  font-weight: bold;
+  border-radius: 8px;
+  border: 2px solid white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 3px;
 }
 
-#click-btn {
-    background-color: #e94560;
-    color: white;
-    border: none;
-    padding: 0.8rem 2rem;
-    font-size: 1rem;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: transform 0.1s, background-color 0.2s;
+.enter-button:hover {
+  background: linear-gradient(45deg, #ff8c42, #ffb347);
+  transform: scale(1.05);
+  box-shadow: 0 0 30px rgba(255, 107, 53, 0.5);
 }
 
-#click-btn:hover {
-    background-color: #c73652;
+#login-page {
+  text-align: center;
 }
 
-#click-btn:active {
-    transform: scale(0.95);
+.login-form {
+  background: rgba(0, 0, 0, 0.7);
+  padding: 40px;
+  border-radius: 15px;
+  border: 1px solid #ff6b35;
+  backdrop-filter: blur(5px);
+  max-width: 400px;
+  margin: 20px auto;
+}
+
+.login-form h2 {
+  color: #ff6b35;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.login-form input {
+  width: 100%;
+  padding: 12px;
+  margin: 10px 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid #ff6b35;
+  color: white;
+  font-family: inherit;
+  font-size: 16px;
+  border-radius: 5px;
+}
+
+.login-form button {
+  width: 100%;
+  padding: 15px;
+  background: linear-gradient(45deg, #ff6b35, #f79339);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  font-size: 18px;
+  font-family: inherit;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 15px;
+}
+
+.login-form button:hover {
+  background: linear-gradient(45deg, #ff8c42, #ffb347);
+}
+
+.hint {
+  color: #888;
+  font-size: 12px;
+  margin-top: 15px;
 }

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device=device-width, initial-scale=1.0">
+  <title>Portal Colosseum - Login</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="login-page">
+    <img src="/logo.jpg" alt="Portal Colosseum" class="logo">
+    <div class="login-form">
+      <h2>ARENA ACCESS</h2>
+      <form id="loginForm">
+        <input type="text" placeholder="Arena Name" id="playerName" required>
+        <input type="password" placeholder="Enter Code" id="accessCode" required>
+        <button type="submit">ENTER ARENA</button>
+      </form>
+      <p class="hint">Enter any name and code 1234 to enter as spectator</p>
+    </div>
+  </div>
+  <script>
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+      e.preventDefault();
+      const name = document.getElementById('playerName').value;
+      if(name) {
+        // TODO: Real auth later
+        localStorage.setItem('playerName', name);
+        window.location.href = '/game';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Colosseum - Arena</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="game-container">
+    <h1>PORTAL COLOSSEUM</h1>
+    <p>Game area - coming soon!</p>
+    <div id="player-status">
+      <span>Welcome, <span id="player-name">Guest</span></span>
+    </div>
+    <canvas id="game" width="800" height="600"></canvas>
+  </div>
+  <script>
+    // Basic setup for future game canvas
+    const playerName = localStorage.getItem('playerName') || 'Guest';
+    document.getElementById('player-name').textContent = playerName;
+    
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    
+    // Simple placeholder - clear canvas with background
+    ctx.fillStyle = '#1a1a2e';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    // Display placeholder text
+    ctx.fillStyle = '#fff';
+    ctx.font = '30px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Arena Battle Will Begin Soon', canvas.width/2, canvas.height/2);
+    
+    ctx.font = '20px monospace';
+    ctx.fillStyle = '#ff6b3b';
+    ctx.fillText('Player: ' + playerName, canvas.width/2, canvas.height/2 + 50);
+  </script>
+</body>
+</html>
