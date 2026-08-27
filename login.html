@@ -135,13 +135,9 @@
     let supabase;
 
     function initSupabase() {
-      if (!SUPABASE_URL.includes('YOUR-PROJECT-ID')) {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-        // Check if already logged in
-        checkExistingSession();
-      } else {
-        showMessage('Please configure your Supabase keys in login.html first. See SUPABASE_SETUP.md', 'error');
-      }
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      // Check if already logged in
+      checkExistingSession();
     }
 
     async function checkExistingSession() {

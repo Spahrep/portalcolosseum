@@ -50,7 +50,7 @@
     let supabase;
 
     async function initGame() {
-      if (!SUPABASE_URL.includes('YOUR-PROJECT-ID')) {
+      if (SUPABASE_URL) {
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       }
 
