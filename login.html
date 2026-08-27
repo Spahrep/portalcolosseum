@@ -24,10 +24,17 @@
   <link rel="stylesheet" href="/style.css">
   <!--
     Supabase JS Client
-    We use the UMD build from unpkg which sets `window.supabase`
-    with a `createClient` method for frontend auth operations.
+    Using ES Module import from esm.sh CDN - modern @supabase/supabase-js
+    doesn't ship UMD builds, so we use the ES module version with import.
+    This gives us access to createClient() for auth and database operations.
   -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script type="module">
+    // Import createClient from Supabase's ES module CDN
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    // Make it globally available as window.supabase.createClient
+    // so the inline script below can use it
+    window.supabase = { createClient: createClient };
+  </script>
   <style>
     /*
       LOGIN PAGE STYLES

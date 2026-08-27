@@ -22,10 +22,14 @@
   <title>Portal Colosseum - Arena</title>
   <link rel="stylesheet" href="/style.css">
   <!--
-    Supabase JS Client (UMD build from unpkg)
-    Provides createClient() for auth and database access.
+    Supabase JS Client
+    Using ES Module import from esm.sh CDN - modern @supabase/supabase-js
+    doesn't ship UMD builds, so we use the ES module version with import.
   -->
-  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+  <script type="module">
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    window.supabase = { createClient: createClient };
+  </script>
   <style>
     /*
       GAME PAGE STYLES
