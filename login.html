@@ -2,33 +2,233 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal Colosseum - Login</title>
   <link rel="stylesheet" href="/style.css">
+  <!-- Supabase JS Client (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .auth-container {
+      max-width: 420px;
+      margin: 60px auto;
+      padding: 2rem;
+      background: rgba(20, 20, 35, 0.95);
+      border: 2px solid #ff6b3b;
+      border-radius: 12px;
+    }
+    .auth-tabs {
+      display: flex;
+      margin-bottom: 1.5rem;
+      border-bottom: 1px solid #333;
+    }
+    .auth-tab {
+      flex: 1;
+      padding: 0.75rem;
+      text-align: center;
+      cursor: pointer;
+      color: #aaa;
+      border-bottom: 3px solid transparent;
+    }
+    .auth-tab.active {
+      color: #ff6b3b;
+      border-bottom-color: #ff6b3b;
+      font-weight: bold;
+    }
+    .oauth-buttons {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .oauth-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 12px;
+      background: #2a2a40;
+      color: white;
+      border: 1px solid #444;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .oauth-btn:hover {
+      background: #3a3a50;
+      border-color: #ff6b3b;
+    }
+    .form-group {
+      margin-bottom: 1rem;
+    }
+    .form-group input {
+      width: 100%;
+      padding: 12px;
+      background: #1a1a2e;
+      border: 1px solid #444;
+      border-radius: 6px;
+      color: white;
+      font-size: 1rem;
+    }
+    .form-group input:focus {
+      outline: none;
+      border-color: #ff6b3b;
+    }
+    .auth-message {
+      margin-top: 1rem;
+      padding: 0.75rem;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      text-align: center;
+    }
+    .success { background: #1a3a1a; color: #4ade80; }
+    .error { background: #3a1a1a; color: #f87171; }
+    .hint {
+      font-size: 0.8rem;
+      color: #666;
+      text-align: center;
+      margin-top: 1rem;
+    }
+  </style>
 </head>
 <body>
   <div id="login-page">
     <img src="/logo.jpg" alt="Portal Colosseum" class="logo">
-    <div class="login-form">
-      <h2>ARENA ACCESS</h2>
-      <form id="loginForm">
-        <input type="text" placeholder="Arena Name" id="playerName" required>
-        <input type="password" placeholder="Enter Code" id="accessCode" required>
-        <button type="submit">ENTER ARENA</button>
-      </form>
-      <p class="hint">Enter any name and code 1234 to enter as spectator</p>
+
+    <div class="auth-container">
+      <h2 style="text-align: center; margin-bottom: 1.5rem; color: #ff6b3b;">ARENA ACCESS</h2>
+
+      <!-- OAuth Section -->
+      <div class="oauth-buttons">
+        <button class="oauth-btn" onclick="signInWithProvider('google')">
+          <span>🔵</span> Continue with Google
+        </button>
+        <button class="oauth-btn" onclick="signInWithProvider('github')">
+          <span>🐙</span> Continue with GitHub
+        </button>
+      </div>
+
+      <div style="text-align: center; color: #666; margin: 1rem 0;">— or —</div>
+
+      <!-- Email / Magic Link -->
+      <div id="email-section">
+        <div class="form-group">
+          <input type="email" id="email" placeholder="your@email.com" required>
+        </div>
+        <button onclick="signInWithEmail()" style="width: 100%; padding: 14px; background: #ff6b3b; color: white; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer;">
+          Send Magic Link
+        </button>
+        <p class="hint">We'll email you a secure login link (no password needed)</p>
+      </div>
+
+      <div id="auth-message" class="auth-message" style="display: none;"></div>
     </div>
+
+    <p class="hint" style="max-width: 420px; margin: 0 auto;">New to the arena? Just use the buttons above — accounts are created automatically.</p>
   </div>
+
   <script>
-    document.getElementById('loginForm').addEventListener('submit', function(e) {
-      e.preventDefault();
-      const name = document.getElementById('playerName').value;
-      if(name) {
-        // TODO: Real auth later
-        localStorage.setItem('playerName', name);
+    // === SUPABASE CONFIG ===
+    const SUPABASE_URL = 'https://tfwwapxewlxiclufpcct.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_bQf1CYXUPQm-TC5hbo1RNA_FkwKzglK';
+
+    let supabase;
+
+    function initSupabase() {
+      if (!SUPABASE_URL.includes('YOUR-PROJECT-ID')) {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        // Check if already logged in
+        checkExistingSession();
+      } else {
+        showMessage('Please configure your Supabase keys in login.html first. See SUPABASE_SETUP.md', 'error');
+      }
+    }
+
+    async function checkExistingSession() {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        // Already logged in
+        localStorage.setItem('playerName', session.user.email || session.user.user_metadata?.full_name || 'Gladiator');
+        localStorage.setItem('supabaseSession', JSON.stringify(session));
         window.location.href = '/game';
       }
-    });
+    }
+
+    function showMessage(text, type = 'success') {
+      const msgEl = document.getElementById('auth-message');
+      msgEl.textContent = text;
+      msgEl.className = `auth-message ${type}`;
+      msgEl.style.display = 'block';
+
+      if (type === 'success') {
+        setTimeout(() => {
+          msgEl.style.display = 'none';
+        }, 4000);
+      }
+    }
+
+    async function signInWithProvider(provider) {
+      if (!supabase) return showMessage('Supabase not initialized', 'error');
+
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: provider,
+        options: {
+          redirectTo: window.location.origin + '/game'
+        }
+      });
+
+      if (error) {
+        showMessage(error.message, 'error');
+      }
+    }
+
+    async function signInWithEmail() {
+      if (!supabase) return showMessage('Supabase not initialized', 'error');
+
+      const email = document.getElementById('email').value.trim();
+      if (!email) return showMessage('Please enter your email', 'error');
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email: email,
+        options: {
+          emailRedirectTo: window.location.origin + '/game'
+        }
+      });
+
+      if (error) {
+        showMessage(error.message, 'error');
+      } else {
+        showMessage(`Magic link sent to ${email}! Check your inbox.`, 'success');
+      }
+    }
+
+    // Handle OAuth / magic link callback
+    async function handleAuthCallback() {
+      if (!supabase) return;
+
+      const { data: { session }, error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
+
+      if (session) {
+        localStorage.setItem('playerName', session.user.email || session.user.user_metadata?.full_name || 'Gladiator');
+        localStorage.setItem('supabaseSession', JSON.stringify(session));
+        window.location.href = '/game';
+      } else if (error) {
+        showMessage('Login failed: ' + error.message, 'error');
+      }
+    }
+
+    // Initialize everything
+    window.onload = function() {
+      initSupabase();
+
+      // Check for auth callback (after OAuth redirect or magic link)
+      if (window.location.hash.includes('access_token')) {
+        handleAuthCallback();
+      }
+    };
+
+    // Expose for debugging
+    window.debugSupabase = () => supabase;
   </script>
 </body>
 </html>
