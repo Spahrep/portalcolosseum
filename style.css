@@ -1,27 +1,45 @@
-/* Portal Colosseum Styles */
+/*
+  Portal Colosseum Stylesheet
+  ===========================
+  Theme: Dark orange/brown fantasy arena
+  Colors:
+    - Primary: #ff6b3b (orange - buttons, accents)
+    - Primary hover: #ff8c42 (lighter orange)
+    - Background dark: #101f2e (deep blue)
+    - Background darker: #1a1a2e (darkest blue)
+    - Form background: rgba(0,0,0,0.7) (semi-transparent black)
+
+  Font: 'Courier New', monospace (terminal/retro gaming feel)
+*/
+
+/* Global body styles - applies to all pages */
 body {
   margin: 0;
   padding: 0;
   font-family: 'Courier New', monospace;
-  background: #101f48ff;
+  background: #101f48ff;           /* Deep blue background */
   background-size: cover;
-  min-height: 100vh;
+  min-height: 100vh;                /* Full viewport height */
   display: flex;
-  justify-content: center;
-  align-items: center;
-  color: #fff;
+  justify-content: center;          /* Center content horizontally */
+  align-items: center;              /* Center content vertically */
+  color: #fff;                      /* Default white text */
 }
 
+/* Landing page container (index.html) */
 #landing {
   text-align: center;
 }
 
+/* Logo images - used on landing and login pages */
 .logo {
-  max-width: 500px; width: auto;
+  max-width: 500px;
+  width: auto;
   margin-bottom: 40px;
   filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
 }
 
+/* "Enter Realm" button on the landing page */
 .enter-button {
   display: inline-block;
   padding: 20px 60px;
@@ -44,10 +62,12 @@ body {
   box-shadow: 0 0 30px rgba(255, 107, 53, 0.5);
 }
 
+/* Login page container */
 #login-page {
   text-align: center;
 }
 
+/* Legacy login form styles (kept for backward compatibility) */
 .login-form {
   background: rgba(0, 0, 0, 0.7);
   padding: 40px;
@@ -94,6 +114,7 @@ body {
   background: linear-gradient(45deg, #ff8c42, #ffb347);
 }
 
+/* Hint text (small gray text) */
 .hint {
   color: #888;
   font-size: 12px;

@@ -1,17 +1,43 @@
 <!DOCTYPE html>
+<!--
+  Portal Colosseum - Arena Game Page
+  ===================================
+  This is the main game page. It displays the player's name,
+  a canvas for the arena battle, and a logout button.
+
+  Authentication Flow:
+  1. Check for active Supabase session on load
+  2. If no session, redirect back to login page
+  3. If session exists, display player info from the session
+  4. Canvas placeholder shows "Arena Battle Will Begin Soon"
+
+  Session Storage:
+  - playerName: stored in localStorage for display
+  - supabaseSession: full session object for re-authentication
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal Colosseum - Arena</title>
   <link rel="stylesheet" href="/style.css">
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <!--
+    Supabase JS Client (UMD build from unpkg)
+    Provides createClient() for auth and database access.
+  -->
+  <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
   <style>
+    /*
+      GAME PAGE STYLES
+      ================
+      Player status bar appears above the game canvas with a dark semi-transparent
+      background. The logout button is styled in red to indicate its destructive action.
+    */
     #player-status {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      background: rgba(30,30,50,0.8);
+      background: rgba(30, 30, 50, 0.8);
       padding: 8px 16px;
       border-radius: 8px;
       margin-bottom: 1rem;
@@ -24,6 +50,7 @@
       border-radius: 6px;
       cursor: pointer;
       font-size: 0.9rem;
+      transition: background 0.2s;
     }
     .logout-btn:hover {
       background: #5c2a2a;
@@ -31,76 +58,128 @@
   </style>
 </head>
 <body>
+  <!-- Main game container -->
   <div id="game-container">
     <h1>PORTAL COLOSSEUM</h1>
 
+    <!-- Player status bar: shows welcome message and logout button -->
     <div id="player-status">
       <span>Welcome, <span id="player-name">Gladiator</span></span>
       <button class="logout-btn" onclick="logout()">Logout</button>
     </div>
 
+    <!-- Game canvas: 800x600 arena where battles will be rendered -->
     <canvas id="game" width="800" height="600"></canvas>
   </div>
 
   <script>
-    // === SUPABASE CONFIG ===
+    /*
+      GAME PAGE SCRIPTS
+      =================
+      Handles session verification, player info display, and the game canvas.
+    */
+
+    // === SUPABASE CONFIGURATION ===
     const SUPABASE_URL = 'https://tfwwapxewlxiclufpcct.supabase.co';
     const SUPABASE_ANON_KEY = 'sb_publishable_bQf1CYXUPQm-TC5hbo1RNA_FkwKzglK';
 
+    // Supabase client instance (initialized in initGame())
     let supabase;
 
+    /**
+     * Initialize the game page.
+     * 1. Creates the Supabase client
+     * 2. Checks for an active session (redirects to login if none)
+     * 3. Displays the player's name
+     * 4. Draws the placeholder canvas content
+     */
     async function initGame() {
+      // Initialize Supabase client
       if (SUPABASE_URL) {
         supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       }
 
-      // Try to get authenticated user
+      // Try to retrieve the authenticated user's session
       let playerName = 'Guest';
 
       if (supabase) {
-        const { data: { session } } = await supabase.auth.getSession();
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
 
-        if (session) {
-          const user = session.user;
-          playerName = user.email || user.user_metadata?.full_name || user.user_metadata?.name || 'Gladiator';
-          localStorage.setItem('playerName', playerName);
-          localStorage.setItem('supabaseSession', JSON.stringify(session));
-        } else {
-          // Fallback to localStorage (for legacy or guest)
+          if (session) {
+            // User is authenticated - extract display name from session
+            const user = session.user;
+            playerName = user.email ||
+                        user.user_metadata?.full_name ||
+                        user.user_metadata?.name ||
+                        'Gladiator';
+            // Persist session data for potential page reloads
+            localStorage.setItem('playerName', playerName);
+            localStorage.setItem('supabaseSession', JSON.stringify(session));
+          } else {
+            // No active session - fall back to localStorage (legacy/guest mode)
+            playerName = localStorage.getItem('playerName') || 'Guest';
+            // Redirect to login if no session or stored player name
+            // (Only redirect if we have no session AND no stored name)
+            if (playerName === 'Guest') {
+              window.location.href = '/login';
+              return;
+            }
+          }
+        } catch (error) {
+          console.error('Session check failed:', error);
+          // Fall back to localStorage on error
           playerName = localStorage.getItem('playerName') || 'Guest';
         }
       } else {
+        // Supabase not initialized - use localStorage
         playerName = localStorage.getItem('playerName') || 'Guest';
       }
 
+      // Display the player's name on the status bar
       document.getElementById('player-name').textContent = playerName;
 
-      // Initialize canvas
+      // Initialize the game canvas with placeholder content
       const canvas = document.getElementById('game');
       const ctx = canvas.getContext('2d');
 
+      // Fill canvas with dark blue background
       ctx.fillStyle = '#1a1a2e';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // Draw placeholder title text
       ctx.fillStyle = '#fff';
       ctx.font = '30px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Arena Battle Will Begin Soon', canvas.width/2, canvas.height/2);
+      ctx.fillText('Arena Battle Will Begin Soon', canvas.width / 2, canvas.height / 2);
 
+      // Draw player name subtitle
       ctx.font = '20px monospace';
       ctx.fillStyle = '#ff6b3b';
-      ctx.fillText('Player: ' + playerName, canvas.width/2, canvas.height/2 + 50);
+      ctx.fillText('Player: ' + playerName, canvas.width / 2, canvas.height / 2 + 50);
     }
 
+    /**
+     * Log out the current user.
+     * Clears both the Supabase session and local storage,
+     * then redirects back to the login page.
+     */
     async function logout() {
       if (supabase) {
-        await supabase.auth.signOut();
+        try {
+          await supabase.auth.signOut();
+        } catch (error) {
+          console.error('Logout error:', error);
+        }
       }
+      // Clear locally stored player info
       localStorage.removeItem('playerName');
       localStorage.removeItem('supabaseSession');
+      // Redirect to login page
       window.location.href = '/login';
     }
 
+    // Initialize the game when the page loads
     window.onload = initGame;
   </script>
 </body>

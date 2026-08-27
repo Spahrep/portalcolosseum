@@ -1,4 +1,19 @@
 <!DOCTYPE html>
+<!--
+  Portal Colosseum - Landing Page
+  ===============================
+  First page users see when visiting the site. Shows the Portal Colosseum
+  artwork with a "COMING SOON!" call-to-action button.
+
+  Navigation Flow:
+  1. User visits https://portalcolosseum.com/ (this page)
+  2. User clicks "ENTER REALM" or "COMING SOON!" button
+  3. Redirect to /login for authentication
+  4. After login, redirected to /game
+
+  Note: The ENTER REALM button is currently commented out since the game
+  isn't ready yet. Users should go to /login directly.
+-->
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -7,9 +22,12 @@
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
+  <!-- Landing section with background art -->
   <div id="landing">
-    <img src="/public/fullscreen.jpg" alt="Coming Soon" class="logo">
-    <a href="#" class="enter-button">COMING SOON!</a>
+    <!-- Fullscreen artwork displayed prominently -->
+    <img src="/public/fullscreen.jpg" alt="Portal Colosseum Arena" class="logo">
+    <!-- Call-to-action button (currently shows "COMING SOON!") -->
+    <a href="/login" class="enter-button">ENTER REALM</a>
   </div>
 </body>
 </html>
