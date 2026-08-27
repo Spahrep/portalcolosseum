@@ -8,13 +8,46 @@
   <!-- Supabase JS Client (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
+    /* Full-screen background image */
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background-image: url('/public/logo.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    
+    /* Semi-transparent overlay to ensure content readability */
+    .login-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(15, 22, 55, 0.7);
+      z-index: 0;
+      backdrop-filter: blur(2px);
+    }
+    
     .auth-container {
+      position: relative;
+      z-index: 1;
       max-width: 420px;
       margin: 60px auto;
       padding: 2rem;
-      background: rgba(20, 20, 35, 0.95);
-      border: 2px solid #ff6b3b;
-      border-radius: 12px;
+      background: rgba(15, 22, 55, 0.85);
+      border: 2px solid rgba(255, 107, 59, 0.8);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
     }
     .auth-tabs {
       display: flex;
@@ -92,8 +125,8 @@
   </style>
 </head>
 <body>
+  <div class="login-overlay"></div>
   <div id="login-page">
-    <img src="/public/logo.jpg" alt="Portal Colosseum" class="logo">
 
     <div class="auth-container">
       <h2 style="text-align: center; margin-bottom: 1.5rem; color: #ff6b3b;">ARENA ACCESS</h2>
@@ -124,7 +157,7 @@
       <div id="auth-message" class="auth-message" style="display: none;"></div>
     </div>
 
-    <p class="hint" style="max-width: 420px; margin: 0 auto;">New to the arena? Just use the buttons above — accounts are created automatically.</p>
+    <div style="text-align: center; color: #ccc; margin-top: 1.5rem; font-size: 0.85rem;">New to the arena? Just use the buttons above — accounts are created automatically.</div>
   </div>
 
   <script>
