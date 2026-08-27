@@ -21,3 +21,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+.credentials
+.env
+.env.local
+.vercel/output
