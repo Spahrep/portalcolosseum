@@ -3,7 +3,7 @@ body {
   margin: 0;
   padding: 0;
   font-family: 'Courier New', monospace;
-  background: url('/background.jpg') no-repeat center center fixed;
+  background: #101f48ff;
   background-size: cover;
   min-height: 100vh;
   display: flex;
@@ -17,7 +17,7 @@ body {
 }
 
 .logo {
-  max-width: 90%; width: 100%; max-width: 800px;
+  max-width: 500px; width: auto;
   margin-bottom: 40px;
   filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.3));
 }
