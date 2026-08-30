@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Colosseum • Battle Test (DW4 Style)</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;display=swap');
+
+    body {
+      margin: 0;
+      padding: 30px 20px;
+      background: #000;
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+      color: #e0e0ff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      image-rendering: pixelated;
+    }
+
+    .dw4-window {
+      width: 720px;
+      background: #000;
+      border: 6px solid #4a90d9;
+      box-shadow: 0 0 0 3px #000, inset 0 0 0 3px #1a3a6e;
+    }
+
+    .top-status {
+      background: #0a1a2e;
+      border-bottom: 4px solid #4a90d9;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+
+    .player-block {
+      display: flex;
+      gap: 30px;
+    }
+
+    .stat-block {
+      min-width: 150px;
+    }
+
+    .name {
+      color: #ffcc66;
+      margin-bottom: 3px;
+    }
+
+    .hp-mp {
+      font-size: 10px;
+      line-height: 1.35;
+    }
+
+    /* Equipment panel */
+    .equip-panel {
+      background: #0a1a2e;
+      border: 3px solid #4a90d9;
+      padding: 8px 12px;
+      font-size: 10px;
+      min-width: 210px;
+    }
+
+    .equip-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 2px 0;
+    }
+
+    .equip-label {
+      color: #88aaff;
+    }
+
+    .arena {
+      position: relative;
+      height: 230px;
+      background: #000;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .enemy-sprites {
+      display: flex;
+      gap: 36px;
+      align-items: flex-end;
+    }
+
+    .enemy-sprites img {
+      width: 130px;
+      height: auto;
+      image-rendering: crisp-edges;
+      filter: drop-shadow(4px 6px 0 #000);
+    }
+
+    .enemy-label {
+      position: absolute;
+      bottom: 10px;
+      right: 24px;
+      background: #0a1a2e;
+      border: 3px solid #4a90d9;
+      padding: 5px 11px;
+      font-size: 10px;
+    }
+
+    .bottom-section {
+      display: flex;
+      border-top: 4px solid #4a90d9;
+    }
+
+    .command-box {
+      flex: 1;
+      background: #0a1a2e;
+      padding: 13px 18px;
+      border-right: 4px solid #4a90d9;
+    }
+
+    .command-box .title {
+      color: #ffaa66;
+      margin-bottom: 6px;
+      font-size: 10px;
+    }
+
+    .command-list {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px 18px;
+      font-size: 12px;
+    }
+
+    .command {
+      padding: 2px 5px;
+      cursor: pointer;
+    }
+
+    .command:hover {
+      background: #1a3a6e;
+      color: #ffcc66;
+    }
+
+    .enemy-list {
+      flex: 1;
+      background: #0a1a2e;
+      padding: 13px 16px;
+      font-size: 11px;
+    }
+
+    .enemy-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 3px 0;
+      padding: 1px 4px;
+    }
+
+    .footer {
+      background: #0a1a2e;
+      text-align: center;
+      padding: 5px;
+      font-size: 9px;
+      color: #5577aa;
+      border-top: 3px solid #4a90d9;
+    }
+  </style>
+</head>
+<body>
+  <div class="dw4-window">
+    <!-- Top Status + Equipment -->
+    <div class="top-status">
+      <div class="player-block">
+        <!-- Player Stats -->
+        <div class="stat-block">
+          <div class="name">SPAHREP</div>
+          <div class="hp-mp">
+            HP 142 / 164<br>
+            MP  38 /  52
+          </div>
+        </div>
+
+        <!-- Equipment -->
+        <div class="equip-panel">
+          <div style="color:#ffaa66; margin-bottom:4px; font-size:10px;">EQUIPMENT</div>
+          
+          <div class="equip-row">
+            <span class="equip-label">L. Hand</span>
+            <span>Iron Sword</span>
+          </div>
+          <div class="equip-row">
+            <span class="equip-label">R. Hand</span>
+            <span>Steel Dagger</span>
+          </div>
+          <div class="equip-row">
+            <span class="equip-label">Belt Loop</span>
+            <span>Bronze Axe</span>
+          </div>
+          <div class="equip-row">
+            <span class="equip-label">Pouch</span>
+            <span>Herb, Bomb</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="text-align:right; font-size:10px; color:#6688aa; line-height:1.3;">
+        PORTAL COLOSSEUM<br>
+        <span style="color:#ffaa66;">ARENA BATTLE</span>
+      </div>
+    </div>
+
+    <!-- Arena with Enemy Glimmerlings -->
+    <div class="arena">
+      <div class="enemy-sprites">
+        <img src="glimmer-attack.jpg" alt="Glimmerling Enemy">
+        <img src="glimmer-normal.jpg" alt="Glimmerling Enemy" style="transform: scaleX(-1);">
+        <img src="glimmer-sad.png" alt="Glimmerling Enemy" style="width:100px;">
+      </div>
+
+      <div class="enemy-label">
+        <div><strong>GLIMMERLING</strong> x3</div>
+        <div style="color:#ffaa66; font-size:9px;">LV. 7-9 • HOSTILE</div>
+      </div>
+    </div>
+
+    <!-- Bottom: Commands + Enemy HP -->
+    <div class="bottom-section">
+      <div class="command-box">
+        <div class="title">COMMAND</div>
+        <div class="command-list">
+          <div class="command" onclick="useCommand(this)">ATTACK</div>
+          <div class="command" onclick="useCommand(this)">SPELL</div>
+          <div class="command" onclick="useCommand(this)">PARRY</div>
+          <div class="command" onclick="useCommand(this)">ITEM</div>
+          <div class="command" onclick="useCommand(this)">RUN</div>
+          <div class="command" onclick="useCommand(this)">TAUNT</div>
+        </div>
+      </div>
+
+      <div class="enemy-list">
+        <div style="color:#ffaa66; margin-bottom:5px;">ENEMIES</div>
+        <div class="enemy-row"><span>Glimmerling A</span><span style="color:#66ff99;">87</span></div>
+        <div class="enemy-row"><span>Glimmerling B</span><span style="color:#66ff99;">94</span></div>
+        <div class="enemy-row"><span>Glimmerling C</span><span style="color:#ffaa66;">41</span></div>
+      </div>
+    </div>
+
+    <div class="footer">
+      DRAGON WARRIOR IV STYLE • GLIMMERLINGS AS ENEMIES • LEFT/RIGHT HAND + BELT GEAR
+    </div>
+  </div>
+
+  <script>
+    function useCommand(el) {
+      const orig = el.style.background;
+      el.style.background = '#ff6b3b';
+      el.style.color = '#000';
+      setTimeout(() => {
+        el.style.background = orig;
+        el.style.color = '';
+      }, 320);
+    }
+
+    document.querySelector('.arena').addEventListener('click', function(e) {
+      if (e.target.tagName === 'IMG') return;
+      const sprites = document.querySelectorAll('.enemy-sprites img');
+      sprites.forEach((s, i) => {
+        setTimeout(() => {
+          s.style.transition = 'transform 0.15s';
+          s.style.transform = i === 0 ? 'translateX(14px)' : 'translateX(-14px)';
+          setTimeout(() => s.style.transform = '', 200);
+        }, i * 70);
+      });
+    });
+
+    console.log('%c[Portal Colosseum] Updated DW4-style test GUI with equipment panel.', 'color:#5577aa');
+  </script>
+</body>
+</html>
