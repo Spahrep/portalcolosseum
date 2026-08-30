@@ -25,3 +25,8 @@ Thumbs.db
 .env
 .env.local
 .vercel/output
+
+# Supabase local development
+supabase/.branches/
+supabase/.temp/
+supabase/.gitignore
