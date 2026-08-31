@@ -19,7 +19,7 @@
   <link rel="stylesheet" href="/style.css">
   <!-- Supabase JS Client (ES Module) -->
   <script type="module">
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
     window.supabase = { createClient: createClient };
   </script>
 
@@ -34,10 +34,10 @@
 
     <!-- OAuth providers -->
     <div class="oauth-buttons">
-      <button class="oauth-btn" onclick="signInWithProvider('google')">
+      <button class="oauth-btn" id="google-signup-btn">
         <span>🔵</span> Sign up with Google
       </button>
-      <button class="oauth-btn" onclick="signInWithProvider('github')">
+      <button class="oauth-btn" id="github-signup-btn">
         <span>🐙</span> Sign up with GitHub
       </button>
     </div>
@@ -55,7 +55,7 @@
       <div class="form-group">
         <input type="password" id="password" placeholder="Create a password" required minlength="6">
       </div>
-      <button onclick="signUpWithEmail()" style="width: 100%; padding: 14px; background: #ff6b3b; color: white; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer;">
+      <button id="email-signup-btn" style="width: 100%; padding: 14px; background: #ff6b3b; color: white; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer;">
         Create Account
       </button>
     </div>
@@ -152,12 +152,13 @@
       // Store username in localStorage for profile creation after auth
       localStorage.setItem('pendingUsername', username);
 
-      // Create auth user via Supabase
+      // Create auth user via Supabase, passing username as user metadata
       const { error } = await supabase.auth.signUp({
         email: email,
         password: password,
         options: {
-          emailRedirectTo: window.location.origin + '/signup-callback'
+          emailRedirectTo: window.location.origin + '/game',
+          data: { username: username }
         }
       });
 
@@ -168,6 +169,11 @@
         showMessage('Account created! Check your email to verify and complete signup.', 'success');
       }
     }
+
+    // --- Event listener bindings (no inline onclick handlers) ---
+    document.getElementById('google-signup-btn').addEventListener('click', () => signInWithProvider('google'));
+    document.getElementById('github-signup-btn').addEventListener('click', () => signInWithProvider('github'));
+    document.getElementById('email-signup-btn').addEventListener('click', signUpWithEmail);
 
     window.onload = function() {
       initSupabase();

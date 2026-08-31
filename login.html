@@ -30,7 +30,7 @@
   -->
   <script type="module">
     // Import createClient from Supabase's ES module CDN
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
     // Make it globally available as window.supabase.createClient
     // so the inline script below can use it
     window.supabase = { createClient: createClient };
@@ -185,10 +185,10 @@
 
       <!-- OAuth providers: Google and GitHub one-click sign-in -->
       <div class="oauth-buttons">
-        <button class="oauth-btn" onclick="signInWithProvider('google')">
+        <button class="oauth-btn" id="google-login-btn">
           <span>🔵</span> Continue with Google
         </button>
-        <button class="oauth-btn" onclick="signInWithProvider('github')">
+        <button class="oauth-btn" id="github-login-btn">
           <span>🐙</span> Continue with GitHub
         </button>
       </div>
@@ -204,15 +204,15 @@
         <div class="form-group">
           <input type="password" id="password" placeholder="Your password" required minlength="6">
         </div>
-        <button onclick="signInWithEmail()" style="width: 100%; padding: 14px; background: #ff6b3b; color: white; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer;">
+        <button id="email-login-btn" style="width: 100%; padding: 14px; background: #ff6b3b; color: white; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer;">
           Log In
         </button>
-        <p class="hint">Forgot password? <a href="#" onclick="sendResetEmail()" style="color: #ff6b3b;">Reset it</a></p>
+        <p class="hint">Forgot password? <a href="#" id="reset-link" style="color: #ff6b3b;">Reset it</a></p>
       </div>
 
       <div style="text-align: center; color: #666; margin: 1rem 0;">— or send magic link —</div>
       <div style="text-align: center;">
-        <button onclick="sendMagicLink()" style="padding: 10px 20px; background: transparent; color: #aaa; border: 1px solid #444; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
+        <button id="magic-link-btn" style="padding: 10px 20px; background: transparent; color: #aaa; border: 1px solid #444; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
           Send Magic Link
         </button>
       </div>
@@ -421,7 +421,7 @@
         return showMessage('Please enter your email and password', 'error');
       }
 
-      console.log('Attempting login for:', email);
+      // console.log removed to avoid logging PII (email address)
 
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
@@ -433,7 +433,7 @@
           console.error('Login error:', error);
           showMessage(`Login failed: ${error.message}`, 'error');
         } else {
-          console.log('Login successful:', data.user.email);
+          console.log('Login successful');
           localStorage.setItem('playerName', data.user.email);
           // Security: Do NOT persist session to localStorage (XSS risk)
           window.location.href = '/game';
@@ -494,6 +494,13 @@
       }
     }
 
+    // --- Event listener bindings (no inline onclick handlers) ---
+    document.getElementById('google-login-btn').addEventListener('click', () => signInWithProvider('google'));
+    document.getElementById('github-login-btn').addEventListener('click', () => signInWithProvider('github'));
+    document.getElementById('email-login-btn').addEventListener('click', signInWithEmail);
+    document.getElementById('reset-link').addEventListener('click', (e) => { e.preventDefault(); sendResetEmail(); });
+    document.getElementById('magic-link-btn').addEventListener('click', sendMagicLink);
+
     /**
      * Initialize the page when fully loaded.
      * Sets up Supabase, checks for existing sessions, and handles auth callbacks.
@@ -504,8 +511,7 @@
 
       // Check for OAuth/magic link callback (PKCE: code in URL query params)
       // With detectSessionInUrl: true, the Supabase client auto-exchanges the code
-      if (window.location.search.includes('code=') || window.location.hash.includes('access_token')) {
-        console.log('Processing auth callback...');
+      if (window.location.search.includes('code=')) {
         handleAuthCallback();
       }
     };

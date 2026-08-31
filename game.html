@@ -27,7 +27,7 @@
     doesn't ship UMD builds, so we use the ES module version with import.
   -->
   <script type="module">
-    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+    import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
     window.supabase = { createClient: createClient };
   </script>
 
@@ -73,7 +73,7 @@
     <!-- Player status bar: shows welcome message and logout button -->
     <div id="player-status">
       <span>Welcome, <span id="player-name">Gladiator</span></span>
-      <button class="logout-btn" onclick="logout()">Logout</button>
+      <button class="logout-btn" id="logout-btn">Logout</button>
     </div>
 
     <!-- Game canvas: 800x600 arena where battles will be rendered -->
@@ -118,6 +118,9 @@
           }
         });
       }
+
+      // --- Event listener bindings (no inline onclick handlers) ---
+      document.getElementById('logout-btn')?.addEventListener('click', logout);
 
       // Fail-closed auth check: must have a valid session or redirect to login
       // Security: We do NOT fall back to localStorage for auth decisions.

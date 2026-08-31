@@ -52,11 +52,13 @@ security definer
 set search_path = public
 as $$
 begin
-  -- Use email as default username if not provided (for OAuth users)
+  -- Use username from user metadata if provided (set via signUp data: { username }),
+  -- otherwise fall back to preferred_username, then email prefix
   insert into public.profiles (id, username)
   values (
     NEW.id,
     COALESCE(
+      (NEW.raw_user_meta_data->>'username')::varchar(32),
       (NEW.raw_user_meta_data->>'preferred_username')::varchar(32),
       split_part(NEW.email, '@', 1)::varchar(32)
     )
