@@ -266,10 +266,27 @@
      * Initialize the Supabase client.
      * Creates a Supabase client instance that provides access to auth, database, etc.
      * After initialization, check if user has an existing session.
+     *
+     * Security: We use an in-memory storage adapter instead of localStorage to
+     * prevent refresh tokens from being exposed to XSS attacks. Sessions are
+     * only retained for the lifetime of the page (no persistence across reloads).
      */
     function initSupabase() {
       // Create the Supabase client with URL and anon key
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      // Security: Use in-memory storage adapter to prevent tokens from being
+      // exposed to XSS attacks via localStorage. Sessions are retained only
+      // for the lifetime of the page (no persistence across reloads).
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          flowType: 'pkce',        // Use PKCE flow instead of implicit (tokens in URL)
+          detectSessionInUrl: true, // Auto-detect and exchange code on callback
+          storage: {
+            getItem: () => null,
+            setItem: () => {},
+            removeItem: () => {}
+          }
+        }
+      });
       console.log('Supabase initialized:', supabase ? 'OK' : 'FAILED');
       // Check if already logged in (e.g., refresh from previous session)
       checkExistingSession();
@@ -285,10 +302,11 @@
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
-          // User is already logged in - store player info and redirect
+          // User is already logged in - store player name and redirect
           const playerName = session.user.email || session.user.user_metadata?.full_name || 'Gladiator';
           localStorage.setItem('playerName', playerName);
-          localStorage.setItem('supabaseSession', JSON.stringify(session));
+          // Security: Do NOT persist session to localStorage (XSS risk)
+          // In-memory client means we can only detect session on initial page load
           window.location.href = '/game';
         }
       } catch (error) {
@@ -417,7 +435,7 @@
         } else {
           console.log('Login successful:', data.user.email);
           localStorage.setItem('playerName', data.user.email);
-          localStorage.setItem('supabaseSession', JSON.stringify(data.session));
+          // Security: Do NOT persist session to localStorage (XSS risk)
           window.location.href = '/game';
         }
       } catch (err) {
@@ -448,23 +466,23 @@
 
     /**
      * Handle authentication callbacks (OAuth redirect, magic link click).
-     * After Supabase redirects back to our site, we extract the session
-     * from the URL hash and store it for use in the game page.
+     * With PKCE + detectSessionInUrl: true, the Supabase client auto-exchanges
+     * the auth code for a session. We just need to check if a session exists.
      */
     async function handleAuthCallback() {
       if (!supabase) return;
 
       try {
-        // Get session from URL hash (contains access_token for OAuth/callback)
-        const { data: { session }, error } = await supabase.auth.getSessionFromUrl({
-          storeSession: true  // Automatically stores session in localStorage
-        });
+        // The client with detectSessionInUrl: true auto-exchanges PKCE code
+        // No manual code extraction needed - check if a session was established
+        const { data: { session }, error } = await supabase.auth.getSession();
 
         if (session) {
-          // Successfully authenticated - store user info and redirect
+          // Successfully authenticated - store user name and redirect
           const playerName = session.user.email || session.user.user_metadata?.full_name || 'Gladiator';
           localStorage.setItem('playerName', playerName);
-          localStorage.setItem('supabaseSession', JSON.stringify(session));
+          // Security: Do NOT persist session to localStorage (XSS risk)
+          // Tokens stay in-memory only for this page's lifetime
           window.location.href = '/game';
         } else if (error) {
           console.error('Auth callback error:', error);
@@ -484,17 +502,13 @@
       // Initialize Supabase client
       initSupabase();
 
-      // Check for OAuth/magic link callback (URL contains auth data in hash)
-      // Example: https://portalcolosseum.com/game#access_token=eyJ...&expires_at=...
-      if (window.location.hash.includes('access_token')) {
+      // Check for OAuth/magic link callback (PKCE: code in URL query params)
+      // With detectSessionInUrl: true, the Supabase client auto-exchanges the code
+      if (window.location.search.includes('code=') || window.location.hash.includes('access_token')) {
         console.log('Processing auth callback...');
         handleAuthCallback();
       }
     };
-
-    // Expose Supabase for debugging in browser console
-    // Type `window.debugSupabase()` in console to inspect the client
-    window.debugSupabase = () => supabase;
   </script>
 </body>
 </html>

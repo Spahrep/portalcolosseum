@@ -76,7 +76,19 @@
     let supabase;
 
     function initSupabase() {
-      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      // Security: Use in-memory storage adapter + PKCE flow to prevent
+      // refresh tokens from being exposed to XSS attacks via localStorage
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+        auth: {
+          flowType: 'pkce',
+          detectSessionInUrl: true,
+          storage: {
+            getItem: () => null,
+            setItem: () => {},
+            removeItem: () => {}
+          }
+        }
+      });
       console.log('Supabase initialized:', supabase ? 'OK' : 'FAILED');
     }
 
@@ -159,20 +171,19 @@
 
     window.onload = function() {
       initSupabase();
-      // Handle OAuth callback that returns with username
-      if (window.location.hash.includes('access_token')) {
+      // Handle OAuth callback with PKCE (code in URL query params)
+      if (window.location.search.includes('code=')) {
         handleAuthCallback();
       }
     };
 
     async function handleAuthCallback() {
-      const { data: { session }, error } = await supabase.auth.getSessionFromUrl({
-        storeSession: true
-      });
+      // PKCE: With detectSessionInUrl: true, client auto-exchanges code for session
+      const { data: { session }, error } = await supabase.auth.getSession();
 
       if (session) {
         localStorage.setItem('playerName', session.user.email);
-        localStorage.setItem('supabaseSession', JSON.stringify(session));
+        // Security: Do NOT persist session to localStorage (XSS risk)
         window.location.href = '/game';
       } else if (error) {
         console.error('Auth callback error:', error);

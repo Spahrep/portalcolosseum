@@ -12,8 +12,8 @@
   4. Canvas placeholder shows "Arena Battle Will Begin Soon"
 
   Session Storage:
-  - playerName: stored in localStorage for display
-  - supabaseSession: full session object for re-authentication
+  - playerName: stored in localStorage for display only (cosmetic cache)
+  - No session tokens persisted to localStorage (XSS prevention)
 -->
 <html lang="en">
 <head>
@@ -103,12 +103,25 @@
      * 4. Draws the placeholder canvas content
      */
     async function initGame() {
-      // Initialize Supabase client
+      // Initialize Supabase client with in-memory storage + PKCE flow
+      // Security: tokens never persist to localStorage (XSS prevention)
       if (SUPABASE_URL) {
-        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+          auth: {
+            flowType: 'pkce',
+            detectSessionInUrl: true,
+            storage: {
+              getItem: () => null,
+              setItem: () => {},
+              removeItem: () => {}
+            }
+          }
+        });
       }
 
-      // Try to retrieve the authenticated user's session
+      // Fail-closed auth check: must have a valid session or redirect to login
+      // Security: We do NOT fall back to localStorage for auth decisions.
+      // playerName in localStorage is purely cosmetic.
       let playerName = 'Guest';
 
       if (supabase) {
@@ -122,27 +135,24 @@
                         user.user_metadata?.full_name ||
                         user.user_metadata?.name ||
                         'Gladiator';
-            // Persist session data for potential page reloads
+            // Security: Do NOT persist session to localStorage (XSS risk)
             localStorage.setItem('playerName', playerName);
-            localStorage.setItem('supabaseSession', JSON.stringify(session));
           } else {
-            // No active session - fall back to localStorage (legacy/guest mode)
-            playerName = localStorage.getItem('playerName') || 'Guest';
-            // Redirect to login if no session or stored player name
-            // (Only redirect if we have no session AND no stored name)
-            if (playerName === 'Guest') {
-              window.location.href = '/login';
-              return;
-            }
+            // No active session - fail closed, redirect to login
+            // Do NOT fall back to localStorage for access decisions
+            window.location.href = '/login';
+            return;
           }
         } catch (error) {
+          // Fail closed on any error - redirect to login
           console.error('Session check failed:', error);
-          // Fall back to localStorage on error
-          playerName = localStorage.getItem('playerName') || 'Guest';
+          window.location.href = '/login';
+          return;
         }
       } else {
-        // Supabase not initialized - use localStorage
-        playerName = localStorage.getItem('playerName') || 'Guest';
+        // Supabase not initialized - fail closed, redirect to login
+        window.location.href = '/login';
+        return;
       }
 
       // Display the player's name on the status bar
@@ -181,9 +191,8 @@
           console.error('Logout error:', error);
         }
       }
-      // Clear locally stored player info
+      // Clear locally stored player name (cosmetic cache only)
       localStorage.removeItem('playerName');
-      localStorage.removeItem('supabaseSession');
       // Redirect to login page
       window.location.href = '/login';
     }

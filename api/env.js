@@ -18,8 +18,9 @@ module.exports = (req, res) => {
   // Set content type to JavaScript
   res.setHeader('Content-Type', 'application/javascript');
 
-  // Set cache to prevent sensitive values from being cached too long
-  res.setHeader('Cache-Control', 'public, max-age=0, s-maxage=0, must-revalidate');
+  // Security: no-store prevents intermediate CDNs from caching different
+  // preview deployments' config envelopes (each preview has distinct keys)
+  res.setHeader('Cache-Control', 'no-store, max-age=0, must-revalidate');
 
   // Build the JS that populates window.ENV with values from Vercel env vars
   // The anon key is designed for client-side use (limited permissions per RLS)
