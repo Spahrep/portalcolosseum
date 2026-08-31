@@ -218,16 +218,29 @@
     </div>
 
     <!-- SIGNUP SECTION - prominent call to action below the login form -->
-    <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid rgba(255, 107, 59, 0.3);">
+    <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 2px solid rgba(255, 107, 59, 0.4);">
       <div style="text-align: center;">
-        <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 0.5rem;">New to the Colosseum?</p>
-        <a href="/signup" style="display: inline-block; padding: 12px 30px; background: #ff6b3b; color: white; border: none; border-radius: 8px; font-size: 1.05rem; text-decoration: none; cursor: pointer; transition: all 0.2s; border: 1px solid #ff6b3b;">
-          Create Your Account
+        <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: bold;">— New to the Colosseum? —</p>
+        <a href="/signup" style="display: inline-block; padding: 14px 40px; background: linear-gradient(45deg, #ff6b35, #f79339); color: white; border: 2px solid #ff6b3b; border-radius: 10px; font-size: 1.15rem; text-decoration: none; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);">
+          ▶ Create Your Account
         </a>
-        <p style="color: #888; font-size: 0.8rem; margin-top: 0.5rem;">Email/password • Google • GitHub</p>
+        <p style="color: #888; font-size: 0.85rem; margin-top: 0.75rem;">
+          Email/password • Google • GitHub
+        </p>
       </div>
     </div>
   </div>
+
+  <!-- Add some bottom padding to ensure signup section isn't cut off -->
+  <style>
+    body {
+      min-height: auto;
+      padding: 20px 0;
+    }
+    .auth-container {
+      margin-bottom: 40px;
+    }
+  </style>
 
   <script>
     /*
