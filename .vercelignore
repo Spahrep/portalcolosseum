@@ -1,0 +1,2 @@
+# Exclude design docs and notes from Vercel deployments
+docs/
