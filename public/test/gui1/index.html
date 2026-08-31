@@ -197,6 +197,22 @@
       color: #ffcc66;
     }
 
+    .herb-suboption {
+      padding: 3px 6px;
+      cursor: pointer;
+      color: #aaffaa;
+    }
+    .herb-suboption:hover {
+      background: #1a3a6e;
+      color: #ffcc66;
+    }
+    .herb-disabled {
+      text-decoration: line-through;
+      opacity: 0.5;
+      pointer-events: none;
+      color: #6688aa;
+    }
+
     .command.selected {
       color: #ffcc66;
       background: #1a3a6e;
@@ -401,12 +417,19 @@
     let inTargetMode = false;
     let currentTargetIndex = 0;
     let confirmButtonsVisible = false;
+    let herbThrown = false;
+    let pendingHerbThrow = false;
 
     function getAllCommands() {
       return Array.from(document.querySelectorAll('.command[data-name]'));
     }
 
     function selectCommand(el) {
+      // Prevent selecting disabled herb
+      if (el.classList.contains('herb-disabled') || (el.dataset.name === 'Herb' && herbThrown)) {
+        return;
+      }
+
       document.querySelectorAll('.command').forEach(cmd => {
         cmd.classList.remove('selected');
         if (cmd.dataset.name) {
@@ -422,9 +445,48 @@
         currentRow = parseInt(el.dataset.row);
 
         const footer = document.getElementById('footer-info');
-        const info = el.dataset.info;
         const name = el.dataset.name;
-        footer.innerHTML = `<strong>${name}</strong> — ${info}`;
+
+        if (name === 'Herb' && !herbThrown) {
+          // Special Herb flow: show Consume / Throw options
+          footer.innerHTML = `
+            <strong>Herb</strong> — Choose action:<br>
+            <span class="herb-suboption" onclick="handleHerbAction('consume', this)">Consume</span> &nbsp;|&nbsp;
+            <span class="herb-suboption" onclick="handleHerbAction('throw', this)">Throw</span>
+          `;
+          // keep the [x] on Herb
+        } else {
+          const info = el.dataset.info;
+          footer.innerHTML = `<strong>${name}</strong> — ${info}`;
+        }
+      }
+    }
+
+    function handleHerbAction(action, el) {
+      const footer = document.getElementById('footer-info');
+      const herbEl = document.querySelector('.command[data-name="Herb"]');
+
+      if (action === 'consume') {
+        footer.innerHTML = 'Action Confirmed! (demo) - You consumed the herb and restored some health.';
+        // reset selection highlight
+        if (herbEl) {
+          herbEl.classList.remove('selected');
+          herbEl.innerHTML = herbEl.innerHTML.replace('[x]', '[ ]');
+        }
+        // clear after short delay for demo
+        setTimeout(() => {
+          footer.innerHTML = 'Select an attack to see details';
+        }, 2500);
+      } else if (action === 'throw') {
+        pendingHerbThrow = true;
+        // proceed to target selection like normal Enter on command
+        if (herbEl) {
+          herbEl.classList.remove('selected');
+        }
+        inTargetMode = true;
+        currentTargetIndex = 0;
+        selectMonster(0);
+        footer.innerHTML = 'Select monster to throw at, then Enter';
       }
     }
 
@@ -506,9 +568,31 @@
       confirmButtonsVisible = false;
       const footer = document.getElementById('footer-info');
       if (go) {
+        if (pendingHerbThrow) {
+          footer.innerHTML = 'Action Confirmed! (demo) - Monster ate the herb and restored some health.';
+          // mark herb as thrown/used
+          const herbEl = document.querySelector('.command[data-name="Herb"]');
+          if (herbEl) {
+            herbEl.classList.add('herb-disabled');
+            herbEl.innerHTML = herbEl.innerHTML.replace('[x]', '[-]').replace('Herb', '<s>Herb</s>');
+            herbEl.onclick = null; // prevent further clicks
+          }
+          herbThrown = true;
+          pendingHerbThrow = false;
+          inTargetMode = false;
+          // clear monster highlights
+          document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));
+          document.querySelectorAll('.monster-wrapper').forEach(w => w.classList.remove('selected'));
+          document.querySelectorAll('.monster-marker').forEach(m => m.innerHTML = '[ ]');
+          setTimeout(() => {
+            footer.innerHTML = 'Select an attack to see details';
+          }, 2500);
+          return;
+        }
         footer.innerHTML = 'Action confirmed! (demo)';
       } else {
         footer.innerHTML = 'Action cancelled. Select command again.';
+        pendingHerbThrow = false;
         // reset to command mode
         inTargetMode = false;
         document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));

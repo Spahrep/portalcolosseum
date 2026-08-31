@@ -30,6 +30,10 @@
     import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
     window.supabase = { createClient: createClient };
   </script>
+
+  <!-- Environment configuration - loaded before application scripts -->
+  <script src="/api/env.js"></script>
+
   <style>
     /*
       GAME PAGE STYLES
@@ -84,8 +88,9 @@
     */
 
     // === SUPABASE CONFIGURATION ===
-    const SUPABASE_URL = 'https://tfwwapxewlxiclufpcct.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_bQf1CYXUPQm-TC5hbo1RNA_FkwKzglK';
+    // Config is loaded from /api/env.js (served by Vercel serverless function)
+    const SUPABASE_URL = window.ENV.SUPABASE_URL;
+    const SUPABASE_ANON_KEY = window.ENV.SUPABASE_ANON_KEY;
 
     // Supabase client instance (initialized in initGame())
     let supabase;
