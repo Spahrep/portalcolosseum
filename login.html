@@ -5,7 +5,6 @@
   This page handles user authentication via Supabase. Users can log in using:
   - Google OAuth (one-click sign-in)
   - GitHub OAuth (one-click sign-in)
-  - Email magic link (passwordless authentication)
 
   Authentication Flow:
   1. Supabase client initialized on page load
@@ -205,29 +204,20 @@
           Log In
         </button>
         <p class="hint">Forgot password? <a href="#" id="reset-link" style="color: #ff6b3b;">Reset it</a></p>
-      </div>
-
-      <div style="text-align: center; color: #666; margin: 1rem 0;">— or send magic link —</div>
-      <div style="text-align: center;">
-        <button id="magic-link-btn" style="padding: 10px 20px; background: transparent; color: #aaa; border: 1px solid #444; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
-          Send Magic Link
-        </button>
-      </div>
-
       <!-- Auth message display area (success/error feedback) -->
       <div id="auth-message" class="auth-message" style="display: none;"></div>
-    </div>
 
-    <!-- SIGNUP SECTION - prominent call to action below the login form -->
-    <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 2px solid rgba(255, 107, 59, 0.4);">
-      <div style="text-align: center;">
-        <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: bold;">— New to the Colosseum? —</p>
-        <a href="/signup" style="display: inline-block; padding: 14px 40px; background: linear-gradient(45deg, #ff6b35, #f79339); color: white; border: 2px solid #ff6b3b; border-radius: 10px; font-size: 1.15rem; text-decoration: none; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);">
-          ▶ Create Your Account
-        </a>
-        <p style="color: #888; font-size: 0.85rem; margin-top: 0.75rem;">
-          Email/password • Google • GitHub
-        </p>
+      <!-- SIGNUP SECTION - prominent call to action -->
+      <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 2px solid rgba(255, 107, 59, 0.4);">
+        <div style="text-align: center;">
+          <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 0.5rem; font-weight: bold;">— New to the Colosseum? —</p>
+          <a href="/signup" style="display: inline-block; padding: 14px 40px; background: linear-gradient(45deg, #ff6b35, #f79339); color: white; border: 2px solid #ff6b3b; border-radius: 10px; font-size: 1.15rem; text-decoration: none; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);">
+            ▶ Create Your Account
+          </a>
+          <p style="color: #888; font-size: 0.85rem; margin-top: 0.75rem;">
+            Email/password • Google • GitHub
+          </p>
+        </div>
       </div>
     </div>
   </div>
@@ -248,7 +238,6 @@
       SUPABASE AUTHENTICATION SCRIPT
       ==============================
       Handles all user authentication including OAuth (Google/GitHub)
-      and email magic link authentication.
     */
 
     // === SUPABASE CONFIGURATION ===
@@ -366,43 +355,6 @@
     }
 
     /**
-     * Send a magic link to the user's email for passwordless authentication.
-     * The user opens their email and clicks the link to sign in.
-     */
-    async function sendMagicLink() {
-      if (!supabase) {
-        console.error('Supabase not initialized');
-        return showMessage('Authentication service not available. Please refresh the page.', 'error');
-      }
-
-      const email = document.getElementById('email').value.trim();
-      if (!email) {
-        return showMessage('Please enter your email address', 'error');
-      }
-
-      // console.log removed to avoid logging PII (email address)
-
-      try {
-        const { error } = await supabase.auth.signInWithOtp({
-          email: email,
-          options: {
-            emailRedirectTo: window.location.origin + '/game',
-          }
-        });
-
-        if (error) {
-          console.error('Magic link error:', error);
-          showMessage(`Failed to send magic link: ${error.message}`, 'error');
-        } else {
-          showMessage(`Magic link sent to ${email}! Check your inbox.`, 'success');
-        }
-      } catch (err) {
-        console.error('Magic link exception:', err);
-        showMessage(`Error: ${err.message}`, 'error');
-      }
-    }
-
-    /**
      * Sign in with email and password.
      */
     async function signInWithEmail() {
@@ -462,7 +414,7 @@
     }
 
     /**
-     * Handle authentication callbacks (OAuth redirect, magic link click).
+     * Handle authentication callbacks (OAuth redirect).
      * With PKCE + detectSessionInUrl: true, the Supabase client auto-exchanges
      * the auth code for a session. We just need to check if a session exists.
      */
@@ -503,7 +455,6 @@
     document.getElementById('github-login-btn').addEventListener('click', () => signInWithProvider('github'));
     document.getElementById('email-login-btn').addEventListener('click', signInWithEmail);
     document.getElementById('reset-link').addEventListener('click', (e) => { e.preventDefault(); sendResetEmail(); });
-    document.getElementById('magic-link-btn').addEventListener('click', sendMagicLink);
 
     /**
      * Initialize the page when fully loaded.
@@ -513,7 +464,7 @@
       // Initialize Supabase client
       initSupabase();
 
-      // Check for OAuth/magic link callback (PKCE: code in URL query params)
+      // Check for OAuth callback (PKCE: code in URL query params)
       // With detectSessionInUrl: true, the Supabase client auto-exchanges the code
       if (window.location.search.includes('code=')) {
         handleAuthCallback();
