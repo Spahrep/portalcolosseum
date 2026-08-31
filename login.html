@@ -192,15 +192,25 @@
       <!-- Divider between OAuth and email methods -->
       <div style="text-align: center; color: #666; margin: 1rem 0;">— or —</div>
 
-      <!-- Email / Magic Link authentication section -->
+      <!-- Email / Password login section -->
       <div id="email-section">
         <div class="form-group">
           <input type="email" id="email" placeholder="your@email.com" required>
         </div>
+        <div class="form-group">
+          <input type="password" id="password" placeholder="Your password" required minlength="6">
+        </div>
         <button onclick="signInWithEmail()" style="width: 100%; padding: 14px; background: #ff6b3b; color: white; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer;">
+          Log In
+        </button>
+        <p class="hint">Forgot password? <a href="#" onclick="sendResetEmail()" style="color: #ff6b3b;">Reset it</a></p>
+      </div>
+
+      <div style="text-align: center; color: #666; margin: 1rem 0;">— or send magic link —</div>
+      <div style="text-align: center;">
+        <button onclick="sendMagicLink()" style="padding: 10px 20px; background: transparent; color: #aaa; border: 1px solid #444; border-radius: 6px; cursor: pointer; font-size: 0.9rem;">
           Send Magic Link
         </button>
-        <p class="hint">We'll email you a secure login link (no password needed)</p>
       </div>
 
       <!-- Auth message display area (success/error feedback) -->
@@ -208,7 +218,9 @@
     </div>
 
     <!-- Hint text below the form -->
-    <div style="text-align: center; color: #ccc; margin-top: 1.5rem; font-size: 0.85rem;">New to the arena? Just use the buttons above — accounts are created automatically.</div>
+    <div style="text-align: center; color: #ccc; margin-top: 1.5rem; font-size: 0.85rem;">
+      Don't have an account? <a href="/signup" style="color: #ff6b3b; text-decoration: none;">Create one</a>
+    </div>
   </div>
 
   <script>
@@ -319,9 +331,8 @@
     /**
      * Send a magic link to the user's email for passwordless authentication.
      * The user opens their email and clicks the link to sign in.
-     * No passwords required - accounts are created automatically.
      */
-    async function signInWithEmail() {
+    async function sendMagicLink() {
       if (!supabase) {
         console.error('Supabase not initialized');
         return showMessage('Authentication service not available. Please refresh the page.', 'error');
@@ -338,7 +349,6 @@
         const { error } = await supabase.auth.signInWithOtp({
           email: email,
           options: {
-            // Where to redirect after the user clicks the magic link
             emailRedirectTo: window.location.origin + '/game',
           }
         });
@@ -352,6 +362,65 @@
       } catch (err) {
         console.error('Magic link exception:', err);
         showMessage(`Error: ${err.message}`, 'error');
+      }
+    }
+
+    /**
+     * Sign in with email and password.
+     */
+    async function signInWithEmail() {
+      if (!supabase) {
+        console.error('Supabase not initialized');
+        return showMessage('Authentication service not available. Please refresh the page.', 'error');
+      }
+
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) {
+        return showMessage('Please enter your email and password', 'error');
+      }
+
+      console.log('Attempting login for:', email);
+
+      try {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: email,
+          password: password,
+        });
+
+        if (error) {
+          console.error('Login error:', error);
+          showMessage(`Login failed: ${error.message}`, 'error');
+        } else {
+          console.log('Login successful:', data.user.email);
+          localStorage.setItem('playerName', data.user.email);
+          localStorage.setItem('supabaseSession', JSON.stringify(data.session));
+          window.location.href = '/game';
+        }
+      } catch (err) {
+        console.error('Login exception:', err);
+        showMessage(`Error: ${err.message}`, 'error');
+      }
+    }
+
+    /**
+     * Send password reset email.
+     */
+    async function sendResetEmail() {
+      const email = document.getElementById('email').value.trim();
+      if (!email) {
+        return showMessage('Please enter your email address', 'error');
+      }
+
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin + '/reset-password',
+      });
+
+      if (error) {
+        showMessage(`Failed to send reset email: ${error.message}`, 'error');
+      } else {
+        showMessage(`Reset instructions sent to ${email}!`, 'success');
       }
     }
 

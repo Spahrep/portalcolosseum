@@ -2,8 +2,16 @@
   "version": 2,
   "routes": [
     {
+      "src": "/",
+      "dest": "/index.html"
+    },
+    {
       "src": "/login",
       "dest": "/login.html"
+    },
+    {
+      "src": "/signup",
+      "dest": "/signup.html"
     },
     {
       "src": "/game",
