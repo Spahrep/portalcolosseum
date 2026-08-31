@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Portal Colosseum • Battle Test (DW4 Style)</title>
+  <title>Portal Colosseum • Battle Test</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;display=swap');
 
@@ -51,59 +51,97 @@
     }
 
     .hp-mp {
-      font-size: 10px;
+      font-size: 11px;
       line-height: 1.35;
     }
 
     .equip-panel {
-      background: #0a1a2e;
-      border: 3px solid #4a90d9;
-      padding: 8px 12px;
       font-size: 10px;
-      min-width: 210px;
+      min-width: 170px;
     }
 
     .equip-row {
       display: flex;
       justify-content: space-between;
       margin: 2px 0;
+      cursor: pointer;
+    }
+
+    .equip-row:hover {
+      background: #1a3a6e;
+      color: #ffcc66;
     }
 
     .equip-label {
-      color: #88aaff;
+      color: #6688aa;
+      margin-right: 8px;
     }
 
     .arena {
+      background: #0a1a2e;
+      padding: 18px;
+      text-align: center;
       position: relative;
-      height: 230px;
-      background: #000;
-      padding: 16px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
+      min-height: 210px;
     }
 
     .enemy-sprites {
       display: flex;
-      gap: 36px;
-      align-items: flex-end;
+      justify-content: center;
+      gap: 30px;
+      margin-bottom: 12px;
     }
 
     .enemy-sprites img {
-      width: 130px;
-      height: auto;
-      image-rendering: crisp-edges;
-      filter: drop-shadow(4px 6px 0 #000);
+      image-rendering: pixelated;
+      max-height: 110px;
     }
 
     .enemy-label {
-      position: absolute;
-      bottom: 10px;
-      right: 24px;
+      font-size: 12px;
+    }
+
+    .tic-bar {
       background: #0a1a2e;
-      border: 3px solid #4a90d9;
-      padding: 5px 11px;
-      font-size: 10px;
+      border-top: 4px solid #4a90d9;
+      padding: 8px 0 6px;
+      font-size: 11px;
+      width: 100%;
+    }
+
+    .tic-row {
+      display: flex;
+      font-family: monospace;
+      white-space: pre;
+      line-height: 1;
+      padding: 0 14px;
+    }
+
+    .tic-labels {
+      width: 50px;
+      color: #88aaff;
+      font-size: 9px;
+      flex-shrink: 0;
+    }
+
+    .tic-track {
+      flex: 1;
+      color: #66ff99;
+    }
+
+    .tic-positions {
+      color: #ff5555;
+      margin-bottom: 0;
+    }
+
+    .tic-scale {
+      position: relative;
+      height: 14px;
+      font-size: 9px;
+      color: #5577aa;
+      padding: 4px 14px 0;
+      border-top: 1px solid #334466;
+      margin-top: 4px;
     }
 
     .bottom-section {
@@ -114,31 +152,50 @@
     .command-box {
       flex: 1;
       background: #0a1a2e;
-      padding: 13px 18px;
+      padding: 10px 14px;
       border-right: 4px solid #4a90d9;
+      position: relative;
     }
 
-    .command-box .title {
+    .command-box:last-child {
+      border-right: none;
+    }
+
+    .hand-header {
       color: #ffaa66;
-      margin-bottom: 6px;
       font-size: 10px;
+      margin-bottom: 2px;
+    }
+
+    .weapon-name {
+      color: #88ccff;
+      font-size: 10px;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #334466;
     }
 
     .command-list {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 3px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
       font-size: 12px;
     }
 
     .command {
-      padding: 2px 5px;
+      padding: 3px 6px;
       cursor: pointer;
+      position: relative;
     }
 
     .command:hover {
       background: #1a3a6e;
       color: #ffcc66;
+    }
+
+    .command.selected {
+      color: #ffcc66;
+      background: #1a3a6e;
     }
 
     .enemy-list {
@@ -158,10 +215,65 @@
     .footer {
       background: #0a1a2e;
       text-align: center;
-      padding: 5px;
-      font-size: 9px;
-      color: #5577aa;
+      padding: 8px 16px;
+      font-size: 10px;
+      color: #aaccff;
       border-top: 3px solid #4a90d9;
+      min-height: 22px;
+    }
+
+    .equip-highlight {
+      animation: equipFlash 0.6s ease;
+    }
+
+    @keyframes equipFlash {
+      0% { background: #ffaa66; color: #000; }
+      100% { background: transparent; color: #e0e0ff; }
+    }
+
+    .monster-target {
+      cursor: pointer;
+      padding: 2px 4px;
+      border: 2px solid transparent;
+    }
+    .monster-target.selected {
+      border-color: #ffcc66;
+      background: #1a3a6e;
+      color: #ffcc66;
+    }
+    .monster-target:hover {
+      background: #1a3a6e;
+    }
+
+    .monster-wrapper {
+      transition: all 0.1s ease;
+    }
+    .monster-wrapper.selected {
+      filter: brightness(1.2);
+    }
+    .monster-wrapper.selected .monster-marker {
+      color: #ffcc66;
+      font-weight: bold;
+    }
+
+    .confirm-buttons {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      margin-top: 8px;
+    }
+    .confirm-btn {
+      font-family: 'Press Start 2P', 'Courier New', monospace;
+      font-size: 11px;
+      padding: 4px 14px;
+      border: 3px solid #4a90d9;
+      background: #0a1a2e;
+      color: #e0e0ff;
+      cursor: pointer;
+    }
+    .confirm-btn:hover, .confirm-btn.selected {
+      background: #1a3a6e;
+      color: #ffcc66;
     }
   </style>
 </head>
@@ -173,29 +285,20 @@
         <div class="stat-block">
           <div class="name">SPAHREP</div>
           <div class="hp-mp">
-            HP 142 / 164<br>
-            MP  38 /  52
+            HP 142 / 164
           </div>
         </div>
 
-        <div class="equip-panel">
-          <div style="color:#ffaa66; margin-bottom:4px; font-size:10px;">EQUIPMENT</div>
-          
-          <div class="equip-row">
-            <span class="equip-label">L. Hand</span>
-            <span>Iron Sword</span>
+        <div class="monster-panel" style="min-width: 220px; font-size:10px;">
+          <div style="color:#ffaa66; margin-bottom:3px; font-size:10px;">MONSTERS</div>
+          <div class="monster-target" data-target="0" style="margin:4px 0; text-align:left; padding-left:4px;" onclick="selectMonster(this)">
+            <span style="color:#88aaff;">A</span> - Glimmerling - <span style="color:#66ff99;">Full</span>
           </div>
-          <div class="equip-row">
-            <span class="equip-label">R. Hand</span>
-            <span>Steel Dagger</span>
+          <div class="monster-target" data-target="1" style="margin:4px 0; text-align:left; padding-left:4px;" onclick="selectMonster(this)">
+            <span style="color:#88aaff;">B</span> - Giant Rat - <span style="color:#ffcc66;">Injured</span>
           </div>
-          <div class="equip-row">
-            <span class="equip-label">Belt Loop</span>
-            <span>Bronze Axe</span>
-          </div>
-          <div class="equip-row">
-            <span class="equip-label">Pouch</span>
-            <span>Herb, Bomb</span>
+          <div class="monster-target" data-target="2" style="margin:4px 0; text-align:left; padding-left:4px;" onclick="selectMonster(this)">
+            <span style="color:#88aaff;">C</span> - Glimmerling - <span style="color:#ff6666;">Battered</span>
           </div>
         </div>
       </div>
@@ -209,53 +312,340 @@
     <!-- Arena with Enemy Glimmerlings -->
     <div class="arena">
       <div class="enemy-sprites">
-        <img src="glimmer-attack.jpg" alt="Glimmerling Enemy">
-        <img src="glimmer-normal.jpg" alt="Glimmerling Enemy" style="transform: scaleX(-1);">
-        <img src="glimmer-sad.png" alt="Glimmerling Enemy" style="width:100px;">
-      </div>
-
-      <div class="enemy-label">
-        <div><strong>GLIMMERLING</strong> x3</div>
-        <div style="color:#ffaa66; font-size:9px;">LV. 7-9 • HOSTILE</div>
+        <div class="monster-wrapper" data-target="0" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;" onclick="selectMonster(0)">
+          <div style="font-size:12px; margin-bottom:2px;">A</div>
+          <img src="glimmer-attack.jpg" alt="Glimmerling Enemy">
+          <div class="monster-marker" data-target="0" style="font-size:11px; margin-top:4px; cursor:pointer;" onclick="event.stopImmediatePropagation(); toggleMonster(0);">[ ]</div>
+        </div>
+        <div class="monster-wrapper" data-target="1" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;" onclick="selectMonster(1)">
+          <div style="font-size:12px; margin-bottom:2px;">B</div>
+          <img src="giantRat1.JPG" alt="Giant Rat Enemy" style="transform: scaleX(-1);">
+          <div class="monster-marker" data-target="1" style="font-size:11px; margin-top:4px; cursor:pointer;" onclick="event.stopImmediatePropagation(); toggleMonster(1);">[ ]</div>
+        </div>
+        <div class="monster-wrapper" data-target="2" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;" onclick="selectMonster(2)">
+          <div style="font-size:12px; margin-bottom:2px;">C</div>
+          <img src="glimmer-sad.png" alt="Glimmerling Enemy" style="width:100px;">
+          <div class="monster-marker" data-target="2" style="font-size:11px; margin-top:4px; cursor:pointer;" onclick="event.stopImmediatePropagation(); toggleMonster(2);">[ ]</div>
+        </div>
       </div>
     </div>
 
-    <!-- Bottom: Commands + Enemy HP -->
+    <!-- Tic Bar (Turn Timeline) - Extended Past 100 -->
+    <div class="tic-bar">
+      <div class="tic-row">
+        <div class="tic-labels"></div>
+        <div class="tic-track tic-positions">*      A      B      C      D      E      +</div>
+      </div>
+      <div class="tic-row">
+        <div class="tic-labels">TIC</div>
+        <div class="tic-track">^==|======|======|======|======|======|======|======|================================================</div>
+      </div>
+      <div class="tic-scale">
+        <div style="position:absolute; left:0;">0</div>
+        <div style="position:absolute; left:33%;">50</div>
+        <div style="position:absolute; left:90%;">100</div>
+        <div style="position:absolute; left:93%; top:8px; color:#ffcc66;">+</div>
+      </div>
+    </div>
+
+    <!-- Bottom: L.Hand + R.Hand Commands -->
     <div class="bottom-section">
+      <!-- Left Hand -->
       <div class="command-box">
-        <div class="title">COMMAND</div>
+        <div class="hand-header">L.HAND</div>
+        <div class="weapon-name" id="left-weapon-name">Iron Sword</div>
+        
         <div class="command-list">
-          <div class="command" onclick="useCommand(this)">ATTACK</div>
-          <div class="command" onclick="useCommand(this)">SPELL</div>
-          <div class="command" onclick="useCommand(this)">PARRY</div>
-          <div class="command" onclick="useCommand(this)">ITEM</div>
-          <div class="command" onclick="useCommand(this)">RUN</div>
-          <div class="command" onclick="useCommand(this)">TAUNT</div>
+          <div class="command" data-col="0" data-row="0" data-name="Quick Slash" data-info="Cast: 3-4 | CD: 1 | Phys/Slash | Dmg 12-22" onclick="selectCommand(this)">[ ] Quick Slash</div>
+          <div class="command" data-col="0" data-row="1" data-name="Slash" data-info="Cast: 5-6 | CD: 2 | Phys/Slash | Dmg 18-30" onclick="selectCommand(this)">[ ] Slash</div>
+          <div class="command" data-col="0" data-row="2" style="color:#446688; cursor:default;">----</div>
         </div>
       </div>
 
+      <!-- Right Hand -->
+      <div class="command-box">
+        <div class="hand-header">R.HAND</div>
+        <div class="weapon-name" id="right-weapon-name">Arcane Wand</div>
+        
+        <div class="command-list">
+          <div class="command" data-col="1" data-row="0" data-name="Fireball 1" data-info="Cast: 8-10 | CD: 4 | Magic/Fire | Dmg 22-38" onclick="selectCommand(this)">[ ] Fireball 1</div>
+          <div class="command" data-col="1" data-row="1" data-name="Ice Bolt 2" data-info="Cast: 10-12 | CD: 3-5 | Magic/Ice | Dmg 20-35" onclick="selectCommand(this)">[ ] Ice Bolt 2</div>
+          <div class="command" data-col="1" data-row="2" style="color:#446688; cursor:default;">----</div>
+        </div>
+      </div>
+
+      <!-- Items -->
       <div class="enemy-list">
-        <div style="color:#ffaa66; margin-bottom:5px;">ENEMIES</div>
-        <div class="enemy-row"><span>Glimmerling A</span><span style="color:#66ff99;">87</span></div>
-        <div class="enemy-row"><span>Glimmerling B</span><span style="color:#66ff99;">94</span></div>
-        <div class="enemy-row"><span>Glimmerling C</span><span style="color:#ffaa66;">41</span></div>
+        <div style="color:#ffaa66; margin-bottom:6px;">Inventory</div>
+
+        <div style="color:#88aaff; font-size:10px; margin:4px 0 2px;">Belt Loop</div>
+        <div class="enemy-row command" data-col="2" data-row="0" data-name="Bronze Axe" data-info="2h, replace both weapons, 30-40 tic equip time" onclick="selectCommand(this)"><span>[ ] Bronze Axe</span></div>
+
+        <div style="color:#88aaff; font-size:10px; margin:6px 0 2px;">Pouch</div>
+        <div class="enemy-row command" data-col="2" data-row="1" data-name="Herb" data-info="Use: Restores a small amount of HP" onclick="selectCommand(this)"><span>[ ] Herb</span></div>
+        <div class="enemy-row command" data-col="2" data-row="2" data-name="Bomb" data-info="Use: Deals damage to all enemies" onclick="selectCommand(this)"><span>[ ] Bomb</span></div>
       </div>
     </div>
 
-    <div class="footer">
-      DRAGON WARRIOR IV STYLE • GLIMMERLINGS AS ENEMIES • LEFT/RIGHT HAND + BELT GEAR
+    <!-- Footer / Info Area -->
+    <div class="footer" id="footer-info">
+      Select an attack to see details
     </div>
   </div>
 
   <script>
-    function useCommand(el) {
-      const orig = el.style.background;
-      el.style.background = '#ff6b3b';
-      el.style.color = '#000';
-      setTimeout(() => {
-        el.style.background = orig;
-        el.style.color = '';
-      }, 320);
+    let currentCol = 0;
+    let currentRow = 0;
+    let inTargetMode = false;
+    let currentTargetIndex = 0;
+    let confirmButtonsVisible = false;
+
+    function getAllCommands() {
+      return Array.from(document.querySelectorAll('.command[data-name]'));
+    }
+
+    function selectCommand(el) {
+      document.querySelectorAll('.command').forEach(cmd => {
+        cmd.classList.remove('selected');
+        if (cmd.dataset.name) {
+          cmd.innerHTML = cmd.innerHTML.replace('[x]', '[ ]');
+        }
+      });
+
+      if (el.dataset.name) {
+        el.innerHTML = el.innerHTML.replace('[ ]', '[x]');
+        el.classList.add('selected');
+
+        currentCol = parseInt(el.dataset.col);
+        currentRow = parseInt(el.dataset.row);
+
+        const footer = document.getElementById('footer-info');
+        const info = el.dataset.info;
+        const name = el.dataset.name;
+        footer.innerHTML = `<strong>${name}</strong> — ${info}`;
+      }
+    }
+
+    function selectMonster(elOrIndex) {
+      // clear previous list selections
+      document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));
+      // clear previous arena selections
+      document.querySelectorAll('.monster-wrapper').forEach(w => w.classList.remove('selected'));
+      document.querySelectorAll('.monster-marker').forEach(m => m.innerHTML = '[ ]');
+
+      let el;
+      if (typeof elOrIndex === 'number') {
+        el = document.querySelector(`.monster-target[data-target="${elOrIndex}"]`);
+        currentTargetIndex = elOrIndex;
+      } else {
+        el = elOrIndex;
+        currentTargetIndex = parseInt(el.dataset.target);
+      }
+      if (el) {
+        el.classList.add('selected');
+      }
+
+      // update arena per-sprite wrapper and [x] marker
+      const arenaWrapper = document.querySelector(`.monster-wrapper[data-target="${currentTargetIndex}"]`);
+      const arenaMarker = document.querySelector(`.monster-marker[data-target="${currentTargetIndex}"]`);
+      if (arenaWrapper) arenaWrapper.classList.add('selected');
+      if (arenaMarker) arenaMarker.innerHTML = '[x]';
+    }
+
+    function toggleMonster(index) {
+      const marker = document.querySelector(`.monster-marker[data-target="${index}"]`);
+      const wrapper = document.querySelector(`.monster-wrapper[data-target="${index}"]`);
+      const listItem = document.querySelector(`.monster-target[data-target="${index}"]`);
+
+      if (!marker) return;
+
+      const isSelected = marker.innerHTML === '[x]';
+
+      // clear all first (to enforce single selection like radio, or support multi? but current design is single)
+      document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));
+      document.querySelectorAll('.monster-wrapper').forEach(w => w.classList.remove('selected'));
+      document.querySelectorAll('.monster-marker').forEach(m => m.innerHTML = '[ ]');
+
+      if (!isSelected) {
+        // select it
+        if (listItem) listItem.classList.add('selected');
+        if (wrapper) wrapper.classList.add('selected');
+        marker.innerHTML = '[x]';
+        currentTargetIndex = index;
+      } else {
+        // toggled off: leave all cleared, currentTargetIndex reset?
+        currentTargetIndex = -1;
+      }
+    }
+
+    function showConfirmButtons() {
+      // remove old if any
+      const old = document.getElementById('confirm-buttons');
+      if (old) old.remove();
+
+      const footer = document.getElementById('footer-info');
+      const btnContainer = document.createElement('div');
+      btnContainer.id = 'confirm-buttons';
+      btnContainer.className = 'confirm-buttons';
+      btnContainer.innerHTML = `
+        <button class="confirm-btn" onclick="confirmAction(true)">Go</button>
+        <button class="confirm-btn" onclick="confirmAction(false)">Cancel</button>
+      `;
+      footer.appendChild(btnContainer);
+      confirmButtonsVisible = true;
+    }
+
+    function confirmAction(go) {
+      const btns = document.getElementById('confirm-buttons');
+      if (btns) btns.remove();
+      confirmButtonsVisible = false;
+      const footer = document.getElementById('footer-info');
+      if (go) {
+        footer.innerHTML = 'Action confirmed! (demo)';
+      } else {
+        footer.innerHTML = 'Action cancelled. Select command again.';
+        // reset to command mode
+        inTargetMode = false;
+        document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));
+        document.querySelectorAll('.monster-wrapper').forEach(w => w.classList.remove('selected'));
+        document.querySelectorAll('.monster-marker').forEach(m => m.innerHTML = '[ ]');
+        // reselect first command
+        const first = document.querySelector('.command[data-col="0"][data-row="0"]');
+        if (first) selectCommand(first);
+      }
+    }
+
+
+    function navigateWithArrows(direction) {
+      if (inTargetMode) {
+        // target navigation: left/right only for A B C
+        let newIdx = currentTargetIndex;
+        if (direction === 'left')  newIdx = Math.max(0, currentTargetIndex - 1);
+        if (direction === 'right') newIdx = Math.min(2, currentTargetIndex + 1);
+        if (direction === 'up' || direction === 'down') return; // stay in targets
+        selectMonster(newIdx);
+        return;
+      }
+      const commands = getAllCommands();
+      let newCol = currentCol;
+      let newRow = currentRow;
+
+      if (direction === 'left')  newCol = Math.max(0, currentCol - 1);
+      if (direction === 'right') newCol = Math.min(2, currentCol + 1);
+      if (direction === 'up')    newRow = Math.max(0, currentRow - 1);
+      if (direction === 'down')  newRow = Math.min(2, currentRow + 1);
+
+      const target = commands.find(cmd => 
+        parseInt(cmd.dataset.col) === newCol && 
+        parseInt(cmd.dataset.row) === newRow
+      );
+
+      if (target) {
+        selectCommand(target);
+      }
+    }
+
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigateWithArrows('left');
+      }
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigateWithArrows('right');
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        navigateWithArrows('up');
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        navigateWithArrows('down');
+      }
+
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (inTargetMode) {
+          // select current monster, show buttons
+          const monsters = document.querySelectorAll('.monster-target');
+          const currentM = monsters[currentTargetIndex];
+          if (currentM) {
+            selectMonster(currentM);
+            showConfirmButtons();
+          }
+        } else {
+          // Enter on command: move to target mode
+          const selectedCmd = document.querySelector('.command.selected');
+          if (selectedCmd) {
+            // clear command selection highlight but keep data
+            document.querySelectorAll('.command').forEach(cmd => cmd.classList.remove('selected'));
+            inTargetMode = true;
+            currentTargetIndex = 0;
+            selectMonster(0);
+            const footer = document.getElementById('footer-info');
+            footer.innerHTML = 'Select target (A/B/C) then Enter';
+          }
+        }
+        return;
+      }
+
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (inTargetMode) {
+          inTargetMode = false;
+          // clear any selected monster highlights
+          document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));
+          document.querySelectorAll('.monster-wrapper').forEach(w => w.classList.remove('selected'));
+          document.querySelectorAll('.monster-marker').forEach(m => m.innerHTML = '[ ]');
+          // restore previously selected command (using preserved currentCol/currentRow)
+          const commands = getAllCommands();
+          const prevCmd = commands.find(cmd =>
+            parseInt(cmd.dataset.col) === currentCol && parseInt(cmd.dataset.row) === currentRow
+          );
+          if (prevCmd) {
+            selectCommand(prevCmd);
+          } else {
+            // fallback: reselect first
+            const first = document.querySelector('.command[data-col="0"][data-row="0"]');
+            if (first) selectCommand(first);
+          }
+        }
+      }
+
+      if (e.key.toLowerCase() === 'e') {
+        e.preventDefault();
+        const equip = document.getElementById('equip-panel');
+        equip.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        equip.style.transition = 'background 0.2s';
+        equip.style.background = '#1a3a6e';
+        setTimeout(() => {
+          equip.style.background = '';
+        }, 600);
+      }
+    });
+
+    document.querySelectorAll('.equip-row').forEach(row => {
+      row.addEventListener('click', function() {
+        const slot = this.dataset.slot;
+        const itemName = this.querySelector('span:not(.equip-label)').innerText;
+
+        if (slot === 'belt' && itemName === 'Bronze Axe') {
+          document.getElementById('left-hand').innerText = 'Bronze Axe';
+          document.getElementById('left-weapon-name').innerText = 'Bronze Axe';
+          document.getElementById('belt').innerText = '—';
+
+          row.classList.add('equip-highlight');
+          setTimeout(() => row.classList.remove('equip-highlight'), 600);
+        }
+      });
+    });
+
+    function initKeyboardNav() {
+      // Ensure initial [x] starts on first command in Left Hand column ("Quick Slash")
+      const firstCmd = document.querySelector('.command[data-col="0"][data-row="0"]');
+      if (firstCmd) {
+        selectCommand(firstCmd);
+      }
     }
 
     document.querySelector('.arena').addEventListener('click', function(e) {
@@ -270,7 +660,10 @@
       });
     });
 
-    console.log('%c[Portal Colosseum] Live test GUI ready at /test/gui1/', 'color:#5577aa');
+    window.onload = function() {
+      initKeyboardNav();
+      console.log('%c[Portal Colosseum] Live test GUI ready at /test/gui1/', 'color:#5577aa');
+    };
   </script>
 </body>
 </html>
