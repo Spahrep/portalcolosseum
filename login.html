@@ -50,7 +50,7 @@
     /* Full-screen background image using CSS instead of an img tag */
     body {
       margin: 0;
-      padding: 0;
+      padding: 20px 0;
       min-height: 100vh;
       background-image: url('/public/logo.jpg');
       background-size: cover;
@@ -58,10 +58,7 @@
       background-repeat: no-repeat;
       background-attachment: fixed;
       font-family: 'Courier New', monospace;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      overflow: hidden;
+      overflow-x: hidden;
     }
 
     /* Dark semi-transparent overlay behind the form for readability */
@@ -81,7 +78,7 @@
       position: relative;
       z-index: 1;
       max-width: 420px;
-      margin: 60px auto;
+      margin: 40px auto;
       padding: 2rem;
       background: rgba(15, 22, 55, 0.85);
       border: 2px solid rgba(255, 107, 59, 0.8);
