@@ -380,7 +380,7 @@
         return showMessage('Please enter your email address', 'error');
       }
 
-      console.log('Sending magic link to:', email);
+      // console.log removed to avoid logging PII (email address)
 
       try {
         const { error } = await supabase.auth.signInWithOtp({
