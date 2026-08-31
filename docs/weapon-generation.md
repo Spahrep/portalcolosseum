@@ -2,6 +2,8 @@
 
 **Source:** Jester's Ideas Log (2026-08-26)  
 **Status:** Design Concept (Post-MVP consideration)  
+
+**Note:** Several parts of the weapon generation system are provisional and subject to iteration.
 **Principle:** Randomness at all stages with controlled balance via point budgets.
 
 ## Overview
@@ -77,6 +79,11 @@ Each weapon class is assigned a **total stat point budget** (example range: 20â€
 - Exact point costs for attacks and stat deltas?
 - Should budget ranges vary by weapon type?
 - Should the point total be visible to players?
+
+## Weapon Quality Grade (Current idea, subject to change)
+- Attacks are rolled independently of the weapon quality grade.
+- The quality grade (Sâ€“F) is determined solely by the base stats.
+- **Current idea, subject to change**
 
 ## Attack Template Example
 

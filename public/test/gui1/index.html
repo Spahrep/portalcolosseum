@@ -112,7 +112,7 @@
     .tic-row {
       display: flex;
       font-family: monospace;
-      white-space: pre;
+      line-height: 1;
       line-height: 1;
       padding: 0 14px;
     }
@@ -127,6 +127,10 @@
     .tic-track {
       flex: 1;
       color: #66ff99;
+      max-width: 100%;
+      position: relative;
+      min-height: 1em;
+      font-family: monospace;
     }
 
     .tic-positions {
@@ -334,17 +338,15 @@
     <div class="tic-bar">
       <div class="tic-row">
         <div class="tic-labels"></div>
-        <div class="tic-track tic-positions">*      A      B      C      D      E      +</div>
+        <div id="tic-top" class="tic-track tic-positions" style="height:1em; color:#ff5555;"></div>
       </div>
       <div class="tic-row">
         <div class="tic-labels">TIC</div>
-        <div class="tic-track">^==|======|======|======|======|======|======|======|================================================</div>
+        <div id="tic-middle" class="tic-track" style="color:#66ff99;"></div>
       </div>
-      <div class="tic-scale">
-        <div style="position:absolute; left:0;">0</div>
-        <div style="position:absolute; left:33%;">50</div>
-        <div style="position:absolute; left:90%;">100</div>
-        <div style="position:absolute; left:93%; top:8px; color:#ffcc66;">+</div>
+      <div class="tic-row">
+        <div class="tic-labels"></div>
+        <div id="tic-bottom" class="tic-track" style="color:#5577aa; font-size:9px;"></div>
       </div>
     </div>
 
@@ -493,6 +495,9 @@
       `;
       footer.appendChild(btnContainer);
       confirmButtonsVisible = true;
+      // default highlight Go
+      const goBtn = btnContainer.querySelector(".confirm-btn");
+      if (goBtn) goBtn.classList.add("selected");
     }
 
     function confirmAction(go) {
@@ -517,12 +522,27 @@
 
 
     function navigateWithArrows(direction) {
+      if (confirmButtonsVisible) {
+        // only Go/Cancel interactive; arrows toggle between them
+        const btns = document.querySelectorAll('#confirm-buttons .confirm-btn');
+        if (btns.length < 2) return;
+        const goBtn = btns[0];
+        const cancelBtn = btns[1];
+        const goSelected = goBtn.classList.contains('selected');
+        if (direction === 'left' || direction === 'up') {
+          goBtn.classList.add('selected');
+          cancelBtn.classList.remove('selected');
+        } else if (direction === 'right' || direction === 'down') {
+          cancelBtn.classList.add('selected');
+          goBtn.classList.remove('selected');
+        }
+        return;
+      }
       if (inTargetMode) {
-        // target navigation: left/right only for A B C
+        // target navigation: all four arrows cycle through A B C
         let newIdx = currentTargetIndex;
-        if (direction === 'left')  newIdx = Math.max(0, currentTargetIndex - 1);
-        if (direction === 'right') newIdx = Math.min(2, currentTargetIndex + 1);
-        if (direction === 'up' || direction === 'down') return; // stay in targets
+        if (direction === 'left' || direction === 'up')  newIdx = (currentTargetIndex - 1 + 3) % 3;
+        if (direction === 'right' || direction === 'down') newIdx = (currentTargetIndex + 1) % 3;
         selectMonster(newIdx);
         return;
       }
@@ -546,6 +566,24 @@
     }
 
     document.addEventListener('keydown', function(e) {
+      if (confirmButtonsVisible) {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const selected = document.querySelector('#confirm-buttons .confirm-btn.selected') || document.querySelector('#confirm-buttons .confirm-btn');
+          if (selected) {
+            if (selected.textContent.trim() === 'Go') confirmAction(true);
+            else confirmAction(false);
+          }
+          return;
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          confirmAction(false);
+          return;
+        }
+        // arrows already handled in navigateWithArrows via the if at top
+      }
+
       if (e.key === 'ArrowLeft') {
         e.preventDefault();
         navigateWithArrows('left');
@@ -660,9 +698,97 @@
       });
     });
 
+    function renderTicBar() {
+      const MAX_TIC = 110;
+      const participants = [
+        { letter: "*", tic: 1, color: "#ff5555" },
+        { letter: "A", tic: 20, color: "#ff5555" },
+        { letter: "B", tic: 51, color: "#ff5555" },
+        { letter: "C", tic: 102, color: "#ff5555" }
+      ];
+      const topEl = document.getElementById("tic-top");
+      const midEl = document.getElementById("tic-middle");
+      const botEl = document.getElementById("tic-bottom");
+
+      [topEl, midEl, botEl].forEach(el => {
+        if (el) {
+          el.innerHTML = "";
+          el.style.position = "relative";
+        }
+      });
+
+      // Top row: participant letters at percentage positions
+      if (topEl) {
+        participants.forEach(p => {
+          const pct = Math.min(100, (p.tic / MAX_TIC) * 100);
+          const span = document.createElement("span");
+          span.textContent = p.letter;
+          span.style.position = "absolute";
+          span.style.left = `${pct}%`;
+          span.style.transform = "translateX(-50%)";
+          span.style.color = p.color || "#ff5555";
+          topEl.appendChild(span);
+        });
+      }
+
+      // Middle row: timeline with | markers
+      if (midEl) {
+        const line = document.createElement("div");
+        line.style.position = "absolute";
+        line.style.left = "0";
+        line.style.right = "0";
+        line.style.top = "0.45em";
+        line.style.height = "1px";
+        line.style.background = "#66ff99";
+        midEl.appendChild(line);
+
+        const startCaret = document.createElement("span");
+        startCaret.textContent = "^";
+        startCaret.style.position = "absolute";
+        startCaret.style.left = "0";
+        startCaret.style.transform = "translateX(-50%)";
+        startCaret.style.color = "#66ff99";
+        midEl.appendChild(startCaret);
+
+        participants.forEach(p => {
+          const pct = Math.min(100, (p.tic / MAX_TIC) * 100);
+          const span = document.createElement("span");
+          span.textContent = "|";
+          span.style.position = "absolute";
+          span.style.left = `${pct}%`;
+          span.style.transform = "translateX(-50%)";
+          span.style.color = "#66ff99";
+          midEl.appendChild(span);
+        });
+      }
+
+      // Bottom row: scale labels using percentages (prevents overflow)
+      if (botEl) {
+        const labels = [
+          { val: "0", pct: 0 },
+          { val: "25", pct: (25 / MAX_TIC) * 100 },
+          { val: "50", pct: (50 / MAX_TIC) * 100 },
+          { val: "75", pct: (75 / MAX_TIC) * 100 },
+          { val: "100", pct: (100 / MAX_TIC) * 100 },
+          { val: "+", pct: (105 / MAX_TIC) * 100, color: "#ffcc66" }
+        ];
+        labels.forEach(l => {
+          const span = document.createElement("span");
+          span.textContent = l.val;
+          span.style.position = "absolute";
+          span.style.left = `${l.pct}%`;
+          span.style.transform = "translateX(-50%)";
+          span.style.fontSize = "9px";
+          span.style.color = l.color || "#5577aa";
+          botEl.appendChild(span);
+        });
+      }
+    }
+
     window.onload = function() {
       initKeyboardNav();
-      console.log('%c[Portal Colosseum] Live test GUI ready at /test/gui1/', 'color:#5577aa');
+      renderTicBar();
+      console.log("%c[Portal Colosseum] Live test GUI ready at /test/gui1/", "color:#5577aa");
     };
   </script>
 </body>
