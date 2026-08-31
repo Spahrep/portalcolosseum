@@ -473,16 +473,23 @@
       if (!supabase) return;
 
       try {
-        // The client with detectSessionInUrl: true auto-exchanges PKCE code
-        // No manual code extraction needed - check if a session was established
         const { data: { session }, error } = await supabase.auth.getSession();
 
         if (session) {
-          // Successfully authenticated - store user name and redirect
-          const playerName = session.user.email || session.user.user_metadata?.full_name || 'Gladiator';
-          localStorage.setItem('playerName', playerName);
-          // Security: Do NOT persist session to localStorage (XSS risk)
-          // Tokens stay in-memory only for this page's lifetime
+          // Persist the refresh token in an HttpOnly cookie via our Edge Function
+          if (session.refresh_token) {
+            try {
+              await fetch('/api/session', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: session.refresh_token })
+              });
+            } catch (err) {
+              console.error('Failed to persist session cookie:', err);
+            }
+          }
+          // Redirect to the game page
           window.location.href = '/game';
         } else if (error) {
           console.error('Auth callback error:', error);

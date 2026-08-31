@@ -16,6 +16,7 @@ The Supabase URL and anonymous key are now loaded from environment variables ins
 | --- | --- | --- |
 | `SUPABASE_URL` | Your Supabase project URL | `https://tfwwapxewlxiclufpcct.supabase.co` |
 | `SUPABASE_ANON_KEY` | Your Supabase anonymous/public API key | `sb_publishable_...` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Your Supabase service_role key (for the `/api/session` Edge Function only — never exposed to the browser) | `sb_secret_...` or legacy key |
 
 ## How It Works
 
@@ -43,12 +44,17 @@ The Supabase URL and anonymous key are now loaded from environment variables ins
    - Name: `SUPABASE_ANON_KEY`  
      Value: `[your anon key from Supabase dashboard]`  
      Environment: `Production`, `Preview`, `Development`
+   - Name: `SUPABASE_SERVICE_ROLE_KEY`  
+     Value: `[your service_role key from Supabase dashboard → Settings → API]`  
+     Environment: `Production`, `Preview`, `Development`  
+     > **Important:** This key bypasses RLS. Only used in the `/api/session` Edge Function, never exposed to the browser.
 
 ### Via Vercel CLI:
 
 ```bash
 vercel env add SUPABASE_URL
 vercel env add SUPABASE_ANON_KEY
+vercel env add SUPABASE_SERVICE_ROLE_KEY
 ```
 
 ## How env.js Gets the Values

@@ -122,14 +122,46 @@
       // --- Event listener bindings (no inline onclick handlers) ---
       document.getElementById('logout-btn')?.addEventListener('click', logout);
 
-      // Fail-closed auth check: must have a valid session or redirect to login
+      // Fail-closed auth check: try in-memory session first, then cookie-based fallback
       // Security: We do NOT fall back to localStorage for auth decisions.
       // playerName in localStorage is purely cosmetic.
       let playerName = 'Guest';
 
       if (supabase) {
         try {
-          const { data: { session } } = await supabase.auth.getSession();
+          // First: check for a PKCE callback (code in URL query params)
+          if (window.location.search.includes('code=')) {
+            // PKCE auto-exchange happened via detectSessionInUrl — just need to
+            // pick up the session and persist the refresh token server-side
+            const { data: { session }, error } = await supabase.auth.getSession();
+
+            if (session && session.refresh_token) {
+              // Persist the refresh token in an HttpOnly cookie via our Edge Function
+              await fetch('/api/session', {
+                method: 'POST',
+                credentials: 'include',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ refresh_token: session.refresh_token })
+              });
+            }
+          } else {
+            // No callback — try to recover session from the HttpOnly cookie
+            const resp = await fetch('/api/session', {
+              method: 'GET',
+              credentials: 'include'
+            });
+
+            if (resp.ok) {
+              const { session: cookieSession } = await resp.json();
+              if (cookieSession) {
+                // Restore the in-memory session from the cookie-obtained tokens
+                await supabase.auth.setSession(cookieSession);
+              }
+            }
+          }
+
+          // Now check the session (whether from callback or cookie restore)
+          const { data: { session }, error } = await supabase.auth.getSession();
 
           if (session) {
             // User is authenticated - extract display name from session
@@ -193,6 +225,12 @@
         } catch (error) {
           console.error('Logout error:', error);
         }
+      }
+      // Clear the HttpOnly session cookie via the Edge Function
+      try {
+        await fetch('/api/session', { method: 'DELETE', credentials: 'include' });
+      } catch (err) {
+        console.error('Cookie clear error:', err);
       }
       // Clear locally stored player name (cosmetic cache only)
       localStorage.removeItem('playerName');

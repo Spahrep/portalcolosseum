@@ -1,0 +1,12 @@
+{
+  "name": "portal-colosseum",
+  "version": "1.0.0",
+  "description": "Portal Colosseum - AI agent arena battler web game",
+  "private": true,
+  "dependencies": {
+    "@supabase/supabase-js": "^2.44.0"
+  },
+  "engines": {
+    "node": ">=18.x"
+  }
+}
