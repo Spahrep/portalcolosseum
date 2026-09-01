@@ -21,6 +21,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal Colosseum - Arena</title>
+  <!-- Pixeloid Mono: pixel-perfect font for town UI markers -->
+  <link href="https://fonts.googleapis.com/css2?family=Pixeloid+Mono:wght@400;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css">
   <link rel="stylesheet" href="/public/game.css">
   <!-- Environment configuration - loaded before module scripts -->
@@ -31,6 +33,21 @@
   <div id="game-container">
     <!-- Game canvas: renders the arena battle overlay -->
     <canvas id="game" width="800" height="600"></canvas>
+    <!-- Town location markers — navigable with arrow keys + Enter -->
+    <div id="town-locations" class="town-locations">
+      <div class="location-marker" data-location="portal" data-x="50%" data-y="80%">
+        [ ] Enter The Portal
+      </div>
+      <div class="location-marker" data-location="store" data-x="70%" data-y="30%">
+        [ ] Store
+      </div>
+      <div class="location-marker" data-location="wizard" data-x="20%" data-y="60%">
+        [ ] Wizard Hut
+      </div>
+      <div class="location-marker" data-location="leaderboard" data-x="30%" data-y="20%">
+        [ ] Leaderboards
+      </div>
+    </div>
   </div>
 
   <!-- Minimal logout button (bottom-right corner) -->

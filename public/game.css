@@ -80,3 +80,70 @@ body.game-page {
   color: #ff5555;
   transform: scale(1.1);
 }
+
+/* Town location markers — overlay on the canvas, positioned on panorama */
+.town-locations {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;  /* allow clicks to pass through to canvas */
+}
+
+/* Individual location marker with [ ] / [x] toggle style */
+.location-marker {
+  position: absolute;
+  /* Position is set via data-x/data-y attributes in JS, default to center */
+  transform: translate(-50%, -50%);
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 16px;
+  font-weight: 700;
+  color: #f8f8f0;
+  text-shadow:
+    2px 0 0 #000,
+    -2px 0 0 #000,
+    0 2px 0 #000,
+    0 -2px 0 #000;
+  /* Subtle glow when selected */
+  text-shadow:
+    2px 0 0 #000,
+    -2px 0 0 #000,
+    0 2px 0 #000,
+    0 -2px 0 #000,
+    0 0 8px rgba(255, 204, 102, 0.6);
+  pointer-events: auto;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  /* Make the [ ] markers slightly transparent until selected */
+  opacity: 0.8;
+}
+
+.location-marker.selected {
+  color: #ffcc66;
+  opacity: 1;
+  text-shadow:
+    2px 0 0 #000,
+    -2px 0 0 #000,
+    0 2px 0 #000,
+    0 -2px 0 #000,
+    0 0 12px rgba(255, 204, 102, 0.9);
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+.location-marker.visited {
+  color: #88ccff;
+  text-shadow:
+    2px 0 0 #000,
+    -2px 0 0 #000,
+    0 2px 0 #000,
+    0 -2px 0 #000,
+    0 0 6px rgba(136, 204, 255, 0.5);
+}
+
+.location-marker .marker-text {
+  font-family: inherit;
+}
