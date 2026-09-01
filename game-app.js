@@ -28,14 +28,15 @@ let supabase;
 // Arrow keys cycle through town locations; Enter triggers the location action.
 // The [ ] / [x] checkbox is rendered via CSS ::before on .location-marker.selected.
 
-// Location definitions: position on the panorama in viewport percentages.
-// x/y are the horizontal/vertical center of the building where the label
-// appears (at the bottom 1/3 of each structure).
+// Location definitions: position on the panorama in image percentages.
+// x = % across the 300vw panorama image (0-100)
+// y = % down from top of the image (0-100) — all at same height for alignment
+// data-x/data-y in game.html match these values
 const LOCATIONS = [
-  { name: 'portal',      label: 'Enter The Portal', x: 50, y: 85 },
-  { name: 'store',       label: 'Store',            x: 15, y: 70 },
-  { name: 'wizard',      label: 'Wizard Hut',       x: 75, y: 65 },
-  { name: 'leaderboard', label: 'Leaderboards',     x: 88, y: 75 }
+  { name: 'portal',      label: 'Enter The Portal', x: 50,  y: 80 },
+  { name: 'store',       label: 'Store',            x: 40,  y: 65 },
+  { name: 'wizard',      label: 'Wizard Hut',       x: 68,  y: 65 },
+  { name: 'leaderboard', label: 'Leaderboards',     x: 88,  y: 65 }
 ];
 
 // Track which locations have been visited (Enter pressed on them)
