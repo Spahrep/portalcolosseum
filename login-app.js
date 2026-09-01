@@ -178,9 +178,60 @@ async function signInWithEmail() {
 
 /**
  * Send password reset email.
- * Includes client-side rate limiting to prevent Supabase 429 errors.
+ * Includes client-side rate limiting with countdown timer to prevent
+ * Supabase 429 (Too Many Requests) errors.
  */
 let resetEmailCooldown = false;
+let cooldownSeconds = 0;
+let cooldownInterval = null;
+
+/**
+ * Start a countdown timer for the reset link.
+ * @param {number} seconds - Number of seconds to count down from
+ */
+function startCooldown(seconds) {
+  resetEmailCooldown = true;
+  cooldownSeconds = seconds;
+  const resetLink = document.getElementById('reset-link');
+  const originalText = 'Reset it';
+  resetLink.style.opacity = '0.6';
+  resetLink.style.pointerEvents = 'none';
+
+  // Clear any existing interval
+  if (cooldownInterval) {
+    clearInterval(cooldownInterval);
+  }
+
+  cooldownInterval = setInterval(() => {
+    cooldownSeconds--;
+    if (cooldownSeconds > 0) {
+      resetLink.textContent = `Try again in ${cooldownSeconds}s`;
+    } else {
+      clearInterval(cooldownInterval);
+      cooldownInterval = null;
+      resetEmailCooldown = false;
+      resetLink.textContent = originalText;
+      resetLink.style.opacity = '1';
+      resetLink.style.pointerEvents = 'auto';
+    }
+  }, 1000);
+}
+
+/**
+ * Stop the cooldown timer early (e.g. if the 429 window resets faster).
+ */
+function stopCooldown() {
+  if (cooldownInterval) {
+    clearInterval(cooldownInterval);
+    cooldownInterval = null;
+  }
+  resetEmailCooldown = false;
+  cooldownSeconds = 0;
+  const resetLink = document.getElementById('reset-link');
+  resetLink.textContent = 'Reset it';
+  resetLink.style.opacity = '1';
+  resetLink.style.pointerEvents = 'auto';
+}
 
 async function sendResetEmail() {
   if (!supabase) {
@@ -188,8 +239,8 @@ async function sendResetEmail() {
   }
 
   // Rate limit: prevent spamming reset requests (causes 429)
-  if (resetEmailCooldown) {
-    showMessage('Please wait a moment before requesting another reset email.', 'error');
+  if (resetEmailCooldown && cooldownSeconds > 0) {
+    showMessage(`Please wait ${cooldownSeconds} seconds before requesting another reset email.`, 'error');
     return;
   }
 
@@ -198,30 +249,28 @@ async function sendResetEmail() {
     return showMessage('Please enter your email address', 'error');
   }
 
-  // Enable cooldown before the request
-  resetEmailCooldown = true;
+  // Show "Sending..." immediately
+  startCooldown(60);
   const resetLink = document.getElementById('reset-link');
-  const originalText = resetLink.textContent;
   resetLink.textContent = 'Sending...';
 
-  // Cooldown timer: 60 seconds
-  setTimeout(() => {
-    resetEmailCooldown = false;
-    if (resetLink.textContent === 'Sending...' || resetLink.textContent === 'Request sent. Wait...') {
-      resetLink.textContent = originalText;
+  try {
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin + '/reset-password',
+    });
+
+    if (error) {
+      // Handle 429 rate limit specifically
+      if (error.status === 429 || /rate limit|429|once every/i.test(error.message)) {
+        showMessage(`Rate limited by server: ${error.message}. Please wait ${cooldownSeconds}s and try again.`, 'error');
+      } else {
+        showMessage(`Failed to send reset email: ${error.message}`, 'error');
+      }
+    } else {
+      showMessage(`Reset instructions sent to ${email}!`, 'success');
     }
-  }, 60000);
-
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: window.location.origin + '/reset-password',
-  });
-
-  if (error) {
-    showMessage(`Failed to send reset email: ${error.message}`, 'error');
-    resetLink.textContent = 'Request failed. Try again...';
-  } else {
-    showMessage(`Reset instructions sent to ${email}!`, 'success');
-    resetLink.textContent = 'Request sent. Wait...';
+  } catch (err) {
+    showMessage(`Error sending reset email: ${err.message}`, 'error');
   }
 }
 
