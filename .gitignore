@@ -30,3 +30,4 @@ Thumbs.db
 supabase/.branches/
 supabase/.temp/
 supabase/.gitignore
+.env.local*
