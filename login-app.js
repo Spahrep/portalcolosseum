@@ -178,10 +178,19 @@ async function signInWithEmail() {
 
 /**
  * Send password reset email.
+ * Includes client-side rate limiting to prevent Supabase 429 errors.
  */
+let resetEmailCooldown = false;
+
 async function sendResetEmail() {
   if (!supabase) {
     return showMessage('Authentication service not available. Please refresh the page.', 'error');
+  }
+
+  // Rate limit: prevent spamming reset requests (causes 429)
+  if (resetEmailCooldown) {
+    showMessage('Please wait a moment before requesting another reset email.', 'error');
+    return;
   }
 
   const email = document.getElementById('email').value.trim();
@@ -189,14 +198,30 @@ async function sendResetEmail() {
     return showMessage('Please enter your email address', 'error');
   }
 
+  // Enable cooldown before the request
+  resetEmailCooldown = true;
+  const resetLink = document.getElementById('reset-link');
+  const originalText = resetLink.textContent;
+  resetLink.textContent = 'Sending...';
+
+  // Cooldown timer: 60 seconds
+  setTimeout(() => {
+    resetEmailCooldown = false;
+    if (resetLink.textContent === 'Sending...' || resetLink.textContent === 'Request sent. Wait...') {
+      resetLink.textContent = originalText;
+    }
+  }, 60000);
+
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: window.location.origin + '/reset-password',
   });
 
   if (error) {
     showMessage(`Failed to send reset email: ${error.message}`, 'error');
+    resetLink.textContent = 'Request failed. Try again...';
   } else {
     showMessage(`Reset instructions sent to ${email}!`, 'success');
+    resetLink.textContent = 'Request sent. Wait...';
   }
 }
 
