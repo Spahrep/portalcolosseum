@@ -8,6 +8,11 @@
  * This module imports createClient directly from esm.sh (allowed by CSP),
  * reads config from window.ENV (set by /api/env.js), and attaches all
  * event listeners via DOMContentLoaded.
+ *
+ * Town Navigation:
+ *   Arrow keys cycle selection between town locations (Portal, Store, Wizard,
+ *   Leaderboards). The selected marker shows [x] via CSS ::before.
+ *   Enter triggers the selected location's action (pan to building + Enter The Portal).
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
@@ -19,21 +24,21 @@ const SUPABASE_ANON_KEY = window.ENV.SUPABASE_ANON_KEY;
 // Supabase client instance (initialized in initGame())
 let supabase;
 
-// === TOWN LOCATION NAVIGATION (replaces old panorama shift logic) ===
-// Arrow keys now cycle between town locations; Enter pans the viewport
-// to the selected location and toggles its [ ] / [x] marker.
+// === TOWN LOCATION NAVIGATION ===
+// Arrow keys cycle through town locations; Enter triggers the location action.
+// The [ ] / [x] checkbox is rendered via CSS ::before on .location-marker.selected.
 
 // Location definitions: position on the panorama in viewport percentages.
-// These map to background-position percentages that the panorama
-// background should center on when a location is selected.
+// x/y are the horizontal/vertical center of the building where the label
+// appears (at the bottom 1/3 of each structure).
 const LOCATIONS = [
-  { name: 'portal',      label: '[ ] Enter The Portal',   x: 50, y: 80 },
-  { name: 'store',       label: '[ ] Store',              x: 70, y: 30 },
-  { name: 'wizard',      label: '[ ] Wizard Hut',         x: 20, y: 60 },
-  { name: 'leaderboard', label: '[ ] Leaderboards',       x: 30, y: 20 }
+  { name: 'portal',      label: 'Enter The Portal', x: 50, y: 85 },
+  { name: 'store',       label: 'Store',            x: 15, y: 70 },
+  { name: 'wizard',      label: 'Wizard Hut',       x: 75, y: 65 },
+  { name: 'leaderboard', label: 'Leaderboards',     x: 88, y: 75 }
 ];
 
-// Track which locations have been visited
+// Track which locations have been visited (Enter pressed on them)
 const visited = new Set();
 
 // Currently selected location index
@@ -45,16 +50,14 @@ let selectedIndex = 0;
  */
 function panToLocation(index) {
   const loc = LOCATIONS[index];
-  // Background is 150vw wide, so the visible viewport sees a portion.
-  // We map the location's x% to a background-position percentage.
-  // At 150vw, center of viewport = 50% of 150vw = 75vw from left.
-  // To put loc.x% at center: bgPosX = loc.x% + (75% - 50%) = loc.x% + 25%
+  // Background is 150vw wide — visible viewport sees a portion.
+  // To put loc.x% at horizontal center: bgPosX = loc.x + 25
   const bgPosX = loc.x + 25;
-  const bgPosY = loc.y + 0;  // height is 100vh so no horizontal offset needed
+  const bgPosY = loc.y;
 
   document.body.style.backgroundPosition = `${bgPosX}% ${bgPosY}%`;
 
-  // Update marker selection state
+  // Update marker selection state (CSS ::before shows [x] when selected)
   document.querySelectorAll('.location-marker').forEach((marker, i) => {
     marker.classList.toggle('selected', i === index);
   });
@@ -74,32 +77,25 @@ function navigateLocations(direction) {
 }
 
 /**
- * Toggle the [ ] / [x] state for the currently selected location.
- * If first visit, mark as visited and pan to center.
+ * Trigger the selected location's action.
+ * Pans to the building and marks as visited.
+ * On 'Enter The Portal' this would start the actual game/battle.
  */
 function enterLocation() {
   const loc = LOCATIONS[selectedIndex];
+  visited.add(loc.name);
+  // Mark as visited (CSS shows [x] and blue visited color)
   const markers = document.querySelectorAll('.location-marker');
-  const marker = markers[selectedIndex];
+  markers[selectedIndex].classList.add('visited');
 
-  if (!visited.has(loc.name)) {
-    // First visit: mark as visited
-    visited.add(loc.name);
-    marker.classList.add('visited');
-    marker.querySelector('.marker-text').textContent =
-      `[x] ${loc.label.replace('[ ] ', '')}`;
-  } else {
-    // Already visited: toggle [x] / [ ]
-    const text = marker.querySelector('.marker-text');
-    if (text.textContent.startsWith('[x]')) {
-      text.textContent = `[ ] ${loc.label.replace('[ ] ', '')}`;
-    } else {
-      text.textContent = `[x] ${loc.label.replace('[ ] ', '')}`;
-    }
-  }
-
-  // Auto-pan to center on the location (slight zoom-in effect)
+  // Pan to center on the selected location
   panToLocation(selectedIndex);
+
+  // Trigger location-specific action
+  if (loc.name === 'portal') {
+    // Enter The Portal — start the game
+    console.log('Entering the portal...');
+  }
 }
 
 /**
@@ -116,8 +112,9 @@ function initLocations() {
     const marker = document.createElement('div');
     marker.className = 'location-marker';
     marker.dataset.location = loc.name;
+    // Position at the building's location on the panorama
     marker.style.left = `${loc.x}%`;
-    marker.style.top = `${loc.y}%`;
+    marker.style.bottom = `${100 - loc.y}%`;
     marker.dataset.index = i;
 
     const span = document.createElement('span');
@@ -130,18 +127,15 @@ function initLocations() {
 }
 
 /**
- * Reset the background to center position.
+ * Reset the background to center position and clear selections.
  */
 function resetBackground() {
   document.body.style.backgroundPosition = 'center';
   document.querySelectorAll('.location-marker').forEach(m => {
     m.classList.remove('selected', 'visited');
   });
-  // Restore initial labels
-  document.querySelectorAll('.location-marker .marker-text').forEach((span, i) => {
-    span.textContent = LOCATIONS[i].label;
-  });
   selectedIndex = 0;
+  panToLocation(0);
 }
 
 /**
@@ -263,7 +257,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // --- Town location navigation via arrow keys + Enter ---
   // Arrow keys cycle through town locations (portal, store, wizard, leaderboard)
-  // Enter pans to the selected location and toggles [ ] / [x]
+  // The selected marker shows [x] via CSS ::before
+  // Enter triggers the location action (pan + enter)
   document.addEventListener('keydown', (e) => {
     switch (e.key) {
       case 'ArrowLeft':

@@ -34,18 +34,19 @@
     <!-- Game canvas: renders the arena battle overlay -->
     <canvas id="game" width="800" height="600"></canvas>
     <!-- Town location markers — navigable with arrow keys + Enter -->
+    <!-- Text positioned at bottom 1/3 of each building, aligned to building positions -->
     <div id="town-locations" class="town-locations">
-      <div class="location-marker" data-location="portal" data-x="50%" data-y="80%">
-        [ ] Enter The Portal
+      <div class="location-marker" data-location="portal" data-x="50%" data-y="85%">
+        <span class="marker-text">Enter The Portal</span>
       </div>
-      <div class="location-marker" data-location="store" data-x="70%" data-y="30%">
-        [ ] Store
+      <div class="location-marker" data-location="store" data-x="15%" data-y="70%">
+        <span class="marker-text">Store</span>
       </div>
-      <div class="location-marker" data-location="wizard" data-x="20%" data-y="60%">
-        [ ] Wizard Hut
+      <div class="location-marker" data-location="wizard" data-x="75%" data-y="65%">
+        <span class="marker-text">Wizard Hut</span>
       </div>
-      <div class="location-marker" data-location="leaderboard" data-x="30%" data-y="20%">
-        [ ] Leaderboards
+      <div class="location-marker" data-location="leaderboard" data-x="88%" data-y="75%">
+        <span class="marker-text">Leaderboards</span>
       </div>
     </div>
   </div>
