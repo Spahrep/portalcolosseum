@@ -65,42 +65,24 @@ async function signInWithProvider(provider) {
 
 /**
  * Validates password strength.
- * Policy: password is accepted if EITHER:
- *   - 12+ characters (any characters), OR
- *   - 8+ characters AND contains uppercase, lowercase, digit, and symbol
+ * Policy: at least 8 characters OR at least 12 characters (any characters).
+ * No mandatory character classes — see /passwords for guidance.
  * Returns { valid: bool, errors: string[] } so the caller can show
  * specific, actionable feedback to the user.
  */
 function validatePassword(password) {
   const errors = [];
-  const hasUpper = /[A-Z]/.test(password);
-  const hasLower = /[a-z]/.test(password);
-  const hasDigit = /[0-9]/.test(password);
-  const hasSymbol = /[^A-Za-z0-9]/.test(password);
-
   const strongEnough = password.length >= 12;
-  const meetsComplexity = password.length >= 8
-    && hasUpper && hasLower && hasDigit && hasSymbol;
+  const minimumLength = password.length >= 8;
 
-  if (!strongEnough && !meetsComplexity) {
-    errors.push('Password must be at least 12 characters, or at least 8 characters with uppercase, lowercase, number, and symbol.');
-  }
-
-  // Provide specific guidance on what is missing (only relevant for the
-  // shorter-length path so the user knows exactly how to fix it).
-  if (!strongEnough && password.length < 8) {
+  if (!strongEnough && !minimumLength) {
     errors.push(`Password must be at least 8 characters (currently ${password.length}).`);
-  } else if (!strongEnough && !hasUpper) {
-    errors.push('Add at least one uppercase letter (A-Z).');
-  } else if (!strongEnough && !hasLower) {
-    errors.push('Add at least one lowercase letter (a-z).');
-  } else if (!strongEnough && !hasDigit) {
-    errors.push('Add at least one number (0-9).');
-  } else if (!strongEnough && !hasSymbol) {
-    errors.push('Add at least one symbol (e.g. !@#$%).');
+    if (password.length >= 8) {
+      errors.push('Or use 12+ characters for a stronger password.');
+    }
   }
 
-  return { valid: strongEnough || meetsComplexity, errors };
+  return { valid: strongEnough || minimumLength, errors };
 }
 
 async function signUpWithEmail() {
