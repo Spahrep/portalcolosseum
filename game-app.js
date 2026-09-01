@@ -102,30 +102,21 @@ function enterLocation() {
 }
 
 /**
- * Initialize town location markers in the DOM.
+ * Initialize town location markers.
+ * Markers are defined in HTML inside .pano, so we just set their positions
+ * based on data-x/data-y attributes (percentages of the 300vw panorama image).
  */
 function initLocations() {
-  const container = document.getElementById('town-locations');
-  if (!container) return;
-
-  // Clear any existing markers
-  container.innerHTML = '';
-
-  LOCATIONS.forEach((loc, i) => {
-    const marker = document.createElement('div');
-    marker.className = 'location-marker';
-    marker.dataset.location = loc.name;
-    // Position at the building's location on the panorama
-    marker.style.left = `${loc.x}%`;
-    marker.style.bottom = `${100 - loc.y}%`;
+  const markers = document.querySelectorAll('.location-marker');
+  markers.forEach((marker, i) => {
+    const x = parseFloat(marker.dataset.x);
+    const y = parseFloat(marker.dataset.y);
+    // Markers are inside .pano (300vw wide), so left:% is x% of 300vw
+    // bottom: (100 - y)% since data-y is from top, bottom is inverse
+    marker.style.left = `${x}%`;
+    marker.style.bottom = `${100 - y}%`;
+    marker.style.transform = 'translate(-50%, 20px)';
     marker.dataset.index = i;
-
-    const span = document.createElement('span');
-    span.className = 'marker-text';
-    span.textContent = loc.label;
-    marker.appendChild(span);
-
-    container.appendChild(marker);
   });
 }
 
