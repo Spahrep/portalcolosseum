@@ -2,18 +2,18 @@
 <!--
   Portal Colosseum - Arena Game Page
   ===================================
-  This is the main game page. It displays the player's name,
-  a canvas for the arena battle, and a logout button.
+  Main game page. Displays the town panorama background with a game canvas
+  overlay for arena battles. The background shifts with arrow keys for a
+  360° exploration feel.
 
   Authentication Flow:
   1. Check for active Supabase session on load
   2. If no session, redirect back to login page
-  3. If session exists, display player info from the session
-  4. Canvas placeholder shows "Arena Battle Will Begin Soon"
+  3. If session exists, initialize the game
 
   Session Storage:
-  - No localStorage usage (all data in-memory or HttpOnly cookies)
-  - Session tokens persisted via HttpOnly cookie + Edge Function
+  - Session stored in localStorage (PKCE flow) for cross-tab persistence
+  - Refresh token stored in HttpOnly cookie via /api/session Edge Function
   - Player name derived from Supabase session, not stored locally
 -->
 <html lang="en">
@@ -27,17 +27,9 @@
   <script src="/api/env.js"></script>
 </head>
 <body class="game-page">
-  <!-- Main game container -->
+  <!-- Main game container — fullscreen canvas over town panorama -->
   <div id="game-container">
-    <h1>PORTAL COLOSSEUM</h1>
-
-    <!-- Player status bar: shows welcome message and logout button -->
-    <div id="player-status">
-      <span>Welcome, <span id="player-name">Gladiator</span></span>
-      <button class="logout-btn" id="logout-btn">Logout</button>
-    </div>
-
-    <!-- Game canvas: 800x600 arena where battles will be rendered -->
+    <!-- Game canvas: renders the arena battle overlay -->
     <canvas id="game" width="800" height="600"></canvas>
   </div>
 

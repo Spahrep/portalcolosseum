@@ -28,8 +28,8 @@ const MAX_SHIFT = 200;  // max pixels the background can shift in any direction
 
 /**
  * Shift the panorama background based on arrow key input.
- * Arrow keys shift the background in the opposite direction of the keypress
- * (pressing right = look right = background moves left, revealing more of the right)
+ * Arrow keys shift the background in the intuitive direction:
+ * pressing right reveals more of the right side of the panorama.
  * @param {string} direction - 'left', 'right', 'up', 'down'
  */
 function shiftBackground(direction) {
@@ -50,10 +50,13 @@ function shiftBackground(direction) {
       break;
   }
 
-  // Apply the shift via CSS transform
+  // Apply the shift via background-position percentage
+  // Shift from center (50%) by a percentage based on max shift
+  const shiftXPercent = (bgOffsetX / MAX_SHIFT) * 5;  // ±5% from center
+  const shiftYPercent = (bgOffsetY / MAX_SHIFT) * 5;  // ±5% from center
   const gameContainer = document.getElementById('game-container');
   if (gameContainer) {
-    gameContainer.style.backgroundPosition = `${50 + (bgOffsetX / window.innerWidth * 100)}% ${50 + (bgOffsetY / window.innerHeight * 100)}%`;
+    gameContainer.style.backgroundPosition = `${50 + shiftXPercent}% ${50 + shiftYPercent}%`;
   }
 }
 
@@ -73,8 +76,7 @@ function resetBackground() {
  * Initialize the game page.
  * 1. Creates the Supabase client
  * 2. Checks for an active session (redirects to login if none)
- * 3. Displays the player's name
- * 4. Draws the placeholder canvas content
+ * 3. Initializes the game canvas context for future rendering
  */
 async function initGame() {
   // Initialize Supabase client with localStorage-backed PKCE storage
@@ -98,13 +100,8 @@ async function initGame() {
     });
   }
 
-  // --- Event listener bindings (no inline onclick handlers) ---
-  document.getElementById('logout-btn')?.addEventListener('click', logout);
-
   // Fail-closed auth check: session is persisted via localStorage (PKCE flow)
   // with refresh_token also stored in HttpOnly cookie as a fallback.
-  let playerName = 'Gladiator';
-
   if (supabase) {
     try {
       // First: check for a PKCE callback (code in URL query params)
@@ -129,15 +126,7 @@ async function initGame() {
       // Now check the session (from localStorage or PKCE callback exchange)
       const { data: { session }, error } = await supabase.auth.getSession();
 
-      if (session) {
-        // User is authenticated - extract display name from session
-        const user = session.user;
-        playerName = user.email ||
-                    user.user_metadata?.full_name ||
-                    user.user_metadata?.name ||
-                    'Gladiator';
-        // Security: Do NOT persist session or PII to localStorage (XSS risk)
-      } else {
+      if (!session) {
         // No active session - fail closed, redirect to login
         window.location.href = '/login';
         return;
@@ -154,33 +143,17 @@ async function initGame() {
     return;
   }
 
-  // Display the player's name on the status bar
-  document.getElementById('player-name').textContent = playerName;
-
-  // Initialize the game canvas with placeholder content
+  // Initialize the game canvas context (placeholder for future rendering)
+  // No placeholder text drawn — the canvas is ready for arena battle rendering
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
-
-  // Fill canvas with dark blue background
-  ctx.fillStyle = '#1a1a2e';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Draw placeholder title text
-  ctx.fillStyle = '#fff';
-  ctx.font = '30px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillText('Arena Battle Will Begin Soon', canvas.width / 2, canvas.height / 2);
-
-  // Draw player name subtitle
-  ctx.font = '20px monospace';
-  ctx.fillStyle = '#ff6b3b';
-  ctx.fillText('Player: ' + playerName, canvas.width / 2, canvas.height / 2 + 50);
+  // Canvas is initially transparent — the town panorama shows through
 }
 
 /**
  * Log out the current user.
  * Clears the Supabase session and the HttpOnly session cookie, then
- * redirects back to the login page. No localStorage is used.
+ * redirects back to the login page.
  */
 async function logout() {
   if (supabase) {

@@ -44,19 +44,9 @@ body.game-page {
   background-position: center;
   background-repeat: no-repeat;
   /* Scale to fill viewport while preserving aspect ratio — image is wider than tall */
-  background-size: auto 100vh;
+  background-size: 150vw 100vh;
   /* Enable smooth transition when background position changes */
   transition: background-position 0.1s ease-out;
-}
-
-/* Ensure the game container doesn't block the background */
-#game-container {
-  background: transparent;
-}
-
-/* Canvas: semi-transparent overlay so the panorama shows through */
-#game {
-  background: rgba(16, 31, 78, 0.3);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 107, 53, 0.3);
+  /* No overlay — panorama is the full background */
+  background-color: #000;  /* fallback while image loads */
 }
