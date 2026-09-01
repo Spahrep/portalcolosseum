@@ -34,7 +34,7 @@ let supabase;
 // data-x/data-y in game.html match these values
 const LOCATIONS = [
   { name: 'portal',      label: 'Enter The Portal', x: 50,  y: 80 },
-  { name: 'store',       label: 'Store',            x: 40,  y: 80 },
+  { name: 'store',       label: 'Store',            x: 10,  y: 80 },
   { name: 'wizard',      label: 'Wizard Hut',       x: 68,  y: 80 },
   { name: 'leaderboard', label: 'Leaderboards',     x: 88,  y: 80 }
 ];
