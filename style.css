@@ -26,14 +26,6 @@ body {
   color: #fff;                      /* Default white text */
 }
 
-/* Game page uses the town panorama as background */
-body.game-page {
-  background-image: url('/public/town_pano.jpg');
-  background-attachment: fixed;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
 /* Landing page container (index.html) */
 #landing {
   text-align: center;

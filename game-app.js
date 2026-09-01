@@ -19,6 +19,56 @@ const SUPABASE_ANON_KEY = window.ENV.SUPABASE_ANON_KEY;
 // Supabase client instance (initialized in initGame())
 let supabase;
 
+// === PANORAMA BACKGROUND SHIFT (parallax when arrow keys pressed) ===
+// The background image is larger than the viewport — we shift its position
+// to simulate looking around a 360° environment.
+let bgOffsetX = 0;  // horizontal offset in pixels
+let bgOffsetY = 0;  // vertical offset in pixels
+const MAX_SHIFT = 200;  // max pixels the background can shift in any direction
+
+/**
+ * Shift the panorama background based on arrow key input.
+ * Arrow keys shift the background in the opposite direction of the keypress
+ * (pressing right = look right = background moves left, revealing more of the right)
+ * @param {string} direction - 'left', 'right', 'up', 'down'
+ */
+function shiftBackground(direction) {
+  const step = 50;  // pixels per keypress
+
+  switch (direction) {
+    case 'left':
+      bgOffsetX = Math.max(-MAX_SHIFT, bgOffsetX - step);
+      break;
+    case 'right':
+      bgOffsetX = Math.min(MAX_SHIFT, bgOffsetX + step);
+      break;
+    case 'up':
+      bgOffsetY = Math.max(-MAX_SHIFT, bgOffsetY - step);
+      break;
+    case 'down':
+      bgOffsetY = Math.min(MAX_SHIFT, bgOffsetY + step);
+      break;
+  }
+
+  // Apply the shift via CSS transform
+  const gameContainer = document.getElementById('game-container');
+  if (gameContainer) {
+    gameContainer.style.backgroundPosition = `${50 + (bgOffsetX / window.innerWidth * 100)}% ${50 + (bgOffsetY / window.innerHeight * 100)}%`;
+  }
+}
+
+/**
+ * Reset the background to center position.
+ */
+function resetBackground() {
+  bgOffsetX = 0;
+  bgOffsetY = 0;
+  const gameContainer = document.getElementById('game-container');
+  if (gameContainer) {
+    gameContainer.style.backgroundPosition = 'center';
+  }
+}
+
 /**
  * Initialize the game page.
  * 1. Creates the Supabase client
@@ -158,4 +208,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // PKCE auto-exchange handled in initGame() via getSession()
   }
   initGame();
+
+  // --- Directional key handling for panorama background shift ---
+  // Arrow keys shift the background image to simulate looking around
+  document.addEventListener('keydown', (e) => {
+    switch (e.key) {
+      case 'ArrowLeft':
+        e.preventDefault();
+        shiftBackground('left');
+        break;
+      case 'ArrowRight':
+        e.preventDefault();
+        shiftBackground('right');
+        break;
+      case 'ArrowUp':
+        e.preventDefault();
+        shiftBackground('up');
+        break;
+      case 'ArrowDown':
+        e.preventDefault();
+        shiftBackground('down');
+        break;
+      case 'Home':
+        // Reset background position
+        e.preventDefault();
+        resetBackground();
+        break;
+    }
+  });
 });

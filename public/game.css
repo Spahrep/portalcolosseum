@@ -34,3 +34,29 @@
 .logout-btn:hover {
   background: #5c2a2a;
 }
+
+/* Game page body: town panorama background with parallax shift capability */
+/* The background image is larger than the viewport — arrow keys shift  */
+/* the background position to simulate looking around a 360° environment */
+body.game-page {
+  background-image: url('/public/town_pano.jpg');
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
+  /* Scale to fill viewport while preserving aspect ratio — image is wider than tall */
+  background-size: auto 100vh;
+  /* Enable smooth transition when background position changes */
+  transition: background-position 0.1s ease-out;
+}
+
+/* Ensure the game container doesn't block the background */
+#game-container {
+  background: transparent;
+}
+
+/* Canvas: semi-transparent overlay so the panorama shows through */
+#game {
+  background: rgba(16, 31, 78, 0.3);
+  border-radius: 8px;
+  border: 1px solid rgba(255, 107, 53, 0.3);
+}
