@@ -266,8 +266,9 @@ document.addEventListener('DOMContentLoaded', () => {
     panToLocation(selectedIndex);
   });
 
-  // --- Town location navigation via arrow keys + Enter ---
-  // Arrow keys cycle through town locations (portal, store, wizard, leaderboard)
+  // --- Town location navigation via arrow keys + mouse scroll ---
+  // Arrow keys cycle through town locations (store, portal, wizard, leaderboard)
+  // Mouse wheel: scroll up = next location, scroll down = previous location
   // The selected marker shows [x] via CSS ::before
   // Enter triggers the location action (pan + enter)
   document.addEventListener('keydown', (e) => {
@@ -299,4 +300,17 @@ document.addEventListener('DOMContentLoaded', () => {
         break;
     }
   });
+
+  // Mouse scroll navigation: scroll up moves to next location,
+  // scroll down moves to previous location
+  document.addEventListener('wheel', (e) => {
+    // Only handle vertical scroll, ignore horizontal
+    if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
+    e.preventDefault();
+    if (e.deltaY < 0) {
+      navigateLocations('right');  // next location
+    } else {
+      navigateLocations('left');   // previous location
+    }
+  }, { passive: false });
 });
