@@ -9,6 +9,8 @@
 /* Game page body: town panorama background with parallax shift */
 /* Arrow keys shift the background position to explore the 360 panorama */
 body.game-page {
+  margin: 0;
+  padding: 0;
   background-image: url('/public/town_pano.jpg');
   background-attachment: fixed;
   background-position: center;
@@ -19,12 +21,32 @@ body.game-page {
   transition: background-position 0.1s ease-out;
   /* Black fallback while image loads */
   background-color: #000;
+  /* Ensure the body takes full viewport height so background is visible */
+  height: 100vh;
+  overflow: hidden;
 }
 
-/* Canvas: transparent overlay — town panorama shows through */
+/* Game container: fills entire viewport */
+#game-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Canvas: transparent overlay — town panorama shows through behind */
 #game {
   display: block;
-  margin: 0 auto;
+  width: 100vw;
+  height: 100vh;
+  /* Transparent canvas so the panorama background is visible */
+  background: transparent;
 }
 
 /* Minimal logout button in bottom-right corner */

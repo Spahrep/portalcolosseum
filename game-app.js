@@ -50,14 +50,11 @@ function shiftBackground(direction) {
       break;
   }
 
-  // Apply the shift via background-position percentage
+  // Apply the shift via background-position percentage on body.game-page
   // Shift from center (50%) by a percentage based on max shift
-  const shiftXPercent = (bgOffsetX / MAX_SHIFT) * 5;  // ±5% from center
-  const shiftYPercent = (bgOffsetY / MAX_SHIFT) * 5;  // ±5% from center
-  const gameContainer = document.getElementById('game-container');
-  if (gameContainer) {
-    gameContainer.style.backgroundPosition = `${50 + shiftXPercent}% ${50 + shiftYPercent}%`;
-  }
+  const shiftXPercent = (bgOffsetX / MAX_SHIFT) * 10;  // ±10% from center (more visible)
+  const shiftYPercent = (bgOffsetY / MAX_SHIFT) * 10;  // ±10% from center (more visible)
+  document.body.style.backgroundPosition = `${50 + shiftXPercent}% ${50 + shiftYPercent}%`;
 }
 
 /**
@@ -66,10 +63,7 @@ function shiftBackground(direction) {
 function resetBackground() {
   bgOffsetX = 0;
   bgOffsetY = 0;
-  const gameContainer = document.getElementById('game-container');
-  if (gameContainer) {
-    gameContainer.style.backgroundPosition = 'center';
-  }
+  document.body.style.backgroundPosition = 'center';
 }
 
 /**
