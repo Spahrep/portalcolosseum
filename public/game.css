@@ -7,10 +7,10 @@
  *
  * Panning model:
  *   The #game-container holds a .pano background layer + canvas + markers.
- *   The .pano is 300vw wide (3x the viewport) to match the 3:1 aspect ratio
+ *   The .pano is 300vh wide (3x viewport height) to match the 3:1 aspect ratio
  *   of town_pano.jpg (2448x816). Panning shifts #game-container left/right.
  *   Markers are children of .pano so they scroll with the background,
- *   positioned as percentages of the 300vw image width.
+ *   positioned as percentages of the 300vh image width.
  */
 
 body.game-page {
@@ -22,16 +22,20 @@ body.game-page {
   overflow: hidden;
 }
 
-/* Panorama background layer — the full 300vw wide town image */
+/* Panorama background layer — the full town image */
+/* Image is 2448x816 (3:1 aspect). We want it at full viewport height (100vh),*/
+/* and width = 3x height (300vh) to preserve aspect ratio on any screen. */
+/* This ensures the image is NEVER stretched regardless of viewport aspect ratio.*/
+/* Viewport sees 100vw of the image; pan across the rest. */
 .pano {
   position: absolute;
   top: 0;
   left: 0;
-  width: 300vw;
+  width: 300vh;
   height: 100vh;
   background-image: url('/public/town_pano.jpg');
   background-repeat: no-repeat;
-  background-size: 300vw 100vh;
+  background-size: 100% 100%;
   background-position: 0% 0%;
 }
 

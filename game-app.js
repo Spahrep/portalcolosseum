@@ -34,9 +34,9 @@ let supabase;
 // data-x/data-y in game.html match these values
 const LOCATIONS = [
   { name: 'portal',      label: 'Enter The Portal', x: 50,  y: 80 },
-  { name: 'store',       label: 'Store',            x: 40,  y: 65 },
-  { name: 'wizard',      label: 'Wizard Hut',       x: 68,  y: 65 },
-  { name: 'leaderboard', label: 'Leaderboards',     x: 88,  y: 65 }
+  { name: 'store',       label: 'Store',            x: 40,  y: 80 },
+  { name: 'wizard',      label: 'Wizard Hut',       x: 68,  y: 80 },
+  { name: 'leaderboard', label: 'Leaderboards',     x: 88,  y: 80 }
 ];
 
 // Track which locations have been visited (Enter pressed on them)
@@ -47,16 +47,25 @@ let selectedIndex = 0;
 
 /**
  * Pan the town panorama to center on the selected location.
- * The panorama image is 300vw wide (2448px / 816px @ 100vh).
- * Viewport is 100vw wide. To center loc.x% (position in the 300vw image)
- * on the viewport center (50vw):
- *   - Building position in image: loc.x * 3vw
+ * The panorama image (.pano) is 300vh wide (3x viewport height) to preserve
+ * the 3:1 aspect ratio of town_pano.jpg regardless of screen aspect ratio.
+ * Viewport is 100vw wide. To center loc.x% (position in the image) on the
+ * viewport center (50vw):
+ *   - Building position in image: loc.x% * 300vh
  *   - We want this at viewport center: 50vw
- *   - Container translateX = 50 - (loc.x * 3)
+ *   - Container translateX in vw = 50 - (loc.x * 3 * vh/vw)
+ *   where vh/vw = window.innerHeight/window.innerWidth * 100... actually
+ *   300vh in vw = 300 * (innerHeight/innerWidth)
+ *   So tx = 50 - loc.x * 3 * innerHeight/innerWidth
  */
 function panToLocation(index) {
   const loc = LOCATIONS[index];
-  const tx = 50 - (loc.x * 3);  // in vw units (range: 50 to -250)
+  // Calculate pan offset: account for the fact that image width (300vh) 
+  // may differ from 300vw on non-3:1 screens
+  const ratio = window.innerHeight / window.innerWidth;  // vh/vw at 100x scale
+  const imageWidthInVw = 300 * ratio;  // 300vh expressed in vw units
+  const buildingPosInVw = (loc.x / 100) * imageWidthInVw;  // position in vw
+  const tx = 50 - buildingPosInVw;  // center on viewport midpoint (50vw)
 
   const container = document.getElementById('game-container');
   container.style.transform = `translate(${tx}vw, 0)`;
@@ -250,6 +259,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // PKCE auto-exchange handled in initGame() via getSession()
   }
   initGame();
+
+  // Re-pan on resize to account for aspect ratio changes
+  window.addEventListener('resize', () => {
+    panToLocation(selectedIndex);
+  });
 
   // --- Town location navigation via arrow keys + Enter ---
   // Arrow keys cycle through town locations (portal, store, wizard, leaderboard)
