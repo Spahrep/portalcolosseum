@@ -42,6 +42,16 @@
       }
     },
     {
+      "src": "/reset-password",
+      "dest": "/reset-password.html",
+      "headers": {
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
+      }
+    },
+    {
       "src": "/game",
       "dest": "/game.html",
       "headers": {
