@@ -29,12 +29,13 @@ let supabase;
 // The [ ] / [x] checkbox is rendered via CSS ::before on .location-marker.selected.
 
 // Location definitions: position on the panorama in image percentages.
-// x = % across the 300vw panorama image (0-100)
-// y = % down from top of the image (0-100) — all at same height for alignment
+// Order determines the arrow-key navigation cycle: Store → Portal → Wizard → Leaderboard
+// x = % across the 300vh panorama image (0-100)
+// y = % down from top of the image — all at same height for alignment
 // data-x/data-y in game.html match these values
 const LOCATIONS = [
-  { name: 'portal',      label: 'Enter The Portal', x: 50,  y: 80 },
   { name: 'store',       label: 'Store',            x: 20,  y: 80 },
+  { name: 'portal',      label: 'Enter The Portal', x: 50,  y: 80 },
   { name: 'wizard',      label: 'Wizard Hut',       x: 68,  y: 80 },
   { name: 'leaderboard', label: 'Leaderboards',     x: 88,  y: 80 }
 ];
