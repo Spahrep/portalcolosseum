@@ -65,24 +65,20 @@ async function signInWithProvider(provider) {
 
 /**
  * Validates password strength.
- * Policy: at least 8 characters OR at least 12 characters (any characters).
+ * Policy: at least 8 characters.
  * No mandatory character classes — see /passwords for guidance.
  * Returns { valid: bool, errors: string[] } so the caller can show
  * specific, actionable feedback to the user.
  */
 function validatePassword(password) {
   const errors = [];
-  const strongEnough = password.length >= 12;
   const minimumLength = password.length >= 8;
 
-  if (!strongEnough && !minimumLength) {
+  if (!minimumLength) {
     errors.push(`Password must be at least 8 characters (currently ${password.length}).`);
-    if (password.length >= 8) {
-      errors.push('Or use 12+ characters for a stronger password.');
-    }
   }
 
-  return { valid: strongEnough || minimumLength, errors };
+  return { valid: minimumLength, errors };
 }
 
 async function signUpWithEmail() {

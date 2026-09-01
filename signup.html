@@ -11,7 +11,7 @@
   3. Database trigger auto-creates profiles row with username
   4. On success, redirect to game page
 
-  Password policy: 8+ characters (or 12+ for extra strength).
+  Password policy: 8+ characters.
   No mandatory character classes — see /passwords for guidance.
 -->
 <html lang="en">
@@ -84,6 +84,9 @@
         <a href="/passwords" class="text-orange">Password guidance</a>
       </p>
       <button id="email-signup-btn" class="btn-primary">Create Account</button>
+      <p class="small-hint">
+        Minimum 8 characters. No character class requirements.
+      </p>
     </div>
 
     <!-- Already have an account link -->
