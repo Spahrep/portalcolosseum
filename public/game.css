@@ -23,7 +23,7 @@ body.game-page {
 
 /* Panorama background layer — inside the pannable container */
 /* Town image is 2448x816 (3:1 aspect). At 100vh height, width = 300vw. */
-/* Viewport sees center 100vw; pan range is ±100vw to cover entire image. */
+/* Viewport sees 100vw of the 300vw image; pan range is 0 to -200vw. */
 .pano {
   position: absolute;
   top: 0;
@@ -32,13 +32,14 @@ body.game-page {
   height: 100vh;
   background-image: url('/public/town_pano.jpg');
   background-repeat: no-repeat;
-  background-size: cover;
+  background-size: 300vw 100vh;
   background-position: 0% 0%;
-  /* Start centered: left 100vw of the 300vw image is off-screen */
-  transform: translateX(-100vw);
+  /* Start at the left edge of the panorama */
+  transform: translateX(0);
 }
 
 /* Game container: holds panorama + canvas + markers, panned via CSS transform */
+/* Note: NO overflow:hidden — we need to scroll through the full 300vw image */
 #game-container {
   position: fixed;
   top: 0;
@@ -47,8 +48,6 @@ body.game-page {
   height: 100vh;
   margin: 0;
   padding: 0;
-  /* Hide overflow so off-screen markers/building parts are clipped */
-  overflow: hidden;
   /* Smooth transition when we pan to a location */
   transition: transform 0.3s ease-out;
 }
