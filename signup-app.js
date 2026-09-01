@@ -36,9 +36,13 @@ function initSupabase() {
   console.log('Supabase initialized:', supabase ? 'OK' : 'FAILED');
 }
 
-function showMessage(text, type = 'success') {
+function showMessage(text, type = 'success', allowHtml = false) {
   const msgEl = document.getElementById('auth-message');
-  msgEl.textContent = text;
+  if (allowHtml) {
+    msgEl.innerHTML = text;
+  } else {
+    msgEl.textContent = text;
+  }
   msgEl.className = `auth-message ${type}`;
   msgEl.style.display = 'block';
   if (type === 'success') {
@@ -59,6 +63,46 @@ async function signInWithProvider(provider) {
   }
 }
 
+/**
+ * Validates password strength.
+ * Policy: password is accepted if EITHER:
+ *   - 12+ characters (any characters), OR
+ *   - 8+ characters AND contains uppercase, lowercase, digit, and symbol
+ * Returns { valid: bool, errors: string[] } so the caller can show
+ * specific, actionable feedback to the user.
+ */
+function validatePassword(password) {
+  const errors = [];
+  const hasUpper = /[A-Z]/.test(password);
+  const hasLower = /[a-z]/.test(password);
+  const hasDigit = /[0-9]/.test(password);
+  const hasSymbol = /[^A-Za-z0-9]/.test(password);
+
+  const strongEnough = password.length >= 12;
+  const meetsComplexity = password.length >= 8
+    && hasUpper && hasLower && hasDigit && hasSymbol;
+
+  if (!strongEnough && !meetsComplexity) {
+    errors.push('Password must be at least 12 characters, or at least 8 characters with uppercase, lowercase, number, and symbol.');
+  }
+
+  // Provide specific guidance on what is missing (only relevant for the
+  // shorter-length path so the user knows exactly how to fix it).
+  if (!strongEnough && password.length < 8) {
+    errors.push(`Password must be at least 8 characters (currently ${password.length}).`);
+  } else if (!strongEnough && !hasUpper) {
+    errors.push('Add at least one uppercase letter (A-Z).');
+  } else if (!strongEnough && !hasLower) {
+    errors.push('Add at least one lowercase letter (a-z).');
+  } else if (!strongEnough && !hasDigit) {
+    errors.push('Add at least one number (0-9).');
+  } else if (!strongEnough && !hasSymbol) {
+    errors.push('Add at least one symbol (e.g. !@#$%).');
+  }
+
+  return { valid: strongEnough || meetsComplexity, errors };
+}
+
 async function signUpWithEmail() {
   if (!supabase) return showMessage('Authentication service not available. Please refresh.', 'error');
 
@@ -70,8 +114,10 @@ async function signUpWithEmail() {
     return showMessage('Please fill in all fields', 'error');
   }
 
-  if (password.length < 6) {
-    return showMessage('Password must be at least 6 characters', 'error');
+  // --- Client-side password validation (before hitting Supabase) ---
+  const { valid, errors } = validatePassword(password);
+  if (!valid) {
+    return showMessage(errors.join(' '), 'error');
   }
 
   // Check username availability before signup
@@ -87,7 +133,7 @@ async function signUpWithEmail() {
     }
 
     if (existing) {
-      return showMessage('Username already taken. Try another.', 'error');
+      return showMessage(`Username '${username}' is taken. Try another.`, 'error');
     }
   } catch (err) {
     // PGRST116 means no rows found (username is available)
@@ -105,7 +151,17 @@ async function signUpWithEmail() {
 
   if (error) {
     console.error('Signup error:', error);
-    showMessage(`Account creation failed: ${error.message}`, 'error');
+    if (error.code === 'user_already_registered' ||
+        /already.*registered/i.test(error.message || '')) {
+      showMessage(
+        'This email is already registered. ' +
+        '<a href="/login#reset">Reset your password</a>?',
+        'error',
+        true
+      );
+    } else {
+      showMessage(`Account creation failed: ${error.message}`, 'error');
+    }
   } else {
     showMessage('Account created! Check your email to verify and complete signup.', 'success');
   }
