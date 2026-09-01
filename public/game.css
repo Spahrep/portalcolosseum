@@ -53,19 +53,19 @@ body.game-page {
 .location-marker {
   position: absolute;
   font-family: 'Pixeloid Mono', 'Courier New', monospace;
-  font-size: 28px;
+  font-size: clamp(14px, 2.5vw, 28px);
   font-weight: 700;
   white-space: nowrap;
   color: #f8f8f0;
   text-shadow:
-    3px 0 0 #000,
-    -3px 0 0 #000,
-    0 3px 0 #000,
-    0 -3px 0 #000;
+    2px 0 0 #000,
+    -2px 0 0 #000,
+    0 2px 0 #000,
+    0 -2px 0 #000;
   pointer-events: auto;
   cursor: pointer;
-  padding: 6px 12px;
-  border-radius: 6px;
+  padding: 4px 8px;
+  border-radius: 4px;
   transition: all 0.2s ease;
   opacity: 0.9;
 }
