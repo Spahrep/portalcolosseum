@@ -147,7 +147,10 @@ async function initGame() {
   // No placeholder text drawn — the canvas is ready for arena battle rendering
   const canvas = document.getElementById('game');
   const ctx = canvas.getContext('2d');
-  // Canvas is initially transparent — the town panorama shows through
+  /* Canvas is initially transparent — the town panorama shows through */
+
+  // --- Event listener bindings (no inline onclick handlers) ---
+  document.getElementById('logout-btn')?.addEventListener('click', logout);
 }
 
 /**

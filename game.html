@@ -33,6 +33,12 @@
     <canvas id="game" width="800" height="600"></canvas>
   </div>
 
+  <!-- Minimal logout button (bottom-right corner) -->
+  <!-- TODO: replace with proper UI -->
+  <div id="logout-corner">
+    <button id="logout-btn" class="logout-corner-btn" title="Logout">×</button>
+  </div>
+
   <!-- Application logic — external ES module (deferred, CSP-compliant) -->
   <!-- Replaces inline scripts that were blocked by CSP script-src without 'unsafe-inline' -->
   <script type="module" src="/game-app.js"></script>

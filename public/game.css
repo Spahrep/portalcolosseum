@@ -3,50 +3,58 @@
  * ===================================
  * Game-specific styles for the arena game page.
  * Global styles (body, fonts) come from style.css.
- * Game page adds: town panorama background, player status bar, canvas.
+ * Game page adds: town panorama background, game canvas, logout button.
  */
 
-/* Player status bar: shows welcome message and logout button */
-#player-status {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  /* Dark semi-transparent background to ensure text is readable over the panorama */
-  background: rgba(30, 30, 50, 0.8);
-  padding: 8px 16px;
-  border-radius: 8px;
-  margin-bottom: 1rem;
-}
-
-/* Logout button: styled in red to indicate destructive action */
-.logout-btn {
-  background: #3a1a1a;
-  color: #f87171;
-  border: 1px solid #5c2a2a;
-  padding: 6px 14px;
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.9rem;
-  transition: background 0.2s;
-  font-family: 'Courier New', monospace;
-}
-
-.logout-btn:hover {
-  background: #5c2a2a;
-}
-
-/* Game page body: town panorama background with parallax shift capability */
-/* The background image is larger than the viewport — arrow keys shift  */
-/* the background position to simulate looking around a 360° environment */
+/* Game page body: town panorama background with parallax shift */
+/* Arrow keys shift the background position to explore the 360 panorama */
 body.game-page {
   background-image: url('/public/town_pano.jpg');
   background-attachment: fixed;
   background-position: center;
   background-repeat: no-repeat;
-  /* Scale to fill viewport while preserving aspect ratio — image is wider than tall */
+  /* 150vw width gives wider view of panorama (less zoomed in than auto 100vh) */
   background-size: 150vw 100vh;
-  /* Enable smooth transition when background position changes */
+  /* Smooth transition when background position changes (arrow key shift) */
   transition: background-position 0.1s ease-out;
-  /* No overlay — panorama is the full background */
-  background-color: #000;  /* fallback while image loads */
+  /* Black fallback while image loads */
+  background-color: #000;
+}
+
+/* Canvas: transparent overlay — town panorama shows through */
+#game {
+  display: block;
+  margin: 0 auto;
+}
+
+/* Minimal logout button in bottom-right corner */
+/* TODO: replace with proper icon/UI design */
+#logout-corner {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 1000;
+}
+
+.logout-corner-btn {
+  background: rgba(58, 26, 26, 0.8);
+  color: #f87171;
+  border: 1px solid #5c2a2a;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  font-size: 20px;
+  font-family: monospace;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  padding: 0;
+}
+
+.logout-corner-btn:hover {
+  background: rgba(92, 42, 42, 0.9);
+  color: #ff5555;
+  transform: scale(1.1);
 }
