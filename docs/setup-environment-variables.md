@@ -112,3 +112,24 @@ Then update the HTML `<script>` tag to point to this API route:
 
 - **Order matters:** The `/env.js` script must load **before** any script that uses `window.ENV.*`.
 - **Local development:** When running locally, you can set placeholder values in `env.js` directly.
+
+## Supabase Auth Settings (Production)
+
+Some auth configurations are **not** set via code — they live in the Supabase project dashboard and must be configured manually:
+
+### Password Requirements
+
+1. Go to [supabase.com](https://supabase.com) → your project → **Settings** → **Authentication** → **User Signups**
+2. Set:
+   - **Minimum password length**: `8` (we enforce 12 chars OR 8+ complex on the client, but Supabase can only set a floor)
+   - **Password requirements**: `Lowercase letters, Uppercase letters, Numbers, Symbols`
+
+> **Why:** Our client-side `validatePassword()` can be bypassed by a hostile user (devtools, direct API calls). The server-side settings enforce the floor so that even if someone skips `signup-app.js`, they still can't register with a weak password.
+
+### Local Development
+
+The same settings are in `/home/spahrep/portalcolosseum/supabase/config.toml` under `[auth]`:
+- `minimum_password_length = 8`
+- `password_requirements = "lower_upper_letters_digits_symbols"`
+
+These apply to `supabase start` locally but do **not** propagate to the hosted project.
