@@ -18,19 +18,20 @@ const SUPABASE_ANON_KEY = window.ENV.SUPABASE_ANON_KEY;
 let supabase;
 
 /**
- * Initialize the Supabase client with sessionStorage-backed PKCE storage.
+ * Initialize the Supabase client with localStorage-backed PKCE storage.
  *
- * SECURITY NOTE: We use sessionStorage (not localStorage) because:
- * - sessionStorage persists across page reloads on the same tab
- *   (needed for password reset flow where user clicks an email link)
- * - sessionStorage is cleared when the tab/window is closed
- *   (better XSS hygiene than localStorage — data doesn't persist after session)
- * - sessionStorage is not accessible cross-origin (same-origin policy)
+ * SECURITY NOTE: We use localStorage (not sessionStorage) because:
+ * - resetPasswordForEmail on the login page stores the PKCE code_verifier in
+ *   localStorage (via the storage adapter)
+ * - The user clicks the email link, opening a NEW browser context (new tab or
+ *   window) to this reset-password page
+ * - sessionStorage is per-tab, so it would be LOST when the email link opens
+ *   in a different context — the code_verifier would be unrecoverable
+ * - localStorage persists across tabs/windows of the same origin, so the
+ *   verifier stored by the login page is available here for exchangeCodeForSession
  *
- * This is specifically needed for the password reset flow:
- * The PKCE code verifier is stored by detectSessionInUrl on init().
- * When the code is exchanged for a session, the verifier must be retrievable.
- * sessionStorage survives the initial page load so exchangeCodeForSession works.
+ * Session refresh_tokens are NOT stored here — they go through the /api/session
+ * Edge Function which sets HttpOnly cookies, keeping them safe from XSS.
  */
 function initSupabase() {
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -38,10 +39,10 @@ function initSupabase() {
       flowType: 'pkce',
       detectSessionInUrl: true,
       storage: {
-        // sessionStorage: survives page reloads, cleared on browser/tab close
-        getItem: (key) => sessionStorage.getItem(key),
-        setItem: (key, value) => sessionStorage.setItem(key, value),
-        removeItem: (key) => sessionStorage.removeItem(key)
+        // localStorage: persists across tabs/windows (needed for email-link PKCE flow)
+        getItem: (key) => localStorage.getItem(key),
+        setItem: (key, value) => localStorage.setItem(key, value),
+        removeItem: (key) => localStorage.removeItem(key)
       }
     }
   });

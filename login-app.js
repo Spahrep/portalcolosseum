@@ -25,23 +25,25 @@ let supabase;
  * Creates a Supabase client instance that provides access to auth, database, etc.
  * After initialization, check if user has an existing session.
  *
- * Security: We use an in-memory storage adapter instead of localStorage to
- * prevent refresh tokens from being exposed to XSS attacks. Sessions are
- * only retained for the lifetime of the page (no persistence across reloads).
+ * Security: We use a storage adapter backed by localStorage.
+ * For the password reset flow, this is REQUIRED — when resetPasswordForEmail
+ * is called on the login page, Supabase stores the PKCE code_verifier in
+ * localStorage. The user then clicks the email link (opening a new browser
+ * context), and the reset-password page needs to read that same verifier.
+ * sessionStorage would be lost since the email link opens in a new context.
+ *
+ * Session tokens (refresh_token) are stored in HttpOnly cookies via /api/session
+ * Edge Function, so they're not exposed to XSS in localStorage.
  */
 function initSupabase() {
-  // Create the Supabase client with URL and anon key
-  // Security: Use in-memory storage adapter to prevent tokens from being
-  // exposed to XSS attacks via localStorage. Sessions are retained only
-  // for the lifetime of the page (no persistence across reloads).
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
-      flowType: 'pkce',        // Use PKCE flow instead of implicit (tokens in URL)
-      detectSessionInUrl: true, // Auto-detect and exchange code on callback
+      flowType: 'pkce',
+      detectSessionInUrl: true,
       storage: {
-        getItem: () => null,
-        setItem: () => {},
-        removeItem: () => {}
+        getItem: (key) => localStorage.getItem(key),
+        setItem: (key, value) => localStorage.setItem(key, value),
+        removeItem: (key) => localStorage.removeItem(key)
       }
     }
   });
