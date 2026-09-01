@@ -1,0 +1,313 @@
+/*
+  Portal Colosseum Auth Pages Shared Stylesheet
+  =============================================
+  Shared styles for login, signup, and password-related pages.
+  Uses the dark fantasy theme: deep blue background, orange accents,
+  glass-morphism form containers.
+
+  Theme colors:
+    Primary:      #ff6b3b (orange - buttons, borders, accents)
+    Primary hover: #ff8c42 (lighter orange)
+    Background:   #101f2e (deep blue)
+    Form bg:      rgba(15, 22, 55, 0.85) with blur
+*/
+
+/* ============================================================
+   BODY / OVERLAY (pages with full-screen background image)
+   ============================================================ */
+.auth-bg-body {
+  margin: 0;
+  padding: 20px 0;
+  min-height: 100vh;
+  font-family: 'Courier New', monospace;
+  overflow-x: hidden;
+}
+
+.auth-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(15, 22, 55, 0.7);
+  z-index: 0;
+  backdrop-filter: blur(2px);
+}
+
+/* ============================================================
+   FORM CONTAINER
+   ============================================================ */
+.auth-container {
+  position: relative;
+  z-index: 1;
+  max-width: 420px;
+  width: 90vw;
+  max-width: 420px;
+  margin: 40px auto;
+  padding: 2rem;
+  background: rgba(15, 22, 55, 0.85);
+  border: 2px solid rgba(255, 107, 59, 0.8);
+  border-radius: 16px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+
+  /* Responsive scaling */
+  box-sizing: border-box;
+}
+
+@media (max-width: 480px) {
+  .auth-container {
+    width: 92vw;
+    padding: 1.5rem;
+    margin: 20px auto;
+  }
+}
+
+@media (min-width: 768px) {
+  .auth-container {
+    max-width: 420px;
+  }
+}
+
+/* ============================================================
+   HEADINGS
+   ============================================================ */
+.auth-container h2 {
+  text-align: center;
+  margin-bottom: 1.5rem;
+  color: #ff6b3b;
+  font-size: 1.5rem;
+  letter-spacing: 1px;
+}
+
+/* ============================================================
+   OAUTH BUTTONS
+   ============================================================ */
+.oauth-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.oauth-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  background: #2a2a40;
+  color: white;
+  border: 1px solid #444;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.oauth-btn:hover {
+  background: #3a3a50;
+  border-color: #ff6b3b;
+}
+
+/* SVG icon container for OAuth buttons */
+.oauth-icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+/* ============================================================
+   FORM INPUTS
+   ============================================================ */
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 12px 14px;
+  background: #1a1a2e;
+  border: 1px solid #444;
+  border-radius: 8px;
+  color: white;
+  font-family: 'Courier New', monospace;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #ff6b3b;
+  box-shadow: 0 0 0 3px rgba(255, 107, 59, 0.2);
+  background: #222236;
+}
+
+.form-group input::placeholder {
+  color: #666;
+}
+
+/* ============================================================
+   PRIMARY BUTTONS (submit, sign up, etc.)
+   ============================================================ */
+.btn-primary {
+  width: 100%;
+  padding: 14px;
+  background: #ff6b3b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-family: 'Courier New', monospace;
+  font-size: 1.1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 15px rgba(255, 107, 59, 0.3);
+}
+
+.btn-primary:hover {
+  background: #ff8c35;
+  border-color: #ff8c35;
+  box-shadow: 0 6px 20px rgba(255, 107, 59, 0.4);
+}
+
+/* Gradient variant (for signup CTA) */
+.btn-gradient {
+  display: inline-block;
+  padding: 14px 40px;
+  background: linear-gradient(45deg, #ff6b35, #f79339);
+  color: white;
+  border: 2px solid #ff6b3b;
+  border-radius: 10px;
+  font-size: 1.15rem;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 15px rgba(255, 107, 53, 0.4);
+}
+
+.btn-gradient:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(255, 107, 53, 0.5);
+}
+
+/* ============================================================
+   MESSAGES
+   ============================================================ */
+.auth-message {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  text-align: center;
+  word-break: break-word;
+}
+
+.msg-success {
+  background: #1a3a1a;
+  color: #4ade80;
+}
+
+.msg-error {
+  background: #3a1a1a;
+  color: #f87171;
+}
+
+/* ============================================================
+   HINT / LINK TEXT
+   ============================================================ */
+.hint {
+  font-size: 0.85rem;
+  color: #888;
+  text-align: center;
+  margin-top: 0.75rem;
+}
+
+.hint a {
+  color: #ff6b3b;
+  text-decoration: none;
+}
+
+.hint a:hover {
+  text-decoration: underline;
+}
+
+/* Orange accent text */
+.text-orange {
+  color: #ff6b3b;
+  font-weight: bold;
+}
+
+.small-hint {
+  font-size: 0.8rem;
+  color: #666;
+  text-align: center;
+  margin-top: 1rem;
+}
+
+/* ============================================================
+   DIVIDER
+   ============================================================ */
+.divider {
+  text-align: center;
+  color: #666;
+  margin: 1rem 0;
+  font-size: 0.9rem;
+  position: relative;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  width: 40%;
+  height: 1px;
+  background: #444;
+}
+
+.divider::before { left: 0; }
+.divider::after { right: 0; }
+
+/* ============================================================
+   SIGNUP SECTION (call-to-action card within auth pages)
+   ============================================================ */
+.signup-cta {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 2px solid rgba(255, 107, 59, 0.4);
+}
+
+.signup-cta-inner {
+  text-align: center;
+}
+
+.signup-cta-inner p {
+  color: #aaa;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  font-weight: bold;
+}
+
+.signup-cta-inner .small {
+  color: #888;
+  font-size: 0.85rem;
+  margin-top: 0.75rem;
+}
+
+/* ============================================================
+   RESPONSIVE BEHAVIOR
+   ============================================================ */
+@media (max-width: 480px) {
+  .auth-container {
+    padding: 1.25rem;
+    width: 92vw;
+  }
+  .auth-container h2 { font-size: 1.3rem; }
+  .btn-primary, .btn-gradient { font-size: 1rem; }
+}
+
+@media (max-width: 360px) {
+  .auth-container { padding: 1rem; }
+  .auth-container h2 { font-size: 1.15rem; }
+}

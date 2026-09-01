@@ -10,6 +10,9 @@
   2. Supabase creates auth.users entry via signUp()
   3. Database trigger auto-creates profiles row with username
   4. On success, redirect to game page
+
+  Password policy: 8+ characters (or 12+ for extra strength).
+  No mandatory character classes — see /passwords for guidance.
 -->
 <html lang="en">
 <head>
@@ -17,28 +20,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal Colosseum - Signup</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/public/auth.css">
   <!-- Environment configuration - loaded before application scripts -->
-  <!-- /api/env.js is a synchronous external script (allowed by CSP script-src 'self') -->
-  <!-- that populates window.ENV before the deferred module below executes. -->
   <script src="/api/env.js"></script>
+
+  <style>
+    /* Full-screen background image using CSS instead of an img tag */
+    body {
+      margin: 0;
+      padding: 20px 0;
+      min-height: 100vh;
+      background-image: url('/public/logo.jpg');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+      font-family: 'Courier New', monospace;
+      overflow-x: hidden;
+    }
+  </style>
 </head>
 <body>
-  <div class="login-overlay"></div>
+  <div class="auth-overlay"></div>
 
   <div class="auth-container">
-    <h2 style="text-align: center; margin-bottom: 1.5rem; color: #ff6b3b;">CREATE ACCOUNT</h2>
+    <h2>CREATE ACCOUNT</h2>
 
-    <!-- OAuth providers -->
+    <!-- OAuth providers: Google and GitHub one-click sign-in -->
     <div class="oauth-buttons">
       <button class="oauth-btn" id="google-signup-btn">
-        <span>🔵</span> Sign up with Google
+        <!-- Google "G" logo -->
+        <svg class="oauth-icon" viewBox="0 0 48 48" width="20" height="20" xmlns="http://www.w3.org/2000/svg">
+          <path fill="#4285F4" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l-3.22 3.22C27.55 14.26 25.88 15 24 15c-4.83 0-8.65 3.27-9.75 7.66l-3.53-2.74C12.32 12.06 17.77 9.5 24 9.5z"/>
+          <path fill="#34A853" d="M43.99 20.25H43.05C42.17 15.34 37.6 11.5 31.86 10.74c0-.08 0-.16 0-.24 0-6.18-4.99-11.27-11.17-11.27-5.97 0-11.15 4.63-12.5 10.87C8.17 10.47 11.58 7.75 15.68 7.75c3.63 0 6.84 1.77 8.77 4.46l2.64-2.64C23.84 6.84 20.08 5 16 7.65c0 .1 0 .18-.01.27C15.99 12.83 12.5 16.92 12.5 22c0 5.52 4.63 10.17 10.6 10.17 3.35 0 6.41-1.17 8.87-3.12 1.28.92 2.73 1.65 4.25 2.12.01-.83.01-1.67 0-2.5 0-.83-.01-1.67-.01-2.5 0-6.38-5.13-11.75-11.45-11.75-1.53 0-3.04.24-4.45.68v-.01c-1.36.43-2.59 1.07-3.68 1.92v-.01l.01 12.25c1.14-.38 2.43-.65 3.86-.65 4.83 0 9.01-3.31 10.1-7.87l-.01 1.68C43.99 31.5 48 27 48 22c0-.81-.07-1.61-.21-2.38A15.3 15.3 0 0 0 48 20.25z"/>
+        </svg>
+        Sign up with Google
       </button>
       <button class="oauth-btn" id="github-signup-btn">
-        <span>🐙</span> Sign up with GitHub
+        <!-- GitHub logo -->
+        <svg class="oauth-icon" viewBox="0 0 24 24" width="20" height="20" fill="#fff" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.44 9.81 8.21 11.4.6.1.82-.26.82-.57 0-.28-.01-1.12-.02-2-3.34.73-4.04-1.61-4.04-1.61C4.42 21.06 3.63 20.7 3.63 20.7c-1.13-.77.08-.76.08-.76 1.27.09 1.93 1.31 1.93 1.31 1.11 1.93 2.93 1.37 3.65 1.04.11-.81.43-1.37.78-1.68-2.66-.31-5.47-1.33-5.47-5.97 0-1.31.46-2.38 1.23-3.22-.12-.31-.54-1.55.11-3.23 0 0 1.01-.32 3.32 1.23.96-.27 1.99-.41 3.02-.41 1.02 0 2.06.14 3.02.41 2.31-1.55 3.32-1.23 3.32-1.23.66 1.68.24 2.92.12 3.23.77.84 1.23 1.91 1.23 3.22 0 4.65-3.82 5.65-5.98 5.96.44.38.82 1.13.82 2.27 0 1.63-.01 2.95-.01 3.36 0 .31.22.68.83.56C20.56 21.79 24 17.29 24 12 24 5.37 18.63 0 12 0z"/>
+        </svg>
+        Sign up with GitHub
       </button>
     </div>
 
-    <div style="text-align: center; color: #666; margin: 1rem 0;">— or —</div>
+    <!-- Divider between OAuth and email methods -->
+    <div class="divider">— or —</div>
 
     <!-- Email/password signup form -->
     <div id="signup-section">
@@ -51,25 +79,23 @@
       <div class="form-group">
         <input type="password" id="password" placeholder="Create a password" required minlength="8">
       </div>
-      <p style="font-size: 0.8rem; color: #888; margin: 0 0 0.5rem 0;">
+      <p class="hint">
         Your password is your account — secure it your way.
-        <a href="/passwords" style="color: #ff6b3b; text-decoration: none;">Password guidance</a>
+        <a href="/passwords" class="text-orange">Password guidance</a>
       </p>
-      <button id="email-signup-btn" style="width: 100%; padding: 14px; background: #ff6b3b; color: white; border: none; border-radius: 8px; font-size: 1.1rem; cursor: pointer;">
-        Create Account
-      </button>
+      <button id="email-signup-btn" class="btn-primary">Create Account</button>
     </div>
 
-    <div style="text-align: center; color: #666; margin: 1rem 0;">— or —</div>
-    <div style="text-align: center; margin-top: 1rem; font-size: 0.85rem; color: #ccc;">
-      Already have an account? <a href="/login" style="color: #ff6b3b; text-decoration: none;">Log in</a>
+    <!-- Already have an account link -->
+    <div style="text-align: center; margin-top: 1.5rem; font-size: 0.9rem; color: #ccc;">
+      Already have an account? <a href="/login" class="text-orange">Log in</a>
     </div>
 
+    <!-- Auth message display area -->
     <div id="auth-message" class="auth-message" style="display: none;"></div>
   </div>
 
   <!-- Application logic — external ES module (deferred, CSP-compliant) -->
-  <!-- Replaces inline scripts that were blocked by CSP script-src without 'unsafe-inline' -->
   <script type="module" src="/signup-app.js"></script>
 </body>
 </html>
