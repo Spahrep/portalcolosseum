@@ -29,8 +29,10 @@
   <script src="/api/env.js"></script>
 </head>
 <body class="game-page">
-  <!-- Main game container — fullscreen canvas over town panorama -->
+  <!-- Main game container — fullscreen, pannable via CSS transform -->
   <div id="game-container">
+    <!-- Panorama background layer — shifts with arrow keys; markers move with it -->
+    <div class="pano"></div>
     <!-- Game canvas: renders the arena battle overlay -->
     <canvas id="game" width="800" height="600"></canvas>
     <!-- Town location markers — navigable with arrow keys + Enter -->

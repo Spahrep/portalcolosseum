@@ -4,29 +4,39 @@
  * Game-specific styles for the arena game page.
  * Global styles (body, fonts) come from style.css.
  * Game page adds: town panorama background, game canvas, logout button.
+ *
+ * Panning model:
+ *   The #game-container holds a .panorama background layer + canvas + markers,
+ *   and is panned via CSS transform: translate(). As the container moves,
+ *   the panorama, markers, and canvas all move together, so markers stay
+ *   fixed to their building positions on the background image.
  */
 
-/* Game page body: town panorama background with parallax shift */
-/* Arrow keys shift the background position to explore the 360 panorama */
+/* Game page body: solid background, no image (image is on .panorama layer) */
 body.game-page {
   margin: 0;
   padding: 0;
-  background-image: url('/public/town_pano.jpg');
-  background-attachment: fixed;
-  background-position: center;
-  background-repeat: no-repeat;
-  /* 150vw width gives wider view of panorama (less zoomed in than auto 100vh) */
-  background-size: 150vw 100vh;
-  /* Smooth transition when background position changes (arrow key shift) */
-  transition: background-position 0.1s ease-out;
-  /* Black fallback while image loads */
   background-color: #000;
-  /* Ensure the body takes full viewport height so background is visible */
   height: 100vh;
   overflow: hidden;
 }
 
-/* Game container: fills entire viewport */
+/* Panorama background layer — inside the pannable container */
+.pano {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 150vw;
+  height: 100vh;
+  background-image: url('/public/town_pano.jpg');
+  background-repeat: no-repeat;
+  background-size: contain;
+  background-position: 0% 0%;
+  /* Start centered: the left 25% of the 150vw wide image is off-screen left */
+  transform: translateX(-25vw);
+}
+
+/* Game container: holds panorama + canvas + markers, panned via CSS transform */
 #game-container {
   position: fixed;
   top: 0;
@@ -35,9 +45,10 @@ body.game-page {
   height: 100vh;
   margin: 0;
   padding: 0;
-  display: flex;
-  justify-content: center;
-  align-items: center;
+  /* Hide overflow so off-screen markers/building parts are clipped */
+  overflow: hidden;
+  /* Smooth transition when we pan to a location */
+  transition: transform 0.3s ease-out;
 }
 
 /* Canvas: transparent overlay — town panorama shows through behind */

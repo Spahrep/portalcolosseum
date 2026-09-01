@@ -45,17 +45,22 @@ const visited = new Set();
 let selectedIndex = 0;
 
 /**
- * Pan the town panorama background to center on the selected location.
- * Uses smooth CSS transition on background-position.
+ * Pan the town panorama to center on the selected location.
+ * The panorama image is 150vw wide inside #game-container (viewport 100vw).
+ * The .pano has a CSS translateX(-25vw) to initially center the image.
+ * Markers are siblings of .pano inside #game-container, so they move together.
+ *
+ * To center loc.x% (position within the 150vw image) on the viewport:
+ *   Building position in viewport = loc.x * 1.5vw - 25vw (current offset)
+ *   Target = 50vw (viewport center)
+ *   Required tx = 50 - (loc.x * 1.5 - 25) = 75 - loc.x * 1.5
  */
 function panToLocation(index) {
   const loc = LOCATIONS[index];
-  // Background is 150vw wide — visible viewport sees a portion.
-  // To put loc.x% at horizontal center: bgPosX = loc.x + 25
-  const bgPosX = loc.x + 25;
-  const bgPosY = loc.y;
+  const tx = 75 - (loc.x * 1.5);  // in vw units
 
-  document.body.style.backgroundPosition = `${bgPosX}% ${bgPosY}%`;
+  const container = document.getElementById('game-container');
+  container.style.transform = `translate(${tx}vw, 0)`;
 
   // Update marker selection state (CSS ::before shows [x] when selected)
   document.querySelectorAll('.location-marker').forEach((marker, i) => {
@@ -127,10 +132,11 @@ function initLocations() {
 }
 
 /**
- * Reset the background to center position and clear selections.
+ * Reset the panorama to center position and clear selections.
  */
 function resetBackground() {
-  document.body.style.backgroundPosition = 'center';
+  const container = document.getElementById('game-container');
+  container.style.transform = 'translate(0, 0)';
   document.querySelectorAll('.location-marker').forEach(m => {
     m.classList.remove('selected', 'visited');
   });
