@@ -46,18 +46,18 @@ let selectedIndex = 0;
 
 /**
  * Pan the town panorama to center on the selected location.
- * The panorama image is 150vw wide inside #game-container (viewport 100vw).
- * The .pano has a CSS translateX(-25vw) to initially center the image.
+ * The panorama image is 300vw wide inside #game-container (viewport 100vw).
+ * The .pano has a CSS translateX(-100vw) to initially center the image.
  * Markers are siblings of .pano inside #game-container, so they move together.
  *
- * To center loc.x% (position within the 150vw image) on the viewport:
- *   Building position in viewport = loc.x * 1.5vw - 25vw (current offset)
+ * To center loc.x% (position within the 300vw image) on the viewport:
+ *   Building position in viewport = loc.x * 3vw - (100vw - tx)
  *   Target = 50vw (viewport center)
- *   Required tx = 50 - (loc.x * 1.5 - 25) = 75 - loc.x * 1.5
+ *   Required tx = 150 - loc.x * 3
  */
 function panToLocation(index) {
   const loc = LOCATIONS[index];
-  const tx = 75 - (loc.x * 1.5);  // in vw units
+  const tx = 150 - (loc.x * 3);  // in vw units (max pan range: ±100vw)
 
   const container = document.getElementById('game-container');
   container.style.transform = `translate(${tx}vw, 0)`;
