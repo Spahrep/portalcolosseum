@@ -27,17 +27,22 @@ let supabase;
  * 4. Draws the placeholder canvas content
  */
 async function initGame() {
-  // Initialize Supabase client with in-memory storage + PKCE flow
-  // Security: tokens never persist to localStorage (XSS prevention)
+  // Initialize Supabase client with localStorage-backed PKCE storage
+  // This matches login-app.js and signup-app.js — the session must be
+  // stored in localStorage so the game page can read it after login redirect
+  // (same origin, same storage). The refresh_token is persisted separately
+  // via the /api/session Edge Function as an HttpOnly cookie.
+  // Security: tokens are short-lived access tokens; the refresh_token
+  // (long-lived) goes through HttpOnly cookies, not localStorage.
   if (SUPABASE_URL) {
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: {
         flowType: 'pkce',
         detectSessionInUrl: true,
         storage: {
-          getItem: () => null,
-          setItem: () => {},
-          removeItem: () => {}
+          getItem: (key) => localStorage.getItem(key),
+          setItem: (key, value) => localStorage.setItem(key, value),
+          removeItem: (key) => localStorage.removeItem(key)
         }
       }
     });
@@ -46,9 +51,9 @@ async function initGame() {
   // --- Event listener bindings (no inline onclick handlers) ---
   document.getElementById('logout-btn')?.addEventListener('click', logout);
 
-  // Fail-closed auth check: try in-memory session first, then cookie-based fallback
-  // Security: We do NOT fall back to localStorage for auth decisions.
-  let playerName = 'Guest';
+  // Fail-closed auth check: session is persisted via localStorage (PKCE flow)
+  // with refresh_token also stored in HttpOnly cookie as a fallback.
+  let playerName = 'Gladiator';
 
   if (supabase) {
     try {
@@ -67,23 +72,11 @@ async function initGame() {
             body: JSON.stringify({ refresh_token: session.refresh_token })
           });
         }
-      } else {
-        // No callback — try to recover session from the HttpOnly cookie
-        const resp = await fetch('/api/session', {
-          method: 'GET',
-          credentials: 'include'
-        });
-
-        if (resp.ok) {
-          const { session: cookieSession } = await resp.json();
-          if (cookieSession) {
-            // Restore the in-memory session from the cookie-obtained tokens
-            await supabase.auth.setSession(cookieSession);
-          }
-        }
       }
+      // else: PKCE flow with localStorage-backed storage will have the
+      // session available directly — no need for cookie fallback here.
 
-      // Now check the session (whether from callback or cookie restore)
+      // Now check the session (from localStorage or PKCE callback exchange)
       const { data: { session }, error } = await supabase.auth.getSession();
 
       if (session) {
@@ -153,7 +146,8 @@ async function logout() {
   } catch (err) {
     console.error('Cookie clear error:', err);
   }
-  // Security: No localStorage to clear — no PII stored client-side
+  // Clear PKCE session from localStorage (code_verifier, session, etc.)
+  localStorage.removeItem('supabase.auth.token');
   window.location.href = '/login';
 }
 

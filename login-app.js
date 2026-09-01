@@ -158,7 +158,8 @@ async function signInWithEmail() {
       showMessage(`Login failed: ${error.message}`, 'error');
     } else {
       // Persist session via HttpOnly cookie (not localStorage)
-      if (session.refresh_token) {
+      const session = data.session;
+      if (session?.refresh_token) {
         try {
           await fetch('/api/session', {
             method: 'POST',
