@@ -5,29 +5,36 @@
  *
  * Request: POST /api/invite-verify
  *   Body: { "key": "<invite-code>" }
+ *   or:   key=<invite-code>  (form-urlencoded)
  *
  * Response:
  *   200 { "valid": true }   — key is valid (hardcoded test key or valid DB key)
  *   400 { "valid": false, "error": "..." } — key is invalid or already used
+ *   405 { "error": "Method not allowed" }
+ *   500 { "error": "Internal server error" }
+ *
+ * DELETE /api/invite-verify?key=<key>
+ *   Marks a key as used after successful account creation.
  *
  * Security:
  *   - The hardcoded test key "EyeOfTheWorld" is read from the INVITE_KEY_HARDCODED
- *     environment variable (set in Vercel project settings). This bypasses the DB
- *     and is never expired (for testing purposes).
+ *     environment variable. This bypasses the DB and is never expired (for testing).
  *   - Real invite keys are stored in the invite_keys table (one-time use).
  *   - This function uses the Supabase service_role key (SUPABASE_SERVICE_ROLE_KEY)
  *     which is only available server-side. The anon key cannot mark keys as used.
  *
  * Environment variables (set in Vercel project settings):
  *   - SUPABASE_URL
- *   - SUPABASE_SERVICE_ROLE_KEY  (admin — bypasses RLS, never exposed to client)
+ *   - SUPABASE_SERVICE_ROLE_KEY
  *   - INVITE_KEY_HARDCODED       (test key, e.g. "EyeOfTheWorld")
  */
 
 import { createClient } from '@supabase/supabase-js';
 
-// Create a Supabase admin client using the service_role key.
-// This client bypasses RLS — use ONLY server-side.
+/**
+ * Create a Supabase admin client using the service_role key.
+ * This client bypasses RLS — use ONLY server-side.
+ */
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -45,14 +52,17 @@ function getSupabaseAdmin() {
 }
 
 /**
- * Parse JSON body from request
+ * Parse JSON or form-urlencoded body from a Web API Request.
  */
-async function parseBody(req) {
-  const contentType = req.headers.get('content-type') || '';
+async function parseBody(request) {
+  const contentType = request.headers.get('content-type') || '';
+
   if (contentType.includes('application/json')) {
-    return await req.json();
+    return await request.json();
   }
-  const text = await req.text();
+
+  // Fall back to form-urlencoded or query params
+  const text = await request.text();
   const params = new URLSearchParams(text);
   return Object.fromEntries(params);
 }
@@ -121,55 +131,110 @@ async function markKeyAsUsed(key) {
 }
 
 /**
- * Handle incoming requests
+ * Handle POST requests — validate an invite key.
+ * Uses Web API Request/Response (Vercel named export pattern).
  */
-export default async function handler(req) {
-  const method = req.method;
-
+export async function POST(request) {
   try {
-    if (method === 'POST') {
-      // Validate an invite key
-      const body = await parseBody(req);
-      const { key } = body;
+    const body = await parseBody(request);
+    const { key } = body;
 
-      const result = await validateInviteKey(key);
+    const result = await validateInviteKey(key);
 
-      if (result.valid) {
-        return new Response(JSON.stringify({ valid: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      return new Response(JSON.stringify({ valid: false, error: result.error }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (method === 'DELETE') {
-      // Mark key as used (called after successful account creation)
-      const url = new URL(req.url);
-      const key = url.searchParams.get('key');
-
-      if (!key) {
-        return new Response(JSON.stringify({ error: 'key parameter is required' }), {
-          status: 400,
-          headers: { 'Content-Type': 'application/json' },
-        });
-      }
-
-      await markKeyAsUsed(key);
-
-      return new Response(JSON.stringify({ ok: true }), {
+    if (result.valid) {
+      return new Response(JSON.stringify({ valid: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
-      status: 405,
-      headers: { 'Content-Type': 'application/json', 'Allow': 'POST, DELETE' },
+    return new Response(JSON.stringify({ valid: false, error: result.error }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    console.error('Invite verify error:', err);
+    return new Response(
+      JSON.stringify({ error: err.message || 'Internal server error' }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+}
+
+/**
+ * Handle DELETE requests — mark a key as used.
+ * Called after successful account creation.
+ */
+export async function DELETE(request) {
+  try {
+    let key = null;
+
+    const url = new URL(request.url);
+    key = url.searchParams.get('key');
+
+    // Also try parsing body for the key
+    if (!key) {
+      const body = await parseBody(request);
+      key = body.key;
+    }
+
+    if (!key) {
+      return new Response(JSON.stringify({ error: 'key parameter is required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    await markKeyAsUsed(key);
+
+    return new Response(JSON.stringify({ ok: true }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  } catch (err) {
+    console.error('Invite delete error:', err);
+    return new Response(
+      JSON.stringify({ error: err.message || 'Internal server error' }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    );
+  }
+}
+
+/**
+ * Handle GET requests — simple health check or validate via query param.
+ */
+export async function GET(request) {
+  try {
+    const url = new URL(request.url);
+    const key = url.searchParams.get('key');
+
+    if (!key) {
+      // Health check
+      return new Response(JSON.stringify({ status: 'ok' }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Allow GET validation via query param (for testing)
+    const result = await validateInviteKey(key);
+
+    if (result.valid) {
+      return new Response(JSON.stringify({ valid: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    return new Response(JSON.stringify({ valid: false, error: result.error }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
     });
   } catch (err) {
     console.error('Invite verify error:', err);
