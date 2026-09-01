@@ -22,41 +22,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal Colosseum - Arena</title>
   <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/public/game.css">
   <!-- Environment configuration - loaded before module scripts -->
   <script src="/api/env.js"></script>
-
-  <style>
-    /*
-      GAME PAGE STYLES
-      ================
-      Player status bar appears above the game canvas with a dark semi-transparent
-      background. The logout button is styled in red to indicate its destructive action.
-    */
-    #player-status {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      background: rgba(30, 30, 50, 0.8);
-      padding: 8px 16px;
-      border-radius: 8px;
-      margin-bottom: 1rem;
-    }
-    .logout-btn {
-      background: #3a1a1a;
-      color: #f87171;
-      border: 1px solid #5c2a2a;
-      padding: 6px 14px;
-      border-radius: 6px;
-      cursor: pointer;
-      font-size: 0.9rem;
-      transition: background 0.2s;
-    }
-    .logout-btn:hover {
-      background: #5c2a2a;
-    }
-  </style>
 </head>
-<body>
+<body class="game-page">
   <!-- Main game container -->
   <div id="game-container">
     <h1>PORTAL COLOSSEUM</h1>

@@ -17,13 +17,21 @@ body {
   margin: 0;
   padding: 0;
   font-family: 'Courier New', monospace;
-  background: #101f48ff;           /* Deep blue background */
+  background: #101f48ff;           /* Deep blue background fallback */
   background-size: cover;
   min-height: 100vh;                /* Full viewport height */
   display: flex;
   justify-content: center;          /* Center content horizontally */
   align-items: center;              /* Center content vertically */
   color: #fff;                      /* Default white text */
+}
+
+/* Game page uses the town panorama as background */
+body.game-page {
+  background-image: url('/public/town_pano.jpg');
+  background-attachment: fixed;
+  background-position: center;
+  background-repeat: no-repeat;
 }
 
 /* Landing page container (index.html) */
