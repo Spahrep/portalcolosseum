@@ -46,13 +46,23 @@
   <div class="auth-container">
     <h2>CREATE ACCOUNT</h2>
 
-    <!-- OAuth providers: Google and GitHub one-click sign-in -->
-    <div class="oauth-buttons">
-      <button class="oauth-btn" id="google-signup-btn">
+    <!-- Alpha invite key input (required before showing auth providers) -->
+    <div id="invite-section">
+      <div class="form-group">
+        <input type="text" id="invite-key" placeholder="Enter your invite key" required maxlength="64" autocomplete="one-time-code">
+      </div>
+      <button id="invite-verify-btn" class="btn-primary">Verify Invite Key</button>
+      <p class="hint" id="invite-hint">An alpha invite key is required to create an account.</p>
+    </div>
+
+    <!-- Auth providers (hidden until valid invite key) -->
+    <div id="auth-providers" style="display: none;">
+      <!-- OAuth providers: Google and GitHub one-click sign-in -->
+      <div class="oauth-buttons">
+        <button class="oauth-btn" id="google-signup-btn">
         <!-- Official Google "G" logo -->
         <img src="/public/google-icon.png" alt="Google" class="oauth-icon-img">
         Sign up with Google
-      </button>
       </button>
       <button class="oauth-btn" id="github-signup-btn">
         <!-- GitHub logo -->
@@ -85,6 +95,7 @@
       <p class="small-hint">
         Minimum 8 characters. No character class requirements.
       </p>
+    </div>
     </div>
 
     <!-- Already have an account link -->

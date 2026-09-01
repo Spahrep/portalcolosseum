@@ -16,8 +16,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 
 - **Slot 1 — Default "Attack"**: Every weapon has this; uses base stats unmodified (no modifiers)
 - **Slot 2 — Additional Attack**: Always present; rolls from attack pools (filtered by weapon type)
-- **Slot 3 — Optional Attack**: ~10% chance; pulls from any pool including spells
-
+- **Slot 3 — Optional Attack**: ~10% chance; pulls from any pool including spells.
 **Status**: Current idea, subject to change.
 
 ## Item Behavior (GUI Demo)
