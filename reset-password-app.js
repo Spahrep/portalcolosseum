@@ -18,8 +18,19 @@ const SUPABASE_ANON_KEY = window.ENV.SUPABASE_ANON_KEY;
 let supabase;
 
 /**
- * Initialize the Supabase client with in-memory storage (XSS protection)
- * and PKCE flow enabled to handle auth code exchange.
+ * Initialize the Supabase client with sessionStorage-backed PKCE storage.
+ *
+ * SECURITY NOTE: We use sessionStorage (not localStorage) because:
+ * - sessionStorage persists across page reloads on the same tab
+ *   (needed for password reset flow where user clicks an email link)
+ * - sessionStorage is cleared when the tab/window is closed
+ *   (better XSS hygiene than localStorage — data doesn't persist after session)
+ * - sessionStorage is not accessible cross-origin (same-origin policy)
+ *
+ * This is specifically needed for the password reset flow:
+ * The PKCE code verifier is stored by detectSessionInUrl on init().
+ * When the code is exchanged for a session, the verifier must be retrievable.
+ * sessionStorage survives the initial page load so exchangeCodeForSession works.
  */
 function initSupabase() {
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
@@ -27,9 +38,10 @@ function initSupabase() {
       flowType: 'pkce',
       detectSessionInUrl: true,
       storage: {
-        getItem: () => null,
-        setItem: () => {},
-        removeItem: () => {}
+        // sessionStorage: survives page reloads, cleared on browser/tab close
+        getItem: (key) => sessionStorage.getItem(key),
+        setItem: (key, value) => sessionStorage.setItem(key, value),
+        removeItem: (key) => sessionStorage.removeItem(key)
       }
     }
   });
@@ -90,7 +102,7 @@ async function handleResetCode() {
 
   try {
     // With detectSessionInUrl: true and PKCE flow, the client will auto-exchange
-    // the code for a session. We now retrieve that session.
+    // the code for a session on initialization. We now retrieve that session.
     const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
     if (sessionError) {
@@ -99,9 +111,7 @@ async function handleResetCode() {
     }
 
     if (!session) {
-      // Session not established yet — trigger the exchange by using the code
-      // The PKCE flow with detectSessionInUrl should have handled this on init,
-      // but if it didn't, we need to manually exchange
+      // Session not established yet — manually exchange the code for a session
       const { data, error } = await supabase.auth.exchangeCodeForSession(code);
       if (error) {
         showMessage(`Failed to verify reset code: ${error.message}`, 'error');
@@ -109,6 +119,7 @@ async function handleResetCode() {
       }
       console.log('Session established after code exchange');
       showMessage('Reset token verified. Enter your new password below.', 'success');
+      document.getElementById('reset-form').style.display = 'block';
     } else {
       // Session already established via auto-detection
       document.getElementById('reset-form').style.display = 'block';
