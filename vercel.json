@@ -62,6 +62,20 @@
       }
     },
     {
+      "src": "/favicon.ico",
+      "dest": "/public/favicon.ico",
+      "headers": {
+        "Content-Type": "image/x-icon"
+      }
+    },
+    {
+      "src": "/favicon.png",
+      "dest": "/public/favicon.png",
+      "headers": {
+        "Content-Type": "image/png"
+      }
+    },
+    {
       "src": "/(.*)",
       "dest": "/$1",
       "headers": {

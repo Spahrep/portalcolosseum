@@ -124,6 +124,11 @@ async function signInWithProvider(provider) {
       console.error(`${provider} OAuth error:`, error);
       return showMessage(`${provider} login failed: ${error.message}`, 'error');
     }
+    // In PKCE flow, signInWithOAuth returns a URL — we must navigate to it manually
+    // Without this, no redirect happens and the page "just sits there"
+    if (data && data.url) {
+      window.location.href = data.url;
+    }
     console.log(`${provider} OAuth initiated successfully`);
   } catch (err) {
     console.error(`${provider} OAuth exception:`, err);
