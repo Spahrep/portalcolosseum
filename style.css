@@ -141,3 +141,91 @@ body {
   line-height: 1.5;
   margin-bottom: 20px;
 }
+
+/* Login and Register buttons on landing page */
+.landing-buttons {
+  display: flex;
+  gap: 20px;
+  justify-content: center;
+  margin-top: 20px;
+}
+
+/* Secondary button variant for Login */
+.enter-button.secondary {
+  background: transparent;
+  border-color: #ff6b35;
+  color: #ff6b35;
+}
+
+.enter-button.secondary:hover {
+  background: rgba(255, 107, 53, 0.1);
+  transform: scale(1.05);
+  box-shadow: 0 0 20px rgba(255, 107, 53, 0.3);
+}
+
+/* Modal overlay (invite key prompt) */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(5px);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal content box */
+.modal {
+  background: rgba(16, 31, 72, 0.95);
+  border: 1px solid #ff6b35;
+  border-radius: 15px;
+  padding: 30px;
+  max-width: 400px;
+  width: 90%;
+  text-align: center;
+}
+
+.modal h3 {
+  color: #ff6b35;
+  margin-bottom: 20px;
+  font-size: 24px;
+}
+
+.modal input {
+  width: 100%;
+  padding: 12px;
+  margin: 15px 0;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid #ff6b35;
+  color: white;
+  font-family: inherit;
+  font-size: 16px;
+  border-radius: 5px;
+  box-sizing: border-box;
+}
+
+/* Secondary button for modal Cancel */
+.btn-secondary {
+  background: transparent;
+  border: 1px solid #888;
+  color: #888;
+  padding: 15px 30px;
+  font-size: 18px;
+  font-weight: bold;
+  text-transform: uppercase;
+  letter-spacing: 3px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-left: 10px;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.btn-secondary:hover {
+  background: rgba(136, 136, 136, 0.1);
+}

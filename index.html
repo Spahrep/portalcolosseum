@@ -30,7 +30,26 @@
     <div class="auth-overlay"></div>
     <div class="alpha-message">
       <p>Currently in development. If you have an invite to be an Alpha Tester, please click below to create an account.</p>
-      <a href="/signup" class="enter-button">ENTER THE COLOSSEUM</a>
+      <!-- Login and Register buttons -->
+      <div class="landing-buttons">
+        <a href="/login" class="enter-button secondary">LOGIN</a>
+        <button id="register-btn" class="enter-button">REGISTER</button>
+      </div>
     </div>
-  </div></body>
+
+    <!-- Invite key modal (hidden by default, shown when Register is clicked) -->
+    <div id="invite-modal" class="modal-overlay">
+      <div class="modal">
+        <h3>Enter Invite Key</h3>
+        <input type="text" id="invite-key-input" placeholder="Enter your invite key" maxlength="64" autocomplete="one-time-code">
+        <button id="invite-submit" class="btn-primary">Continue</button>
+        <button id="invite-cancel" class="btn-secondary">Cancel</button>
+        <p class="hint" id="invite-error" style="color: #ff6b35; display: none;"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Landing page application logic (deferred, CSP-compliant) -->
+  <script src="/landing-app.js"></script>
+</body>
 </html>

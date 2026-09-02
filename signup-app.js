@@ -283,6 +283,29 @@ async function handleAuthCallback() {
 
 // --- DOM ready: attach event listeners after DOM is parsed ---
 document.addEventListener('DOMContentLoaded', () => {
+  // Check if we arrived here from the landing page with a validated key
+  // The landing page stores the key in sessionStorage after verifying it
+  const sessionKey = sessionStorage.getItem('invite_key');
+  if (sessionKey && sessionKey.trim()) {
+    // Pre-fill the invite key field and auto-validate
+    inviteKey = sessionKey;
+    const keyInput = document.getElementById('invite-key');
+    if (keyInput) {
+      keyInput.value = sessionKey;
+    }
+    // Reveal auth provider buttons directly
+    const inviteSection = document.getElementById('invite-section');
+    const authProviders = document.getElementById('auth-providers');
+    if (inviteSection) inviteSection.style.opacity = '0.4';
+    if (authProviders) {
+      authProviders.style.display = 'block';
+      authProviders.style.animation = 'fadeIn 0.5s ease-in';
+    }
+    // Hide the verify button since we already validated
+    const verifyBtn = document.getElementById('invite-verify-btn');
+    if (verifyBtn) verifyBtn.style.display = 'none';
+  }
+
   // Invite key verification
   document.getElementById('invite-verify-btn')?.addEventListener('click', verifyInviteKey);
 
