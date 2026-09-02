@@ -282,44 +282,6 @@ async function sendResetEmail() {
   }
 }
 
-/**
- * Handle authentication callbacks (OAuth redirect).
- * With PKCE + detectSessionInUrl: true, the Supabase client auto-exchanges
- * the auth code for a session. We just need to check if a session exists
- * and persist it via the session Edge Function.
- */
-async function handleAuthCallback() {
-  if (!supabase) return;
-
-  try {
-    const { data: { session }, error } = await supabase.auth.getSession();
-
-    if (session) {
-      // Persist the refresh token in an HttpOnly cookie via our Edge Function
-      if (session.refresh_token) {
-        try {
-          await fetch('/api/session', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: session.refresh_token })
-          });
-        } catch (err) {
-          console.error('Failed to persist session cookie:', err);
-        }
-      }
-      // Redirect to the game page
-      window.location.href = '/game';
-    } else if (error) {
-      console.error('Auth callback error:', error);
-      showMessage('Login failed: ' + error.message, 'error');
-    }
-  } catch (err) {
-    console.error('Callback exception:', err);
-    showMessage('Authentication error: ' + err.message, 'error');
-  }
-}
-
 // --- DOM ready: attach event listeners after DOM is parsed ---
 document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('google-login-btn').addEventListener('click', () => signInWithProvider('google'));
@@ -328,9 +290,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize Supabase client
   initSupabase();
-
-  // Check for OAuth callback (PKCE: code in URL query params)
-  if (window.location.search.includes('code=')) {
-    handleAuthCallback();
-  }
 });

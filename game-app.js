@@ -174,6 +174,7 @@ async function initGame() {
 
   // Fail-closed auth check: session is persisted via localStorage (PKCE flow)
   // with refresh_token also stored in HttpOnly cookie as a fallback.
+  let session = null;
   if (supabase) {
     try {
       // First: check for a PKCE callback (code in URL query params)
@@ -196,7 +197,36 @@ async function initGame() {
       // session available directly — no need for cookie fallback here.
 
       // Now check the session (from localStorage or PKCE callback exchange)
-      const { data: { session }, error } = await supabase.auth.getSession();
+      const { data: { session: storedSession }, error } = await supabase.auth.getSession();
+      session = storedSession;
+
+      // === COOKIE-BASED SESSION RESTORATION (fallback) ===
+      // If localStorage session check failed, try restoring from the HttpOnly
+      // cookie via GET /api/session — the cookie survives localStorage clears
+      // and is XSS-safe (HttpOnly = JS can't read it).
+      // The GET endpoint exchanges the refresh_token for a fresh session.
+      if (!session && supabase) {
+        try {
+          const sessionResponse = await fetch('/api/session', {
+            method: 'GET',
+            credentials: 'include'
+          });
+          if (sessionResponse.ok) {
+            const { session: cookieSession } = await sessionResponse.json();
+            if (cookieSession && cookieSession.access_token) {
+              // Hydrate the Supabase client with the cookie-restored session
+              await supabase.auth.setSession({
+                access_token: cookieSession.access_token,
+                refresh_token: cookieSession.refresh_token,
+              });
+              session = cookieSession;
+            }
+          }
+        } catch (err) {
+          // Cookie-based restoration is a fallback — don't fail hard
+          console.error('Cookie session restore error:', err);
+        }
+      }
 
       if (!session) {
         // No active session - fail closed, redirect to login
@@ -255,10 +285,6 @@ async function logout() {
 
 // --- DOM ready: initialize game when page loads ---
 document.addEventListener('DOMContentLoaded', () => {
-  // Check for OAuth callback (PKCE: code in URL query params)
-  if (window.location.search.includes('code=')) {
-    // PKCE auto-exchange handled in initGame() via getSession()
-  }
   initGame();
 
   // Re-pan on resize to account for aspect ratio changes

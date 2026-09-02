@@ -114,6 +114,9 @@ async function verifyInviteKey() {
       inviteHint.textContent = 'Invite key accepted!';
       inviteHint.style.color = '#4ade80';
 
+      // Persist to sessionStorage so the key survives page reloads (e.g., OAuth redirects)
+      sessionStorage.setItem('invite_key', key);
+
       // Reveal auth provider buttons
       const inviteSection = document.getElementById('invite-section');
       const authProviders = document.getElementById('auth-providers');
@@ -300,8 +303,10 @@ async function signUpWithEmail() {
         'success',
         { text: 'log in', href: '/login' }
       );
-      // Don't mark the invite key as used yet — wait until the user
-      // successfully logs in with a confirmed account
+      // Mark the invite key as used — the key was validated before signup
+      // and the account was successfully created in Supabase auth
+      await markInviteKeyUsed();
+      sessionStorage.removeItem('invite_key');
     }
   }
 }
