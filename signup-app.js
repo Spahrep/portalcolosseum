@@ -244,7 +244,11 @@ async function signUpWithEmail() {
     return showMessage('Passwords do not match. Please try again.', 'error');
   }
 
-  // Check username availability before signup
+  // Check username availability before signup.
+  // We catch ALL errors here (including 406s from PostgREST when the username
+  // contains special chars like @) because the database constraint on
+  // profiles.username (unique, varchar(32)) is the real source of truth —
+  // if it's taken, the auth trigger insert will raise PGRST1044.
   try {
     const { data: existing, error: checkError } = await supabase
       .from('profiles')
@@ -253,7 +257,10 @@ async function signUpWithEmail() {
       .single();
 
     if (checkError && checkError.code !== 'PGRST116') {
-      console.error('Username check error:', checkError);
+      // PGRST116 = "exact one row required" — means username is available
+      // Any other error (including PostgREST 406 on special chars) we log
+      // but DON'T block signup, since the DB unique constraint catches dupes
+      console.warn('Username check skipped, relying on DB constraint:', checkError.message);
     }
 
     if (existing) {
