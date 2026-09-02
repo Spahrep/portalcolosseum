@@ -123,9 +123,9 @@ body {
 /* Alpha invite message on landing page */
 .alpha-message {
   position: absolute;
-  top: 75%;
+  top: 88%;
   left: 50%;
-  transform: translate(-50%, -50%);
+  transform: translateX(-50%);
   max-width: 600px;
   text-align: center;
   padding: 40px;
