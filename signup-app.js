@@ -291,7 +291,7 @@ async function signUpWithEmail() {
           body: JSON.stringify({ refresh_token: refreshToken })
         });
       }
-      markInviteKeyUsed();
+      await markInviteKeyUsed();
       window.location.href = '/game';
     } else {
       // Email confirmation required — tell the user to check their email
