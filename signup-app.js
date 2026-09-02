@@ -235,7 +235,7 @@ async function signUpWithEmail() {
   }
 
   // Create auth user via Supabase, passing username as user metadata
-  const { error } = await supabase.auth.signUp({
+  const { data: signUpData, error } = await supabase.auth.signUp({
     email: email,
     password: password,
     options: {
@@ -258,9 +258,34 @@ async function signUpWithEmail() {
       showMessage(`Account creation failed: ${error.message}`, 'error');
     }
   } else {
-    showMessage('Account created! Check your email to verify and complete signup.', 'success');
-    // Mark the invite key as used after successful signup
-    markInviteKeyUsed();
+    // If email confirmation is required (mailer_autoconfirm=false),
+    // Supabase returns no session — the user needs to check their email.
+    // If email confirmation is not required, a session IS returned and we
+    // can persist it and proceed directly.
+    if (signUpData && signUpData.session) {
+      // User is immediately confirmed — persist session and proceed
+      const refreshToken = signUpData.session.refresh_token;
+      if (refreshToken) {
+        await fetch('/api/session', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
+      }
+      markInviteKeyUsed();
+      window.location.href = '/game';
+    } else {
+      // Email confirmation required — tell the user to check their email
+      showMessage(
+        'Account created! Please check your email to verify your account, ' +
+        'then <a href="/login">log in</a>.',
+        'success',
+        true
+      );
+      // Don't mark the invite key as used yet — wait until the user
+      // successfully logs in with a confirmed account
+    }
   }
 }
 
@@ -272,19 +297,23 @@ async function handleAuthCallback() {
     // Persist the session via HttpOnly cookie through /api/session
     const refreshToken = session.refresh_token;
     if (refreshToken) {
-      await fetch('/api/session', {
+      const sessionResponse = await fetch('/api/session', {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: refreshToken })
       });
+      if (!sessionResponse.ok) {
+        console.error('Failed to persist session:', sessionResponse.status);
+      }
     }
     // After successful OAuth flow, mark invite key as used
-    markInviteKeyUsed();
+    await markInviteKeyUsed();
     // Session is persisted via HttpOnly cookie by the /api/session endpoint
     window.location.href = '/game';
   } else if (error) {
     console.error('Auth callback error:', error);
+    showMessage('Authentication error. Please try again.', 'error');
   }
 }
 
