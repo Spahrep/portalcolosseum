@@ -215,6 +215,12 @@ async function signUpWithEmail() {
     return showMessage(errors.join(' '), 'error');
   }
 
+  // --- Password confirmation check ---
+  const confirmPassword = document.getElementById('confirm-password').value;
+  if (password !== confirmPassword) {
+    return showMessage('Passwords do not match. Please try again.', 'error');
+  }
+
   // Check username availability before signup
   try {
     const { data: existing, error: checkError } = await supabase
