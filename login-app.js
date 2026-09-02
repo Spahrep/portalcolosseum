@@ -47,7 +47,6 @@ function initSupabase() {
       }
     }
   });
-  console.log('Supabase initialized:', supabase ? 'OK' : 'FAILED');
   // Check if already logged in (e.g., refresh from previous session)
   checkExistingSession();
 }
@@ -129,7 +128,8 @@ async function signInWithProvider(provider) {
     if (data && data.url) {
       window.location.href = data.url;
     }
-    console.log(`${provider} OAuth initiated successfully`);
+    // If no URL returned, signInWithOAuth didn't succeed — the error path
+    // above handles error cases
   } catch (err) {
     console.error(`${provider} OAuth exception:`, err);
     showMessage(`${provider} login error: ${err.message}`, 'error');

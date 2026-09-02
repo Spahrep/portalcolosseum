@@ -22,8 +22,6 @@ Thumbs.db
 *.swp
 *.swo
 .credentials
-.env
-.env.local
 .vercel/output
 
 # Supabase local development

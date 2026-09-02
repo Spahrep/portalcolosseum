@@ -51,15 +51,28 @@ function initSupabase() {
       }
     }
   });
-  console.log('Supabase initialized:', supabase ? 'OK' : 'FAILED');
 }
 
-function showMessage(text, type = 'success', allowHtml = false) {
+/**
+ * Display a message (success or error) to the user.
+ * Uses textContent by default to prevent XSS. For messages that need
+ * an inline link, pass the link text and href separately — the function
+ * builds the DOM safely rather than parsing HTML strings.
+ * @param {string} message - The message text (already safe, no HTML)
+ * @param {string} type - 'success' or 'error'
+ * @param {object|null} link - { text: 'link text', href: '/login#reset' } for inline link
+ */
+function showMessage(message, type = 'success', link = null) {
   const msgEl = document.getElementById('auth-message');
-  if (allowHtml) {
-    msgEl.innerHTML = text;
+  msgEl.textContent = '';
+  if (link) {
+    msgEl.appendChild(document.createTextNode(message));
+    const a = document.createElement('a');
+    a.href = link.href;
+    a.textContent = link.text;
+    msgEl.appendChild(a);
   } else {
-    msgEl.textContent = text;
+    msgEl.textContent = message;
   }
   msgEl.className = `auth-message ${type}`;
   msgEl.style.display = 'block';
@@ -255,10 +268,9 @@ async function signUpWithEmail() {
     if (error.code === 'user_already_registered' ||
         /already.*registered/i.test(error.message || '')) {
       showMessage(
-        'This email is already registered. ' +
-        '<a href="/login#reset">Reset your password</a>?',
+        'This email is already registered. ',
         'error',
-        true
+        { text: 'Reset your password?', href: '/login#reset' }
       );
     } else {
       showMessage(`Account creation failed: ${error.message}`, 'error');
@@ -284,10 +296,9 @@ async function signUpWithEmail() {
     } else {
       // Email confirmation required — tell the user to check their email
       showMessage(
-        'Account created! Please check your email to verify your account, ' +
-        'then <a href="/login">log in</a>.',
+        'Account created! Please check your email to verify your account, then ',
         'success',
-        true
+        { text: 'log in', href: '/login' }
       );
       // Don't mark the invite key as used yet — wait until the user
       // successfully logs in with a confirmed account
