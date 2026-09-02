@@ -61,10 +61,23 @@ slot_4_pool: ["Power Attack", "Battle Cry", "Shield Bash"]
 - Example: speed of 55 = ~1.8 attacks/sec; speed of 25 = ~4 attacks/sec
 - DPS = Damage * (100 / Speed)
 
+## Classification (A/B/C Grades)
+**The grade is computed *after* all stats are rolled**, not as an input to generation. Each stat range is rolled independently using the Base + Delta formula. The resulting grade is a **UI/UX label** that tells the player "how good" their weapon is without making them do the math.
+
+```
+// Step 1: Roll all independent stats
+Final Damage = Base_Damage + random(0..Damage_Range)
+Final Speed = Base_Speed + random(0..Speed_Variance)   // lower is faster
+Final Accuracy = Base_Accuracy + random(0..Accuracy_Range)
+
+// Step 2: Classify the completed weapon (S→F tier)
+// Normal distribution of the rolled values relative to base values
+// Grade is determined by how far above the base the rolled stats land
+```
+
 ## Post-MVP Features (Deferred)
 - **Point Budget System** — will add balance constraints using point allocation
 - **Rarity Tiers** — will integrate with monster loot tables
-- **Quality Grades (S-F)** — will display UX tier based on stat rolls, not affect generation
 - **Two-handed flag / Weight** — for equipment slot mechanics
 
 ## Future Integration Notes

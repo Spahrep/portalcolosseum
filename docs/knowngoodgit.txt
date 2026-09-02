@@ -1,0 +1,9 @@
+Known-good rollback point before migration: Vercel → Supabase Edge Functions
+
+Commit: f81bc1c (Remove duplicate favicon.ico links and replace inline @import with link tag)
+Date: 2026-09-02 (current HEAD before migration)
+
+To rollback:
+  git checkout f81bc1c -- .
+
+Created after confirming all work is safely committed in git.

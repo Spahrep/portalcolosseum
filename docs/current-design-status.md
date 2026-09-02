@@ -5,7 +5,8 @@ This file captures the current state of design decisions for Portal Colosseum. I
 ## Weapon Generation (documented in weapon-generation.md)
 
 - Base + Delta system for stats
-- Normal distribution quality grading (S–F)
+- All stats rolled **independently** before classification
+- Normal distribution quality grading (S–F), applied **after** all stats are rolled — it's a UI label, not an input
   - S-tier ≈ 0.15% (roughly 1 in 740, often communicated as ~1 in 1000)
   - A-tier ≈ 2.1%
 - Attacks roll **independently** of weapon grade (current idea, subject to change)
