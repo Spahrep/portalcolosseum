@@ -108,7 +108,7 @@ function enterLocation() {
   // Trigger location-specific action
   if (loc.name === 'portal') {
     // Enter The Portal — redirect to the GUI battle test
-    window.location.href = '/test/gui1/';
+    window.location.href = '/test/gui1';
   }
 }
 
