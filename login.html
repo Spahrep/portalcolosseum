@@ -3,6 +3,8 @@
   Portal Colosseum - Login Page
   =============================
   Authentication via Supabase: Google OAuth, GitHub OAuth, or email/password.
+  Signup is now a separate invite-only flow accessed via the landing page's
+  Register button. Users who already registered can log in here.
   See docs/setup-environment-variables.md for Supabase config.
 -->
 <html lang="en">
@@ -69,23 +71,11 @@
         <button id="email-login-btn" class="btn-primary">
           Log In
         </button>
-        <p class="hint">Forgot password? <a href="#" id="reset-link" class="text-orange">Reset it</a></p>
+        <p class="hint">Need to reset your password? <a href="/reset-password" class="text-orange">Reset it here</a></p>
 
         <!-- Auth message display area (success/error feedback) -->
         <div id="auth-message" class="auth-message" style="display: none;"></div>
-
-        <!-- SIGNUP SECTION - prominent call to action -->
-        <div class="signup-cta">
-          <div class="signup-cta-inner">
-            <p>— New to the Colosseum? —</p>
-            <a href="/signup" class="btn-gradient">
-              ▶ Create Your Account
-            </a>
-            <p class="small">
-              Email/password • Google • GitHub
-            </p>
-          </div>
-        </div>
+      </div>
       </div>
     </div>
   </div>

@@ -3,16 +3,16 @@
   Portal Colosseum - Landing Page
   ===============================
   First page users see when visiting the site. Shows the Portal Colosseum
-  artwork with a "COMING SOON!" call-to-action button.
+  artwork with an alpha invite notice.
 
   Navigation Flow:
   1. User visits https://portalcolosseum.com/ (this page)
-  2. User clicks "ENTER THE COLOSSEUM" or "COMING SOON!" button
-  3. Redirect to /login for authentication
-  4. After login, redirected to /game
+  2. LOGIN → goes to /login (for existing users)
+  3. REGISTER → opens invite key modal → validates → redirects to /signup
+  4. After signup, redirected to /game
 
-  Note: The ENTER THE COLOSSEUM button is currently commented out since the game
-  isn't ready yet. Users should go to /login directly.
+  Signup is invite-only: users must enter a valid key at the landing page
+  before they can create an account.
 -->
 <html lang="en">
 <head>
