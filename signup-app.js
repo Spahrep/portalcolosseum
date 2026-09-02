@@ -225,6 +225,13 @@ async function signUpWithEmail() {
     return showMessage('Please fill in all fields', 'error');
   }
 
+  // --- Validate username length before any DB calls ---
+  // The profiles.username column is varchar(32) per schema — reject
+  // anything longer client-side to avoid a confusing 406 from PostgREST
+  if (username.length > 32) {
+    return showMessage(`Username must be 32 characters or fewer (currently ${username.length}).`, 'error');
+  }
+
   // --- Client-side password validation (before hitting Supabase) ---
   const { valid, errors } = validatePassword(password);
   if (!valid) {
