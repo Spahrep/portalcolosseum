@@ -322,13 +322,13 @@
 
         <div class="monster-panel" style="min-width: 220px; font-size:10px;">
           <div style="color:#ffaa66; margin-bottom:3px; font-size:10px;">MONSTERS</div>
-          <div class="monster-target" data-target="0" style="margin:4px 0; text-align:left; padding-left:4px;" onclick="selectMonster(this)">
+          <div class="monster-target" data-target="0" style="margin:4px 0; text-align:left; padding-left:4px;">
             <span style="color:#88aaff;">A</span> - Glimmerling - <span style="color:#66ff99;">Full</span>
           </div>
-          <div class="monster-target" data-target="1" style="margin:4px 0; text-align:left; padding-left:4px;" onclick="selectMonster(this)">
+          <div class="monster-target" data-target="1" style="margin:4px 0; text-align:left; padding-left:4px;">
             <span style="color:#88aaff;">B</span> - Giant Rat - <span style="color:#ffcc66;">Injured</span>
           </div>
-          <div class="monster-target" data-target="2" style="margin:4px 0; text-align:left; padding-left:4px;" onclick="selectMonster(this)">
+          <div class="monster-target" data-target="2" style="margin:4px 0; text-align:left; padding-left:4px;">
             <span style="color:#88aaff;">C</span> - Glimmerling - <span style="color:#ff6666;">Battered</span>
           </div>
         </div>
@@ -343,20 +343,20 @@
     <!-- Arena with Enemy Glimmerlings -->
     <div class="arena">
       <div class="enemy-sprites">
-        <div class="monster-wrapper" data-target="0" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;" onclick="selectMonster(0)">
+        <div class="monster-wrapper" data-target="0" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
           <div style="font-size:12px; margin-bottom:2px;">A</div>
-          <img src="glimmer-attack.jpg" alt="Glimmerling Enemy">
-          <div class="monster-marker" data-target="0" style="font-size:11px; margin-top:4px; cursor:pointer;" onclick="event.stopImmediatePropagation(); toggleMonster(0);">[ ]</div>
+          <img src="./glimmer-attack.jpg" alt="Glimmerling Enemy">
+          <div class="monster-marker" data-target="0" style="font-size:11px; margin-top:4px; cursor:pointer;">[ ]</div>
         </div>
-        <div class="monster-wrapper" data-target="1" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;" onclick="selectMonster(1)">
+        <div class="monster-wrapper" data-target="1" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
           <div style="font-size:12px; margin-bottom:2px;">B</div>
-          <img src="giantRat1.JPG" alt="Giant Rat Enemy" style="transform: scaleX(-1);">
-          <div class="monster-marker" data-target="1" style="font-size:11px; margin-top:4px; cursor:pointer;" onclick="event.stopImmediatePropagation(); toggleMonster(1);">[ ]</div>
+          <img src="./giantRat1.JPG" alt="Giant Rat Enemy" style="transform: scaleX(-1);">
+          <div class="monster-marker" data-target="1" style="font-size:11px; margin-top:4px; cursor:pointer;">[ ]</div>
         </div>
-        <div class="monster-wrapper" data-target="2" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;" onclick="selectMonster(2)">
+        <div class="monster-wrapper" data-target="2" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
           <div style="font-size:12px; margin-bottom:2px;">C</div>
-          <img src="glimmer-sad.png" alt="Glimmerling Enemy" style="width:100px;">
-          <div class="monster-marker" data-target="2" style="font-size:11px; margin-top:4px; cursor:pointer;" onclick="event.stopImmediatePropagation(); toggleMonster(2);">[ ]</div>
+          <img src="./glimmer-sad.png" alt="Glimmerling Enemy" style="width:100px;">
+          <div class="monster-marker" data-target="2" style="font-size:11px; margin-top:4px; cursor:pointer;">[ ]</div>
         </div>
       </div>
     </div>
@@ -385,8 +385,8 @@
         <div class="weapon-name" id="left-weapon-name">Iron Sword</div>
         
         <div class="command-list">
-          <div class="command" data-col="0" data-row="0" data-name="Quick Slash" data-info="Cast: 3-4 | CD: 1 | Phys/Slash | Dmg 12-22" onclick="selectCommand(this)">[ ] Quick Slash</div>
-          <div class="command" data-col="0" data-row="1" data-name="Slash" data-info="Cast: 5-6 | CD: 2 | Phys/Slash | Dmg 18-30" onclick="selectCommand(this)">[ ] Slash</div>
+          <div class="command" data-col="0" data-row="0" data-name="Quick Slash" data-info="Cast: 3-4 | CD: 1 | Phys/Slash | Dmg 12-22">[ ] Quick Slash</div>
+          <div class="command" data-col="0" data-row="1" data-name="Slash" data-info="Cast: 5-6 | CD: 2 | Phys/Slash | Dmg 18-30">[ ] Slash</div>
           <div class="command" data-col="0" data-row="2" style="color:#446688; cursor:default;">----</div>
         </div>
       </div>
@@ -397,8 +397,8 @@
         <div class="weapon-name" id="right-weapon-name">Arcane Wand</div>
         
         <div class="command-list">
-          <div class="command" data-col="1" data-row="0" data-name="Fireball 1" data-info="Cast: 8-10 | CD: 4 | Magic/Fire | Dmg 22-38" onclick="selectCommand(this)">[ ] Fireball 1</div>
-          <div class="command" data-col="1" data-row="1" data-name="Ice Bolt 2" data-info="Cast: 10-12 | CD: 3-5 | Magic/Ice | Dmg 20-35" onclick="selectCommand(this)">[ ] Ice Bolt 2</div>
+          <div class="command" data-col="1" data-row="0" data-name="Fireball 1" data-info="Cast: 8-10 | CD: 4 | Magic/Fire | Dmg 22-38">[ ] Fireball 1</div>
+          <div class="command" data-col="1" data-row="1" data-name="Ice Bolt 2" data-info="Cast: 10-12 | CD: 3-5 | Magic/Ice | Dmg 20-35">[ ] Ice Bolt 2</div>
           <div class="command" data-col="1" data-row="2" style="color:#446688; cursor:default;">----</div>
         </div>
       </div>
@@ -408,11 +408,11 @@
         <div style="color:#ffaa66; margin-bottom:6px;">Inventory</div>
 
         <div style="color:#88aaff; font-size:10px; margin:4px 0 2px;">Belt Loop</div>
-        <div class="enemy-row command" data-col="2" data-row="0" data-name="Bronze Axe" data-info="2h, replace both weapons, 30-40 tic equip time" onclick="selectCommand(this)"><span>[ ] Bronze Axe</span></div>
+        <div class="enemy-row command" data-col="2" data-row="0" data-name="Bronze Axe" data-info="2h, replace both weapons, 30-40 tic equip time"><span>[ ] Bronze Axe</span></div>
 
         <div style="color:#88aaff; font-size:10px; margin:6px 0 2px;">Pouch</div>
-        <div class="enemy-row command" data-col="2" data-row="1" data-name="Herb" data-info="Use: Restores a small amount of HP" onclick="selectCommand(this)"><span>[ ] Herb</span></div>
-        <div class="enemy-row command" data-col="2" data-row="2" data-name="Bomb" data-info="Use: Deals damage to all enemies" onclick="selectCommand(this)"><span>[ ] Bomb</span></div>
+        <div class="enemy-row command" data-col="2" data-row="1" data-name="Herb" data-info="Use: Restores a small amount of HP"><span>[ ] Herb</span></div>
+        <div class="enemy-row command" data-col="2" data-row="2" data-name="Bomb" data-info="Use: Deals damage to all enemies"><span>[ ] Bomb</span></div>
       </div>
     </div>
 
@@ -422,469 +422,6 @@
     </div>
   </div>
 
-  <script>
-    let currentCol = 0;
-    let currentRow = 0;
-    let inTargetMode = false;
-    let currentTargetIndex = 0;
-    let confirmButtonsVisible = false;
-    let herbThrown = false;
-    let pendingHerbThrow = false;
-
-    function getAllCommands() {
-      return Array.from(document.querySelectorAll('.command[data-name]'));
-    }
-
-    function selectCommand(el) {
-      // Prevent selecting disabled herb
-      if (el.classList.contains('herb-disabled') || (el.dataset.name === 'Herb' && herbThrown)) {
-        return;
-      }
-
-      document.querySelectorAll('.command').forEach(cmd => {
-        cmd.classList.remove('selected');
-        if (cmd.dataset.name) {
-          cmd.innerHTML = cmd.innerHTML.replace('[x]', '[ ]');
-        }
-      });
-
-      if (el.dataset.name) {
-        el.innerHTML = el.innerHTML.replace('[ ]', '[x]');
-        el.classList.add('selected');
-
-        currentCol = parseInt(el.dataset.col);
-        currentRow = parseInt(el.dataset.row);
-
-        const footer = document.getElementById('footer-info');
-        const name = el.dataset.name;
-
-        if (name === 'Herb' && !herbThrown) {
-          // Special Herb flow: show Consume / Throw options
-          footer.innerHTML = `
-            <strong>Herb</strong> — Choose action:<br>
-            <span class="herb-suboption" onclick="handleHerbAction('consume', this)">Consume</span> &nbsp;|&nbsp;
-            <span class="herb-suboption" onclick="handleHerbAction('throw', this)">Throw</span>
-          `;
-          // keep the [x] on Herb
-        } else {
-          const info = el.dataset.info;
-          footer.innerHTML = `<strong>${name}</strong> — ${info}`;
-        }
-      }
-    }
-
-    function handleHerbAction(action, el) {
-      const footer = document.getElementById('footer-info');
-      const herbEl = document.querySelector('.command[data-name="Herb"]');
-
-      if (action === 'consume') {
-        footer.innerHTML = 'Action Confirmed! (demo) - You consumed the herb and restored some health.';
-        // reset selection highlight
-        if (herbEl) {
-          herbEl.classList.remove('selected');
-          herbEl.innerHTML = herbEl.innerHTML.replace('[x]', '[ ]');
-        }
-        // clear after short delay for demo
-        setTimeout(() => {
-          footer.innerHTML = 'Select an attack to see details';
-        }, 2500);
-      } else if (action === 'throw') {
-        pendingHerbThrow = true;
-        // proceed to target selection like normal Enter on command
-        if (herbEl) {
-          herbEl.classList.remove('selected');
-        }
-        inTargetMode = true;
-        currentTargetIndex = 0;
-        selectMonster(0);
-        footer.innerHTML = 'Select monster to throw at, then Enter';
-      }
-    }
-
-    function selectMonster(elOrIndex) {
-      // clear previous list selections
-      document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));
-      // clear previous arena selections
-      document.querySelectorAll('.monster-wrapper').forEach(w => w.classList.remove('selected'));
-      document.querySelectorAll('.monster-marker').forEach(m => m.innerHTML = '[ ]');
-
-      let el;
-      if (typeof elOrIndex === 'number') {
-        el = document.querySelector(`.monster-target[data-target="${elOrIndex}"]`);
-        currentTargetIndex = elOrIndex;
-      } else {
-        el = elOrIndex;
-        currentTargetIndex = parseInt(el.dataset.target);
-      }
-      if (el) {
-        el.classList.add('selected');
-      }
-
-      // update arena per-sprite wrapper and [x] marker
-      const arenaWrapper = document.querySelector(`.monster-wrapper[data-target="${currentTargetIndex}"]`);
-      const arenaMarker = document.querySelector(`.monster-marker[data-target="${currentTargetIndex}"]`);
-      if (arenaWrapper) arenaWrapper.classList.add('selected');
-      if (arenaMarker) arenaMarker.innerHTML = '[x]';
-    }
-
-    function toggleMonster(index) {
-      const marker = document.querySelector(`.monster-marker[data-target="${index}"]`);
-      const wrapper = document.querySelector(`.monster-wrapper[data-target="${index}"]`);
-      const listItem = document.querySelector(`.monster-target[data-target="${index}"]`);
-
-      if (!marker) return;
-
-      const isSelected = marker.innerHTML === '[x]';
-
-      // clear all first (to enforce single selection like radio, or support multi? but current design is single)
-      document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));
-      document.querySelectorAll('.monster-wrapper').forEach(w => w.classList.remove('selected'));
-      document.querySelectorAll('.monster-marker').forEach(m => m.innerHTML = '[ ]');
-
-      if (!isSelected) {
-        // select it
-        if (listItem) listItem.classList.add('selected');
-        if (wrapper) wrapper.classList.add('selected');
-        marker.innerHTML = '[x]';
-        currentTargetIndex = index;
-      } else {
-        // toggled off: leave all cleared, currentTargetIndex reset?
-        currentTargetIndex = -1;
-      }
-    }
-
-    function showConfirmButtons() {
-      // remove old if any
-      const old = document.getElementById('confirm-buttons');
-      if (old) old.remove();
-
-      const footer = document.getElementById('footer-info');
-      const btnContainer = document.createElement('div');
-      btnContainer.id = 'confirm-buttons';
-      btnContainer.className = 'confirm-buttons';
-      btnContainer.innerHTML = `
-        <button class="confirm-btn" onclick="confirmAction(true)">Go</button>
-        <button class="confirm-btn" onclick="confirmAction(false)">Cancel</button>
-      `;
-      footer.appendChild(btnContainer);
-      confirmButtonsVisible = true;
-      // default highlight Go
-      const goBtn = btnContainer.querySelector(".confirm-btn");
-      if (goBtn) goBtn.classList.add("selected");
-    }
-
-    function confirmAction(go) {
-      const btns = document.getElementById('confirm-buttons');
-      if (btns) btns.remove();
-      confirmButtonsVisible = false;
-      const footer = document.getElementById('footer-info');
-      if (go) {
-        if (pendingHerbThrow) {
-          footer.innerHTML = 'Action Confirmed! (demo) - Monster ate the herb and restored some health.';
-          // mark herb as thrown/used
-          const herbEl = document.querySelector('.command[data-name="Herb"]');
-          if (herbEl) {
-            herbEl.classList.add('herb-disabled');
-            herbEl.innerHTML = herbEl.innerHTML.replace('[x]', '[-]').replace('Herb', '<s>Herb</s>');
-            herbEl.onclick = null; // prevent further clicks
-          }
-          herbThrown = true;
-          pendingHerbThrow = false;
-          inTargetMode = false;
-          // clear monster highlights
-          document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));
-          document.querySelectorAll('.monster-wrapper').forEach(w => w.classList.remove('selected'));
-          document.querySelectorAll('.monster-marker').forEach(m => m.innerHTML = '[ ]');
-          setTimeout(() => {
-            footer.innerHTML = 'Select an attack to see details';
-          }, 2500);
-          return;
-        }
-        footer.innerHTML = 'Action confirmed! (demo)';
-      } else {
-        footer.innerHTML = 'Action cancelled. Select command again.';
-        pendingHerbThrow = false;
-        // reset to command mode
-        inTargetMode = false;
-        document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));
-        document.querySelectorAll('.monster-wrapper').forEach(w => w.classList.remove('selected'));
-        document.querySelectorAll('.monster-marker').forEach(m => m.innerHTML = '[ ]');
-        // reselect first command
-        const first = document.querySelector('.command[data-col="0"][data-row="0"]');
-        if (first) selectCommand(first);
-      }
-    }
-
-
-    function navigateWithArrows(direction) {
-      if (confirmButtonsVisible) {
-        // only Go/Cancel interactive; arrows toggle between them
-        const btns = document.querySelectorAll('#confirm-buttons .confirm-btn');
-        if (btns.length < 2) return;
-        const goBtn = btns[0];
-        const cancelBtn = btns[1];
-        const goSelected = goBtn.classList.contains('selected');
-        if (direction === 'left' || direction === 'up') {
-          goBtn.classList.add('selected');
-          cancelBtn.classList.remove('selected');
-        } else if (direction === 'right' || direction === 'down') {
-          cancelBtn.classList.add('selected');
-          goBtn.classList.remove('selected');
-        }
-        return;
-      }
-      if (inTargetMode) {
-        // target navigation: all four arrows cycle through A B C
-        let newIdx = currentTargetIndex;
-        if (direction === 'left' || direction === 'up')  newIdx = (currentTargetIndex - 1 + 3) % 3;
-        if (direction === 'right' || direction === 'down') newIdx = (currentTargetIndex + 1) % 3;
-        selectMonster(newIdx);
-        return;
-      }
-      const commands = getAllCommands();
-      let newCol = currentCol;
-      let newRow = currentRow;
-
-      if (direction === 'left')  newCol = Math.max(0, currentCol - 1);
-      if (direction === 'right') newCol = Math.min(2, currentCol + 1);
-      if (direction === 'up')    newRow = Math.max(0, currentRow - 1);
-      if (direction === 'down')  newRow = Math.min(2, currentRow + 1);
-
-      const target = commands.find(cmd => 
-        parseInt(cmd.dataset.col) === newCol && 
-        parseInt(cmd.dataset.row) === newRow
-      );
-
-      if (target) {
-        selectCommand(target);
-      }
-    }
-
-    document.addEventListener('keydown', function(e) {
-      if (confirmButtonsVisible) {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          const selected = document.querySelector('#confirm-buttons .confirm-btn.selected') || document.querySelector('#confirm-buttons .confirm-btn');
-          if (selected) {
-            if (selected.textContent.trim() === 'Go') confirmAction(true);
-            else confirmAction(false);
-          }
-          return;
-        }
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          confirmAction(false);
-          return;
-        }
-        // arrows already handled in navigateWithArrows via the if at top
-      }
-
-      if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        navigateWithArrows('left');
-      }
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        navigateWithArrows('right');
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        navigateWithArrows('up');
-      }
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        navigateWithArrows('down');
-      }
-
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (inTargetMode) {
-          // select current monster, show buttons
-          const monsters = document.querySelectorAll('.monster-target');
-          const currentM = monsters[currentTargetIndex];
-          if (currentM) {
-            selectMonster(currentM);
-            showConfirmButtons();
-          }
-        } else {
-          // Enter on command: move to target mode
-          const selectedCmd = document.querySelector('.command.selected');
-          if (selectedCmd) {
-            // clear command selection highlight but keep data
-            document.querySelectorAll('.command').forEach(cmd => cmd.classList.remove('selected'));
-            inTargetMode = true;
-            currentTargetIndex = 0;
-            selectMonster(0);
-            const footer = document.getElementById('footer-info');
-            footer.innerHTML = 'Select target (A/B/C) then Enter';
-          }
-        }
-        return;
-      }
-
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        if (inTargetMode) {
-          inTargetMode = false;
-          // clear any selected monster highlights
-          document.querySelectorAll('.monster-target').forEach(m => m.classList.remove('selected'));
-          document.querySelectorAll('.monster-wrapper').forEach(w => w.classList.remove('selected'));
-          document.querySelectorAll('.monster-marker').forEach(m => m.innerHTML = '[ ]');
-          // restore previously selected command (using preserved currentCol/currentRow)
-          const commands = getAllCommands();
-          const prevCmd = commands.find(cmd =>
-            parseInt(cmd.dataset.col) === currentCol && parseInt(cmd.dataset.row) === currentRow
-          );
-          if (prevCmd) {
-            selectCommand(prevCmd);
-          } else {
-            // fallback: reselect first
-            const first = document.querySelector('.command[data-col="0"][data-row="0"]');
-            if (first) selectCommand(first);
-          }
-        }
-      }
-
-      if (e.key.toLowerCase() === 'e') {
-        e.preventDefault();
-        const equip = document.getElementById('equip-panel');
-        equip.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        equip.style.transition = 'background 0.2s';
-        equip.style.background = '#1a3a6e';
-        setTimeout(() => {
-          equip.style.background = '';
-        }, 600);
-      }
-    });
-
-    document.querySelectorAll('.equip-row').forEach(row => {
-      row.addEventListener('click', function() {
-        const slot = this.dataset.slot;
-        const itemName = this.querySelector('span:not(.equip-label)').innerText;
-
-        if (slot === 'belt' && itemName === 'Bronze Axe') {
-          document.getElementById('left-hand').innerText = 'Bronze Axe';
-          document.getElementById('left-weapon-name').innerText = 'Bronze Axe';
-          document.getElementById('belt').innerText = '—';
-
-          row.classList.add('equip-highlight');
-          setTimeout(() => row.classList.remove('equip-highlight'), 600);
-        }
-      });
-    });
-
-    function initKeyboardNav() {
-      // Ensure initial [x] starts on first command in Left Hand column ("Quick Slash")
-      const firstCmd = document.querySelector('.command[data-col="0"][data-row="0"]');
-      if (firstCmd) {
-        selectCommand(firstCmd);
-      }
-    }
-
-    document.querySelector('.arena').addEventListener('click', function(e) {
-      if (e.target.tagName === 'IMG') return;
-      const sprites = document.querySelectorAll('.enemy-sprites img');
-      sprites.forEach((s, i) => {
-        setTimeout(() => {
-          s.style.transition = 'transform 0.15s';
-          s.style.transform = i === 0 ? 'translateX(14px)' : 'translateX(-14px)';
-          setTimeout(() => s.style.transform = '', 200);
-        }, i * 70);
-      });
-    });
-
-    function renderTicBar() {
-      const MAX_TIC = 110;
-      const participants = [
-        { letter: "*", tic: 1, color: "#ff5555" },
-        { letter: "A", tic: 20, color: "#ff5555" },
-        { letter: "B", tic: 51, color: "#ff5555" },
-        { letter: "C", tic: 102, color: "#ff5555" }
-      ];
-      const topEl = document.getElementById("tic-top");
-      const midEl = document.getElementById("tic-middle");
-      const botEl = document.getElementById("tic-bottom");
-
-      [topEl, midEl, botEl].forEach(el => {
-        if (el) {
-          el.innerHTML = "";
-          el.style.position = "relative";
-        }
-      });
-
-      // Top row: participant letters at percentage positions
-      if (topEl) {
-        participants.forEach(p => {
-          const pct = Math.min(100, (p.tic / MAX_TIC) * 100);
-          const span = document.createElement("span");
-          span.textContent = p.letter;
-          span.style.position = "absolute";
-          span.style.left = `${pct}%`;
-          span.style.transform = "translateX(-50%)";
-          span.style.color = p.color || "#ff5555";
-          topEl.appendChild(span);
-        });
-      }
-
-      // Middle row: timeline with | markers
-      if (midEl) {
-        const line = document.createElement("div");
-        line.style.position = "absolute";
-        line.style.left = "0";
-        line.style.right = "0";
-        line.style.top = "0.45em";
-        line.style.height = "1px";
-        line.style.background = "#66ff99";
-        midEl.appendChild(line);
-
-        const startCaret = document.createElement("span");
-        startCaret.textContent = "^";
-        startCaret.style.position = "absolute";
-        startCaret.style.left = "0";
-        startCaret.style.transform = "translateX(-50%)";
-        startCaret.style.color = "#66ff99";
-        midEl.appendChild(startCaret);
-
-        participants.forEach(p => {
-          const pct = Math.min(100, (p.tic / MAX_TIC) * 100);
-          const span = document.createElement("span");
-          span.textContent = "|";
-          span.style.position = "absolute";
-          span.style.left = `${pct}%`;
-          span.style.transform = "translateX(-50%)";
-          span.style.color = "#66ff99";
-          midEl.appendChild(span);
-        });
-      }
-
-      // Bottom row: scale labels using percentages (prevents overflow)
-      if (botEl) {
-        const labels = [
-          { val: "0", pct: 0 },
-          { val: "25", pct: (25 / MAX_TIC) * 100 },
-          { val: "50", pct: (50 / MAX_TIC) * 100 },
-          { val: "75", pct: (75 / MAX_TIC) * 100 },
-          { val: "100", pct: (100 / MAX_TIC) * 100 },
-          { val: "+", pct: (105 / MAX_TIC) * 100, color: "#ffcc66" }
-        ];
-        labels.forEach(l => {
-          const span = document.createElement("span");
-          span.textContent = l.val;
-          span.style.position = "absolute";
-          span.style.left = `${l.pct}%`;
-          span.style.transform = "translateX(-50%)";
-          span.style.fontSize = "9px";
-          span.style.color = l.color || "#5577aa";
-          botEl.appendChild(span);
-        });
-      }
-    }
-
-    window.onload = function() {
-      initKeyboardNav();
-      renderTicBar();
-      console.log("%c[Portal Colosseum] Live test GUI ready at /test/gui1/", "color:#5577aa");
-    };
-  </script>
+  <script src="./gui1-app.js"></script>
 </body>
 </html>
