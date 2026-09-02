@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal Colosseum • Battle Test</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&amp;display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Pixeloid+Mono&amp;display=swap');
 
     body {
       margin: 0;
       padding: 30px 20px;
       background: #000;
-      font-family: 'Press Start 2P', 'Courier New', monospace;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
       color: #e0e0ff;
       display: flex;
       justify-content: center;
@@ -283,7 +283,7 @@
       margin-top: 8px;
     }
     .confirm-btn {
-      font-family: 'Press Start 2P', 'Courier New', monospace;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
       font-size: 11px;
       padding: 4px 14px;
       border: 3px solid #4a90d9;
@@ -306,6 +306,17 @@
           <div class="name">SPAHREP</div>
           <div class="hp-mp">
             HP 142 / 164
+          </div>
+        </div>
+
+        <div id="equip-panel" class="equip-panel" style="display:none;">
+          <div class="equip-row" data-slot="left-hand">
+            <span class="equip-label">L.HAND:</span>
+            <span id="left-hand">—</span>
+          </div>
+          <div class="equip-row" data-slot="belt">
+            <span class="equip-label">BELT:</span>
+            <span id="belt">—</span>
           </div>
         </div>
 
