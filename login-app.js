@@ -287,6 +287,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('google-login-btn').addEventListener('click', () => signInWithProvider('google'));
   document.getElementById('github-login-btn').addEventListener('click', () => signInWithProvider('github'));
   document.getElementById('email-login-btn').addEventListener('click', signInWithEmail);
+  document.getElementById('reset-link').addEventListener('click', sendResetEmail);
 
   // Initialize Supabase client
   initSupabase();

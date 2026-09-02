@@ -118,7 +118,6 @@ async function handleResetCode() {
         showMessage(`Failed to verify reset code: ${error.message}`, 'error');
         return;
       }
-      console.log('Session established after code exchange');
       showMessage('Reset token verified. Enter your new password below.', 'success');
       document.getElementById('reset-form').style.display = 'block';
     } else {

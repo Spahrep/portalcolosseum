@@ -245,6 +245,22 @@
   font-weight: bold;
 }
 
+/* Link-styled buttons (e.g. the password reset trigger) */
+button.text-orange {
+  display: block;
+  margin: 0.75rem auto 0;
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: 'Courier New', monospace;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+button.text-orange:hover {
+  text-decoration: underline;
+}
+
 .small-hint {
   font-size: 0.8rem;
   color: #666;

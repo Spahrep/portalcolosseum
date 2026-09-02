@@ -67,52 +67,6 @@ body {
 }
 
 /* Legacy login form styles (kept for backward compatibility) */
-.login-form {
-  background: rgba(0, 0, 0, 0.7);
-  padding: 40px;
-  border-radius: 15px;
-  border: 1px solid #ff6b35;
-  backdrop-filter: blur(5px);
-  max-width: 400px;
-  margin: 20px auto;
-}
-
-.login-form h2 {
-  color: #ff6b35;
-  margin-bottom: 20px;
-  text-align: center;
-}
-
-.login-form input {
-  width: 100%;
-  padding: 12px;
-  margin: 10px 0;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid #ff6b35;
-  color: white;
-  font-family: inherit;
-  font-size: 16px;
-  border-radius: 5px;
-}
-
-.login-form button {
-  width: 100%;
-  padding: 15px;
-  background: linear-gradient(45deg, #ff6b35, #f79339);
-  color: white;
-  border: none;
-  border-radius: 5px;
-  font-size: 18px;
-  font-family: inherit;
-  font-weight: bold;
-  cursor: pointer;
-  margin-top: 15px;
-}
-
-.login-form button:hover {
-  background: linear-gradient(45deg, #ff8c42, #ffb347);
-}
-
 /* Hint text (small gray text) */
 .hint {
   color: #888;
