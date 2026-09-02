@@ -472,5 +472,4 @@ function renderTicBar() {
 window.onload = function() {
   initKeyboardNav();
   renderTicBar();
-  console.log('%c[Portal Colosseum] Live test GUI ready at /test/gui1/', 'color:#5577aa');
 };
