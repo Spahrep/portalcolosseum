@@ -154,7 +154,7 @@ async function signInWithProvider(provider) {
 
   if (!supabase) return showMessage('Authentication service not available. Please refresh.', 'error');
   try {
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: provider,
       options: {
         redirectTo: window.location.origin + '/signup',
@@ -162,7 +162,14 @@ async function signInWithProvider(provider) {
         // (stored in sessionStorage which persists across tabs of same origin)
       }
     });
+
     if (error) return showMessage(`${provider} login failed: ${error.message}`, 'error');
+
+    // In PKCE flow, signInWithOAuth returns a URL — we must navigate to it manually
+    // Without this, no redirect happens and the page "just sits there"
+    if (data && data.url) {
+      window.location.href = data.url;
+    }
   } catch (err) {
     showMessage(`${provider} error: ${err.message}`, 'error');
   }
