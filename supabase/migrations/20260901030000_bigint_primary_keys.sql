@@ -70,28 +70,32 @@ create table if not exists public.weapon_template (
   slot_1_pool     text[]    not null default '{}',
   slot_2_pool     text[]    not null default '{}',
   slot_3_pool     text[]    not null default '{}',
-  slot_1_chance   float     not null default 1.0,
-  slot_2_chance   float     not null default 0.8,
-  slot_3_chance   float     not null default 0.4,
+  slot_4_pool     text[]    not null default '{}',
+  slot_1_chance   float     not null,
+  slot_2_chance   float     not null,
+  slot_3_chance   float     not null,
+  slot_4_chance   float     not null default 0,
   created_at      timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at      timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
-comment on table public.weapon_template is 'Weapon definitions with procedurally-generated stat ranges and attack slot pools (3-slot system)';
+comment on table public.weapon_template is 'Weapon definitions with procedurally-generated stat ranges and attack slot pools (4-slot + default system)';
 comment on column public.weapon_template.id is 'BigInt auto-increment primary key (better readability in logs/debugging than UUID)';
-comment on column public.weapon_template.slot_1_pool is 'Attacks eligible for Slot 1 (always granted, chance=1.0) — base attack pool';
-comment on column public.weapon_template.slot_2_pool is 'Attacks eligible for Slot 2 (default 80% chance) — secondary attack pool';
-comment on column public.weapon_template.slot_3_pool is 'Attacks eligible for Slot 3 (default 40% chance) — rare/strongest attack pool';
-comment on column public.weapon_template.slot_1_chance is 'Probability (0.0–1.0) of Slot 1 activating (default 1.0 = always)';
-comment on column public.weapon_template.slot_2_chance is 'Probability (0.0–1.0) of Slot 2 activating (default 0.8)';
-comment on column public.weapon_template.slot_3_chance is 'Probability (0.0–1.0) of Slot 3 activating (default 0.4)';
+comment on column public.weapon_template.slot_1_pool is 'Attacks eligible for Slot 1 (per-template probability set by slot_1_chance)';
+comment on column public.weapon_template.slot_2_pool is 'Attacks eligible for Slot 2 (per-template probability set by slot_2_chance)';
+comment on column public.weapon_template.slot_3_pool is 'Attacks eligible for Slot 3 (per-template probability set by slot_3_chance)';
+comment on column public.weapon_template.slot_4_pool is 'Attacks eligible for Slot 4 (per-template probability set by slot_4_chance)';
+comment on column public.weapon_template.slot_1_chance is 'Probability (0.0–1.0) of Slot 1 activating (set per weapon template)';
+comment on column public.weapon_template.slot_2_chance is 'Probability (0.0–1.0) of Slot 2 activating (set per weapon template)';
+comment on column public.weapon_template.slot_3_chance is 'Probability (0.0–1.0) of Slot 3 activating (set per weapon template)';
+comment on column public.weapon_template.slot_4_chance is 'Probability (0.0–1.0) of Slot 4 activating (set per weapon template, default 0)';
 
 -- WEAPON_TEMPLATE_ATTACK MAPPING TABLE
 create table if not exists public.weapon_template_attack (
   id               bigint    primary key generated always as identity,
   weapon_template_id bigint  not null references public.weapon_template(id) on delete cascade,
   attack_id        bigint    not null references public.attack(id) on delete cascade,
-  slot             int       not null check (slot in (1, 2, 3)),
+  slot             int       not null check (slot in (1, 2, 3, 4)),
   created_at       timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -201,30 +205,30 @@ insert into public.attack (name, description, attack_type, prepare_time, cooldow
 insert into public.weapon_template (
   name, weapon_type, base_damage, damage_range, base_speed, speed_variance,
   base_accuracy, accuracy_range,
-  slot_1_pool, slot_2_pool, slot_3_pool,
-  slot_1_chance, slot_2_chance, slot_3_chance
+  slot_1_pool, slot_2_pool, slot_3_pool, slot_4_pool,
+  slot_1_chance, slot_2_chance, slot_3_chance, slot_4_chance
 ) values
   ('Wristblade', 'dagger', 25, 5, 18, 2, 88, 4,
-    ARRAY['Attack'], ARRAY['Quick Slash', 'Precision Strike'], ARRAY['Power Attack'],
-    1.0, 0.8, 0.15),
+    ARRAY['Attack'], ARRAY['Quick Slash', 'Precision Strike'], ARRAY['Power Attack'], ARRAY['Battle Cry'],
+    1.0, 0.8, 0.15, 0.1),
   ('Short Sword', 'sword', 35, 6, 27, 3, 85, 5,
-    ARRAY['Attack'], ARRAY['Heavy Chop', 'Cleave'], ARRAY['Fireball'],
-    1.0, 0.8, 0.4),
+    ARRAY['Attack'], ARRAY['Heavy Chop', 'Cleave'], ARRAY['Fireball'], ARRAY['Ice Shard'],
+    1.0, 0.8, 0.4, 0.1),
   ('Greatsword', 'sword', 55, 8, 35, 4, 82, 6,
-    ARRAY['Attack'], ARRAY['Heavy Chop', 'Whirlwind'], ARRAY['Lightning Rod'],
-    1.0, 0.85, 0.45),
+    ARRAY['Attack'], ARRAY['Heavy Chop', 'Whirlwind'], ARRAY['Lightning Rod'], ARRAY['Arcane Bolt'],
+    1.0, 0.85, 0.45, 0.1),
   ('Hand Axe', 'axe', 32, 5, 29, 3, 84, 5,
-    ARRAY['Attack'], ARRAY['Heavy Chop', 'Cleave'], ARRAY['Ice Shard'],
-    1.0, 0.75, 0.35),
+    ARRAY['Attack'], ARRAY['Heavy Chop', 'Cleave'], ARRAY['Ice Shard'], ARRAY['Weaken Strike'],
+    1.0, 0.75, 0.35, 0.1),
   ('Battle Axe', 'axe', 50, 7, 38, 4, 80, 6,
-    ARRAY['Attack'], ARRAY['Whirlwind', 'Power Attack'], ARRAY['Arcane Bolt'],
-    1.0, 0.9, 0.5),
+    ARRAY['Attack'], ARRAY['Whirlwind', 'Power Attack'], ARRAY['Arcane Bolt'], ARRAY['Shield Bash'],
+    1.0, 0.9, 0.5, 0.15),
   ('Quarterstaff', 'staff', 28, 4, 24, 2, 87, 4,
-    ARRAY['Attack'], ARRAY['Arcane Bolt', 'Ice Shard'], ARRAY['Fireball'],
-    1.0, 0.8, 0.5),
+    ARRAY['Attack'], ARRAY['Arcane Bolt', 'Ice Shard'], ARRAY['Fireball'], ARRAY['Lightning Rod'],
+    1.0, 0.8, 0.5, 0.2),
   ('Warhammer', 'hammer', 42, 6, 33, 3, 83, 5,
-    ARRAY['Attack'], ARRAY['Heavy Chop', 'Shield Bash'], ARRAY['Adrenaline Rush'],
-    1.0, 0.85, 0.4);
+    ARRAY['Attack'], ARRAY['Heavy Chop', 'Shield Bash'], ARRAY['Adrenaline Rush'], ARRAY['Battle Cry'],
+    1.0, 0.85, 0.4, 0.1);
 
 -- WEAPON-TEMPLATE-ATTACK MAPPING (name-based lookups now work with int IDs)
 insert into public.weapon_template_attack (weapon_template_id, attack_id, slot)

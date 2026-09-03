@@ -16,9 +16,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 ## Attack Slot System (documented in weapon-generation.md)
 
 - **Slot 1 — Default "Attack"**: Every weapon has this; uses base stats unmodified (no modifiers)
-- **Slot 2 — Additional Attack**: Always present; rolls from attack pools (filtered by weapon type)
-- **Slot 3 — Optional Attack**: ~10% chance; pulls from any pool including spells.
-**Status**: Current idea, subject to change.
+- **Slots 1-4 — Additional Attacks**: Each slot has configurable `_chance` and `_pool` columns in the weapon_template table. The chance (0.0–1.0) and allowed attacks vary per template. Max total attacks = 5 (Slot 0 + up to 4 configurable slots).
 
 ## Item Behavior (GUI Demo)
 
