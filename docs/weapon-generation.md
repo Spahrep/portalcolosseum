@@ -2,7 +2,7 @@
 
 **Source:** Jester's Ideas Log (2026-08-26)
 **Status:** MVP Implementation
-**Principle:** Randomness at all stages with flat stat ranges.
+**Principle:** Randomness at all stages with normal distribution centered on base values.
 
 ## Overview
 
@@ -36,9 +36,9 @@ Max attacks on a weapon = 1 (Slot 0) + up to 4 (Slots 1-4) = 5.
 
 ### Stat Generation Formula
 ```
-Final Damage   = Base_Damage ± random(0..Damage_Range)
-Final Speed    = Base_Speed ± random(0..Speed_Variance)   // lower is faster
-Final Accuracy = Base_Accuracy ± random(0..Accuracy_Range)
+Final Damage   = Base_Damage ± rand_normal(0..Damage_Range, mean=Base_Damage)
+Final Speed    = Base_Speed ± rand_normal(0..Speed_Variance, mean=Base_Speed)   // lower is faster
+Final Accuracy = Base_Accuracy ± rand_normal(0..Accuracy_Range, mean=Base_Accuracy)
 ```
 
 Attack slots are resolved per-slot:
