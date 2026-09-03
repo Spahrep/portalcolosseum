@@ -398,6 +398,23 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
+# Alpha invite key verification. Migrated from the Vercel function that used
+# to live at api/invite-verify.js.
+#
+# verify_jwt = false is required, not a convenience: invite keys are verified
+# before the account exists, so the caller has no JWT to present. The endpoint
+# is gated instead by server-side Origin validation inside the function plus
+# the unguessability of the keys themselves. Everything the function touches in
+# the database goes through two RPCs granted only to service_role.
+#
+# Requires a secret that is NOT auto-injected:
+#   supabase secrets set INVITE_KEY_HARDCODED=EyeOfTheWorld
+# (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided by the runtime.)
+[functions.invite-verify]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/invite-verify/index.ts"
+
 [analytics]
 enabled = true
 port = 54327

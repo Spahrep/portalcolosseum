@@ -5,12 +5,29 @@
  *
  * Flow:
  *   - Login button → goes directly to /login
- *   - Register button → shows invite key modal → validates via /api/invite-verify
+ *   - Register button → shows invite key modal → validates via the
+ *     invite-verify Supabase Edge Function
  *     → on success, redirects to /signup (with key in sessionStorage for signup-app.js)
  *     → on failure, shows error message
  *
  * This is an external script (not inline) to comply with CSP.
  */
+
+/**
+ * Build the invite-verify Edge Function URL from window.ENV.SUPABASE_URL,
+ * which /api/env.js injects at runtime. The project ref is deliberately not
+ * hardcoded here: this file is a static asset, and baking the ref in would
+ * mean a source edit (and a redeploy) to point at a different project.
+ * Returns null if the environment config never loaded.
+ */
+function getInviteVerifyUrl() {
+  const baseUrl = (window.ENV && window.ENV.SUPABASE_URL) || '';
+  if (!baseUrl) {
+    console.error('[landing-app] Missing window.ENV.SUPABASE_URL — is /api/env.js loaded?');
+    return null;
+  }
+  return `${baseUrl.replace(/\/+$/, '')}/functions/v1/invite-verify`;
+}
 
 // DOM elements
 const registerBtn = document.getElementById('register-btn');
@@ -57,12 +74,19 @@ if (inviteSubmitBtn) {
       return;
     }
 
+    const inviteVerifyUrl = getInviteVerifyUrl();
+    if (!inviteVerifyUrl) {
+      inviteError.textContent = 'Unable to verify invite key. Please try again.';
+      inviteError.style.display = 'block';
+      return;
+    }
+
     inviteError.style.display = 'none';
     inviteSubmitBtn.disabled = true;
     inviteSubmitBtn.textContent = 'Verifying...';
 
     try {
-      const response = await fetch('/api/invite-verify', {
+      const response = await fetch(inviteVerifyUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

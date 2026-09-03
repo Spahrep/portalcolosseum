@@ -12,11 +12,11 @@
  *
  * Alpha Invite Flow:
  *   1. User enters invite key in the #invite-key field
- *   2. Clicks "Verify Invite Key" → calls /api/invite-verify (POST)
+ *   2. Clicks "Verify Invite Key" → POSTs to the invite-verify Edge Function
  *   3. If valid → auth providers section slides in, invite section fades out
  *   4. Invite key stored in sessionStorage (session-only, no XSS persistence)
- *   5. On OAuth/email signup, the invite key is sent to /api/invite-verify
- *      (DELETE) to mark it as used
+ *   5. On OAuth/email signup, the invite key is sent to the invite-verify
+ *      Edge Function (DELETE) to mark it as used
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
@@ -26,6 +26,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.ENV.SUPABASE_ANON_KEY;
 let supabase;
+
+// Invite verification moved off Vercel (/api/invite-verify) onto Supabase
+// Edge Functions. The URL is derived from the runtime-injected SUPABASE_URL
+// rather than hardcoded, so the project ref never appears in source.
+const INVITE_VERIFY_URL = `${(SUPABASE_URL || '').replace(/\/+$/, '')}/functions/v1/invite-verify`;
 
 // Store the validated invite key in session scope (not localStorage — too short
 // lived to be an XSS target, and sessionStorage is cleared on tab close)
@@ -82,7 +87,7 @@ function showMessage(message, type = 'success', link = null) {
 }
 
 /**
- * Verify an invite key via the /api/invite-verify Edge Function.
+ * Verify an invite key via the invite-verify Supabase Edge Function.
  * If valid, reveals the auth provider buttons.
  */
 async function verifyInviteKey() {
@@ -101,7 +106,7 @@ async function verifyInviteKey() {
   inviteHint.textContent = 'Validating your invite key...';
 
   try {
-    const response = await fetch('/api/invite-verify', {
+    const response = await fetch(INVITE_VERIFY_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key })
@@ -150,8 +155,13 @@ async function markInviteKeyUsed() {
   if (!inviteKey) return;
 
   try {
-    const response = await fetch(`/api/invite-verify?key=${encodeURIComponent(inviteKey)}`, {
-      method: 'DELETE'
+    // The key travels in the body, not the query string: URLs end up in
+    // access logs, proxy logs and Referer headers, and an invite key is a
+    // credential.
+    const response = await fetch(INVITE_VERIFY_URL, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: inviteKey })
     });
     if (!response.ok) {
       console.error('Failed to mark invite key as used:', response.status);

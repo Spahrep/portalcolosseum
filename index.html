@@ -21,6 +21,13 @@
   <title>Portal Colosseum</title>
   <link rel="icon" href="/favicon.png" type="image/png" sizes="128x128">
   <link rel="stylesheet" href="/style.css">
+  <!--
+    Environment configuration - must load before landing-app.js, which reads
+    window.ENV.SUPABASE_URL to build the invite-verify Edge Function URL.
+    Synchronous by design (no defer/async): window.ENV has to exist by the
+    time the application script runs.
+  -->
+  <script src="/api/env.js"></script>
 </head>
 <body>
   <!-- Landing section with background art -->
