@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Colosseum - Admin</title>
+  <link rel="icon" href="/favicon.png" type="image/png" sizes="128x128">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/api/env.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+      background: #101f48;
+      color: #fff;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      display: block;
+      align-items: flex-start;
+    }
+    .admin-container { max-width: 1200px; margin: 0 auto; }
+    h1 { color: #ff6b3b; text-transform: uppercase; letter-spacing: 2px; }
+    h2 { color: #ff6b3b; margin-top: 20px; }
+    h3 { color: #ff6b3b; }
+    h4 { color: #ff8c42; margin: 5px 0; }
+    .tab-nav { display: flex; gap: 10px; margin-bottom: 20px; }
+    .tab-btn { padding: 10px 20px; background: #1a2a5e; color: #ff6b3b; border: 1px solid #ff6b3b; cursor: pointer; font-family: inherit; font-size: 14px; }
+    .tab-btn:hover { background: #243670; }
+    .tab-btn.active { background: #ff6b3b; color: #101f48; }
+    table { width: 100%; border-collapse: collapse; background: #1a2a5e; margin: 10px 0; }
+    th, td { padding: 8px 12px; border: 1px solid #2a3a6e; text-align: left; }
+    th { color: #ff6b3b; }
+    .btn { padding: 6px 12px; background: #ff6b3b; color: #101f48; border: none; cursor: pointer; margin: 2px; font-family: inherit; font-size: 13px; border-radius: 3px; }
+    .btn:hover { background: #ff8c42; }
+    .btn-danger { background: #8b0000; color: white; }
+    .btn-danger:hover { background: #a52020; }
+    .btn-secondary { background: transparent; border: 1px solid #888; color: #888; }
+    .form-card { background: #1a2a5e; padding: 20px; border: 1px solid #ff6b3b; border-radius: 5px; margin: 15px 0; }
+    .form-group { margin: 10px 0; }
+    .form-group label { display: block; color: #ff8c42; margin-bottom: 4px; font-size: 13px; }
+    input, select, textarea {
+      width: 100%; padding: 8px; background: #0a1428; color: #fff;
+      border: 1px solid #2a3a6e; font-family: 'Courier New', monospace; font-size: 14px;
+      box-sizing: border-box; border-radius: 3px;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #ff6b3b; outline: none; }
+    input[type="checkbox"] { width: auto; }
+    .mapping-slot { margin: 15px 0; padding: 15px; background: #152050; border: 1px solid #2a3a6e; border-radius: 5px; }
+    .add-attack-row { display: flex; gap: 10px; margin-top: 10px; align-items: center; }
+    .add-attack-row select { flex: 1; }
+    .hidden { display: none; }
+    .muted { color: #888; font-size: 12px; }
+    .error { color: #ff4444; }
+    .mapping-editor { border-color: #ff6b3b; }
+    #login-gate { text-align: center; padding: 60px 20px; }
+    #login-gate .btn { font-size: 16px; padding: 12px 30px; margin: 10px; }
+    #auth-message { color: #ff4444; margin-top: 15px; }
+  </style>
+</head>
+<body>
+  <div class="admin-container">
+    <h1>⚔️ Portal Colosseum Admin</h1>
+    <div id="login-gate">
+      <p>Admin access requires authentication.</p>
+      <button id="google-login-btn" class="btn">Continue with Google</button>
+      <button id="github-login-btn" class="btn">Continue with GitHub</button>
+      <div id="auth-message"></div>
+    </div>
+    <div id="admin-dashboard" class="hidden">
+      <p>Logged in as admin. <button id="logout-btn" class="btn btn-secondary">Logout</button></p>
+      <div class="tab-nav">
+        <button class="tab-btn" data-tab="attacks">Attacks</button>
+        <button class="tab-btn" data-tab="weapon-templates">Weapon Templates</button>
+        <button class="tab-btn" data-tab="monster-templates">Monster Templates</button>
+      </div>
+      <div id="tab-content"></div>
+    </div>
+  </div>
+  <script type="module" src="/admin-app.js"></script>
+</body>
+</html>

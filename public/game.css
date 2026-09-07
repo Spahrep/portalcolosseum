@@ -27,15 +27,18 @@ body.game-page {
 /* and width = 3x height (300vh) to preserve aspect ratio on any screen. */
 /* This ensures the image is NEVER stretched regardless of viewport aspect ratio.*/
 /* Viewport sees 100vw of the image; pan across the rest. */
+/* width: max(300vh, 100vw) ensures the pano is never narrower than the viewport*/
+/* (ultrawide screens where 100vw > 300vh). background-repeat: repeat-x tiles*/
+/* the image horizontally so the panorama loops seamlessly — you never see black.*/
 .pano {
   position: absolute;
   top: 0;
   left: 0;
-  width: 300vh;
+  width: max(300vh, 100vw);
   height: 100vh;
-  background-image: url('/public/town_pano.jpg');
-  background-repeat: no-repeat;
-  background-size: 100% 100%;
+  background-image: url('/pictures/town/town_pano.jpg');
+  background-repeat: repeat-x;
+  background-size: 300vh 100vh;
   background-position: 0% 0%;
 }
 

@@ -29,3 +29,6 @@ supabase/.temp/
 supabase/.gitignore
 .env.local*
 .vercel
+
+# Weapon generation comparison files (local test artifacts)
+tmp/weapon_gen/

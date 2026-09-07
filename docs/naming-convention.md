@@ -19,7 +19,7 @@
 | `user` / `profiles` | `uuid` | Required — must reference Supabase `auth.users` table which uses UUID |
 | `weapon_template` | `bigint` (auto-increment) | Game data table — integers are human-readable, compact, and standard in game dev |
 | `attack` | `bigint` (auto-increment) | Same as above |
-| `weapon_template_attack` | `bigint` (auto-increment) | Junction table — consistent with parent tables |
+| `weapon_template_attack_mapping` | `bigint` (auto-increment) | Junction table — consistent with parent tables |
 | `match` | TBD | Future table — likely `bigint` for same game-data reasons |
 
 ### Rationale
@@ -51,7 +51,7 @@ id bigint primary key generated always as identity,
 ## Column Naming
 
 - **Lowercase**: `base_damage`, not `Base_Damage`
-- **Snake_case**: `slot_1_pool`, `created_at`
+- **Snake_case**: `slot_1_chance`, `created_at`
 - **Consistent terminology**: `created_at` / `updated_at` on all timestamp columns
 
 ## Future Tables (anticipated)
