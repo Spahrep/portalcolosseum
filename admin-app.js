@@ -191,7 +191,7 @@ async function renderAttacks(container) {
     <button class="btn" id="create-attack-btn">+ Create New Attack</button>
     <div id="attack-form-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Type</th><th>Dmg Mult</th><th>Prep</th><th>CD</th><th>Multi?</th><th>Spell?</th><th>Weight</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Dmg Mult</th><th>Prep</th><th>CD</th><th>Multi?</th><th>Weight</th><th>Actions</th></tr></thead>
       <tbody id="attacks-tbody"></tbody>
     </table>
   `;
@@ -203,12 +203,10 @@ async function renderAttacks(container) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${esc(a.name)}</td>
-      <td>${esc(a.attack_type)}</td>
       <td>${a.base_damage_multiplier}</td>
       <td>${a.prepare_time}</td>
       <td>${a.cooldown_time}</td>
       <td>${a.is_multi_target ? '✓' : ''}</td>
-      <td>${a.is_spell ? '✓' : ''}</td>
       <td>${a.weight}</td>
       <td>
         <button class="btn" data-edit="${a.id}">Edit</button>
@@ -237,18 +235,10 @@ function showAttackForm(id = null) {
       <div class="form-group"><label>Name</label><input id="f-name" value="${esc(attack.name || '')}"></div>
       <div class="form-group"><label>Description</label><textarea id="f-description" rows="2">${esc(attack.description || '')}</textarea></div>
       <div class="form-group">
-        <label>Attack Type</label>
-        <select id="f-attack_type">
-          ${['simple','advanced','magic','multi_enemy','buff','debuff'].map(t =>
-            `<option value="${t}" ${attack.attack_type === t ? 'selected' : ''}>${t}</option>`
-          ).join('')}
-        </select>
-      </div>
       <div class="form-group"><label>Base Damage Multiplier</label><input id="f-base_damage_multiplier" type="number" step="0.1" value="${attack.base_damage_multiplier ?? 1.0}"></div>
       <div class="form-group"><label>Prepare Time</label><input id="f-prepare_time" type="number" value="${attack.prepare_time ?? 10}"></div>
       <div class="form-group"><label>Cooldown Time</label><input id="f-cooldown_time" type="number" value="${attack.cooldown_time ?? 10}"></div>
       <div class="form-group"><label><input id="f-is_multi_target" type="checkbox" ${attack.is_multi_target ? 'checked' : ''}> Multi Target</label></div>
-      <div class="form-group"><label><input id="f-is_spell" type="checkbox" ${attack.is_spell ? 'checked' : ''}> Spell (Slot 3+ only)</label></div>
       <div class="form-group"><label>Weight</label><input id="f-weight" type="number" step="0.1" value="${attack.weight ?? 1.0}"></div>
       <div class="form-group"><label>Allowed Weapon Types (comma-separated, blank = all)</label><input id="f-allowed_weapon_types" value="${attack.allowed_weapon_types ? attack.allowed_weapon_types.join(', ') : ''}"></div>
       <button class="btn" id="save-attack-btn">${isEdit ? 'Update' : 'Create'}</button>
@@ -262,12 +252,10 @@ function showAttackForm(id = null) {
     const body = {
       name: val('f-name'),
       description: val('f-description') || null,
-      attack_type: val('f-attack_type'),
       base_damage_multiplier: parseFloat(val('f-base_damage_multiplier')),
       prepare_time: parseInt(val('f-prepare_time')),
       cooldown_time: parseInt(val('f-cooldown_time')),
       is_multi_target: document.getElementById('f-is_multi_target').checked,
-      is_spell: document.getElementById('f-is_spell').checked,
       weight: parseFloat(val('f-weight')),
       allowed_weapon_types: awtRaw ? awtRaw.split(',').map(s => s.trim()).filter(Boolean) : null,
     };
@@ -369,7 +357,7 @@ function showWeaponTemplateForm(id = null) {
         <div class="form-group">
           <label>Slot 0 Attack (default)</label>
           <select id="wt-slot_0_attack_id">
-            ${allAttacks.map(a => `<option value="${a.id}" ${t.slot_0_attack_id === a.id ? 'selected' : ''}>${esc(a.name)} (${a.attack_type})</option>`).join('')}
+            ${allAttacks.map(a => `<option value="${a.id}" ${t.slot_0_attack_id === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}
           </select>
         </div>
         <div class="form-group"><label>Slot 1 Chance (0.0-1.0)</label><input id="wt-slot_1_chance" type="number" step="0.1" value="${t.slot_1_chance ?? 1.0}"></div>
@@ -449,15 +437,13 @@ async function showWeaponMappingEditor(templateId) {
         <div class="mapping-slot">
           <h4>Slot ${slot} <span class="muted">(chance: ${(template['slot_' + slot + '_chance'] * 100).toFixed(0)}%)</span></h4>
           <table>
-            <thead><tr><th>Attack Name</th><th>Type</th><th>Spell?</th><th>Weight</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Attack Name</th><th>Weight</th><th>Actions</th></tr></thead>
             <tbody>
       `;
       bySlot[slot].forEach(m => {
         html += `
           <tr>
             <td>${esc(m.attack?.name || 'Unknown')}</td>
-            <td>${esc(m.attack?.attack_type || '')}</td>
-            <td>${m.attack?.is_spell ? '✓' : ''}</td>
             <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
             <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
           </tr>
@@ -473,7 +459,7 @@ async function showWeaponMappingEditor(templateId) {
         <div class="add-attack-row">
           <select id="add-attack-slot-${slot}">
             <option value="">— Add attack to Slot ${slot} —</option>
-            ${available.map(a => `<option value="${a.id}">${esc(a.name)} (${a.attack_type}${a.is_spell ? ', spell' : ''})</option>`).join('')}
+            ${available.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}
           </select>
           <button class="btn" data-add-to-slot="${slot}">Add</button>
         </div>
@@ -596,7 +582,7 @@ function showMonsterTemplateForm(id = null) {
         <div class="form-group">
           <label>Slot 0 Attack</label>
           <select id="mt-slot_0_attack_id">
-            ${allAttacks.map(a => `<option value="${a.id}" ${t.slot_0_attack_id === a.id ? 'selected' : ''}>${esc(a.name)} (${a.attack_type})</option>`).join('')}
+            ${allAttacks.map(a => `<option value="${a.id}" ${t.slot_0_attack_id === a.id ? 'selected' : ''}>${esc(a.name)}</option>`).join('')}
           </select>
         </div>
         <div class="form-group"><label>Slot 1 Chance (0.0-1.0)</label><input id="mt-slot_1_chance" type="number" step="0.1" value="${t.slot_1_chance ?? 0}"></div>
@@ -673,15 +659,13 @@ async function showMonsterMappingEditor(templateId) {
         <div class="mapping-slot">
           <h4>Slot ${slot} <span class="muted">(chance: ${(template['slot_' + slot + '_chance'] * 100).toFixed(0)}%)</span></h4>
           <table>
-            <thead><tr><th>Attack Name</th><th>Type</th><th>Spell?</th><th>Weight</th><th>Actions</th></tr></thead>
+            <thead><tr><th>Attack Name</th><th>Weight</th><th>Actions</th></tr></thead>
             <tbody>
       `;
       bySlot[slot].forEach(m => {
         html += `
           <tr>
             <td>${esc(m.attack?.name || 'Unknown')}</td>
-            <td>${esc(m.attack?.attack_type || '')}</td>
-            <td>${m.attack?.is_spell ? '✓' : ''}</td>
             <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
             <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
           </tr>
@@ -696,7 +680,7 @@ async function showMonsterMappingEditor(templateId) {
         <div class="add-attack-row">
           <select id="mt-add-attack-slot-${slot}">
             <option value="">— Add attack to Slot ${slot} —</option>
-            ${available.map(a => `<option value="${a.id}">${esc(a.name)} (${a.attack_type}${a.is_spell ? ', spell' : ''})</option>`).join('')}
+            ${available.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}
           </select>
           <button class="btn" data-add-to-slot="${slot}">Add</button>
         </div>

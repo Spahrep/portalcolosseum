@@ -199,7 +199,7 @@ async function handle(request, method) {
     const maxSlot = 3;
 
     if (method === 'GET' && !id) {
-      const { data, error } = await admin.from(table).select('*, slot_0_attack:attack!slot_0_attack_id_fk(name)').order('name');
+      const { data, error } = await admin.from(table).select('*, slot_0_attack:attack!weapon_template_slot_0_attack_id_fkey(name)').order('name');
       if (error) return json({ error: error.message }, 500);
       return json({ data });
     }
@@ -212,7 +212,7 @@ async function handle(request, method) {
       return json({ data }, 201);
     }
     if (method === 'GET' && id && !subResource) {
-      const { data, error } = await admin.from(table).select('*, slot_0_attack:attack!slot_0_attack_id_fk(name)').eq('id', id).single();
+      const { data, error } = await admin.from(table).select('*, slot_0_attack:attack!weapon_template_slot_0_attack_id_fkey(name)').eq('id', id).single();
       if (error) return json({ error: error.message }, 404);
       return json({ data });
     }
@@ -233,7 +233,7 @@ async function handle(request, method) {
     }
     if (method === 'GET' && id && subResource === 'mappings') {
       const { data, error } = await admin.from(mappingTable)
-        .select(`id, ${templateIdCol}, attack_id, slot, weight, created_at, attack:attack!attack_id_fk(name, attack_type, is_spell)`)
+        .select(`id, ${templateIdCol}, attack_id, slot, weight, created_at, attack:attack!weapon_template_attack_attack_id_fkey(name)`)
         .eq(templateIdCol, id).order('slot').order('weight', { ascending: false });
       if (error) return json({ error: error.message }, 500);
       return json({ data });
@@ -276,7 +276,7 @@ async function handle(request, method) {
     const maxSlot = 4;
 
     if (method === 'GET' && !id) {
-      const { data, error } = await admin.from(table).select('*, slot_0_attack:attack!slot_0_attack_id_fk(name)').order('name');
+      const { data, error } = await admin.from(table).select('*, slot_0_attack:attack!monster_template_slot_0_attack_id_fkey(name)').order('name');
       if (error) return json({ error: error.message }, 500);
       return json({ data });
     }
@@ -289,7 +289,7 @@ async function handle(request, method) {
       return json({ data }, 201);
     }
     if (method === 'GET' && id && !subResource) {
-      const { data, error } = await admin.from(table).select('*, slot_0_attack:attack!slot_0_attack_id_fk(name)').eq('id', id).single();
+      const { data, error } = await admin.from(table).select('*, slot_0_attack:attack!monster_template_slot_0_attack_id_fkey(name)').eq('id', id).single();
       if (error) return json({ error: error.message }, 404);
       return json({ data });
     }
@@ -310,7 +310,7 @@ async function handle(request, method) {
     }
     if (method === 'GET' && id && subResource === 'mappings') {
       const { data, error } = await admin.from(mappingTable)
-        .select(`id, ${templateIdCol}, attack_id, slot, weight, created_at, attack:attack!attack_id_fk(name, attack_type, is_spell)`)
+        .select(`id, ${templateIdCol}, attack_id, slot, weight, created_at, attack:attack!monster_template_attack_mapping_attack_id_fkey(name)`)
         .eq(templateIdCol, id).order('slot').order('weight', { ascending: false });
       if (error) return json({ error: error.message }, 500);
       return json({ data });

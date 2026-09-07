@@ -1,4 +1,4 @@
-# Current Design Status (as of 2026-08-30)
+# Current Design Status (as of 2026-09-07)
 
 This file captures the current state of design decisions for Portal Colosseum. It is intended as a living reference until decisions are moved into more permanent documents.
 
@@ -44,6 +44,29 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Full clear = keep all loot
 - Death = keep small number of items (1–2 randomly chosen)
 
+## Loot & Prize Pool (documented in loot-prize-pool.md)
+
+### Equipment Drops
+- **Loot Point (LP) budget** system — each monster contributes LP based on monster point value + portal depth (deeper = more LP, rewarding risk)
+- **Loot table** = monster-specific pool + portal-shared pool
+- Each drop has independent **cost** (LP consumed) and **weight** (selection probability)
+- **Algorithm**: filter affordable items → weighted random pick → subtract cost → re-filter → repeat until LP exhausted or 10-item cap
+- No 100% guaranteed drops (just very high weights)
+- Same item can drop multiple times (no stack cap for MVP)
+- Leftover LP below cheapest item cost is voided
+
+### Gold Drops
+- Separate from equipment — guaranteed drop with variable amount
+- Each monster has min/max gold; all monsters in fight are **summed**
+- **Box-Muller bell curve** distribution mapped into [combined_min, combined_max]
+- Spread tuning deferred
+
+### Deferred (Post-MVP)
+- Stack caps on materials
+- Final LP formula (monster points × portal depth)
+- Gold spread tuning (sigma value)
+- Exact weight/cost/min-max values per item/monster
+
 ## Open / Undocumented Points
 
 The following topics have been discussed but are not yet formally documented:
@@ -75,7 +98,7 @@ The following topics have been discussed but are not yet formally documented:
    - 5th monster absorption: pick closest-cost monster, or upgrade template to match remaining budget?
    - Dice pool size and composition per portal tier (database configuration)
    - Face value calibration (actual numbers, not the example 10/20/30)
-   - Point-to-loot relationship: does higher point budget yield better loot?
+   - Point-to-loot relationship: does higher point budget yield better loot? (Note: loot now uses LP budget system, separate from encounter point budget)
 
 ---
 
