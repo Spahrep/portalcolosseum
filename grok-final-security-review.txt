@@ -1,0 +1,54 @@
+Do a final security review of our Supabase Postgres database. This is the final state after hardening:
+
+## Database Structure (10 tables)
+
+### User-owned tables (player data):
+- `player_inventory` — is_admin-gated via `is_current_user_admin()`
+- `weapon_instance` — is_admin-gated via `is_current_user_admin()`
+- `profiles` — has new `is_admin boolean` column; is_admin-gated via `is_current_user_admin()`
+
+### Static/reference data tables (game data):
+- `weapon_template` — is_admin-gated via `is_current_user_admin()`
+- `attack` — is_admin-gated
+- `weapon_template_attack_mapping` — is_admin-gated
+- `monster_template` — is_admin-gated
+- `monster_template_attack_mapping` — is_admin-gated
+- `monster_instance` — is_admin-gated
+
+### Restricted table:
+- `invite_keys` — is_admin-gated
+
+## Access Model
+
+**All 10 tables:**
+- RLS enabled with `FORCE ROW LEVEL SECURITY`
+- `anon` role: NO table-level grants, NO policies → **zero access**
+- `authenticated` role: Table-level grants (`SELECT, INSERT, UPDATE, DELETE`) so RLS policies are evaluated, but **every policy** uses `is_current_user_admin()` which checks `profiles.is_admin = true` for `auth.uid()`
+  - Regular game players: `is_current_user_admin()` returns false → **zero rows returned** → effectively no access
+  - Admin users (Spahrep, DarkJester, and their AI agents authenticated as them): `is_current_user_admin()` returns true → **full CRUD on all tables**
+
+## Helper function:
+```sql
+CREATE OR REPLACE FUNCTION public.is_current_user_admin()
+RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public AS $$
+  SELECT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = auth.uid() AND p.is_admin = true);
+$$;
+```
+
+Every policy on every table is: `USING (public.is_current_user_admin()) WITH CHECK (public.is_current_user_admin())`
+
+## Key design decisions:
+1. Table-level grants ARE given to `authenticated` — this is required for RLS policies to be evaluated. Without table-level access, the role gets `permission denied` before RLS even fires.
+2. All access control is enforced at the RLS/policy layer via `is_current_user_admin()`.
+3. `profiles.is_admin` is the single gate. Admin: true = full DB access (because authenticated as you means your AI agents inherit admin).
+4. Admin flag is set manually: `UPDATE profiles SET is_admin = true WHERE id = '<supabase_auth_uuid>'`
+
+## Questions for the review:
+1. Is giving table-level grants (SELECT/INSERT/UPDATE/DELETE) to `authenticated` on all tables a risk, given that every policy gates on `is_current_user_admin()`?
+2. Is the `SECURITY DEFINER` helper function safe? Could it be abused?
+3. Is `FORCE ROW LEVEL SECURITY` the right choice vs regular `ENABLE ROW LEVEL SECURITY`?
+4. Are there any bypass vectors I'm missing? (e.g., could a regular authenticated user manipulate query plans, use extensions, or exploit the function?)
+5. Any other issues with this admin-only access model?
+
+Rate findings: 🔴 CRITICAL, 🟡 WARNING, 🟢 OK.

@@ -98,9 +98,11 @@ async function checkAdminSession() {
     if (res.ok) {
       showDashboard();
     } else {
+      const body = await res.json().catch(() => ({}));
       document.getElementById('login-gate').classList.remove('hidden');
       document.getElementById('admin-dashboard').classList.add('hidden');
-      document.getElementById('auth-message').textContent = 'Access denied: Admin privileges required.';
+      document.getElementById('auth-message').textContent = `Access denied (${res.status}): ${JSON.stringify(body)}`;
+      console.log('Auth check failed:', body);
     }
   } catch (err) {
     document.getElementById('auth-message').textContent = `Error: ${err.message}`;

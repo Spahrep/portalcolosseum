@@ -59,19 +59,20 @@ function getAdminClient() {
 async function verifyAdmin(request) {
   let admin;
   try { admin = getAdminClient(); }
-  catch { return { error: 'Server config error', status: 500 }; }
+  catch (e) { return { error: 'Server config error', status: 500, debug: e.message }; }
 
   const authHeader = request.headers.get('authorization') || '';
   const token = authHeader.replace('Bearer ', '').trim();
   if (!token) return { error: 'No auth token', status: 401 };
 
   const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return { error: 'Invalid token', status: 401 };
+  if (error || !user) return { error: 'Invalid token', status: 401, debug: { error: error?.message, user: !!user } };
 
   const { data: profile, error: pe } = await admin
     .from('profiles').select('is_admin').eq('id', user.id).single();
 
-  if (pe || !profile || !profile.is_admin) return { error: 'Admin access required', status: 403 };
+  if (pe || !profile || !profile.is_admin)
+    return { error: 'Admin access required', status: 403, debug: { profileError: pe?.message, profile: profile, userId: user.id } };
   return { admin, user };
 }
 
@@ -146,7 +147,7 @@ export async function DELETE(request, { params }) {
 
 async function handle(request, method, params) {
   const auth = await verifyAdmin(request);
-  if (auth.error) return json({ error: auth.error }, auth.status);
+  if (auth.error) return json({ error: auth.error, debug: auth.debug }, auth.status);
 
   const admin = auth.admin;
   // params.path is the catch-all array: ['attacks', '123'] etc.
