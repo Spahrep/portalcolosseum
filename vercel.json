@@ -106,6 +106,14 @@
       }
     },
     {
+      "src": "/api/admin/(.*)",
+      "dest": "/api/admin/[...path].js"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/$1"
+    },
+    {
       "src": "/(.*)",
       "dest": "/$1",
       "headers": {
