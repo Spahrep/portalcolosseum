@@ -176,6 +176,7 @@ async function loadTab(tab) {
     if (tab === 'attacks') await renderAttacks(content);
     else if (tab === 'weapon-templates') await renderWeaponTemplates(content);
     else if (tab === 'monster-templates') await renderMonsterTemplates(content);
+    else if (tab === 'portal-templates') await renderPortalTemplates(content);
   } catch (e) {
     content.innerHTML = `<p class="error">Error: ${e.message}</p>`;
   }
@@ -724,6 +725,336 @@ async function showMonsterMappingEditor(templateId) {
 
   } catch (e) {
     container.innerHTML = `<p class="error">Error loading mappings: ${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// PORTAL TEMPLATES TAB
+// ============================================================
+
+async function renderPortalTemplates(container) {
+  container.innerHTML = `
+    <h2>Portal Templates</h2>
+    <button class="btn" id="create-pt-btn">+ Create New Portal Template</button>
+    <div id="pt-form-container"></div>
+    <div id="pt-mapping-container"></div>
+    <table>
+      <thead><tr><th>Name</th><th>Tier</th><th>Dice Pool</th><th>Actions</th></tr></thead>
+      <tbody id="pt-tbody"></tbody>
+    </table>
+  `;
+  document.getElementById('create-pt-btn').addEventListener('click', () => showPortalTemplateForm());
+
+  const res = await apiCall('/api/admin/portal-templates');
+  const templates = res.data || [];
+  const tbody = document.getElementById('pt-tbody');
+  templates.forEach(t => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(t.name)}</td>
+      <td>${t.tier}</td>
+      <td>G:${t.green_dice_count} Y:${t.yellow_dice_count} R:${t.red_dice_count}</td>
+      <td>
+        <button class="btn" data-edit="${t.id}">Edit</button>
+        <button class="btn" data-monsters="${t.id}">Monster Mappings</button>
+        <button class="btn" data-loot="${t.id}">Loot Mappings</button>
+        <button class="btn btn-danger" data-delete="${t.id}">Delete</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => showPortalTemplateForm(btn.dataset.edit));
+  });
+  tbody.querySelectorAll('[data-monsters]').forEach(btn => {
+    btn.addEventListener('click', () => showPortalMonsterMappingEditor(btn.dataset.monsters));
+  });
+  tbody.querySelectorAll('[data-loot]').forEach(btn => {
+    btn.addEventListener('click', () => showPortalLootMappingEditor(btn.dataset.loot));
+  });
+  tbody.querySelectorAll('[data-delete]').forEach(btn => {
+    btn.addEventListener('click', () => deletePortalTemplate(btn.dataset.delete));
+  });
+}
+
+function showPortalTemplateForm(id = null) {
+  const container = document.getElementById('pt-form-container');
+  apiCall('/api/admin/portal-templates').then(res => {
+    const templates = res.data || [];
+    const t = id ? templates.find(x => String(x.id) === String(id)) : {};
+
+    container.innerHTML = `
+      <div class="form-card">
+        <h3>${id ? 'Edit Portal Template' : 'Create Portal Template'}</h3>
+        <div class="form-group"><label>Name</label><input id="pt-name" value="${esc(t.name || '')}"></div>
+        <div class="form-group"><label>Tier</label><input id="pt-tier" type="number" value="${t.tier ?? 1}"></div>
+        <div class="form-group"><label>Description</label><textarea id="pt-description" rows="2">${esc(t.description || '')}</textarea></div>
+        <div class="form-group"><label>Green Dice Count</label><input id="pt-green_dice_count" type="number" value="${t.green_dice_count ?? 4}"></div>
+        <div class="form-group"><label>Yellow Dice Count</label><input id="pt-yellow_dice_count" type="number" value="${t.yellow_dice_count ?? 3}"></div>
+        <div class="form-group"><label>Red Dice Count</label><input id="pt-red_dice_count" type="number" value="${t.red_dice_count ?? 3}"></div>
+        <div class="form-group"><label>Green Faces (comma-separated)</label><input id="pt-green_faces" value="${(t.green_faces || [10,10,10,20,20,30]).join(',')}"></div>
+        <div class="form-group"><label>Yellow Faces (comma-separated)</label><input id="pt-yellow_faces" value="${(t.yellow_faces || [10,10,20,20,30,30]).join(',')}"></div>
+        <div class="form-group"><label>Red Faces (comma-separated)</label><input id="pt-red_faces" value="${(t.red_faces || [10,20,20,30,30,30]).join(',')}"></div>
+        <button class="btn" id="save-pt-btn">${id ? 'Update' : 'Create'}</button>
+        <button class="btn btn-secondary" id="cancel-pt-btn">Cancel</button>
+      </div>
+    `;
+
+    document.getElementById('cancel-pt-btn').addEventListener('click', () => { container.innerHTML = ''; });
+    document.getElementById('save-pt-btn').addEventListener('click', async () => {
+      const body = {
+        name: val('pt-name'),
+        tier: parseInt(val('pt-tier')),
+        description: val('pt-description') || null,
+        green_dice_count: parseInt(val('pt-green_dice_count')),
+        yellow_dice_count: parseInt(val('pt-yellow_dice_count')),
+        red_dice_count: parseInt(val('pt-red_dice_count')),
+        green_faces: val('pt-green_faces'),
+        yellow_faces: val('pt-yellow_faces'),
+        red_faces: val('pt-red_faces'),
+      };
+      try {
+        if (id) await apiCall(`/api/admin/portal-templates/${id}`, 'PUT', body);
+        else await apiCall('/api/admin/portal-templates', 'POST', body);
+        container.innerHTML = '';
+        loadTab(currentTab);
+      } catch (e) { alert('Error: ' + e.message); }
+    });
+  });
+}
+
+async function deletePortalTemplate(id) {
+  if (!confirm('Delete this portal template?')) return;
+  try {
+    await apiCall(`/api/admin/portal-templates/${id}`, 'DELETE');
+    loadTab(currentTab);
+  } catch (e) { alert('Delete blocked: ' + e.message); }
+}
+
+// ============================================================
+// PORTAL TEMPLATE — MONSTER MAPPING EDITOR
+// ============================================================
+
+async function showPortalMonsterMappingEditor(templateId) {
+  const container = document.getElementById('pt-mapping-container');
+  container.innerHTML = '<p>Loading mappings...</p>';
+
+  try {
+    const [templateRes, mappingRes, monsterRes] = await Promise.all([
+      apiCall(`/api/admin/portal-templates/${templateId}`),
+      apiCall(`/api/admin/portal-templates/${templateId}/monsters`),
+      apiCall('/api/admin/monster-templates'),
+    ]);
+    const template = templateRes.data;
+    const mappings = mappingRes.data || [];
+    const allMonsters = monsterRes.data || [];
+
+    let html = `
+      <div class="form-card mapping-editor">
+        <h3>Monster Mappings — ${esc(template.name)}</h3>
+        <p class="muted">Tier ${template.tier} · Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}</p>
+        <table>
+          <thead><tr><th>Monster Name</th><th>Point Cost</th><th>Weight</th><th>Actions</th></tr></thead>
+          <tbody>
+    `;
+
+    mappings.forEach(m => {
+      html += `
+        <tr>
+          <td>${esc(m.monster_template?.name || 'Unknown')}</td>
+          <td><input type="number" value="${m.point_cost}" data-mapping-id="${m.id}" class="cost-input"></td>
+          <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
+          <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
+        </tr>
+      `;
+    });
+    if (mappings.length === 0) html += '<tr><td colspan="4" class="muted">No monsters assigned to this portal</td></tr>';
+    html += `</tbody></table>`;
+
+    // Add monster picker — show monsters NOT already in this portal
+    const usedIds = mappings.map(m => m.monster_template_id);
+    const available = allMonsters.filter(m => !usedIds.includes(m.id));
+    html += `
+      <div class="add-attack-row">
+        <select id="pt-add-monster">
+          <option value="">— Add monster to portal —</option>
+          ${available.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}
+        </select>
+        <input type="number" id="pt-add-cost" placeholder="Point Cost" value="10">
+        <input type="number" id="pt-add-weight" placeholder="Weight" step="0.1" value="1.0">
+        <button class="btn" id="pt-add-monster-btn">Add</button>
+      </div>
+      <button class="btn btn-secondary" id="pt-close-monster-btn">Close</button>
+    </div>
+    `;
+    container.innerHTML = html;
+
+    document.getElementById('pt-close-monster-btn').addEventListener('click', () => { container.innerHTML = ''; });
+
+    // Cost and weight edit handlers
+    container.querySelectorAll('.cost-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const mappingId = e.target.dataset.mappingId;
+        const point_cost = parseInt(e.target.value);
+        // Find the sibling weight input
+        const row = e.target.closest('tr');
+        const weightInput = row.querySelector('.weight-input');
+        const weight = parseFloat(weightInput.value);
+        try {
+          await apiCall(`/api/admin/portal-templates/${templateId}/monsters/${mappingId}`, 'PATCH', { point_cost, weight });
+        } catch (err) { alert('Error updating: ' + err.message); }
+      });
+    });
+    container.querySelectorAll('.weight-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const mappingId = e.target.dataset.mappingId;
+        const weight = parseFloat(e.target.value);
+        const row = e.target.closest('tr');
+        const costInput = row.querySelector('.cost-input');
+        const point_cost = parseInt(costInput.value);
+        try {
+          await apiCall(`/api/admin/portal-templates/${templateId}/monsters/${mappingId}`, 'PATCH', { point_cost, weight });
+        } catch (err) { alert('Error updating: ' + err.message); }
+      });
+    });
+
+    // Remove handlers
+    container.querySelectorAll('[data-remove-mapping]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Remove this monster from the portal?')) return;
+        try {
+          await apiCall(`/api/admin/portal-templates/${templateId}/monsters/${btn.dataset.removeMapping}`, 'DELETE');
+          showPortalMonsterMappingEditor(templateId);
+        } catch (e) { alert('Error: ' + e.message); }
+      });
+    });
+
+    // Add handler
+    document.getElementById('pt-add-monster-btn').addEventListener('click', async () => {
+      const monsterId = parseInt(document.getElementById('pt-add-monster').value);
+      if (!monsterId) return;
+      const point_cost = parseInt(document.getElementById('pt-add-cost').value);
+      const weight = parseFloat(document.getElementById('pt-add-weight').value);
+      try {
+        await apiCall(`/api/admin/portal-templates/${templateId}/monsters`, 'POST', {
+          monster_template_id: monsterId, point_cost, weight,
+        });
+        showPortalMonsterMappingEditor(templateId);
+      } catch (e) { alert('Error: ' + e.message); }
+    });
+
+  } catch (e) {
+    container.innerHTML = `<p class="error">Error loading mappings: ${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// PORTAL TEMPLATE — LOOT MAPPING EDITOR
+// ============================================================
+
+async function showPortalLootMappingEditor(templateId) {
+  const container = document.getElementById('pt-mapping-container');
+  container.innerHTML = '<p>Loading loot mappings...</p>';
+
+  try {
+    const [templateRes, lootRes] = await Promise.all([
+      apiCall(`/api/admin/portal-templates/${templateId}`),
+      apiCall(`/api/admin/portal-templates/${templateId}/loot`),
+    ]);
+    const template = templateRes.data;
+    const mappings = lootRes.data || [];
+
+    let html = `
+      <div class="form-card mapping-editor">
+        <h3>Loot Mappings — ${esc(template.name)}</h3>
+        <p class="muted">Tier ${template.tier} · Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}</p>
+        <table>
+          <thead><tr><th>Item Name</th><th>LP Cost</th><th>Weight</th><th>Actions</th></tr></thead>
+          <tbody>
+    `;
+
+    mappings.forEach(m => {
+      html += `
+        <tr>
+          <td>${esc(m.item_name)}</td>
+          <td><input type="number" value="${m.lp_cost}" data-mapping-id="${m.id}" class="cost-input"></td>
+          <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
+          <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
+        </tr>
+      `;
+    });
+    if (mappings.length === 0) html += '<tr><td colspan="4" class="muted">No loot items assigned to this portal</td></tr>';
+    html += `</tbody></table>`;
+
+    // Add loot form — text input since there's no item table
+    html += `
+      <div class="add-attack-row">
+        <input type="text" id="pt-add-item-name" placeholder="Item Name">
+        <input type="number" id="pt-add-lp-cost" placeholder="LP Cost" value="10">
+        <input type="number" id="pt-add-loot-weight" placeholder="Weight" step="0.1" value="1.0">
+        <button class="btn" id="pt-add-loot-btn">Add</button>
+      </div>
+      <button class="btn btn-secondary" id="pt-close-loot-btn">Close</button>
+    </div>
+    `;
+    container.innerHTML = html;
+
+    document.getElementById('pt-close-loot-btn').addEventListener('click', () => { container.innerHTML = ''; });
+
+    // Cost and weight edit handlers
+    container.querySelectorAll('.cost-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const mappingId = e.target.dataset.mappingId;
+        const lp_cost = parseInt(e.target.value);
+        const row = e.target.closest('tr');
+        const weightInput = row.querySelector('.weight-input');
+        const weight = parseFloat(weightInput.value);
+        try {
+          await apiCall(`/api/admin/portal-templates/${templateId}/loot/${mappingId}`, 'PATCH', { lp_cost, weight });
+        } catch (err) { alert('Error updating: ' + err.message); }
+      });
+    });
+    container.querySelectorAll('.weight-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const mappingId = e.target.dataset.mappingId;
+        const weight = parseFloat(e.target.value);
+        const row = e.target.closest('tr');
+        const costInput = row.querySelector('.cost-input');
+        const lp_cost = parseInt(costInput.value);
+        try {
+          await apiCall(`/api/admin/portal-templates/${templateId}/loot/${mappingId}`, 'PATCH', { lp_cost, weight });
+        } catch (err) { alert('Error updating: ' + err.message); }
+      });
+    });
+
+    // Remove handlers
+    container.querySelectorAll('[data-remove-mapping]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Remove this loot item from the portal?')) return;
+        try {
+          await apiCall(`/api/admin/portal-templates/${templateId}/loot/${btn.dataset.removeMapping}`, 'DELETE');
+          showPortalLootMappingEditor(templateId);
+        } catch (e) { alert('Error: ' + e.message); }
+      });
+    });
+
+    // Add handler
+    document.getElementById('pt-add-loot-btn').addEventListener('click', async () => {
+      const item_name = document.getElementById('pt-add-item-name').value.trim();
+      if (!item_name) return;
+      const lp_cost = parseInt(document.getElementById('pt-add-lp-cost').value);
+      const weight = parseFloat(document.getElementById('pt-add-loot-weight').value);
+      try {
+        await apiCall(`/api/admin/portal-templates/${templateId}/loot`, 'POST', {
+          item_name, lp_cost, weight,
+        });
+        showPortalLootMappingEditor(templateId);
+      } catch (e) { alert('Error: ' + e.message); }
+    });
+
+  } catch (e) {
+    container.innerHTML = `<p class="error">Error loading loot mappings: ${e.message}</p>`;
   }
 }
 

@@ -121,6 +121,15 @@ async function checkMonsterTemplateDeleteBlockers(admin, id) {
   return blockers;
 }
 
+async function checkPortalTemplateDeleteBlockers(admin, id) {
+  const blockers = [];
+  const { data: pmm } = await admin.from('portal_monster_mapping').select('id').eq('portal_template_id', id);
+  if (pmm?.length) blockers.push(`portal_monster_mapping: ${pmm.length} row(s)`);
+  const { data: plm } = await admin.from('portal_loot_mapping').select('id').eq('portal_template_id', id);
+  if (plm?.length) blockers.push(`portal_loot_mapping: ${plm.length} row(s)`);
+  return blockers;
+}
+
 // ============================================================
 // MAIN HANDLER
 // ============================================================
@@ -340,6 +349,128 @@ async function handle(request, method) {
     }
     if (method === 'DELETE' && id && subResource === 'mappings' && mappingId) {
       const { error } = await admin.from(mappingTable).delete().eq('id', mappingId);
+      if (error) return json({ error: error.message }, 400);
+      return json({ success: true });
+    }
+  }
+
+  // ---- PORTAL TEMPLATES ----
+  if (resource === 'portal-templates') {
+    const table = 'portal_template';
+
+    if (method === 'GET' && !id) {
+      const { data, error } = await admin.from(table).select('*').order('tier').order('name');
+      if (error) return json({ error: error.message }, 500);
+      return json({ data });
+    }
+    if (method === 'POST' && !id) {
+      const body = await getBody(request);
+      if (!body) return json({ error: 'Invalid JSON' }, 400);
+      // Convert face arrays from comma strings to int arrays
+      ['green_faces', 'yellow_faces', 'red_faces'].forEach(f => {
+        if (body[f] && typeof body[f] === 'string') {
+          body[f] = body[f].split(',').map(s => parseInt(s.trim()));
+        }
+      });
+      delete body.id; delete body.created_at;
+      const { data, error } = await admin.from(table).insert(body).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ data }, 201);
+    }
+    if (method === 'GET' && id && !subResource) {
+      const { data, error } = await admin.from(table).select('*').eq('id', id).single();
+      if (error) return json({ error: error.message }, 404);
+      return json({ data });
+    }
+    if (method === 'PUT' && id && !subResource) {
+      const body = await getBody(request);
+      if (!body) return json({ error: 'Invalid JSON' }, 400);
+      ['green_faces', 'yellow_faces', 'red_faces'].forEach(f => {
+        if (body[f] && typeof body[f] === 'string') {
+          body[f] = body[f].split(',').map(s => parseInt(s.trim()));
+        }
+      });
+      delete body.id; delete body.created_at;
+      const { data, error } = await admin.from(table).update(body).eq('id', id).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ data });
+    }
+    if (method === 'DELETE' && id && !subResource) {
+      const blockers = await checkPortalTemplateDeleteBlockers(admin, id);
+      if (blockers.length) return json({ error: 'Cannot delete: referenced by other records.', blockers }, 409);
+      const { error } = await admin.from(table).delete().eq('id', id);
+      if (error) return json({ error: error.message }, 400);
+      return json({ success: true });
+    }
+
+    // ---- Portal Monster Mappings ----
+    if (method === 'GET' && id && subResource === 'monsters') {
+      const { data, error } = await admin.from('portal_monster_mapping')
+        .select('id, portal_template_id, monster_template_id, point_cost, weight, created_at, monster_template:monster_template!portal_monster_mapping_monster_template_id_fkey(name)')
+        .eq('portal_template_id', id).order('weight', { ascending: false });
+      if (error) return json({ error: error.message }, 500);
+      return json({ data });
+    }
+    if (method === 'POST' && id && subResource === 'monsters') {
+      const body = await getBody(request);
+      if (!body) return json({ error: 'Invalid JSON' }, 400);
+      const { monster_template_id, point_cost, weight } = body;
+      if (!monster_template_id || point_cost === undefined) return json({ error: 'monster_template_id and point_cost required' }, 400);
+      const { data, error } = await admin.from('portal_monster_mapping').insert({
+        portal_template_id: id, monster_template_id, point_cost, weight: weight || 1.0,
+      }).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ data }, 201);
+    }
+    if (method === 'PATCH' && id && subResource === 'monsters' && mappingId) {
+      const body = await getBody(request);
+      if (!body) return json({ error: 'Invalid JSON' }, 400);
+      const update = {};
+      if (body.point_cost !== undefined) update.point_cost = body.point_cost;
+      if (body.weight !== undefined) update.weight = body.weight;
+      if (Object.keys(update).length === 0) return json({ error: 'Nothing to update' }, 400);
+      const { data, error } = await admin.from('portal_monster_mapping').update(update).eq('id', mappingId).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ data });
+    }
+    if (method === 'DELETE' && id && subResource === 'monsters' && mappingId) {
+      const { error } = await admin.from('portal_monster_mapping').delete().eq('id', mappingId);
+      if (error) return json({ error: error.message }, 400);
+      return json({ success: true });
+    }
+
+    // ---- Portal Loot Mappings ----
+    if (method === 'GET' && id && subResource === 'loot') {
+      const { data, error } = await admin.from('portal_loot_mapping')
+        .select('id, portal_template_id, item_name, lp_cost, weight, created_at')
+        .eq('portal_template_id', id).order('weight', { ascending: false });
+      if (error) return json({ error: error.message }, 500);
+      return json({ data });
+    }
+    if (method === 'POST' && id && subResource === 'loot') {
+      const body = await getBody(request);
+      if (!body) return json({ error: 'Invalid JSON' }, 400);
+      const { item_name, lp_cost, weight } = body;
+      if (!item_name || lp_cost === undefined) return json({ error: 'item_name and lp_cost required' }, 400);
+      const { data, error } = await admin.from('portal_loot_mapping').insert({
+        portal_template_id: id, item_name, lp_cost, weight: weight || 1.0,
+      }).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ data }, 201);
+    }
+    if (method === 'PATCH' && id && subResource === 'loot' && mappingId) {
+      const body = await getBody(request);
+      if (!body) return json({ error: 'Invalid JSON' }, 400);
+      const update = {};
+      if (body.lp_cost !== undefined) update.lp_cost = body.lp_cost;
+      if (body.weight !== undefined) update.weight = body.weight;
+      if (Object.keys(update).length === 0) return json({ error: 'Nothing to update' }, 400);
+      const { data, error } = await admin.from('portal_loot_mapping').update(update).eq('id', mappingId).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ data });
+    }
+    if (method === 'DELETE' && id && subResource === 'loot' && mappingId) {
+      const { error } = await admin.from('portal_loot_mapping').delete().eq('id', mappingId);
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
     }
