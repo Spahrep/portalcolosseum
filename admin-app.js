@@ -240,7 +240,6 @@ function showAttackForm(id = null) {
       <div class="form-group"><label>Cooldown Time</label><input id="f-cooldown_time" type="number" value="${attack.cooldown_time ?? 10}"></div>
       <div class="form-group"><label><input id="f-is_multi_target" type="checkbox" ${attack.is_multi_target ? 'checked' : ''}> Multi Target</label></div>
       <div class="form-group"><label>Weight</label><input id="f-weight" type="number" step="0.1" value="${attack.weight ?? 1.0}"></div>
-      <div class="form-group"><label>Allowed Weapon Types (comma-separated, blank = all)</label><input id="f-allowed_weapon_types" value="${attack.allowed_weapon_types ? attack.allowed_weapon_types.join(', ') : ''}"></div>
       <button class="btn" id="save-attack-btn">${isEdit ? 'Update' : 'Create'}</button>
       <button class="btn btn-secondary" id="cancel-attack-btn">Cancel</button>
     </div>
@@ -248,7 +247,6 @@ function showAttackForm(id = null) {
 
   document.getElementById('cancel-attack-btn').addEventListener('click', () => { container.innerHTML = ''; });
   document.getElementById('save-attack-btn').addEventListener('click', async () => {
-    const awtRaw = document.getElementById('f-allowed_weapon_types').value.trim();
     const body = {
       name: val('f-name'),
       description: val('f-description') || null,
@@ -257,7 +255,6 @@ function showAttackForm(id = null) {
       cooldown_time: parseInt(val('f-cooldown_time')),
       is_multi_target: document.getElementById('f-is_multi_target').checked,
       weight: parseFloat(val('f-weight')),
-      allowed_weapon_types: awtRaw ? awtRaw.split(',').map(s => s.trim()).filter(Boolean) : null,
     };
     try {
       if (isEdit) {
@@ -298,7 +295,7 @@ async function renderWeaponTemplates(container) {
     <div id="wt-form-container"></div>
     <div id="wt-mapping-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Type</th><th>Base Dmg</th><th>Speed</th><th>Accuracy</th><th>Slot 0 Attack</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Dmg (base ± range)</th><th>Speed (base ± range)</th><th>Accuracy (base ± range)</th><th>Slot 0 Attack</th><th>Actions</th></tr></thead>
       <tbody id="wt-tbody"></tbody>
     </table>
   `;
@@ -311,10 +308,9 @@ async function renderWeaponTemplates(container) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${esc(t.name)}</td>
-      <td>${esc(t.weapon_type)}</td>
-      <td>${t.base_damage}</td>
-      <td>${t.base_speed}</td>
-      <td>${t.base_accuracy}</td>
+      <td>${t.base_damage} ± ${t.damage_range}</td>
+      <td>${t.base_speed} ± ${t.speed_variance}</td>
+      <td>${t.base_accuracy} ± ${t.accuracy_range}</td>
       <td>${t.slot_0_attack?.name ? esc(t.slot_0_attack.name) : '<span class="muted">—</span>'}</td>
       <td>
         <button class="btn" data-edit="${t.id}">Edit</button>
@@ -347,7 +343,6 @@ function showWeaponTemplateForm(id = null) {
       <div class="form-card">
         <h3>${id ? 'Edit Weapon Template' : 'Create Weapon Template'}</h3>
         <div class="form-group"><label>Name</label><input id="wt-name" value="${esc(t.name || '')}"></div>
-        <div class="form-group"><label>Weapon Type</label><input id="wt-weapon_type" value="${esc(t.weapon_type || '')}"></div>
         <div class="form-group"><label>Base Damage</label><input id="wt-base_damage" type="number" value="${t.base_damage ?? ''}"></div>
         <div class="form-group"><label>Damage Range</label><input id="wt-damage_range" type="number" value="${t.damage_range ?? 0}"></div>
         <div class="form-group"><label>Base Speed (lower=faster)</label><input id="wt-base_speed" type="number" value="${t.base_speed ?? ''}"></div>
@@ -373,7 +368,6 @@ function showWeaponTemplateForm(id = null) {
     document.getElementById('save-wt-btn').addEventListener('click', async () => {
       const body = {
         name: val('wt-name'),
-        weapon_type: val('wt-weapon_type'),
         base_damage: parseInt(val('wt-base_damage')),
         damage_range: parseInt(val('wt-damage_range')),
         base_speed: parseInt(val('wt-base_speed')),
@@ -526,7 +520,7 @@ async function renderMonsterTemplates(container) {
     <div id="mt-form-container"></div>
     <div id="mt-mapping-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Base Dmg</th><th>Speed</th><th>Accuracy</th><th>Slot 0 Attack</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Dmg (base ± range)</th><th>Speed (base ± range)</th><th>Accuracy (base ± range)</th><th>Slot 0 Attack</th><th>Actions</th></tr></thead>
       <tbody id="mt-tbody"></tbody>
     </table>
   `;
@@ -539,9 +533,9 @@ async function renderMonsterTemplates(container) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${esc(t.name)}</td>
-      <td>${t.base_damage}</td>
-      <td>${t.base_speed}</td>
-      <td>${t.base_accuracy}</td>
+      <td>${t.base_damage} ± ${t.damage_range}</td>
+      <td>${t.base_speed} ± ${t.speed_variance}</td>
+      <td>${t.base_accuracy} ± ${t.accuracy_range}</td>
       <td>${t.slot_0_attack?.name ? esc(t.slot_0_attack.name) : '<span class="muted">—</span>'}</td>
       <td>
         <button class="btn" data-edit="${t.id}">Edit</button>
