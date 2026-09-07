@@ -129,29 +129,22 @@ export async function OPTIONS() {
   return new Response(null, { status: 200, headers: CORS });
 }
 
-export async function GET(request, { params }) {
-  return handle(request, 'GET', params);
-}
-export async function POST(request, { params }) {
-  return handle(request, 'POST', params);
-}
-export async function PUT(request, { params }) {
-  return handle(request, 'PUT', params);
-}
-export async function PATCH(request, { params }) {
-  return handle(request, 'PATCH', params);
-}
-export async function DELETE(request, { params }) {
-  return handle(request, 'DELETE', params);
-}
+export async function GET(request) { return handle(request, 'GET'); }
+export async function POST(request) { return handle(request, 'POST'); }
+export async function PUT(request) { return handle(request, 'PUT'); }
+export async function PATCH(request) { return handle(request, 'PATCH'); }
+export async function DELETE(request) { return handle(request, 'DELETE'); }
 
-async function handle(request, method, params) {
+async function handle(request, method) {
+  // Parse path segments from the URL directly (Vercel doesn't pass params reliably)
+  const url = new URL(request.url);
+  const fullPath = url.pathname.replace(/^\/api\/admin\//, '');
+  const path = fullPath ? fullPath.split('/').filter(Boolean) : [];
+
   const auth = await verifyAdmin(request);
   if (auth.error) return json({ error: auth.error, debug: auth.debug }, auth.status);
 
   const admin = auth.admin;
-  // params.path is the catch-all array: ['attacks', '123'] etc.
-  const path = params.path || [];
   const resource = path[0]; // 'attacks', 'weapon-templates', 'monster-templates', 'auth-check'
   const id = path[1] ? parseInt(path[1]) : null;
   const subResource = path[2]; // 'mappings'
