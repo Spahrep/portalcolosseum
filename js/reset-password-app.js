@@ -8,12 +8,8 @@
  * CSP-compliant: script-src 'self' esm.sh https://*.supabase.co
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { supabaseClient } from '../js/utils.js';
 
-// === SUPABASE CONFIGURATION ===
-// Config is loaded from /api/env.js (served by Vercel serverless function)
-const SUPABASE_URL = window.ENV.SUPABASE_URL;
-const SUPABASE_ANON_KEY = window.ENV.SUPABASE_ANON_KEY;
 
 let supabase;
 
