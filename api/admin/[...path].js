@@ -77,6 +77,12 @@ async function verifyAdmin(request) {
 }
 
 async function getBody(request) {
+  // Validation helper for admin routes
+  function validateAdminInput(data, requiredFields = []) {
+    if (!data || typeof data !== 'object') return {valid:false,error:'Body must be object',code:'VALIDATION_ERROR'};
+    for (const f of requiredFields) if (!data[f]) return {valid:false,error:'Missing required field: '+f,code:'VALIDATION_ERROR'};
+    return {valid:true};
+  }
   try { return await request.json(); } catch { return null; }
 }
 
