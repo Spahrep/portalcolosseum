@@ -6,13 +6,27 @@
 ## Core Model
 
 - Consumables modify **one stat** for now (PMVP: possibly multiple): **HP (heal), Speed, Accuracy, Damage**
-- Template-based, exactly like weapons: `base ± delta` rolls
+- Template-based, exactly like weapons, **except effect deltas are `+` only** (see "Floor + Window" below)
 - Each potion rolls **two properties**:
-  1. **Effect value** — the stat it modifies (heal amount, speed bonus, etc.)
+  1. **Effect value** — the stat it modifies (heal amount, speed bonus, etc.), rolled as floor + window
   2. **Speed** — how fast the potion drinks. A healing pill pops in your mouth in ~1 tic; a "4L jug of heal juice" takes many tics. Speed is part of the roll, not fixed per template.
 - **Grade (D/E/F → S) is computed AFTER generation** from the standard deviation curve — a UX label only, same grading system as weapons.
   - Example: a 20hp heal potion might grade A while a 22hp potion grades S. Small advantages command big premiums at the top.
 - Potions are **unique rolls** — each one is its own item with its own values. Potions take a **full inventory slot**, no stacking (pouches are PMVP).
+
+## Effect Values: Floor + Window (all consumables)
+
+- Every consumable's effect stat is generated from **four template numbers**, all `+`-only deltas:
+  1. `floor_base` — the guaranteed minimum effect
+  2. `floor_delta` — how much the floor can roll up
+  3. `window_base` — the guaranteed bonus on top of the floor
+  4. `window_delta` — how much the window can roll up
+- Result: **`floor`, up to `floor + window`** — e.g. `floor_base=100, floor_delta=10, window_base=20, window_delta=10` produces anywhere from **"100+, up to 120"** (worst roll) to **"110+, up to 140"** (best roll).
+- **Labels show `X+, up to Y`** — the floor is the number on the card, the full range is visible on the detail screen. Both must always be visible (floor front and center, range one tap away — never hidden).
+- **Deltas are `+` only for ALL consumables — potions, bombs, anything consumed or thrown.** No `±` anywhere in the consumable family.
+- **Why (the One-Sample Rule):** a consumable is used exactly once, at the player's most critical moment. A low roll on a single sample is a betrayal — it reads as "the game cheated me," not "the gamble didn't pay." `+`-only means the item can *never* under-deliver below its template's promise; only the upside varies. The template name becomes a guarantee ("Minor Healing = at least 100").
+- **Weapons are the deliberate exception:** they roll hundreds of times per fight, so `±` is free texture — low swings average out and skill still wins. Single-use items never betray; many-sample items can swing.
+- **This kills the "gamble bomb" fantasy by default** — a "10–100 chaos bomb" would be a hidden betrayal because the player can't see a monster's exact HP (a ± bomb's odds aren't actually visible). If a wild gamble item is ever wanted, it must be a **rare, clearly-labeled exception** (e.g., "Gamble Flask: 0–200, exact odds on label") that the player opts into — never a default.
 
 ## Using a Consumable (Combat)
 
@@ -42,6 +56,7 @@
 ## Throw Mechanic
 
 - **No throw for now.** PMVP flavor idea (FF-style: use a healing potion on a zombie to damage it). Do not build for MVP.
+- **When throwables arrive, they use the same Floor + Window model with `+`-only deltas** — same schema, same label format, one generation path for all consumables.
 
 ## Where Consumables Can Be Used
 
@@ -65,7 +80,9 @@
 
 - Exact pre/post formula (f(weapon speed, potion speed))
 - Exact duration numbers per template
+- **Shop pricing key: does price run off the floor, the window, or the rolled center?** (follow-on from Floor + Window — needs a decision when shop numbers are done)
 - Multiple stats per consumable (PMVP)
-- Throw mechanic (PMVP)
+- Throw mechanic (PMVP — inherits Floor + Window, `+`-only)
 - Disruption (PMVP)
 - Potion pouches / stacking (PMVP)
+- Rare "gamble" consumable exception, clearly labeled with visible odds (PMVP, only if ever wanted)
