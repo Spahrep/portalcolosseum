@@ -1,10 +1,10 @@
 # Portal Colosseum
 
-Working rules for Hermes in this repo.
+Working rules for AI agents in this repo (Hermes, Grok workers, Claude Code, and any other tool pointed at this project).
 
 ## Model allocation — hand off to Grok
 - All non-trivial coding and implementation work runs through Grok via
-  `delegate_task` (delegation is pinned to xai-oauth / grok-4-0709 — the
+  `delegate_task` (delegation is pinned to xai-oauth / grok-4.3 — the
   SuperGrok subscription is already paid, so this costs $0 marginal).
 - Do NOT implement multi-file, logic-heavy, or debugging tasks directly.
   Delegate them.
