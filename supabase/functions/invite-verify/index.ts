@@ -10,6 +10,15 @@
  * Validates invite keys for the alpha signup system. Migrated from the
  * Vercel function at api/invite-verify.js.
  *
+ * SINGLE SOURCE OF TRUTH DECISION (PC-10):
+ *   The Edge Function is now the canonical home. The old Vercel
+ *   api/invite-verify.js has been removed (git rm). Frontend
+ *   (signup-app.js, landing-app.js) already calls the Edge Function
+ *   URL derived from window.ENV.SUPABASE_URL. The Edge version is
+ *   strictly superior (origin allowlist on every request, timing-safe
+ *   compare, RPC-only DB access, proper size caps, fixed error strings).
+ *   No thin proxy left behind — removal is the minimal correct change.
+ *
  * Endpoints (base: ${SUPABASE_URL}/functions/v1/invite-verify):
  *
  *   POST   - Validate an invite key.

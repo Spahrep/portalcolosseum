@@ -398,8 +398,8 @@ deno_version = 2
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
 
-# Alpha invite key verification. Migrated from the Vercel function that used
-# to live at api/invite-verify.js.
+# Alpha invite key verification. Edge Function is the single source of truth
+# (Vercel api/invite-verify.js removed in PC-10).
 #
 # verify_jwt = false is required, not a convenience: invite keys are verified
 # before the account exists, so the caller has no JWT to present. The endpoint
