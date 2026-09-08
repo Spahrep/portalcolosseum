@@ -44,3 +44,6 @@ grok-*.md
 GmailAuthPNG.png
 gmail-*.py
 email_integration.py
+
+# Hermes kanban worktrees
+.worktrees/
