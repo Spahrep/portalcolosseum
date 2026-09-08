@@ -93,14 +93,14 @@
     },
     {
       "src": "/favicon.ico",
-      "dest": "/pictures/ui/favicon.ico",
+      "dest": "/public/pictures/ui/favicon.ico",
       "headers": {
         "Content-Type": "image/x-icon"
       }
     },
     {
       "src": "/favicon.png",
-      "dest": "/pictures/ui/favicon.png",
+      "dest": "/public/pictures/ui/favicon.png",
       "headers": {
         "Content-Type": "image/png"
       }
