@@ -32,6 +32,26 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
+ * Simple in-memory rate limiter for serverless.
+ * LIMITATIONS: Per-instance only (no shared state across Vercel instances),
+ * resets on cold starts/deploys, not suitable for high-traffic production
+ * without Redis/Upstash. Fine for alpha testing.
+ */
+const rateLimitMap = new Map();
+function checkRateLimit(key, limit = 10, windowMs = 60000) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key) || { count: 0, reset: now + windowMs };
+  if (now > entry.reset) {
+    entry.count = 0;
+    entry.reset = now + windowMs;
+  }
+  if (entry.count >= limit) return false;
+  entry.count++;
+  rateLimitMap.set(key, entry);
+  return true;
+}
+
+/**
  * Create a Supabase admin client using the service_role key.
  * This client bypasses RLS — use ONLY server-side.
  */
@@ -108,6 +128,29 @@ async function validateInviteKey(key) {
 }
 
 /**
+ * Validate and normalize an invite key from a request body.
+ * Handles null bodies (bad JSON), non-string values, whitespace, and length.
+ * @param {unknown} rawKey - the raw `body.key` value (may be undefined/null/non-string)
+ * @returns {{valid: true, key: string} | {valid: false, error: string}}
+ */
+function validateInviteKeyInput(rawKey) {
+  if (rawKey === undefined || rawKey === null) {
+    return { valid: false, error: 'Invite key is required' };
+  }
+  if (typeof rawKey !== 'string') {
+    return { valid: false, error: 'Invite key must be a string' };
+  }
+  const key = rawKey.trim();
+  if (key.length === 0) {
+    return { valid: false, error: 'Invite key is required' };
+  }
+  if (key.length > 128) {
+    return { valid: false, error: 'Invite key is too long' };
+  }
+  return { valid: true, key };
+}
+
+/**
  * Mark an invite key as used in the database.
  * Called after successful account creation.
  */
@@ -137,6 +180,11 @@ async function markKeyAsUsed(key) {
 export async function POST(request) {
   try {
     const body = await parseBody(request);
+    const ip = request.headers.get('x-forwarded-for') || 'unknown';
+    if (!checkRateLimit('invite:' + ip, 20, 60000)) return new Response(JSON.stringify({error:'Rate limit exceeded',code:'RATE_LIMIT'}),{status:429,headers:{'Content-Type':'application/json'}});
+    const v = validateInviteKeyInput(body.key);
+    if (!v.valid) return new Response(JSON.stringify({valid:false,error:v.error,code:'VALIDATION_ERROR'}),{status:400,headers:{'Content-Type':'application/json'}});
+    body.key = v.key;
     const { key } = body;
 
     const result = await validateInviteKey(key);

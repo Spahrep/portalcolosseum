@@ -37,6 +37,22 @@
 // This client bypasses RLS — use ONLY server-side.
 import { createClient } from '@supabase/supabase-js';
 
+/**
+ * Simple in-memory rate limiter for serverless.
+ * LIMITATIONS: Per-instance only (no shared state across Vercel instances),
+ * resets on cold starts/deploys, not suitable for high-traffic production
+ * without Redis/Upstash. Fine for alpha testing.
+ */
+const rateLimitMap = new Map();
+function checkRateLimit(key, limit = 10, windowMs = 60000) {
+  const now = Date.now();
+  const entry = rateLimitMap.get(key) || { count: 0, reset: now + windowMs };
+  if (now > entry.reset) { entry.count = 0; entry.reset = now + windowMs; }
+  if (entry.count >= limit) return false;
+  entry.count++; rateLimitMap.set(key, entry); return true;
+}
+
+
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.SUPABASE_URL;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
