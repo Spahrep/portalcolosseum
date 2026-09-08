@@ -83,7 +83,7 @@ async function checkAdminSession() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refresh_token: session.refresh_token }),
       });
-    } catch (err) { /* non-fatal */ }
+    } catch (_err) { /* non-fatal */ }
   }
 
   // Verify admin via API

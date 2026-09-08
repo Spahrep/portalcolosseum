@@ -6,6 +6,12 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.44.0"
   },
+  "devDependencies": {
+    "eslint": "^8.57.0"
+  },
+  "scripts": {
+    "lint": "eslint js/admin-app.js js/game-app.js"
+  },
   "engines": {
     "node": ">=18.x"
   }

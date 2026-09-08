@@ -61,7 +61,7 @@ let selectedIndex = 0;
  */
 function panToLocation(index) {
   const loc = LOCATIONS[index];
-  // Calculate pan offset: account for the fact that image width (300vh) 
+  // Calculate pan offset: account for the fact that image width (300vh)
   // may differ from 300vw on non-3:1 screens
   const ratio = window.innerHeight / window.innerWidth;  // vh/vw at 100x scale
   const imageWidthInVw = 300 * ratio;  // 300vh expressed in vw units
@@ -181,7 +181,7 @@ async function initGame() {
       if (window.location.search.includes('code=')) {
         // PKCE auto-exchange happened via detectSessionInUrl — just need to
         // pick up the session and persist the refresh token server-side
-        const { data: { session }, error } = await supabase.auth.getSession();
+        const { data: { session }, error: _error } = await supabase.auth.getSession();
 
         if (session && session.refresh_token) {
           // Persist the refresh token in an HttpOnly cookie via our Edge Function
@@ -197,7 +197,7 @@ async function initGame() {
       // session available directly — no need for cookie fallback here.
 
       // Now check the session (from localStorage or PKCE callback exchange)
-      const { data: { session: storedSession }, error } = await supabase.auth.getSession();
+      const { data: { session: storedSession }, error: _error } = await supabase.auth.getSession();
       session = storedSession;
 
       // === COOKIE-BASED SESSION RESTORATION (fallback) ===
