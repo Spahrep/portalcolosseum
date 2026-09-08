@@ -1,3 +1,10 @@
+-- ============================================================
+-- Portal template + mapping tables (portal_template, portal_monster_mapping, portal_loot_mapping)
+-- Originally created as unversioned portal-templates.sql; renamed 2026-09-08
+-- for proper lexical ordering in the migration list (before the RLS enable step).
+-- Contents kept identical.
+-- ============================================================
+
 CREATE TABLE portal_template (
   id bigint primary key generated always as identity,
   name text not null,
