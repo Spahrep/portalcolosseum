@@ -28,6 +28,8 @@
 - **Why (the One-Sample Rule):** a consumable is used exactly once, at the player's most critical moment. A low roll on a single sample is a betrayal — it reads as "the game cheated me," not "the gamble didn't pay." `+`-only means the item can *never* under-deliver below its template's promise; only the upside varies. The template name becomes a guarantee ("Minor Healing = at least 100").
 - **Weapons are the deliberate exception:** they roll hundreds of times per fight, so `±` is free texture — low swings average out and skill still wins. Single-use items never betray; many-sample items can swing.
 - **This is what replaces the "gamble bomb" fantasy:** a "10–100 chaos bomb" as a `±` item would be a hidden betrayal (exact monster HP is invisible, so its odds aren't actually visible). But the *same fantasy* is fully available as a wide-window `+`-only consumable (e.g., "10+, up to 310") — a transparent gamble the player can read on the label. High variance lives in the **window**, never in the **floor**.
+- **Both axes are strict goods.** Since the floor is guaranteed and the window is pure upside (floor + window is the ceiling), a larger floor is always better and a larger window is always better — for a heal potion, a bigger window is *never* a risk, it's just more upside. There is no risk/return trade-off between them. So different floor/window shapes are **different price tiers, not different gamble kinds**: e.g. "100+, up to 120" (EV 110) vs "105+, up to 110" (EV 107.5) vs "90+, up to 120" (EV 105) are simply better/worse potions at different prices.
+- **Consequence: grade and price both key off expected value = `floor + window/2`.** The floor/window split is pure flavor and feel (reliability, label personality) — it does not create a separate value axis. (A small premium for high-floor shapes is possible as a tuning knob, since the floor is the survival number — but that's a number, not a design decision.) This is the answer to the "pricing key" question in TBD.
 
 ## Using a Consumable (Combat)
 
@@ -81,7 +83,7 @@
 
 - Exact pre/post formula (f(weapon speed, potion speed))
 - Exact duration numbers per template
-- **Shop pricing key: does price run off the floor, the window, or the rolled center?** (follow-on from Floor + Window — needs a decision when shop numbers are done)
+- **Shop pricing key: RESOLVED — price keys off expected value = `floor + window/2`** (see "Both axes are strict goods" above). Remaining: exact price curve numbers.
 - Multiple stats per consumable (PMVP)
 - Throw mechanic (PMVP — inherits Floor + Window, `+`-only)
 - Disruption (PMVP)
