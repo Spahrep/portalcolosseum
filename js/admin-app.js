@@ -990,22 +990,25 @@ async function showPortalMonsterMappingEditor(templateId) {
       `;
     });
     if (mappings.length === 0) html += '<tr><td colspan="4" class="muted">No monsters assigned to this portal</td></tr>';
-    html += `</tbody></table>`;
 
-    // Add monster picker — show monsters NOT already in this portal
+    // Add monster picker row — show monsters NOT already in this portal
     const usedIds = mappings.map(m => m.monster_template_id);
     const available = allMonsters.filter(m => !usedIds.includes(m.id));
     html += `
-      <div class="add-attack-row">
-        <select id="pt-add-monster">
-          <option value="">— Add monster to portal —</option>
-          ${available.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}
-        </select>
-        <input type="number" id="pt-add-cost" placeholder="Point Cost" value="10">
-        <input type="number" id="pt-add-weight" placeholder="Weight" step="0.1" value="1.0">
-        <button class="btn" id="pt-add-monster-btn">Add</button>
-      </div>
-      <button class="btn btn-secondary" id="pt-close-monster-btn">Close</button>
+      <tr class="add-mapping-row">
+        <td>
+          <select id="pt-add-monster">
+            <option value="">— Add monster to portal —</option>
+            ${available.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}
+          </select>
+        </td>
+        <td><input type="number" id="pt-add-cost" placeholder="Point Cost" value="10"></td>
+        <td><input type="number" id="pt-add-weight" placeholder="Weight" step="0.1" value="1.0"></td>
+        <td><button class="btn" id="pt-add-monster-btn">Add</button></td>
+      </tr>
+      </tbody>
+    </table>
+    <button class="btn btn-secondary" id="pt-close-monster-btn">Close</button>
     </div>
     `;
     container.innerHTML = html;
