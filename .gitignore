@@ -32,3 +32,15 @@ supabase/.gitignore
 
 # Weapon generation comparison files (local test artifacts)
 tmp/weapon_gen/
+
+# Junk / scratch / personal automation (not project code)
+.venv-email/
+share/
+tmp/
+GROK_*.md
+SECURITY_REVIEW*.md
+grok-*.txt
+grok-*.md
+GmailAuthPNG.png
+gmail-*.py
+email_integration.py

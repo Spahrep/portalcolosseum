@@ -116,7 +116,7 @@ storage: {
 ```
 This means the Supabase JS SDK writes the **full session object (including
 `refresh_token`) to `localStorage`** — which is XSS-readable. The
-`SECURITY_REVIEW_PASS2.md` claims this was changed to in-memory no-op storage,
+`internal security review pass` claims this was changed to in-memory no-op storage,
 but the current code does not reflect that. **The plan's Option A analysis is
 based on an incorrect assumption about the current storage model.**
 
@@ -390,7 +390,7 @@ headers that might be logged.
   `window.ENV.SUPABASE_URL` and `window.ENV.SUPABASE_ANON_KEY` via JavaScript
   execution (`<script src="/api/env.js">`).
 - `Cache-Control: no-store` prevents caching (already fixed per
-  SECURITY_REVIEW_PASS2).
+  internal security review pass).
 - `Content-Type: application/javascript` — the response is executed as a
   script, meaning any injection into the response could become XSS.
 - The **anon key is already exposed to the browser** — this is by Supabase's
@@ -491,7 +491,7 @@ All four frontend modules configure the Supabase client with a
 (including `refresh_token`) is written to `localStorage`** by the Supabase SDK
 itself. This is XSS-readable and persistent across tabs and browser restarts.
 
-The `SECURITY_REVIEW_PASS2.md` claims this was fixed (changed to in-memory
+The `internal security review pass` claims this was fixed (changed to in-memory
 no-op storage), but **the code on disk does not reflect this** — all four
 modules use `localStorage.getItem/setItem/removeItem`. This discrepancy means
 either:

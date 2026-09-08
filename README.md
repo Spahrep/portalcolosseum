@@ -44,17 +44,8 @@ Model allocation: **Laguna is the default** (free). Grok (paid) is for hard prob
 
 ## Root-Level Documents
 
-### Security Reviews
-- **`SECURITY_REVIEW.md`** — First-pass security audit of auth flow. Identified 5 findings: CRITICAL session tokens in localStorage, HIGH auth bypass via stale playerName, HIGH missing CSP, MEDIUM unpinned esm.sh import, MEDIUM OAuth implicit flow (not PKCE). All findings include fixes and rationale.
-- **`SECURITY_REVIEW_PASS2.md`** — Verification pass on commit `5d1bbf1`. Confirms 4/5 findings fixed (tokens, auth bypass, CSP added, PKCE). Documents new issues: session lost on reload (in-memory storage tradeoff), CSP weakened by `'unsafe-inline'`, unpinned esm.sh overlooked, `/signup-callback` 404 bug, signup username TOCTOU.
-
-### Setup Guides
 - **`SUPABASE_SETUP.md`** — Step-by-step Supabase project creation, OAuth provider configuration (Google, GitHub), site URL setup, and code integration. Includes troubleshooting for "Invalid API key" and redirect loops. Replaces the old "code 1234" login with real accounts.
 
-### Bug & Fix Documentation
-- **`GROK_FIX_BRIEF.md`** — Codebase audit packaged for Grok: password reset flow broken (HIGH — `sendResetEmail()` never bound to click handler), HTML div structure issues, debug console.log in production, dead CSS, missing element references in gui1 test page, and the critical "Press Start 2P" font violation (must use Pixeloid Mono).
-
----
 
 ## Shared Documents (/home/spahrep/shared/)
 
