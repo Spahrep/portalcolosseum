@@ -6,6 +6,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { escapeHtml } from './pure-utils.js';
 
 // === SUPABASE CONFIGURATION ===
 // Config is loaded from /api/env.js (served by Vercel serverless function)
@@ -105,17 +106,4 @@ export async function apiFetch(url, options = {}) {
     throw new Error(`API ${url} failed: ${res.status} ${text}`);
   }
   return res.json().catch(() => ({}));
-}
-
-/**
- * Escape HTML to prevent XSS when inserting user-controlled strings.
- */
-export function escapeHtml(str) {
-  if (!str) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
