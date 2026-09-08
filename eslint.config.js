@@ -1,5 +1,8 @@
 export default [
   {
+    ignores: ['.worktrees/**', 'node_modules/**', 'supabase/**', '.venv-email/**', 'share/**', 'tmp/**'],
+  },
+  {
     files: ['**/*.js'],
     languageOptions: {
       ecmaVersion: 'latest',
