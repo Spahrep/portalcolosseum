@@ -128,6 +128,29 @@ async function validateInviteKey(key) {
 }
 
 /**
+ * Validate and normalize an invite key from a request body.
+ * Handles null bodies (bad JSON), non-string values, whitespace, and length.
+ * @param {unknown} rawKey - the raw `body.key` value (may be undefined/null/non-string)
+ * @returns {{valid: true, key: string} | {valid: false, error: string}}
+ */
+function validateInviteKeyInput(rawKey) {
+  if (rawKey === undefined || rawKey === null) {
+    return { valid: false, error: 'Invite key is required' };
+  }
+  if (typeof rawKey !== 'string') {
+    return { valid: false, error: 'Invite key must be a string' };
+  }
+  const key = rawKey.trim();
+  if (key.length === 0) {
+    return { valid: false, error: 'Invite key is required' };
+  }
+  if (key.length > 128) {
+    return { valid: false, error: 'Invite key is too long' };
+  }
+  return { valid: true, key };
+}
+
+/**
  * Mark an invite key as used in the database.
  * Called after successful account creation.
  */
