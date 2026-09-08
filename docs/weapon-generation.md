@@ -85,8 +85,14 @@ Eligible attacks (from weapon_template_attack_mapping):
 - Example: speed of 55 ≈ 1.8 attacks/sec; speed of 25 ≈ 4 attacks/sec
 - DPS = Damage × (100 / Speed)
 
-## Classification (A/B/C Grades)
+## Classification (Grades)
+
 **The grade is computed *after* all stats are rolled**, not as an input to generation. Each stat range is rolled independently using the Base + Delta formula. The resulting grade is a **UI/UX label** that tells the player "how good" their weapon is without making them do the math.
+
+- **Grade bands are D/E/F → S**, assigned from the standard deviation curve of the roll (S-tier ≈ 0.15%, A-tier ≈ 2.1%, etc.)
+- The same grading system applies to **all items** (weapons and consumables) — one bell curve drives rarity → grade → price
+- Price multipliers scale **per category**: weapons steep (S ≈ 100× base), consumables shallow (10% better ≈ 25% more). See `shops-and-economy.md`.
+- D/E/F tiers are the gold drip — cheap junk keeps the economy liquid and every run yields something sellable.
 
 ## Post-MVP Features (Deferred)
 - **Point Budget System** — will add balance constraints using point allocation

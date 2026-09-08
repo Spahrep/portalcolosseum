@@ -8,6 +8,8 @@ After winning a combat, the player receives loot through two independent systems
 
 Equipment drops use a **Loot Point (LP) budget** system. Each combat contributes a pool of LP, which is spent on weighted random pulls from a combined loot table.
 
+**Consumables are equipment-class loot:** potions take LP exactly like weapons, are template-costed (LP cost is based on the template, not the roll), and are assigned to portals and monsters via the same loot tables. See `consumables.md` for the consumable design and `shops-and-economy.md` for how shop pricing differs from drop costing.
+
 #### Loot Points (LP)
 
 - Each monster has a base **Loot Point value** (e.g., Dragon = 100, Glimmerling = 5)
@@ -93,9 +95,11 @@ Gold uses a separate calculation from equipment drops. Gold is a guaranteed drop
 The prize pool is the meta-layer on top of individual combat loot drops.
 
 - After every combat in a run, loot is added to a shared **prize pool**
+- **Loot in the prize pool cannot be used mid-run** — what you bring in is all you have (see consumables.md). No drinking a freshly dropped potion between fights.
 - **Finish the run**: Player receives the full prize pool
-- **Stop early**: Player receives a reduced share of the pool
-- **Die during run**: Player receives almost nothing or nothing
+- **Stop early**: Player receives a reduced share of the pool (exact % TBD)
+- **Die during run**: Player is kicked out and the prize pool is forfeited. Items brought INTO the run are never lost — death only costs unbanked loot.
+- **No inventory access between fights**: the 5-item loadout is locked at entry (see inventory-slots.md)
 
 This creates strong "push your luck" tension.
 

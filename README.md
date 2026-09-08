@@ -23,12 +23,14 @@ Model allocation: **Laguna is the default** (free). Grok (paid) is for hard prob
 
 ### Design & Architecture
 - **`core-philosophy.md`** — The foundational design principles: father-son learning project, clean/minimal setups, open-source tools, iterative over over-engineered, KISS/YAGNI/DRY. Emphasizes procedurally generated content with realistic statistical distributions and honest admission of mistakes.
-- **`ap-economy.md`** — The Action Point (AP) economy system. Covers daily AP generation, AP as a resource for player actions, and how AP scarcity drives meaningful decisions.
+- **`ap-economy.md`** — The Action Point (AP) economy system: 3× cap (no FOMO), deepest-run leaderboard, AP sinks (runs, shop resets), gold as secondary meter, wizard tent healing (TBD).
 - **`combat-system.md`** — Arena combat mechanics: turn-based actions, weapon damage, hit chance calculations, and the core battle loop.
-- **`inventory-slots.md`** — Player inventory structure: slot types, equipment slots (left hand, right hand, belt, etc.), and how items map to combat stats.
-- **`loot-prize-pool.md`** — Weapon loot generation with procedural distributions: 60% C-grade, 30% B-grade, 10% A-grade. Covers weapon grade probabilities and stat ranges.
-- **`portal-runs.md`** — The portal run gameplay loop: what happens when a player enters the portal, dungeon-like progression, and rewards.
-- **`progression-gating.md`** — How player progression is gated: combat tier requirements, AP thresholds, and what unlocks at each stage.
+- **`consumables.md`** — Consumable design: template rolls (effect + drink speed), hand-based pre/post timing, buffs apply to the player, loadout Potion A/B slots, prize-pool loot rules. Weapons + consumables are the only MVP item types.
+- **`inventory-slots.md`** — Player inventory structure: 20-slot backpack, 5-item run loadout (Hand L/R, Belt Loop, Potion A/B), loadout locked at entry, belt-loop weapon swap.
+- **`loot-prize-pool.md`** — Loot drops (LP budget + gold) and prize pool rules: finish = all, stop = reduced share, die = forfeit pool (brought items safe). Consumables are equipment-class loot.
+- **`portal-runs.md`** — The portal run gameplay loop: 5 fights, push-your-luck prize pool, portal tiers as item power tiers, entry costs, anti-soft-lock rule (old portals stay farmable).
+- **`progression-gating.md`** — How player progression is gated: portal unlocks, the 3-active-portals limit, and the "magical aura" shop tiering.
+- **`shops-and-economy.md`** — Shops & item economy: output-based pricing (shop by roll, drops by template), per-category price curves, portal-gated shop tiers, exponential rerolls with AP reset, three gates against grinding.
 
 ### Technical Docs
 - **`aws-future-stack.md`** — Future deployment architecture on AWS (S3 + CloudFront + Route 53), including cost estimates and migration from Vercel. Documents the roadmap for moving to AWS.
