@@ -283,9 +283,90 @@ async function logout() {
   window.location.href = '/login';
 }
 
+// === ONBOARDING TUTORIAL (PC-11) ===
+// Lightweight 4-step dismissible overlay for first-run players.
+// Uses plain DOM, localStorage persistence, styled to match css/style.css.
+const ONBOARDING_KEY = 'pc_onboarding_seen';
+const ONBOARDING_STEPS = [
+  {
+    title: 'Action Points (AP)',
+    body: 'AP gates your play. You spend AP to start Portal runs. Manage it wisely between runs.'
+  },
+  {
+    title: 'Starting a Run',
+    body: 'Navigate to the Portal marker (arrow keys or scroll) and press Enter. A run is 5 fights. Prize grows with each victory.'
+  },
+  {
+    title: 'Continue vs Stop',
+    body: 'After each fight you can CONTINUE (risk it for bigger reward) or STOP and bank your current loot.'
+  },
+  {
+    title: 'Loot & Grades',
+    body: 'Higher-grade dice improve your loot tier. Better rolls = rarer rewards at the end of a successful run.'
+  }
+];
+
+function showOnboarding() {
+  if (localStorage.getItem(ONBOARDING_KEY) === 'true') return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'onboarding-overlay';
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(16,31,46,0.92);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:"Pixeloid Mono","Courier New",monospace;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:#1a1a2e;border:2px solid #ff6b3b;border-radius:8px;max-width:520px;width:90%;padding:28px 32px;color:#fff;box-shadow:0 0 40px rgba(255,107,59,0.3);';
+
+  let stepIndex = 0;
+
+  function renderStep() {
+    const step = ONBOARDING_STEPS[stepIndex];
+    modal.innerHTML = `
+      <div style="margin-bottom:20px;">
+        <div style="color:#ff6b3b;font-size:13px;letter-spacing:2px;margin-bottom:6px;">TUTORIAL • STEP ${stepIndex + 1}/${ONBOARDING_STEPS.length}</div>
+        <h2 style="margin:0 0 14px;font-size:22px;color:#fff;">${step.title}</h2>
+        <p style="line-height:1.55;margin:0;font-size:15px;color:#ddd;">${step.body}</p>
+      </div>
+      <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:24px;">
+        ${stepIndex > 0 ? '<button id="ob-back" class="enter-button" style="padding:10px 22px;font-size:14px;">Back</button>' : ''}
+        <button id="ob-next" class="enter-button" style="padding:10px 22px;font-size:14px;">${stepIndex === ONBOARDING_STEPS.length - 1 ? 'Got it!' : 'Next'}</button>
+        <button id="ob-skip" class="enter-button" style="padding:10px 22px;font-size:14px;background:#333;border-color:#555;">Skip</button>
+      </div>
+    `;
+
+    // Attach handlers after innerHTML
+    setTimeout(() => {
+      const nextBtn = modal.querySelector('#ob-next');
+      const backBtn = modal.querySelector('#ob-back');
+      const skipBtn = modal.querySelector('#ob-skip');
+
+      if (nextBtn) nextBtn.onclick = () => {
+        if (stepIndex === ONBOARDING_STEPS.length - 1) {
+          finishOnboarding(overlay);
+        } else {
+          stepIndex++;
+          renderStep();
+        }
+      };
+      if (backBtn) backBtn.onclick = () => { stepIndex--; renderStep(); };
+      if (skipBtn) skipBtn.onclick = () => finishOnboarding(overlay);
+    }, 0);
+  }
+
+  function finishOnboarding(ov) {
+    localStorage.setItem(ONBOARDING_KEY, 'true');
+    ov.remove();
+  }
+
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+  renderStep();
+}
+
 // --- DOM ready: initialize game when page loads ---
 document.addEventListener('DOMContentLoaded', () => {
   initGame();
+  // First-run tutorial overlay (localStorage-persisted, dismissible)
+  showOnboarding();
 
   // Re-pan on resize to account for aspect ratio changes
   window.addEventListener('resize', () => {
