@@ -26,7 +26,7 @@ let supabase;
 // Invite verification moved off Vercel (/api/invite-verify) onto Supabase
 // Edge Functions. The URL is derived from the runtime-injected SUPABASE_URL
 // rather than hardcoded, so the project ref never appears in source.
-const INVITE_VERIFY_URL = `${(window.ENV.SUPABASE_URL || '').replace(/\/+$/, '')}/functions/v1/invite-verify`;
+const INVITE_VERIFY_URL = `${(window.ENV?.SUPABASE_URL || '').replace(/\/+$/, '')}/functions/v1/invite-verify`;
 
 // Store the validated invite key in session scope (not localStorage — too short
 // lived to be an XSS target, and sessionStorage is cleared on tab close)

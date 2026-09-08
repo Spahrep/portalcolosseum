@@ -4,25 +4,21 @@
 -- docs/portal-runs.md, docs/weapon-generation.md (LP costs, point costs,
 -- weight semantics for weighted selection, gold ranges).
 -- All references use name-based subselects; no hardcoded IDs.
--- Existing base data at time of writing: 1 portal_template, 1 monster_template,
--- 7 weapon_template, 16 attack.
+-- Existing base data (prod, verified 2026-09-08): portal 'Portal 1',
+-- monster 'Glimmerling', 7 weapon_templates. 'Herb' does not exist in prod,
+-- so its loot row is omitted (was a no-op insert).
 
 -- Portal monster mappings (point_cost + weight for encounter selection)
 INSERT INTO portal_monster_mapping (portal_template_id, monster_template_id, point_cost, weight)
 SELECT p.id, m.id, 40, 1.0
 FROM portal_template p, monster_template m
-WHERE p.name = 'Glimmer Portal' AND m.name = 'Glimmerling';
+WHERE p.name = 'Portal 1' AND m.name = 'Glimmerling';
 
--- Portal loot mappings (shared portal drop pool; item_name references weapon_template.name)
-INSERT INTO portal_loot_mapping (portal_template_id, item_name, lp_cost, weight)
-SELECT p.id, w.name, 15, 2.0
+-- Portal loot mappings (shared portal drop pool; weapon_template_id FK to weapon_template)
+INSERT INTO portal_loot_mapping (portal_template_id, weapon_template_id, lp_cost, weight)
+SELECT p.id, w.id, 15, 2.0
 FROM portal_template p, weapon_template w
-WHERE p.name = 'Glimmer Portal' AND w.name IN ('Wristblade', 'Short Sword');
-
-INSERT INTO portal_loot_mapping (portal_template_id, item_name, lp_cost, weight)
-SELECT p.id, w.name, 25, 1.0
-FROM portal_template p, weapon_template w
-WHERE p.name = 'Glimmer Portal' AND w.name = 'Herb';
+WHERE p.name = 'Portal 1' AND w.name IN ('Wristblade', 'Short Sword');
 
 -- Monster loot mappings (monster-specific drops)
 INSERT INTO monster_loot_mapping (monster_template_id, weapon_template_id, lp_cost, weight)
