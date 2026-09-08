@@ -118,6 +118,8 @@ async function checkMonsterTemplateDeleteBlockers(admin, id) {
   if (mi?.length) blockers.push(`monster_instance: ${mi.length} row(s)`);
   const { data: mtm } = await admin.from('monster_template_attack_mapping').select('id').eq('monster_template_id', id);
   if (mtm?.length) blockers.push(`monster_template_attack_mapping: ${mtm.length} row(s)`);
+  const { data: mlm } = await admin.from('monster_loot_mapping').select('id').eq('monster_template_id', id);
+  if (mlm?.length) blockers.push(`monster_loot_mapping: ${mlm.length} row(s)`);
   return blockers;
 }
 
@@ -349,6 +351,42 @@ async function handle(request, method) {
     }
     if (method === 'DELETE' && id && subResource === 'mappings' && mappingId) {
       const { error } = await admin.from(mappingTable).delete().eq('id', mappingId);
+      if (error) return json({ error: error.message }, 400);
+      return json({ success: true });
+    }
+
+    // ---- Monster Loot Mappings (FK to weapon_template) ----
+    if (method === 'GET' && id && subResource === 'loot') {
+      const { data, error } = await admin.from('monster_loot_mapping')
+        .select('id, monster_template_id, weapon_template_id, lp_cost, weight, created_at, weapon_template:weapon_template!monster_loot_mapping_weapon_template_id_fkey(name)')
+        .eq('monster_template_id', id).order('weight', { ascending: false });
+      if (error) return json({ error: error.message }, 500);
+      return json({ data });
+    }
+    if (method === 'POST' && id && subResource === 'loot') {
+      const body = await getBody(request);
+      if (!body) return json({ error: 'Invalid JSON' }, 400);
+      const { weapon_template_id, lp_cost, weight } = body;
+      if (!weapon_template_id || lp_cost === undefined) return json({ error: 'weapon_template_id and lp_cost required' }, 400);
+      const { data, error } = await admin.from('monster_loot_mapping').insert({
+        monster_template_id: id, weapon_template_id, lp_cost, weight: weight || 1.0,
+      }).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ data }, 201);
+    }
+    if (method === 'PATCH' && id && subResource === 'loot' && mappingId) {
+      const body = await getBody(request);
+      if (!body) return json({ error: 'Invalid JSON' }, 400);
+      const update = {};
+      if (body.lp_cost !== undefined) update.lp_cost = body.lp_cost;
+      if (body.weight !== undefined) update.weight = body.weight;
+      if (Object.keys(update).length === 0) return json({ error: 'Nothing to update' }, 400);
+      const { data, error } = await admin.from('monster_loot_mapping').update(update).eq('id', mappingId).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ data });
+    }
+    if (method === 'DELETE' && id && subResource === 'loot' && mappingId) {
+      const { error } = await admin.from('monster_loot_mapping').delete().eq('id', mappingId);
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
     }

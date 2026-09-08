@@ -541,6 +541,7 @@ async function renderMonsterTemplates(container) {
       <td>
         <button class="btn" data-edit="${t.id}">Edit</button>
         <button class="btn" data-mappings="${t.id}">Attack Mappings</button>
+        <button class="btn" data-loot="${t.id}">Loot Mappings</button>
         <button class="btn btn-danger" data-delete="${t.id}">Delete</button>
       </td>
     `;
@@ -552,6 +553,9 @@ async function renderMonsterTemplates(container) {
   });
   tbody.querySelectorAll('[data-mappings]').forEach(btn => {
     btn.addEventListener('click', () => showMonsterMappingEditor(btn.dataset.mappings));
+  });
+  tbody.querySelectorAll('[data-loot]').forEach(btn => {
+    btn.addEventListener('click', () => showMonsterLootMappingEditor(btn.dataset.loot));
   });
   tbody.querySelectorAll('[data-delete]').forEach(btn => {
     btn.addEventListener('click', () => deleteMonsterTemplate(btn.dataset.delete));
@@ -584,6 +588,8 @@ function showMonsterTemplateForm(id = null) {
         <div class="form-group"><label>Slot 2 Chance</label><input id="mt-slot_2_chance" type="number" step="0.1" value="${t.slot_2_chance ?? 0}"></div>
         <div class="form-group"><label>Slot 3 Chance</label><input id="mt-slot_3_chance" type="number" step="0.1" value="${t.slot_3_chance ?? 0}"></div>
         <div class="form-group"><label>Slot 4 Chance</label><input id="mt-slot_4_chance" type="number" step="0.1" value="${t.slot_4_chance ?? 0}"></div>
+        <div class="form-group"><label>Min Gold</label><input id="mt-min_gold" type="number" value="${t.min_gold ?? 0}"></div>
+        <div class="form-group"><label>Max Gold</label><input id="mt-max_gold" type="number" value="${t.max_gold ?? 0}"></div>
         <button class="btn" id="save-mt-btn">${id ? 'Update' : 'Create'}</button>
         <button class="btn btn-secondary" id="cancel-mt-btn">Cancel</button>
       </div>
@@ -604,6 +610,8 @@ function showMonsterTemplateForm(id = null) {
         slot_2_chance: parseFloat(val('mt-slot_2_chance')),
         slot_3_chance: parseFloat(val('mt-slot_3_chance')),
         slot_4_chance: parseFloat(val('mt-slot_4_chance')),
+        min_gold: parseInt(val('mt-min_gold')),
+        max_gold: parseInt(val('mt-max_gold')),
       };
       try {
         if (id) await apiCall(`/api/admin/monster-templates/${id}`, 'PUT', body);
@@ -725,6 +733,118 @@ async function showMonsterMappingEditor(templateId) {
 
   } catch (e) {
     container.innerHTML = `<p class="error">Error loading mappings: ${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// MONSTER TEMPLATE — LOOT MAPPING EDITOR
+// ============================================================
+
+async function showMonsterLootMappingEditor(templateId) {
+  const container = document.getElementById('mt-mapping-container');
+  container.innerHTML = '<p>Loading loot mappings...</p>';
+
+  try {
+    const [templateRes, lootRes, weaponRes] = await Promise.all([
+      apiCall(`/api/admin/monster-templates/${templateId}`),
+      apiCall(`/api/admin/monster-templates/${templateId}/loot`),
+      apiCall('/api/admin/weapon-templates'),
+    ]);
+    const template = templateRes.data;
+    const mappings = lootRes.data || [];
+    const allWeapons = weaponRes.data || [];
+
+    let html = `
+      <div class="form-card mapping-editor">
+        <h3>Loot Mappings — ${esc(template.name)}</h3>
+        <p class="muted">Gold: ${template.min_gold}–${template.max_gold} · These weapons can drop from this monster</p>
+        <table>
+          <thead><tr><th>Weapon Template</th><th>LP Cost</th><th>Weight</th><th>Actions</th></tr></thead>
+          <tbody>
+    `;
+
+    mappings.forEach(m => {
+      html += `
+        <tr>
+          <td>${esc(m.weapon_template?.name || 'Unknown')}</td>
+          <td><input type="number" value="${m.lp_cost}" data-mapping-id="${m.id}" class="cost-input"></td>
+          <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
+          <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
+        </tr>
+      `;
+    });
+    if (mappings.length === 0) html += '<tr><td colspan="4" class="muted">No loot items assigned to this monster</td></tr>';
+    html += `</tbody></table>`;
+
+    const usedIds = mappings.map(m => m.weapon_template_id);
+    const available = allWeapons.filter(w => !usedIds.includes(w.id));
+    html += `
+      <div class="add-attack-row">
+        <select id="mt-add-weapon">
+          <option value="">— Add weapon to monster loot pool —</option>
+          ${available.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
+        </select>
+        <input type="number" id="mt-add-lp-cost" placeholder="LP Cost" value="10">
+        <input type="number" id="mt-add-loot-weight" placeholder="Weight" step="0.1" value="1.0">
+        <button class="btn" id="mt-add-loot-btn">Add</button>
+      </div>
+      <button class="btn btn-secondary" id="mt-close-loot-btn">Close</button>
+    </div>
+    `;
+    container.innerHTML = html;
+
+    document.getElementById('mt-close-loot-btn').addEventListener('click', () => { container.innerHTML = ''; });
+
+    container.querySelectorAll('.cost-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const mappingId = e.target.dataset.mappingId;
+        const lp_cost = parseInt(e.target.value);
+        const row = e.target.closest('tr');
+        const weightInput = row.querySelector('.weight-input');
+        const weight = parseFloat(weightInput.value);
+        try {
+          await apiCall(`/api/admin/monster-templates/${templateId}/loot/${mappingId}`, 'PATCH', { lp_cost, weight });
+        } catch (err) { alert('Error updating: ' + err.message); }
+      });
+    });
+    container.querySelectorAll('.weight-input').forEach(input => {
+      input.addEventListener('change', async (e) => {
+        const mappingId = e.target.dataset.mappingId;
+        const weight = parseFloat(e.target.value);
+        const row = e.target.closest('tr');
+        const costInput = row.querySelector('.cost-input');
+        const lp_cost = parseInt(costInput.value);
+        try {
+          await apiCall(`/api/admin/monster-templates/${templateId}/loot/${mappingId}`, 'PATCH', { lp_cost, weight });
+        } catch (err) { alert('Error updating: ' + err.message); }
+      });
+    });
+
+    container.querySelectorAll('[data-remove-mapping]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Remove this loot item from the monster?')) return;
+        try {
+          await apiCall(`/api/admin/monster-templates/${templateId}/loot/${btn.dataset.removeMapping}`, 'DELETE');
+          showMonsterLootMappingEditor(templateId);
+        } catch (e) { alert('Error: ' + e.message); }
+      });
+    });
+
+    document.getElementById('mt-add-loot-btn').addEventListener('click', async () => {
+      const weaponId = parseInt(document.getElementById('mt-add-weapon').value);
+      if (!weaponId) return;
+      const lp_cost = parseInt(document.getElementById('mt-add-lp-cost').value);
+      const weight = parseFloat(document.getElementById('mt-add-loot-weight').value);
+      try {
+        await apiCall(`/api/admin/monster-templates/${templateId}/loot`, 'POST', {
+          weapon_template_id: weaponId, lp_cost, weight,
+        });
+        showMonsterLootMappingEditor(templateId);
+      } catch (e) { alert('Error: ' + e.message); }
+    });
+
+  } catch (e) {
+    container.innerHTML = `<p class="error">Error loading loot mappings: ${e.message}</p>`;
   }
 }
 
