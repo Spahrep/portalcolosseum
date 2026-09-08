@@ -30,18 +30,7 @@ let supabase;
  * Edge Function which sets HttpOnly cookies, keeping them safe from XSS.
  */
 function initSupabase() {
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      flowType: 'pkce',
-      detectSessionInUrl: true,
-      storage: {
-        // localStorage: persists across tabs/windows (needed for email-link PKCE flow)
-        getItem: (key) => localStorage.getItem(key),
-        setItem: (key, value) => localStorage.setItem(key, value),
-        removeItem: (key) => localStorage.removeItem(key)
-      }
-    }
-  });
+  supabase = supabaseClient();
 }
 
 /**

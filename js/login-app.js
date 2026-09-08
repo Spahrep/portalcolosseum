@@ -16,34 +16,16 @@ import { supabaseClient } from '../js/utils.js';
 let supabase;
 
 /**
- * Initialize the Supabase client.
- * Creates a Supabase client instance that provides access to auth, database, etc.
- * After initialization, check if user has an existing session.
- *
- * Security: We use a storage adapter backed by localStorage.
- * For the password reset flow, this is REQUIRED — when resetPasswordForEmail
- * is called on the login page, Supabase stores the PKCE code_verifier in
- * localStorage. The user then clicks the email link (opening a new browser
- * context), and the reset-password page needs to read that same verifier.
- * sessionStorage would be lost since the email link opens in a new context.
- *
- * Session tokens (refresh_token) are stored in HttpOnly cookies via /api/session
- * Edge Function, so they're not exposed to XSS in localStorage.
+ * Initialize the Supabase client via the shared singleton.
+ * Delegates to supabaseClient() in ../js/utils.js which encapsulates
+ * the PKCE + localStorage setup and singleton behavior.
  */
 function initSupabase() {
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      flowType: 'pkce',
-      detectSessionInUrl: true,
-      storage: {
-        getItem: (key) => localStorage.getItem(key),
-        setItem: (key, value) => localStorage.setItem(key, value),
-        removeItem: (key) => localStorage.removeItem(key)
-      }
-    }
-  });
-  // Check if already logged in (e.g., refresh from previous session)
-  checkExistingSession();
+  supabase = supabaseClient();
+  if (supabase) {
+    // Check if already logged in (e.g., refresh from previous session)
+    checkExistingSession();
+  }
 }
 
 /**
