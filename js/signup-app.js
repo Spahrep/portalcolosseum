@@ -26,32 +26,15 @@ let supabase;
 // Invite verification moved off Vercel (/api/invite-verify) onto Supabase
 // Edge Functions. The URL is derived from the runtime-injected SUPABASE_URL
 // rather than hardcoded, so the project ref never appears in source.
-const INVITE_VERIFY_URL = `${(SUPABASE_URL || '').replace(/\/+$/, '')}/functions/v1/invite-verify`;
+const INVITE_VERIFY_URL = `${(SUPABASE_URL || '').replace(/\\/+$/, '')}/functions/v1/invite-verify`;
 
 // Store the validated invite key in session scope (not localStorage — too short
 // lived to be an XSS target, and sessionStorage is cleared on tab close)
 let inviteKey = null;
 
 function initSupabase() {
-  // Security: Use localStorage-backed PKCE storage so the code_verifier
-  // persists across the OAuth redirect (provider → signup page).
-  // The OAuth flow opens a new browser context, so an in-memory or
-  // sessionStorage adapter would lose the verifier. localStorage survives
-  // across tabs of the same origin, matching login-app.js and reset-password-app.js.
-  //
-  // Refresh tokens are NOT stored here — they go through the /api/session
-  // Edge Function which sets HttpOnly cookies, keeping them safe from XSS.
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      flowType: 'pkce',
-      detectSessionInUrl: true,
-      storage: {
-        getItem: (key) => localStorage.getItem(key),
-        setItem: (key, value) => localStorage.setItem(key, value),
-        removeItem: (key) => localStorage.removeItem(key)
-      }
-    }
-  });
+  // Delegate to shared singleton in ../js/utils.js (PKCE + localStorage storage adapter)
+  supabase = supabaseClient();
 }
 
 /**
