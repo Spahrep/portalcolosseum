@@ -439,10 +439,10 @@ async function handle(request, method) {
       return json({ success: true });
     }
 
-    // ---- Portal Loot Mappings ----
+    // ---- Portal Loot Mappings (FK to weapon_template) ----
     if (method === 'GET' && id && subResource === 'loot') {
       const { data, error } = await admin.from('portal_loot_mapping')
-        .select('id, portal_template_id, item_name, lp_cost, weight, created_at')
+        .select('id, portal_template_id, weapon_template_id, lp_cost, weight, created_at, weapon_template:weapon_template!portal_loot_mapping_weapon_template_id_fkey(name)')
         .eq('portal_template_id', id).order('weight', { ascending: false });
       if (error) return json({ error: error.message }, 500);
       return json({ data });
@@ -450,10 +450,10 @@ async function handle(request, method) {
     if (method === 'POST' && id && subResource === 'loot') {
       const body = await getBody(request);
       if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const { item_name, lp_cost, weight } = body;
-      if (!item_name || lp_cost === undefined) return json({ error: 'item_name and lp_cost required' }, 400);
+      const { weapon_template_id, lp_cost, weight } = body;
+      if (!weapon_template_id || lp_cost === undefined) return json({ error: 'weapon_template_id and lp_cost required' }, 400);
       const { data, error } = await admin.from('portal_loot_mapping').insert({
-        portal_template_id: id, item_name, lp_cost, weight: weight || 1.0,
+        portal_template_id: id, weapon_template_id, lp_cost, weight: weight || 1.0,
       }).select().single();
       if (error) return json({ error: error.message }, 400);
       return json({ data }, 201);

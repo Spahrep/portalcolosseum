@@ -958,26 +958,28 @@ async function showPortalLootMappingEditor(templateId) {
   container.innerHTML = '<p>Loading loot mappings...</p>';
 
   try {
-    const [templateRes, lootRes] = await Promise.all([
+    const [templateRes, lootRes, weaponRes] = await Promise.all([
       apiCall(`/api/admin/portal-templates/${templateId}`),
       apiCall(`/api/admin/portal-templates/${templateId}/loot`),
+      apiCall('/api/admin/weapon-templates'),
     ]);
     const template = templateRes.data;
     const mappings = lootRes.data || [];
+    const allWeapons = weaponRes.data || [];
 
     let html = `
       <div class="form-card mapping-editor">
         <h3>Loot Mappings — ${esc(template.name)}</h3>
         <p class="muted">Tier ${template.tier} · Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}</p>
         <table>
-          <thead><tr><th>Item Name</th><th>LP Cost</th><th>Weight</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Weapon Template</th><th>LP Cost</th><th>Weight</th><th>Actions</th></tr></thead>
           <tbody>
     `;
 
     mappings.forEach(m => {
       html += `
         <tr>
-          <td>${esc(m.item_name)}</td>
+          <td>${esc(m.weapon_template?.name || 'Unknown')}</td>
           <td><input type="number" value="${m.lp_cost}" data-mapping-id="${m.id}" class="cost-input"></td>
           <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
           <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
@@ -987,10 +989,15 @@ async function showPortalLootMappingEditor(templateId) {
     if (mappings.length === 0) html += '<tr><td colspan="4" class="muted">No loot items assigned to this portal</td></tr>';
     html += `</tbody></table>`;
 
-    // Add loot form — text input since there's no item table
+    // Add weapon picker — show weapons NOT already in this portal's loot
+    const usedIds = mappings.map(m => m.weapon_template_id);
+    const available = allWeapons.filter(w => !usedIds.includes(w.id));
     html += `
       <div class="add-attack-row">
-        <input type="text" id="pt-add-item-name" placeholder="Item Name">
+        <select id="pt-add-weapon">
+          <option value="">— Add weapon to loot pool —</option>
+          ${available.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
+        </select>
         <input type="number" id="pt-add-lp-cost" placeholder="LP Cost" value="10">
         <input type="number" id="pt-add-loot-weight" placeholder="Weight" step="0.1" value="1.0">
         <button class="btn" id="pt-add-loot-btn">Add</button>
@@ -1041,13 +1048,13 @@ async function showPortalLootMappingEditor(templateId) {
 
     // Add handler
     document.getElementById('pt-add-loot-btn').addEventListener('click', async () => {
-      const item_name = document.getElementById('pt-add-item-name').value.trim();
-      if (!item_name) return;
+      const weaponId = parseInt(document.getElementById('pt-add-weapon').value);
+      if (!weaponId) return;
       const lp_cost = parseInt(document.getElementById('pt-add-lp-cost').value);
       const weight = parseFloat(document.getElementById('pt-add-loot-weight').value);
       try {
         await apiCall(`/api/admin/portal-templates/${templateId}/loot`, 'POST', {
-          item_name, lp_cost, weight,
+          weapon_template_id: weaponId, lp_cost, weight,
         });
         showPortalLootMappingEditor(templateId);
       } catch (e) { alert('Error: ' + e.message); }
