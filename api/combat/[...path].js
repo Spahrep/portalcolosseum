@@ -363,6 +363,97 @@ export default async function handler(request) {
       return json({ status: newStatus, current_battle: newBattle });
     }
 
+    // GET /api/combat/weapons — caller's owned weapons + template attacks (for gear command)
+    if (path === '/weapons' && method === 'GET') {
+      let instances;
+      try {
+        const res = await admin.from('weapon_instance')
+          .select('id, damage, template_id, weapon_template:template_id (name)')
+          .eq('user_id', user.id)
+          .order('id');
+        instances = res.data;
+        if (res.error) throw res.error;
+      } catch (e) {
+        console.error('weapons query error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      // join attacks via weapon_template_attack_mapping → attack
+      const weapons = [];
+      for (const inst of (instances || [])) {
+        let attacks = [];
+        try {
+          const mapRes = await admin.from('weapon_template_attack_mapping')
+            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time)')
+            .eq('weapon_template_id', inst.template_id);
+          if (mapRes.data) {
+            attacks = mapRes.data.map(m => m.attack).filter(Boolean);
+          }
+        } catch (e) {
+          console.error('attack mapping error for template', inst.template_id, e);
+        }
+        weapons.push({
+          id: inst.id,
+          name: inst.weapon_template?.name || 'Unknown',
+          damage: inst.damage,
+          attacks: attacks.map(a => ({
+            id: a.id,
+            name: a.name,
+            is_multi_target: !!a.is_multi_target,
+            prepare_time: a.prepare_time || 3,
+            cooldown_time: a.cooldown_time || 2
+          }))
+        });
+      }
+      return json({ weapons });
+    }
+
+    // POST /api/combat/dev/grant — admin-gated dev helper: create starter weapon_instance for caller
+    if (path === '/dev/grant' && method === 'POST') {
+      // Gate exactly like api/admin routes (profiles.is_admin check)
+      let profile;
+      try {
+        const pRes = await admin.from('profiles').select('is_admin').eq('id', user.id).single();
+        profile = pRes.data;
+        if (pRes.error) throw pRes.error;
+      } catch (e) {
+        console.error('admin profile check error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      if (!profile || !profile.is_admin) {
+        return json({ error: 'Admin access required' }, 403);
+      }
+
+      // pick first existing weapon_template
+      let tmpl;
+      try {
+        const tRes = await admin.from('weapon_template').select('id, name').order('id', { ascending: true }).limit(1).single();
+        tmpl = tRes.data;
+        if (tRes.error || !tmpl) throw tRes.error || new Error('no templates');
+      } catch (e) {
+        console.error('weapon_template query error', e);
+        return json({ error: 'No weapon templates found' }, 404);
+      }
+
+      // create weapon_instance with sane deterministic damage (constant 15 as example 12-18 range)
+      const damage = 15;
+      let inst;
+      try {
+        const iRes = await admin.from('weapon_instance').insert({
+          user_id: user.id,
+          template_id: tmpl.id,
+          damage,
+          speed: 6,
+          accuracy: 70
+        }).select('id').single();
+        inst = iRes.data;
+        if (iRes.error) throw iRes.error;
+      } catch (e) {
+        console.error('weapon_instance grant insert error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      return json({ weapon_instance_id: inst.id, template_name: tmpl.name, damage });
+    }
+
     return json({ error: 'Route not found' }, 404);
   } catch (e) {
     // F12: generic error to client, log real server-side
