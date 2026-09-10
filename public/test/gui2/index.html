@@ -395,6 +395,59 @@
       background: #1a3a6e;
       color: #ffcc66;
     }
+
+    /* BATTLE TERMINAL (replaces enemy sprites) */
+    .battle-terminal {
+      background: #0a0f0a;
+      border: 2px solid #334433;
+      height: 190px;
+      display: flex;
+      flex-direction: column;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 10px;
+      color: #88ff88;
+      overflow: hidden;
+      text-align: left;
+      width: 100%;
+    }
+    .terminal-header {
+      background: #112211;
+      color: #aaffaa;
+      padding: 2px 8px;
+      font-size: 9px;
+      border-bottom: 1px solid #334433;
+      flex-shrink: 0;
+      letter-spacing: 0.5px;
+    }
+    .battle-log {
+      flex: 1;
+      padding: 6px 8px;
+      overflow-y: auto;
+      line-height: 1.32;
+      display: flex;
+      flex-direction: column;
+    }
+    .terminal-line {
+      white-space: pre;
+      margin: 1px 0;
+      color: #88ff88;
+    }
+    .terminal-line.dim {
+      color: #557755;
+    }
+    .blink-cursor {
+      display: inline-block;
+      width: 7px;
+      height: 11px;
+      background: #88ff88;
+      vertical-align: bottom;
+      margin-left: 1px;
+      animation: blink 1s step-end infinite;
+    }
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
   </style>
 </head>
 <body>
@@ -444,21 +497,26 @@
     <!-- Arena + Right rail (time menu + dice) -->
     <div class="middle-section">
       <div class="arena">
-        <div class="enemy-sprites">
-          <div class="monster-wrapper" data-target="0" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
-            <div style="font-size:12px; margin-bottom:2px;">A</div>
-            <img src="/public/pictures/enemies/glimmer-attack.jpg" alt="Glimmerling Enemy">
-            <div class="monster-marker" data-target="0" style="font-size:11px; margin-top:4px; cursor:pointer;">[ ]</div>
-          </div>
-          <div class="monster-wrapper" data-target="1" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
-            <div style="font-size:12px; margin-bottom:2px;">B</div>
-            <img src="/pictures/enemies/giantRat1.JPG" alt="Giant Rat Enemy" style="transform: scaleX(-1);">
-            <div class="monster-marker" data-target="1" style="font-size:11px; margin-top:4px; cursor:pointer;">[ ]</div>
-          </div>
-          <div class="monster-wrapper" data-target="2" style="display:flex; flex-direction:column; align-items:center; cursor:pointer;">
-            <div style="font-size:12px; margin-bottom:2px;">C</div>
-            <img src="/public/pictures/enemies/glimmer-sad.png" alt="Glimmerling Enemy" style="width:100px;">
-            <div class="monster-marker" data-target="2" style="font-size:11px; margin-top:4px; cursor:pointer;">[ ]</div>
+        <div class="battle-terminal">
+          <div class="terminal-header">BATTLE FEED — tic 214</div>
+          <div class="battle-log">
+            <div class="terminal-line dim">tic 168 — C Glimmerling AcidShot hits for 11</div>
+            <div class="terminal-line">tic 171 — LH Quick Slash hits A for 16 (A Healthy)</div>
+            <div class="terminal-line">tic 174 — B Giant Rat Bite misses</div>
+            <div class="terminal-line">tic 177 — RH Fireball 1 hits B for 29 (B Injured)</div>
+            <div class="terminal-line dim">tic 180 — A Glimmerling strikes for 8</div>
+            <div class="terminal-line">tic 183 — LH Slash hits C for 21 (C Battered)</div>
+            <div class="terminal-line">tic 186 — RH Ice Bolt 2 hits A for 24</div>
+            <div class="terminal-line dim">tic 189 — B attempts HeavyAttack (blocked)</div>
+            <div class="terminal-line">tic 192 — LH Quick Slash hits B for 19</div>
+            <div class="terminal-line">tic 195 — C Glimmerling status: Battered</div>
+            <div class="terminal-line dim">tic 198 — A Glimmerling Bite hits for 6</div>
+            <div class="terminal-line">tic 201 — RH Fireball 1 hits C for 31</div>
+            <div class="terminal-line">tic 204 — LH Slash hits A for 18 (A Healthy)</div>
+            <div class="terminal-line dim">tic 207 — B Giant Rat misses</div>
+            <div class="terminal-line">tic 210 — RH Ice Bolt 2 hits B for 22</div>
+            <div class="terminal-line">tic 213 — LH Quick Slash hits B for 14</div>
+            <div class="terminal-line">tic 214 — RH Slash hits B for 18<span class="blink-cursor"></span></div>
           </div>
         </div>
       </div>
@@ -515,7 +573,6 @@
 
         <div class="dice-tray">
           <div class="rail-header">DICE</div>
-
           <div class="dice-group-label">REMAINING (8)</div>
           <div class="dice-row">
             <div class="die green">G</div>
@@ -527,13 +584,11 @@
             <div class="die red">R</div>
             <div class="die red">R</div>
           </div>
-
           <div class="dice-group-label">USED (2)</div>
           <div class="dice-row">
             <div class="die green used">G <span class="rolled">15</span></div>
             <div class="die yellow used">Y <span class="rolled">20</span></div>
           </div>
-
           <div class="dice-legend">
             <span class="g">GREEN 10·10·10·15·15·20</span><br>
             <span class="y">YELLOW 10·15·15·15·20·25</span><br>
