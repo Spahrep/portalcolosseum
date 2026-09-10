@@ -58,6 +58,21 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - **Anti-soft-lock**: portals stay farmable forever after unlock — a player must always have at least one portal they can profitably clear. God-runs are a gift, not a trap.
 - PMVP crafting/enchanting makes low portals a permanent harvest ground
 
+## Battle Status UI (documented in battle-status-ui.md) — NEW 2026-09-08
+
+- Replaces the gui1 tic-track bar with a **single vertical action-queue column** (right side)
+- Every pending event is a row: `Label | EventName | TicsUntil`, sorted by tics, next event on top
+- **Every row = countdown to a state change** — attack landing, hand freeing, buff expiry
+- Hand rows **morph**: attack lands → same row relabels to `Ready|cd` → re-sorts. One row per hand always
+- Monster rows don't morph: damage applies, next attack in cycle spawns as a new row (repetition visible)
+- Pre/cooldown profiles can be any mix (short pre + long cd, etc.) — sorting handles all of them
+- **Ties resolve player-first**, always (no same-tic mutual kills); death-cancels-in-flight = PMVP
+- **Browse → Commit flow**: browsing an attack shows a preview band in a lane left of the queue (cast range + hand-free range, real rows inside tint gold); committing ROLLS the values — committed rows are permanent numbers, never ranges
+- **Monster HP = words only** (Healthy/Injured/Battered/Critical, 25% bands of rolled max) — never exact numbers; kill timing stays a genuine gamble
+- Row cap ~10 with `+3 more`; top 3 rows visually dominant
+- **PMVP kill telegraph** ("glowing sword of death", far-future idea — not in planning): blue pulse = can kill on max roll, steady blue = guaranteed kill; client-side only
+- Command boxes = "what I can do" (name + damage only, no timers); footer = one tic-stamped last-event line
+
 ## Encounter System (documented in encounter-system.md)
 
 - Zombie-dice style system for generating portal run battles
@@ -70,14 +85,22 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Max 5 monsters per battle; 5th monster absorbs remaining points
 - Battles are **groups of monsters**, not single encounters — multi-enemy attacks (Cleave, Whirlwind) become core
 
-## Portal Runs (documented in portal-runs.md) — UPDATED 2026-09-08
+## Monster Stats (documented in combat-system.md + battle-status-ui.md) — NEW 2026-09-08
 
-- 5 encounters per run
+- Each monster has a base MaxHP **and a maxHP delta**, rolled per instance; the rolled max is **secret** (player knows species base at best, never the instance)
+- **MaxHP delta = EVEN (uniform) distribution, not bell curve** (Spahrep 2026-09-08) — every value equally likely, so the secret max stays unpredictable with play
+- Other monster stat rolls (damage, etc.): distribution TBD per stat
+- **SCHEMA (2026-09-10):** `monster_template.base_hp` + `monster_template.max_hp_delta`; `monster_instance.max_hp` (rolled). `generate_monster()` still rolls HP via Box-Muller `normal_int()` — MUST be switched to a uniform roll before the engine uses it.
+
+## Portal Runs (documented in portal-runs.md) — UPDATED 2026-09-10
+
+- **X fights per run** — configured on portal_template (`.fights`, default 5); not hardcoded. Portal 1 = 5 via config (Spahrep 2026-09-10)
 - Option to stop after each fight and keep a reduced % of loot (exact % TBD)
 - Full clear = keep all loot
 - **Death = kicked out, prize pool forfeited; brought items never lost**
 - **No inventory access between fights** — 5-item loadout (Hand L/R, Belt Loop, Potion A/B) locked at entry
 - Entry costs: X AP + Y gold, deeper portals cost more (P2 = 4×Y example)
+- **SCHEMA (2026-09-10):** `portal_run` table created — loadout FKs (hand_l/r_weapon_id, belt_weapon_id, consume_a/b_id), current_battle, total_battles, player_hp, battle_state jsonb. Consume A/B currently FK to weapon_instance as PLACEHOLDER until consumable tables exist (consumables skipped for now).
 
 ## Loot & Prize Pool (documented in loot-prize-pool.md)
 

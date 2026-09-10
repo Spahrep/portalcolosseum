@@ -20,6 +20,18 @@ All combat outcomes incorporate variance:
 - Individual attack variance on top of base ranges
 - Monster stats and behavior include randomness
 
+## Monster Stats
+
+- Each monster has a **base MaxHP and a maxHP delta**, rolled per instance (see
+  `battle-status-ui.md` — the rolled max is secret; the player knows the species base
+  at best, never the instance value).
+- **The maxHP delta is rolled with an EVEN (uniform) distribution**, not a bell curve
+  (Spahrep 2026-09-08). Every value in the delta range is equally likely — a blue slime
+  with 90 HP is just as likely as one with 110 HP. This keeps the HP secret genuinely
+  unpredictable: the uncertainty doesn't erode with play the way a bell curve's
+  mean-clustering would.
+- Other monster stat rolls (damage, etc.) are not yet specified — distribution TBD per stat.
+
 ## Encounters Are Groups (1–5 Monsters)
 
 Battles in portal runs are **groups of monsters**, not single encounters. The number and composition of each group is determined by the zombie-dice encounter system (see `encounter-system.md`). A single combat may involve 1 to 5 monsters simultaneously.

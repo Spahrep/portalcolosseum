@@ -1,10 +1,10 @@
 # Portal Runs
 
-**Updated:** 2026-09-08 — portal tiers as power tiers, entry costs, anti-soft-lock, death rules clarified
+**Updated:** 2026-09-10 — X fights per run via config (portal_template.fights, default 5)
 
 ## MVP Structure
 
-- Each portal run consists of **5 combats**
+- Each portal run consists of **X combats** — the count lives on `portal_template.fights` (config, default 5). Portal 1 = 5 via config, not hardcoded (Spahrep 2026-09-10).
 - After each combat the player chooses: **Continue** or **Stop**
 - Loot received after each fight is added to a **prize pool**
 - **Finishing the run** awards the full prize pool
