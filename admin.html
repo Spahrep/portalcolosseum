@@ -46,8 +46,8 @@
     input:focus, select:focus, textarea:focus { border-color: #ff6b3b; outline: none; }
     input[type="checkbox"] { width: auto; }
     .mapping-slot { margin: 15px 0; padding: 15px; background: #152050; border: 1px solid #2a3a6e; border-radius: 5px; }
-    .add-attack-row { display: flex; gap: 10px; margin-top: 10px; align-items: center; }
-    .add-attack-row select { flex: 1; }
+    .add-attack-row select, .add-mapping-row select { min-width: 240px; }
+    .add-attack-row input[type="number"], .add-mapping-row input[type="number"] { min-width: 70px; }
     .hidden { display: none; }
     .muted { color: #888; font-size: 12px; }
     .error { color: #ff4444; }

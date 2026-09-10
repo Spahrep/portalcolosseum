@@ -445,19 +445,21 @@ async function showWeaponMappingEditor(templateId) {
         `;
       });
       if (bySlot[slot].length === 0) html += '<tr><td colspan="5" class="muted">No attacks assigned to this slot</td></tr>';
-      html += `</tbody></table>`;
-
       // Add attack picker — show attacks NOT already in this slot
       const usedIds = bySlot[slot].map(m => m.attack_id);
       const available = allAttacks.filter(a => !usedIds.includes(a.id));
       html += `
-        <div class="add-attack-row">
-          <select id="add-attack-slot-${slot}">
-            <option value="">— Add attack to Slot ${slot} —</option>
-            ${available.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}
-          </select>
-          <button class="btn" data-add-to-slot="${slot}">Add</button>
-        </div>
+        <tr class="add-attack-row">
+          <td>
+            <select id="add-attack-slot-${slot}">
+              <option value="">— Add attack to Slot ${slot} —</option>
+              ${available.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}
+            </select>
+          </td>
+          <td></td>
+          <td><button class="btn" data-add-to-slot="${slot}">Add</button></td>
+        </tr>
+        </tbody></table>
         </div>
       `;
     }
@@ -675,18 +677,21 @@ async function showMonsterMappingEditor(templateId) {
         `;
       });
       if (bySlot[slot].length === 0) html += '<tr><td colspan="5" class="muted">No attacks assigned to this slot</td></tr>';
-      html += `</tbody></table>`;
-
+      // Add attack picker — show attacks NOT already in this slot
       const usedIds = bySlot[slot].map(m => m.attack_id);
       const available = allAttacks.filter(a => !usedIds.includes(a.id));
       html += `
-        <div class="add-attack-row">
-          <select id="mt-add-attack-slot-${slot}">
-            <option value="">— Add attack to Slot ${slot} —</option>
-            ${available.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}
-          </select>
-          <button class="btn" data-add-to-slot="${slot}">Add</button>
-        </div>
+        <tr class="add-attack-row">
+          <td>
+            <select id="mt-add-attack-slot-${slot}">
+              <option value="">— Add attack to Slot ${slot} —</option>
+              ${available.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}
+            </select>
+          </td>
+          <td></td>
+          <td><button class="btn" data-add-to-slot="${slot}">Add</button></td>
+        </tr>
+        </tbody></table>
         </div>
       `;
     }
@@ -774,20 +779,22 @@ async function showMonsterLootMappingEditor(templateId) {
       `;
     });
     if (mappings.length === 0) html += '<tr><td colspan="4" class="muted">No loot items assigned to this monster</td></tr>';
-    html += `</tbody></table>`;
-
+    // Add weapon picker — show weapons NOT already in this monster's loot pool
     const usedIds = mappings.map(m => m.weapon_template_id);
     const available = allWeapons.filter(w => !usedIds.includes(w.id));
     html += `
-      <div class="add-attack-row">
-        <select id="mt-add-weapon">
-          <option value="">— Add weapon to monster loot pool —</option>
-          ${available.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
-        </select>
-        <input type="number" id="mt-add-lp-cost" placeholder="LP Cost" value="10">
-        <input type="number" id="mt-add-loot-weight" placeholder="Weight" step="0.1" value="1.0">
-        <button class="btn" id="mt-add-loot-btn">Add</button>
-      </div>
+      <tr class="add-attack-row">
+        <td>
+          <select id="mt-add-weapon">
+            <option value="">— Add weapon to monster loot pool —</option>
+            ${available.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
+          </select>
+        </td>
+        <td><input type="number" id="mt-add-lp-cost" placeholder="LP Cost" value="10"></td>
+        <td><input type="number" id="mt-add-loot-weight" placeholder="Weight" step="0.1" value="1.0"></td>
+        <td><button class="btn" id="mt-add-loot-btn">Add</button></td>
+      </tr>
+      </tbody></table>
       <button class="btn btn-secondary" id="mt-close-loot-btn">Close</button>
     </div>
     `;
@@ -1110,21 +1117,22 @@ async function showPortalLootMappingEditor(templateId) {
       `;
     });
     if (mappings.length === 0) html += '<tr><td colspan="4" class="muted">No loot items assigned to this portal</td></tr>';
-    html += `</tbody></table>`;
-
     // Add weapon picker — show weapons NOT already in this portal's loot
     const usedIds = mappings.map(m => m.weapon_template_id);
     const available = allWeapons.filter(w => !usedIds.includes(w.id));
     html += `
-      <div class="add-attack-row">
-        <select id="pt-add-weapon">
-          <option value="">— Add weapon to loot pool —</option>
-          ${available.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
-        </select>
-        <input type="number" id="pt-add-lp-cost" placeholder="LP Cost" value="10">
-        <input type="number" id="pt-add-loot-weight" placeholder="Weight" step="0.1" value="1.0">
-        <button class="btn" id="pt-add-loot-btn">Add</button>
-      </div>
+      <tr class="add-attack-row">
+        <td>
+          <select id="pt-add-weapon">
+            <option value="">— Add weapon to loot pool —</option>
+            ${available.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
+          </select>
+        </td>
+        <td><input type="number" id="pt-add-lp-cost" placeholder="LP Cost" value="10"></td>
+        <td><input type="number" id="pt-add-loot-weight" placeholder="Weight" step="0.1" value="1.0"></td>
+        <td><button class="btn" id="pt-add-loot-btn">Add</button></td>
+      </tr>
+      </tbody></table>
       <button class="btn btn-secondary" id="pt-close-loot-btn">Close</button>
     </div>
     `;
