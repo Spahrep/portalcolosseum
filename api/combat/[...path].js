@@ -906,7 +906,7 @@ async function handle(request) {
         }
       }
 
-      // 5. POST /dev/set-hp
+      // 6. POST /dev/set-hp
       if (path === '/dev/set-hp') {
         const body = await request.json().catch(() => ({}));
         const target = body.target;
@@ -935,7 +935,7 @@ async function handle(request) {
         }
       }
 
-      // 6. POST /dev/win-battle
+      // 7. POST /dev/win-battle
       if (path === '/dev/win-battle') {
         const run = await findActiveRun(user.id);
         if (!run) return json({ error: 'start a run first' }, 400);
@@ -951,7 +951,7 @@ async function handle(request) {
         return json({ monsters_dead: true });
       }
 
-      // 7. POST /dev/kill-player
+      // 8. POST /dev/kill-player
       if (path === '/dev/kill-player') {
         const run = await findActiveRun(user.id);
         if (!run) return json({ error: 'start a run first' }, 400);

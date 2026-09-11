@@ -224,7 +224,7 @@ async function cmdHelp() {
     appendLines([
       '',
       'Dev tools (slash commands):',
-      '  /equip [LH|RH|belt]            — random weapon into slot (overwrites, old displaced)',
+      '  /equip [LH|RH|belt] [#N]       — equip instance #N (from inventory) or random into slot',
       '  /roll weapon <id> [LH|RH|belt] — spawn a specific weapon template',
       '  /roll monster <id>             — spawn a specific monster template (adds to battle)',
       '  /del monster <label|id>        — remove a monster from the battle',
@@ -570,6 +570,21 @@ async function cmdDevEquip(args) {
   if (!currentRunId) { printError('no run — use run new first'); return; }
   let slot = args[0] ? args[0].toUpperCase() : null;
   if (slot && !['LH','RH','belt'].includes(slot)) slot = null;
+  const instArg = args[1];
+  if (instArg) {
+    let n = instArg.startsWith('#') ? instArg.slice(1) : instArg;
+    const instance_id = parseInt(n, 10);
+    if (isNaN(instance_id) || instance_id <= 0) { printError('usage: /equip [LH|RH|belt] [#N]'); return; }
+    const body = { instance_id, slot: slot || undefined };
+    try {
+      const data = await apiCall('POST', '/dev/equip-instance', body);
+      const w = data.weapon;
+      let msg = `${data.slot} → ${w.template_name} (dmg ${w.damage}, #${w.instance_id})`;
+      if (data.displaced) msg += ` (displaced ${data.displaced.template_name} → inventory)`;
+      printGreen(msg);
+    } catch (e) { printError('equip: ' + e.message); }
+    return;
+  }
   const body = slot ? { slot } : {};
   try {
     const data = await apiCall('POST', '/dev/equip', body);
