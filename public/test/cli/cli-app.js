@@ -466,7 +466,7 @@ async function cmdDevRoll(args) {
     try {
       const data = await apiCall('POST', '/dev/roll-monster', { template_id });
       const m = data.monster;
-      printGreen(`monster ${m.label} hp ${m.current_hp}/${m.max_hp} dmg ${m.damage} spd ${m.speed} acc ${m.accuracy}`);
+      printGreen(`monster ${m.label} hp ${m.current_hp ?? m.max_hp}/${m.max_hp} dmg ${m.damage} spd ${m.speed} acc ${m.accuracy}`);
     } catch (e) {
       printError('roll: ' + e.message);
     }
