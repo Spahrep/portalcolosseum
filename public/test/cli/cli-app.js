@@ -46,16 +46,16 @@ function printDim(msg) {
 async function initAuth() {
   authStatusEl.textContent = 'checking auth…';
   try {
-    // env.js sets window.__ENV
-    const env = window.__ENV || {};
+    // env.js sets window.ENV
+    const env = window.ENV || {};
     const SUPABASE_URL = env.SUPABASE_URL;
     const SUPABASE_ANON_KEY = env.SUPABASE_ANON_KEY;
     if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       throw new Error('Missing Supabase env');
     }
 
-    // dynamic import Supabase (CSP safe, external)
-    const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/+esm');
+    // dynamic import Supabase (esm.sh — matches the rest of the codebase and the CSP allowlist)
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.112.4');
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { persistSession: true, storageKey: 'sb-portalcolosseum-cli' }
     });
