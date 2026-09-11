@@ -10,15 +10,18 @@ Working rules for AI agents in this repo (Hermes, Grok workers, Claude Code, and
   Delegate them.
 - Hermes edits directly ONLY for mechanical patches (small insertions,
   pattern-following edits, sed-style replacements, config tweaks).
-- Claude Sonnet stays reserved for security reviews only (one pass per trigger).
+- Claude Sonnet is reserved for security reviews ONLY when Spahrep explicitly
+  requests one (Claude credits are precious — batch into one big review later,
+  no per-delta passes).
 
 ## Kanban workflow (video-style development)
 - Hermes = producer/overseer: creates the kanban of tasks, oversees progress,
   verifies results. Hermes writes no code/schema EXCEPT mechanical UI/CRUD
   edits, which Hermes does directly (Spahrep 2026-09-10).
 - Grok (via delegate_task) = the builder: implements logic-heavy code and schema.
-- Claude Sonnet = security reviewer: any code touching auth/RLS/secrets/security
-  gets one Claude security-review pass before merge (one pass per trigger).
+- Claude Sonnet = security reviewer ON REQUEST ONLY (Spahrep 2026-09-10):
+  no automatic per-delta review passes — batch code up and run one big review
+  when Spahrep asks for it.
 - Spahrep = the director: sets goals, decides direction.
 - Approval policy (Spahrep 2026-09-10): on-script work — anything Spahrep asked
   for — commits and applies WITHOUT approval; ship it and report. Approval is
