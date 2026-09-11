@@ -824,7 +824,7 @@ async function handle(request) {
         // ownership check (fail-closed, mirror PC-21 R7/F7)
         let inst;
         try {
-          const iRes = await admin.from('weapon_instance').select('id, damage, template_id, weapon_template:template_id(name)').eq('id', instance_id).eq('user_id', user.id).single();
+          const iRes = await admin.from('weapon_instance').select('id, damage, template_id, weapon_template:template_id (name)').eq('id', instance_id).eq('user_id', user.id).single();
           inst = iRes.data;
           if (iRes.error) throw iRes.error;
         } catch (e) {
@@ -840,7 +840,7 @@ async function handle(request) {
         let displaced = null;
         if (oldId && oldId !== instance_id) {
           try {
-            const { data: oldInst } = await admin.from('weapon_instance').select('id, template_id, weapon_template:template_id(name)').eq('id', oldId).single();
+            const { data: oldInst } = await admin.from('weapon_instance').select('id, template_id, weapon_template:template_id (name)').eq('id', oldId).single();
             if (oldInst) displaced = { instance_id: oldInst.id, template_name: oldInst.weapon_template?.name || 'Unknown' };
           } catch (_) {}
         }
