@@ -47,3 +47,6 @@ email_integration.py
 
 # Hermes kanban worktrees
 .worktrees/
+
+# Hermes plan/brief scratch (not project code)
+.hermes/

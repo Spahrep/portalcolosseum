@@ -541,38 +541,296 @@ async function handle(request) {
         return json({ error: 'Admin access required' }, 403);
       }
 
-      // pick first existing weapon_template
+      // Rev2: dev-mode unlock only — no weapon creation
+      return json({ dev_mode: true });
+    }
+
+    // === Shared dev helpers (Rev2) ===
+    async function findActiveRun(userId) {
+      try {
+        const { data: run } = await admin.from('portal_run').select('*').eq('user_id', userId).eq('status', 'active').order('created_at', { ascending: false }).limit(1).single();
+        return run || null;
+      } catch (_) {
+        return null;
+      }
+    }
+
+    async function createAndEquipWeapon(adminClient, userId, run, templateId, slot = 'LH') {
+      // template lookup
       let tmpl;
       try {
-        const tRes = await admin.from('weapon_template').select('id, name, slot_0_attack_id').order('id', { ascending: true }).limit(1).single();
+        const tRes = await adminClient.from('weapon_template').select('id, name, slot_0_attack_id').eq('id', templateId).single();
         tmpl = tRes.data;
-        if (tRes.error || !tmpl) throw tRes.error || new Error('no templates');
+        if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
       } catch (e) {
-        console.error('weapon_template query error', e);
-        return json({ error: 'No weapon templates found' }, 404);
+        return { error: 'weapon template not found', status: 404 };
       }
-
-      // create weapon_instance with sane deterministic damage (constant 15 as example 12-18 range)
-      // slot_0_attack_id is NOT NULL (no default) since migration 20260905040000 —
-      // materialize the template's slot-0 attack on the instance, like weapon generation does.
-      const damage = 15;
+      // insert weapon_instance — byte-for-byte grant pattern (slot_0_attack_id NOT NULL)
       let inst;
       try {
-        const iRes = await admin.from('weapon_instance').insert({
-          user_id: user.id,
+        const iRes = await adminClient.from('weapon_instance').insert({
+          user_id: userId,
           template_id: tmpl.id,
           slot_0_attack_id: tmpl.slot_0_attack_id,
-          damage,
+          damage: 15,
           speed: 6,
           accuracy: 70
         }).select('id').single();
         inst = iRes.data;
         if (iRes.error) throw iRes.error;
       } catch (e) {
-        console.error('weapon_instance grant insert error', e);
+        console.error('weapon_instance insert error', e);
+        return { error: 'Internal server error', status: 500 };
+      }
+      // map slot to column
+      const col = slot === 'RH' ? 'hand_r_weapon_id' : slot === 'belt' ? 'belt_weapon_id' : 'hand_l_weapon_id';
+      // displaced
+      const oldId = run[col];
+      let displaced = null;
+      if (oldId) {
+        try {
+          const { data: oldInst } = await adminClient.from('weapon_instance').select('id, template_id, weapon_template:template_id(name)').eq('id', oldId).single();
+          if (oldInst) displaced = { instance_id: oldInst.id, template_name: oldInst.weapon_template?.name || 'Unknown' };
+        } catch (_) {}
+      }
+      // update run pointer
+      try {
+        await adminClient.from('portal_run').update({ [col]: inst.id }).eq('id', run.id).eq('user_id', userId);
+      } catch (e) {
+        console.error('run weapon pointer update error', e);
+        return { error: 'Internal server error', status: 500 };
+      }
+      return {
+        slot,
+        weapon: { instance_id: inst.id, template_name: tmpl.name, damage: 15 },
+        displaced
+      };
+    }
+
+    async function rebuildBattleState(run, monsters, playerHp) {
+      const participants = {
+        loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id },
+        monsters
+      };
+      const freshEngine = createEngine();
+      freshEngine.startBattle(participants, null, playerHp);
+      const newState = freshEngine.state;
+      // persist
+      try {
+        await admin.from('portal_run').update({ battle_state: newState, player_hp: playerHp }).eq('id', run.id).eq('user_id', run.user_id);
+      } catch (e) {
+        console.error('rebuildBattleState persist error', e);
+        throw e;
+      }
+      return newState;
+    }
+
+    async function generateOneMonster(templateId, usedLabels) {
+      let tmpl;
+      try {
+        const tRes = await admin.from('monster_template').select('id').eq('id', templateId).single();
+        tmpl = tRes.data;
+        if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
+      } catch (e) {
+        return { error: 'monster template not found', status: 404 };
+      }
+      let gen;
+      try {
+        const { data } = await admin.rpc('generate_monster', { p_template_id: templateId });
+        gen = data;
+        if (!gen) throw new Error('rpc null');
+      } catch (e) {
+        console.error('generate_monster rpc error', e);
+        return { error: 'Internal server error', status: 500 };
+      }
+      // next free A-Z label
+      const used = new Set(usedLabels || []);
+      let label = null;
+      for (let i = 0; i < 26; i++) {
+        const cand = `Monster ${String.fromCharCode(65 + i)}`;
+        if (!used.has(cand)) { label = cand; break; }
+      }
+      if (!label) label = `Monster #${gen.id || templateId}`;
+      return { ...gen, label };
+    }
+
+    // === New dev routes (all POST, admin-gated) ===
+    const isDevPath = (p) => p.startsWith('/dev/');
+
+    if (isDevPath(path) && method === 'POST') {
+      // admin gate (reuse grant pattern)
+      let profile;
+      try {
+        const pRes = await admin.from('profiles').select('is_admin').eq('id', user.id).single();
+        profile = pRes.data;
+        if (pRes.error) throw pRes.error;
+      } catch (e) {
+        console.error('admin profile check error', e);
         return json({ error: 'Internal server error' }, 500);
       }
-      return json({ weapon_instance_id: inst.id, template_name: tmpl.name, damage });
+      if (!profile || !profile.is_admin) {
+        return json({ error: 'Admin access required' }, 403);
+      }
+
+      // 1. POST /dev/equip
+      if (path === '/dev/equip') {
+        const body = await request.json().catch(() => ({}));
+        let slot = body.slot;
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        // default slot: first empty LH->RH->belt else LH
+        if (!slot) {
+          if (!run.hand_l_weapon_id) slot = 'LH';
+          else if (!run.hand_r_weapon_id) slot = 'RH';
+          else if (!run.belt_weapon_id) slot = 'belt';
+          else slot = 'LH';
+        }
+        if (!['LH','RH','belt'].includes(slot)) slot = 'LH';
+        // random template
+        let templates;
+        try {
+          const tRes = await admin.from('weapon_template').select('id, name, slot_0_attack_id');
+          templates = tRes.data || [];
+        } catch (_) { templates = []; }
+        if (!templates.length) return json({ error: 'no weapon templates' }, 404);
+        const pick = templates[Math.floor(Math.random() * templates.length)];
+        const res = await createAndEquipWeapon(admin, user.id, run, pick.id, slot);
+        if (res.error) return json({ error: res.error }, res.status || 400);
+        return json(res);
+      }
+
+      // 2. POST /dev/roll-weapon
+      if (path === '/dev/roll-weapon') {
+        const body = await request.json().catch(() => ({}));
+        const templateId = parseInt(body.template_id, 10);
+        let slot = body.slot || 'LH';
+        if (isNaN(templateId) || templateId <= 0) return json({ error: 'Invalid template_id' }, 400);
+        if (!['LH','RH','belt'].includes(slot)) slot = 'LH';
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        const res = await createAndEquipWeapon(admin, user.id, run, templateId, slot);
+        if (res.error) return json({ error: res.error }, res.status || 400);
+        return json(res);
+      }
+
+      // 3. POST /dev/roll-monster
+      if (path === '/dev/roll-monster') {
+        const body = await request.json().catch(() => ({}));
+        const templateId = parseInt(body.template_id, 10);
+        if (isNaN(templateId) || templateId <= 0) return json({ error: 'Invalid template_id' }, 400);
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        if (!run.battle_state || Object.keys(run.battle_state).length === 0) return json({ error: 'start a battle first' }, 400);
+        const live = (run.battle_state.monsters || []).filter(m => (m.current_hp || 0) > 0);
+        const usedLabels = live.map(m => m.label);
+        const m = await generateOneMonster(templateId, usedLabels);
+        if (m.error) return json({ error: m.error }, m.status || 400);
+        const eng = resumeEngine(run.battle_state, Math.random);
+        const playerHp = eng && eng.state.player ? eng.state.player.hp : run.player_hp;
+        try {
+          const s = await rebuildBattleState(run, [...live, m], playerHp);
+          return json({ monster: m, battle_state: s });
+        } catch (_) {
+          return json({ error: 'Internal server error' }, 500);
+        }
+      }
+
+      // 4. POST /dev/del-monster
+      if (path === '/dev/del-monster') {
+        const body = await request.json().catch(() => ({}));
+        const target = (body.target || '').trim();
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        if (!run.battle_state) return json({ error: 'no battle state' }, 400);
+        const live = run.battle_state.monsters || [];
+        let foundIdx = -1;
+        let removed = null;
+        for (let i = 0; i < live.length; i++) {
+          const m = live[i];
+          if (m.label === target || m.label === `Monster ${target}` || String(m.id) === target) {
+            foundIdx = i; removed = { label: m.label, id: m.id }; break;
+          }
+        }
+        if (foundIdx === -1) return json({ error: 'no such monster' }, 404);
+        const remaining = live.filter((_, i) => i !== foundIdx);
+        const eng = resumeEngine(run.battle_state, Math.random);
+        const playerHp = eng && eng.state.player ? eng.state.player.hp : run.player_hp;
+        try {
+          const s = await rebuildBattleState(run, remaining, playerHp);
+          return json({ removed, battle_state: s });
+        } catch (_) {
+          return json({ error: 'Internal server error' }, 500);
+        }
+      }
+
+      // 5. POST /dev/set-hp
+      if (path === '/dev/set-hp') {
+        const body = await request.json().catch(() => ({}));
+        const target = body.target;
+        const hp = parseInt(body.hp, 10);
+        if (isNaN(hp) || hp < 0) return json({ error: 'Invalid hp' }, 400);
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        const bs = run.battle_state || {};
+        if (target === 'player') {
+          bs.player = bs.player || {};
+          bs.player.hp = hp;
+          await admin.from('portal_run').update({ battle_state: bs, player_hp: hp }).eq('id', run.id).eq('user_id', user.id);
+          return json({ target: 'player', hp });
+        } else {
+          const mons = bs.monsters || [];
+          let found = false;
+          for (const m of mons) {
+            if (m.label === target || m.label === `Monster ${target}` || String(m.id) === target) {
+              m.current_hp = Math.min(hp, m.max_hp || hp);
+              found = true; break;
+            }
+          }
+          if (!found) return json({ error: 'no such monster' }, 404);
+          await admin.from('portal_run').update({ battle_state: bs }).eq('id', run.id).eq('user_id', user.id);
+          return json({ target, hp });
+        }
+      }
+
+      // 6. POST /dev/win-battle
+      if (path === '/dev/win-battle') {
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        const bs = run.battle_state || {};
+        if (bs.monsters) {
+          bs.monsters.forEach(m => { m.current_hp = 0; });
+        }
+        // also clear any queue rows for monsters to satisfy isBattleOver / monsters_dead
+        if (bs.queue) {
+          bs.queue = bs.queue.filter(r => !r.label || r.label.startsWith('LH') || r.label.startsWith('RH'));
+        }
+        await admin.from('portal_run').update({ battle_state: bs }).eq('id', run.id).eq('user_id', user.id);
+        return json({ monsters_dead: true });
+      }
+
+      // 7. POST /dev/kill-player
+      if (path === '/dev/kill-player') {
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        const bs = run.battle_state || {};
+        bs.player = bs.player || {};
+        bs.player.hp = 0;
+        await admin.from('portal_run').update({ battle_state: bs, player_hp: 0 }).eq('id', run.id).eq('user_id', user.id);
+        // check via resumeEngine pattern
+        let player_dead = true;
+        let status = 'dead';
+        try {
+          const api = resumeEngine(bs, Math.random);
+          const st = api.getState();
+          if (!st.player_dead) player_dead = false;
+        } catch (_) {}
+        if (player_dead) {
+          await admin.from('portal_run').update({ status: 'dead' }).eq('id', run.id).eq('user_id', user.id);
+        }
+        return json({ player_dead, status: player_dead ? 'dead' : 'active' });
+      }
+
+      return json({ error: 'unknown dev command' }, 404);
     }
 
     return json({ error: 'Route not found' }, 404);

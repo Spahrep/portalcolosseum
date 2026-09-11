@@ -14,6 +14,7 @@ let supabase = null;
 let currentUser = null;
 let currentRunId = localStorage.getItem('cli_current_run_id') || null;
 let accessToken = null;
+let devMode = false;
 
 // Command history for ArrowUp/ArrowDown (terminal-style recall), capped at 5.
 const HISTORY_KEY = 'cli_command_history';
@@ -196,6 +197,20 @@ async function cmdHelp() {
     '',
     'Notes: run id auto-saved to localStorage. Unknown cmd shows error. State printed after mutations.'
   ], 'dim');
+  if (devMode) {
+    appendLines([
+      '',
+      'Dev tools (slash commands):',
+      '  /equip [LH|RH|belt]            — random weapon into slot (overwrites, old displaced)',
+      '  /roll weapon <id> [LH|RH|belt] — spawn a specific weapon template',
+      '  /roll monster <id>             — spawn a specific monster template (adds to battle)',
+      '  /del monster <label|id>        — remove a monster from the battle',
+      '  /list weapons|monsters         — list owned weapons / battle monsters',
+      '  /set hp <player|monster> <n>   — set hit points',
+      '  /win battle                    — force-win the current battle',
+      '  /kill player                   — kill the player'
+    ], 'dim');
+  }
 }
 
 async function cmdState() {
@@ -312,8 +327,12 @@ async function cmdGear() {
 async function cmdGrant() {
   try {
     const data = await apiCall('POST', '/dev/grant', {});
-    printGreen(`Granted weapon_instance #${data.weapon_instance_id} (${data.template_name} dmg=${data.damage})`);
-    await cmdGear();
+    if (data.dev_mode === true) {
+      devMode = true;
+      printGreen('Dev tools unlocked. Type help for the full command list.');
+    } else {
+      appendLine(JSON.stringify(data), 'dim');
+    }
   } catch (e) {
     if (e.message.includes('Admin access required') || e.message.includes('403')) {
       printAmber('403 Admin access required (non-admin caller)');
@@ -333,6 +352,15 @@ function handleCommand(line) {
   const args = parts.slice(1);
 
   if (!cmd) return;
+
+  // Slash commands = dev tools (verb-first, git-style); gated on grant
+  if (line.trim().startsWith('/')) {
+    if (!devMode) { appendLine('Dev tools locked — type grant', 'amber'); return; }
+    const fn = DEV_COMMANDS[cmd];
+    if (!fn) { appendLine('unknown dev command — type help', 'amber'); return; }
+    fn(args);
+    return;
+  }
 
   switch (cmd) {
     case 'help': cmdHelp(); break;
@@ -398,3 +426,148 @@ main().catch(e => {
   console.error(e);
   printError('Fatal: ' + e.message);
 });
+
+async function cmdDevEquip(args) {
+  if (!currentRunId) { printError('no run — use run new first'); return; }
+  let slot = args[0] ? args[0].toUpperCase() : null;
+  if (slot && !['LH','RH','belt'].includes(slot)) slot = null;
+  const body = slot ? { slot } : {};
+  try {
+    const data = await apiCall('POST', '/dev/equip', body);
+    const w = data.weapon;
+    let msg = `${data.slot} → ${w.template_name} (dmg ${w.damage}, #${w.instance_id})`;
+    if (data.displaced) {
+      msg += ` (displaced ${data.displaced.template_name} → inventory)`;
+    }
+    printGreen(msg);
+  } catch (e) {
+    printError('equip: ' + e.message);
+  }
+}
+
+async function cmdDevRoll(args) {
+  if (!currentRunId) { printError('no run — use run new first'); return; }
+  const sub = args[0];
+  if (sub === 'weapon') {
+    const template_id = parseInt(args[1], 10);
+    if (!Number.isFinite(template_id)) { printError('usage: /roll weapon <id> [LH|RH|belt] | /roll monster <id>'); return; }
+    let slot = args[2] ? args[2].toUpperCase() : 'LH';
+    if (!['LH','RH','belt'].includes(slot)) slot = 'LH';
+    try {
+      const data = await apiCall('POST', '/dev/roll-weapon', { template_id, slot });
+      const w = data.weapon;
+      printGreen(`${data.slot} → ${w.template_name} (dmg ${w.damage}, #${w.instance_id})`);
+    } catch (e) {
+      printError('roll: ' + e.message);
+    }
+  } else if (sub === 'monster') {
+    const template_id = parseInt(args[1], 10);
+    if (!Number.isFinite(template_id)) { printError('usage: /roll weapon <id> [LH|RH|belt] | /roll monster <id>'); return; }
+    try {
+      const data = await apiCall('POST', '/dev/roll-monster', { template_id });
+      const m = data.monster;
+      printGreen(`monster ${m.label} hp ${m.current_hp}/${m.max_hp} dmg ${m.damage} spd ${m.speed} acc ${m.accuracy}`);
+    } catch (e) {
+      printError('roll: ' + e.message);
+    }
+  } else {
+    printError('usage: /roll weapon <id> [LH|RH|belt] | /roll monster <id>');
+  }
+}
+
+async function cmdDevDel(args) {
+  if (!currentRunId) { printError('no run — use run new first'); return; }
+  if (args[0] !== 'monster') { printError('usage: /del monster <label|id>'); return; }
+  const target = args[1];
+  if (!target) { printError('usage: /del monster <label|id>'); return; }
+  try {
+    const data = await apiCall('POST', '/dev/del-monster', { target });
+    printGreen(`removed ${data.removed.label} (#${data.removed.id})`);
+  } catch (e) {
+    printError('del: ' + e.message);
+  }
+}
+
+async function cmdDevSet(args) {
+  if (!currentRunId) { printError('no run — use run new first'); return; }
+  if (args[0] !== 'hp') { printError('usage: /set hp <player|monster> <n>'); return; }
+  const target = args[1];
+  const hp = parseInt(args[2], 10);
+  if (!Number.isFinite(hp) || hp < 0) { printError('usage: /set hp <player|monster> <n>'); return; }
+  try {
+    const data = await apiCall('POST', '/dev/set-hp', { target, hp });
+    printGreen(`set ${data.target} hp → ${data.hp}`);
+  } catch (e) {
+    printError('set: ' + e.message);
+  }
+}
+
+async function cmdDevWin(args) {
+  if (!currentRunId) { printError('no run — use run new first'); return; }
+  if (args[0] !== 'battle') { printError('usage: /win battle'); return; }
+  try {
+    const data = await apiCall('POST', '/dev/win-battle', {});
+    printGreen('battle won');
+    appendLine(JSON.stringify(data, null, 0), 'dim');
+  } catch (e) {
+    printError('win: ' + e.message);
+  }
+}
+
+async function cmdDevKill(args) {
+  if (!currentRunId) { printError('no run — use run new first'); return; }
+  if (args[0] !== 'player') { printError('usage: /kill player'); return; }
+  try {
+    const data = await apiCall('POST', '/dev/kill-player', {});
+    printGreen('player killed');
+    appendLine(JSON.stringify(data, null, 0), 'dim');
+  } catch (e) {
+    printError('kill: ' + e.message);
+  }
+}
+
+async function cmdDevList(args) {
+  const sub = args[0] || 'weapons';
+  if (sub === 'weapons') {
+    try {
+      const data = await apiCall('GET', '/weapons');
+      if (!data.weapons || data.weapons.length === 0) {
+        appendLine('No weapons owned.', 'amber');
+        return;
+      }
+      data.weapons.forEach(w => {
+        const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
+        appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
+      });
+    } catch (e) {
+      printError('list: ' + e.message);
+    }
+  } else if (sub === 'monsters') {
+    if (!currentRunId) { appendLine('no active run', 'amber'); return; }
+    try {
+      const data = await apiCall('GET', `/runs/${currentRunId}`);
+      const mons = (data.run && data.run.battle_state && data.run.battle_state.monsters) || [];
+      if (mons.length === 0) {
+        appendLine('no monsters', 'dim');
+        return;
+      }
+      mons.forEach(m => {
+        appendLine(`Monster ${m.label} hp ${m.current_hp}/${m.max_hp}`, 'green');
+      });
+    } catch (e) {
+      printError('list: ' + e.message);
+    }
+  } else {
+    printError('usage: /list weapons|monsters');
+  }
+}
+
+const DEV_COMMANDS = {
+  '/equip': cmdDevEquip,
+  '/roll': cmdDevRoll,
+  '/del': cmdDevDel,
+  '/list': cmdDevList,
+  '/set': cmdDevSet,
+  '/win': cmdDevWin,
+  '/kill': cmdDevKill
+};
