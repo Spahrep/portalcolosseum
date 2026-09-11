@@ -216,6 +216,7 @@ async function cmdHelp() {
     '  battle end <continue|stop> — end current battle',
     '  inventory            — everything assigned to you (weapons; consumables when they exist)',
     '  grant                — admin dev: unlock dev tools (403 if not admin)',
+    '  inspect [id]         — monster template info (bare lists ids)',
     '  clear                — clear terminal output',
     '',
     'Notes: run id auto-saved to localStorage. Unknown cmd shows error. State printed after mutations.'
@@ -231,7 +232,10 @@ async function cmdHelp() {
       '  /list weapons|monsters         — list owned weapons / battle monsters',
       '  /set hp <player|monster> <n>   — set hit points',
       '  /win battle                    — force-win the current battle',
-      '  /kill player                   — kill the player'
+      '  /kill player                   — kill the player',
+      '  /nuke                          — clear all monsters from battle_state',
+      '  /list templates                — show all weapon + monster template ids',
+      '  /abandon run                   — abandon current active run'
     ], 'dim');
   }
 }
@@ -272,7 +276,7 @@ async function cmdRunNew() {
     });
     appendLine('consumables:', 'dim');
     if (!cData.consumables || cData.consumables.length === 0) {
-      appendLine('  (none — use /dev/grant-consumable or grant first)', 'dim');
+      appendLine('  (consumables on hold)', 'dim');
     } else {
       cData.consumables.forEach(c => {
         appendLine(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`, 'green');
@@ -510,6 +514,7 @@ function handleCommand(line) {
     case 'inventory':
     case 'gear': cmdInventory(); break;
     case 'grant': cmdGrant(); break;
+    case 'inspect': cmdInspect(args); break;
     case 'clear': cmdClear(); break;
     default:
       appendLine('unknown command — type help', 'amber');
@@ -716,6 +721,81 @@ async function cmdDevList(args) {
   }
 }
 
+async function cmdDevNuke(args) {
+  const res = await apiCall('POST', '/dev/nuke-monsters', {});
+  if (res.error) {
+    printError(res.error);
+    return;
+  }
+  const n = res.removed || 0;
+  if (n > 0) {
+    printGreen(`removed ${n} monster(s)`);
+  } else {
+    appendLine('no monsters to remove', 'dim');
+  }
+}
+
+async function cmdListTemplates(args) {
+  const res = await apiCall('GET', '/dev/templates');
+  if (res.error) {
+    printError(res.error);
+    return;
+  }
+  appendLine('Weapons:', 'dim');
+  for (const w of (res.weapons || [])) {
+    appendLine(`  #${w.id} ${w.name}`, 'dim');
+  }
+  appendLine('Monsters:', 'dim');
+  for (const m of (res.monsters || [])) {
+    appendLine(`  #${m.id} ${m.name}`, 'dim');
+  }
+}
+
+async function cmdInspect(args) {
+  const idStr = (args[0] || '').trim();
+  if (!idStr) {
+    const res = await apiCall('GET', '/dev/templates');
+    if (res.error) {
+      printError(res.error);
+      return;
+    }
+    for (const m of (res.monsters || [])) {
+      appendLine(`#${m.id} ${m.name}`, 'dim');
+    }
+    return;
+  }
+  const id = parseInt(idStr, 10);
+  if (isNaN(id) || id < 1) {
+    printError('Invalid template id');
+    return;
+  }
+  const res = await apiCall('GET', `/templates/monster/${id}`);
+  if (res.error) {
+    printError(res.error);
+    return;
+  }
+  appendLine(`${res.name} (#${res.id})`, 'dim');
+  appendLine(`base_hp: ${res.base_hp}  dmg: ${res.damage}  spd: ${res.speed}  acc: ${res.accuracy}`);
+  if (res.attacks && res.attacks.length) {
+    appendLine('attacks:');
+    for (const a of res.attacks) {
+      const multi = a.is_multi_target ? ', multi' : '';
+      appendLine(`  #${a.id} ${a.name} (prep ${a.prepare_time}, cd ${a.cooldown_time}${multi})`);
+    }
+  }
+}
+
+async function cmdDevAbandonRun(args) {
+  const res = await apiCall('POST', '/dev/abandon-run', {});
+  if (res.error) {
+    printError(res.error);
+    return;
+  }
+  currentRunId = null;
+  localStorage.removeItem('cli_current_run_id');
+  printGreen(`run #${res.run_id} abandoned — use run new to start fresh`);
+}
+
 const DEV_COMMANDS = {
   '/equip': cmdDevEquip,
   '/roll': cmdDevRoll,
@@ -723,7 +803,10 @@ const DEV_COMMANDS = {
   '/list': cmdDevList,
   '/set': cmdDevSet,
   '/win': cmdDevWin,
-  '/kill': cmdDevKill
+  '/kill': cmdDevKill,
+  '/nuke': cmdDevNuke,
+  '/inspect': cmdInspect,
+  '/abandon': cmdDevAbandonRun
 };
 
 function updateSidePanelsFromRun(run) {
