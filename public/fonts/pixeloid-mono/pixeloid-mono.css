@@ -1,0 +1,16 @@
+/*
+  Pixeloid Mono — self-hosted (OFL 1.1, GGBotNet).
+  NOT available on Google Fonts; the old fonts.googleapis.com link
+  returned 400 and silently fell back to Courier New everywhere.
+  https://ggbot.net/fonts/ — license: OFL-LICENSE.txt (same directory).
+
+  Note: the Pixeloid family only ships a Regular Mono weight —
+  there is no Bold. Browsers synthesize bold from this face.
+*/
+@font-face {
+  font-family: 'Pixeloid Mono';
+  src: url('pixeloid-mono-regular.ttf') format('truetype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
