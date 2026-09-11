@@ -15,6 +15,7 @@ let currentUser = null;
 let currentRunId = localStorage.getItem('cli_current_run_id') || null;
 let accessToken = null;
 let devMode = false;
+let pendingInputResolver = null;
 
 // Command history for ArrowUp/ArrowDown (terminal-style recall), capped at 5.
 const HISTORY_KEY = 'cli_command_history';
@@ -215,7 +216,7 @@ async function cmdHelp() {
 
 async function cmdState() {
   if (!currentRunId) {
-    appendLine('No current run id. Use "run new" first.', 'amber');
+    appendLine('No current run id. Use \"run new\" first.', 'amber');
     return;
   }
   try {
@@ -226,14 +227,96 @@ async function cmdState() {
   }
 }
 
+async function promptUser(question) {
+  appendLine(question, 'amber');
+  return new Promise(resolve => {
+    pendingInputResolver = resolve;
+  });
+}
+
 async function cmdRunNew() {
   try {
-    // sane default portal_template_id (Portal 1 exists in seed)
-    const data = await apiCall('POST', '/runs', { portal_template_id: 1 });
+    // fetch current inventory for loadout choice
+    let wData = { weapons: [] };
+    let cData = { consumables: [] };
+    try { wData = await apiCall('GET', '/weapons'); } catch (_) {}
+    try { cData = await apiCall('GET', '/consumables'); } catch (_) {}
+
+    appendLine('=== Loadout for new run (weapons + consumables) ===', 'dim');
+    appendLine('weapons:', 'dim');
+    (wData.weapons || []).forEach(w => {
+      const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
+      appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
+    });
+    appendLine('consumables:', 'dim');
+    if (!cData.consumables || cData.consumables.length === 0) {
+      appendLine('  (none — use /dev/grant-consumable or grant first)', 'dim');
+    } else {
+      cData.consumables.forEach(c => {
+        appendLine(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`, 'green');
+      });
+    }
+
+    const getId = async (label, allowEmpty = true) => {
+      while (true) {
+        const ans = (await promptUser(`${label} (id${allowEmpty ? ' or empty to skip' : ''}, 'inventory' to re-list):`)).trim();
+        if (ans.toLowerCase() === 'inventory') {
+          // re-list
+          appendLine('weapons:', 'dim');
+          (wData.weapons || []).forEach(w => {
+            const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
+            appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
+          });
+          appendLine('consumables:', 'dim');
+          (cData.consumables || []).forEach(c => appendLine(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`, 'green'));
+          continue;
+        }
+        if (!ans && allowEmpty) return null;
+        const id = parseInt(ans, 10);
+        if (Number.isFinite(id)) return id;
+        printAmber('invalid id, try again');
+      }
+    };
+
+    const lh = await getId('LH');
+    const rh = await getId('RH');
+    const belt = await getId('Belt');
+    const ca = await getId('Consume A', true);
+    const cb = await getId('Consume B', true);
+
+    const payload = { portal_template_id: 1 };
+    if (lh != null) payload.hand_l = lh;
+    if (rh != null) payload.hand_r = rh;
+    if (belt != null) payload.belt = belt;
+    if (ca != null) payload.consume_a = ca;
+    if (cb != null) payload.consume_b = cb;
+
+    const data = await apiCall('POST', '/runs', payload);
     currentRunId = data.run.id;
     localStorage.setItem('cli_current_run_id', currentRunId);
     printGreen(`Created run #${currentRunId}`);
-    printStateFromRun(data.run);
+
+    // render dice + budget + battle-1 monsters (from response or run)
+    const run = data.run;
+    const bs = run.battle_state || {};
+    const d = bs.dice || {};
+    if (d.remaining || d.current) {
+      const fmtC = (o) => `G${o.green ?? 0} Y${o.yellow ?? 0} R${o.red ?? 0}`;
+      const cur = d.current
+        ? `current: ${d.current.color} die face=${d.current.face} budget=${d.current.rolled_value}`
+        : 'current: —';
+      appendLine(`dice remaining: ${fmtC(d.remaining || {})}  used: ${fmtC(d.used || {})}  ${cur}`, 'green');
+    }
+    // monsters: prefer participants if returned by POST, else battle_state
+    const mons = (data.participants || bs.monsters || []);
+    if (mons.length) {
+      appendLine('battle-1 monsters:', 'dim');
+      mons.forEach(m => {
+        printGreen(`monster ${m.label} hp ${m.current_hp ?? m.max_hp}/${m.max_hp} dmg ${m.damage} spd ${m.speed} acc ${m.accuracy}`);
+      });
+    } else {
+      appendLine('battle-1 monsters: (none or see state)', 'dim');
+    }
   } catch (e) {
     printError('run new: ' + e.message);
   }
@@ -261,7 +344,12 @@ async function cmdBattleStart() {
     appendLine(JSON.stringify(data, null, 2), 'dim');
     await cmdState();
   } catch (e) {
-    printError('battle start: ' + e.message);
+    if (e.message.includes('Battle already in progress')) {
+      printAmber('Battle already in progress — printing current state');
+      await cmdState();
+    } else {
+      printError('battle start: ' + e.message);
+    }
   }
 }
 
@@ -310,16 +398,31 @@ async function cmdBattleEnd(args) {
 
 async function cmdInventory() {
   try {
-    const data = await apiCall('GET', '/weapons');
-    if (!data.weapons || data.weapons.length === 0) {
-      appendLine('Nothing assigned to you yet. (Dev: grant, then /equip to add a weapon.)', 'amber');
-      return;
+    const [wData, cData] = await Promise.allSettled([
+      apiCall('GET', '/weapons'),
+      apiCall('GET', '/consumables')
+    ]);
+    const weapons = (wData.status === 'fulfilled' ? wData.value.weapons : []) || [];
+    const consumables = (cData.status === 'fulfilled' ? cData.value.consumables : []) || [];
+
+    appendLine('inventory — weapons:', 'dim');
+    if (weapons.length === 0) {
+      appendLine('  (none)', 'dim');
+    } else {
+      weapons.forEach(w => {
+        const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
+        appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
+      });
     }
-    appendLine('inventory — everything assigned to you:', 'dim');
-    data.weapons.forEach(w => {
-      const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
-      appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
-    });
+
+    appendLine('inventory — consumables:', 'dim');
+    if (consumables.length === 0) {
+      appendLine('  (none)', 'dim');
+    } else {
+      consumables.forEach(c => {
+        appendLine(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`, 'green');
+      });
+    }
   } catch (e) {
     printError('gear: ' + e.message);
   }
@@ -392,7 +495,7 @@ async function main() {
   const ok = await initAuth();
   if (!ok) return;
 
-  appendLine('CLI harness ready. Type "help" for commands. State auto-prints after mutations.', 'dim');
+  appendLine('CLI harness ready. Type \"help\" for commands. State auto-prints after mutations.', 'dim');
   if (currentRunId) {
     await cmdState();
   }
@@ -418,6 +521,12 @@ async function main() {
       historyIdx = -1;
       historyDraft = '';
       pushHistory(val);
+      if (pendingInputResolver) {
+        const resolve = pendingInputResolver;
+        pendingInputResolver = null;
+        resolve(val);
+        return;
+      }
       handleCommand(val);
     }
   });
