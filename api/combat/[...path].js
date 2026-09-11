@@ -42,7 +42,7 @@ async function verifyUser(request) {
   return { admin, user };
 }
 
-export default async function handler(request) {
+async function handle(request) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
   // Vercel may pass request.url as a relative path (e.g. "/api/combat/runs?path=runs")
@@ -465,3 +465,17 @@ export default async function handler(request) {
     return json({ error: 'Internal server error' }, 500);
   }
 }
+
+// Named HTTP-method exports (Vercel Web Fetch API convention) — same pattern as
+// api/admin/[...path].js. A single default export on a catch-all file makes
+// Vercel invoke the function in legacy Node mode: request.url is a relative
+// path with ?path= segments and request.headers is a plain object without .get(),
+// which breaks new URL() and header reads. Named exports get a real Request.
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS });
+}
+export async function GET(request) { return handle(request); }
+export async function POST(request) { return handle(request); }
+export async function PUT(request) { return handle(request); }
+export async function PATCH(request) { return handle(request); }
+export async function DELETE(request) { return handle(request); }
