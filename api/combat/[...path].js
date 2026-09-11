@@ -711,7 +711,7 @@ async function handle(request) {
       let displaced = null;
       if (oldId) {
         try {
-          const { data: oldInst } = await adminClient.from('weapon_instance').select('id, template_id, weapon_template:template_id(name)').eq('id', oldId).single();
+          const { data: oldInst } = await adminClient.from('weapon_instance').select('id, template_id, weapon_template:template_id (name)').eq('id', oldId).single();
           if (oldInst) displaced = { instance_id: oldInst.id, template_name: oldInst.weapon_template?.name || 'Unknown' };
         } catch (_) {}
       }
