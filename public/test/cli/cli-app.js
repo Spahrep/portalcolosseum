@@ -2,7 +2,7 @@
  * cli-app.js — CLI dev/test harness for live combat API
  * Terminal UI matching gui2 aesthetics (near-black, Pixeloid Mono, green/amber, thin amber border)
  * Auth: /api/env.js + Supabase PKCE localStorage pattern from game.html
- * Commands: help/state/run new/run/battle start/attack/battle end/gear/grant/clear
+ * Commands: help/state/run new/run/battle start/attack/battle end/inventory/grant/clear
  * Always prints compact current state after state-changing commands
  */
 
@@ -191,8 +191,8 @@ async function cmdHelp() {
     '  battle start         — start next battle on current run',
     '  attack <LH|RH> <attack_id> [target_id ...]  — commit attack (targets default to first live monster)',
     '  battle end <continue|stop> — end current battle',
-    '  gear                 — list owned weapons + attacks (via /weapons)',
-    '  grant                — admin dev: grant starter weapon_instance (403 if not admin)',
+    '  inventory            — everything assigned to you (weapons; consumables when they exist)',
+    '  grant                — admin dev: unlock dev tools (403 if not admin)',
     '  clear                — clear terminal output',
     '',
     'Notes: run id auto-saved to localStorage. Unknown cmd shows error. State printed after mutations.'
@@ -308,13 +308,14 @@ async function cmdBattleEnd(args) {
   }
 }
 
-async function cmdGear() {
+async function cmdInventory() {
   try {
     const data = await apiCall('GET', '/weapons');
     if (!data.weapons || data.weapons.length === 0) {
-      appendLine('No weapons owned. Use "grant" (admin) to get starter.', 'amber');
+      appendLine('Nothing assigned to you yet. (Dev: grant, then /equip to add a weapon.)', 'amber');
       return;
     }
+    appendLine('inventory — everything assigned to you:', 'dim');
     data.weapons.forEach(w => {
       const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
       appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
@@ -355,6 +356,8 @@ function handleCommand(line) {
 
   // Slash commands = dev tools (verb-first, git-style); gated on grant
   if (line.trim().startsWith('/')) {
+    // /inventory is a player command, not a dev tool — tolerated ungated as a convenience alias
+    if (cmd === '/inventory') { cmdInventory(); return; }
     if (!devMode) { appendLine('Dev tools locked — type grant', 'amber'); return; }
     const fn = DEV_COMMANDS[cmd];
     if (!fn) { appendLine('unknown dev command — type help', 'amber'); return; }
@@ -376,7 +379,8 @@ function handleCommand(line) {
       else printError('unknown battle subcommand');
       break;
     case 'attack': cmdAttack(args); break;
-    case 'gear': cmdGear(); break;
+    case 'inventory':
+    case 'gear': cmdInventory(); break;
     case 'grant': cmdGrant(); break;
     case 'clear': cmdClear(); break;
     default:
