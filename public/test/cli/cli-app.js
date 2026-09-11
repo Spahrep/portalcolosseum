@@ -546,18 +546,27 @@ async function main() {
       if (historyIdx === -1) historyDraft = '';
     } else if (e.key === 'Enter') {
       const val = inputEl.value.trim();
+      if (pendingInputResolver) {
+        const resolve = pendingInputResolver;
+        pendingInputResolver = null;
+        if (val) {
+          appendLine('> ' + val, 'dim');
+          inputEl.value = '';
+          historyIdx = -1;
+          historyDraft = '';
+          pushHistory(val);
+        } else {
+          inputEl.value = '';
+        }
+        resolve(val);
+        return;
+      }
       if (!val) return;
       appendLine('> ' + val, 'dim');
       inputEl.value = '';
       historyIdx = -1;
       historyDraft = '';
       pushHistory(val);
-      if (pendingInputResolver) {
-        const resolve = pendingInputResolver;
-        pendingInputResolver = null;
-        resolve(val);
-        return;
-      }
       handleCommand(val);
     }
   });
