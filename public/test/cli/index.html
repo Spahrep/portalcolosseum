@@ -6,47 +6,98 @@
   <title>Portal Colosseum • CLI Test Harness</title>
   <link rel="stylesheet" href="/public/fonts/pixeloid-mono/pixeloid-mono.css">
   <style>
+    :root {
+      --yellow: #ffff00;
+      --orange: #ffaa00;
+      --green: #00ff00;
+      --gray: #888888;
+      --amber: #ffaa00;
+    }
     body {
       margin: 0;
-      padding: 20px;
+      padding: 12px;
       background: #000;
       font-family: 'Pixeloid Mono', 'Courier New', monospace;
       color: #0f0;
       min-height: 100vh;
       display: flex;
-      flex-direction: column;
-      align-items: center;
+      align-items: flex-start;
+      justify-content: center;
     }
-    .cli-window {
-      width: 960px;
+    .main-grid {
+      display: grid;
+      grid-template-columns: 200px minmax(620px, 1fr) 200px;
+      gap: 8px;
+      width: 1040px;
       max-width: 100%;
+      height: 640px;
+    }
+    .panel {
       background: #000;
-      border: 3px solid #ffaa00;
-      box-shadow: 0 0 0 2px #000, inset 0 0 0 2px #331100;
+      border: 4px solid #ffff00;
+      color: #0f0;
+      font-size: 12px;
       display: flex;
       flex-direction: column;
-      height: 620px;
+      overflow: hidden;
+    }
+    .panel-title {
+      background: #0a0a0a;
+      color: #ffaa00;
+      padding: 4px 8px;
+      font-size: 11px;
+      border-bottom: 2px solid #ffff00;
+      flex-shrink: 0;
+    }
+    .panel-content {
+      flex: 1;
+      padding: 6px 8px;
+      overflow-y: auto;
+      font-size: 11px;
+      line-height: 1.3;
+      white-space: pre-wrap;
+    }
+    .panel-content .stat-line { margin: 2px 0; color: #0f0; }
+    .panel-content .monster { color: #0f0; }
+    .panel-content .dim { color: #666; }
+    .panel-content .amber { color: #ffaa00; }
+
+    /* Center terminal */
+    .cli-window {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      background: #000;
+      border: 4px solid #ffff00;
+      box-shadow: inset 0 0 0 1px #331100;
     }
     .cli-header {
       background: #0a0a0a;
       border-bottom: 3px solid #ffaa00;
-      padding: 6px 12px;
+      padding: 6px 10px;
       font-size: 12px;
       color: #ffaa00;
       display: flex;
       justify-content: space-between;
       align-items: center;
+      flex-shrink: 0;
     }
+    .cli-header .title { font-weight: bold; }
+    .cli-header .user { color: #888; font-size: 11px; }
     .cli-output {
       flex: 1;
-      padding: 12px;
+      padding: 10px;
       overflow-y: auto;
       background: #000;
-      font-size: 13px;
-      line-height: 1.4;
+      font-size: 12px;
+      line-height: 1.35;
       white-space: pre-wrap;
       word-break: break-all;
+      scrollbar-width: thin;
+      scrollbar-color: #ffaa00 #111;
     }
+    .cli-output::-webkit-scrollbar { width: 8px; }
+    .cli-output::-webkit-scrollbar-thumb { background: #ffaa00; }
     .cli-output .line { margin: 1px 0; }
     .cli-output .error { color: #ff6644; }
     .cli-output .amber { color: #ffaa00; }
@@ -54,11 +105,12 @@
     .cli-output .dim { color: #666; }
     .cli-input-line {
       border-top: 3px solid #ffaa00;
-      padding: 8px 12px;
+      padding: 6px 10px;
       background: #0a0a0a;
       display: flex;
       align-items: center;
-      gap: 8px;
+      gap: 6px;
+      flex-shrink: 0;
     }
     .prompt { color: #ffaa00; }
     .cli-input {
@@ -68,23 +120,98 @@
       outline: none;
       color: #0f0;
       font-family: inherit;
-      font-size: 13px;
+      font-size: 12px;
     }
     .status { font-size: 10px; color: #666; }
+
+    .left-col, .right-col {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      height: 100%;
+    }
+    .left-col .panel, .right-col .panel {
+      flex: 1;
+      min-height: 0;
+    }
+    .player-stats .stat { display: block; margin: 3px 0; }
   </style>
 </head>
 <body>
-  <div class="cli-window">
-    <div class="cli-header">
-      <div>PORTAL COLOSSEUM — LIVE COMBAT CLI HARNESS</div>
-      <div class="status" id="auth-status">checking auth…</div>
+  <div class="main-grid">
+    <!-- LEFT COLUMN: 3 info panels -->
+    <div class="left-col">
+      <!-- Player Stats -->
+      <div class="panel yellow-border" id="player-stats-panel">
+        <div class="panel-title">PLAYER STATS</div>
+        <div class="panel-content player-stats" id="player-stats-content">
+          <div class="stat-line">HP: —</div>
+          <div class="stat-line">LH: —</div>
+          <div class="stat-line">RH: —</div>
+          <div class="stat-line">BL: —</div>
+          <div class="stat-line">C1: —</div>
+          <div class="stat-line">C2: —</div>
+        </div>
+      </div>
+
+      <!-- Monster Roster -->
+      <div class="panel yellow-border" id="monster-roster-panel">
+        <div class="panel-title">MONSTER ROSTER</div>
+        <div class="panel-content" id="monster-roster-content">
+          <div class="dim">No monsters</div>
+        </div>
+      </div>
+
+      <!-- Run Loot -->
+      <div class="panel yellow-border" id="run-loot-panel">
+        <div class="panel-title">RUN LOOT</div>
+        <div class="panel-content" id="run-loot-content">
+          <div class="dim">—</div>
+        </div>
+      </div>
     </div>
-    <div class="cli-output" id="output"></div>
-    <div class="cli-input-line">
-      <span class="prompt">&gt;</span>
-      <input type="text" class="cli-input" id="input" name="no-autofill" autocomplete="off" spellcheck="false" data-lpignore="true" data-form-type="other" placeholder="type help or state">
+
+    <!-- CENTER: Interactive Terminal -->
+    <div class="cli-window">
+      <div class="cli-header">
+        <div class="title">PORTAL COLOSSEUM — LIVE COMBAT CLI HARNESS</div>
+        <div class="user" id="auth-status">checking auth…</div>
+      </div>
+      <div class="cli-output" id="output"></div>
+      <div class="cli-input-line">
+        <span class="prompt">&gt;</span>
+        <input type="text" class="cli-input" id="input" name="no-autofill" autocomplete="off" spellcheck="false" data-lpignore="true" data-form-type="other" placeholder="type help or state">
+      </div>
+    </div>
+
+    <!-- RIGHT COLUMN: 3 info panels -->
+    <div class="right-col">
+      <!-- Action/tic queue -->
+      <div class="panel yellow-border" id="action-queue-panel">
+        <div class="panel-title">ACTION/TIC QUEUE</div>
+        <div class="panel-content" id="action-queue-content">
+          <div class="dim">empty</div>
+        </div>
+      </div>
+
+      <!-- Dice Left -->
+      <div class="panel yellow-border" id="dice-left-panel">
+        <div class="panel-title">DICE LEFT</div>
+        <div class="panel-content" id="dice-left-content">
+          <div class="dim">G0 Y0 R0</div>
+        </div>
+      </div>
+
+      <!-- Dice Rolled Results -->
+      <div class="panel yellow-border" id="dice-rolled-panel">
+        <div class="panel-title">DICE ROLLED</div>
+        <div class="panel-content" id="dice-rolled-content">
+          <div class="dim">—</div>
+        </div>
+      </div>
     </div>
   </div>
+
   <script src="/api/env.js"></script>
   <script type="module" src="/test/cli/cli-app.js"></script>
 </body>
