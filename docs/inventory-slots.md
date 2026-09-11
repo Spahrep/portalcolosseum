@@ -55,6 +55,8 @@ Limited slots interact directly with the tic-based combat system — choosing th
 
 When a portal run is started, the run records which items from the player's inventory are used in each position. The inventory itself is just a backpack — it holds items, it does not track assignments.
 
+**Rule (Decided 2026-09-11): inventory should only ever be assigned to a player.** A run records its own loadout; it never takes ownership of inventory rows.
+
 ### Structure
 
 **One table defines the player's backpack:**
@@ -65,26 +67,26 @@ When a portal run is started, the run records which items from the player's inve
    - `slot_index` (0–19) — position in the 20-slot inventory grid
    - `weapon_instance_id` (bigint → `weapon_instance.id`) — the item carried
    - No assignment columns, no `is_equipped` flag — this is purely "what's in my bag"
-   - LRBP gear assignments will live on a future `portal_run` table, referenced from here
+   - Loadout assignments live on `portal_run` (`hand_l_weapon_id`, `hand_r_weapon_id`, `belt_weapon_id`, `consume_a_id`, `consume_b_id`) — the run records its own loadout
 
 ### Why This Structure
 
-- **Single responsibility:** `player_inventory` only tracks backpack contents. The run/loadout problem doesn't exist yet, so we don't model it.
+- **Single responsibility:** `player_inventory` only tracks backpack contents. The run/loadout lives on `portal_run`, not here.
 - **No stale state:** If a run is abandoned or failed, no "unequipped" cleanup is needed — the run record just isn't used again.
 - **Simple queries:** "What's in my bag?" = look at `player_inventory` rows for the player.
-- **Deferred design:** The `portal_run` table (which will hold LRBP assignment columns) is deferred until you decide what columns a run needs. This table won't need to change when that happens.
+- **Deferred design:** consumable instances are pending a `consumable_instance` table; `consume_a_id`/`consume_b_id` are placeholders on `weapon_instance` until then.
 
 ### Slot Naming Reference (future — for when portal_run is added)
 
-The five gear positions that will be assigned per-run:
+The five loadout positions assigned per run (live on `portal_run`):
 
 | Column              | Label        | Notes                          |
 |---------------------|--------------|--------------------------------|
-| `hand_l_item_id`    | Hand Slot L  | Primary weapon                 |
-| `hand_r_item_id`    | Hand Slot R  | Secondary weapon / shield      |
-| `belt_loop_item_id` | Belt Loop    | Dedicated swap / utility slot  |
-| `pouch_l_item_id`   | Belt Pouch L | Consumables / quick items      |
-| `pouch_r_item_id`   | Belt Pouch R | Consumables / quick items      |
+| `hand_l_weapon_id`    | Hand Slot L  | Primary weapon                 |
+| `hand_r_weapon_id`    | Hand Slot R  | Secondary weapon / shield      |
+| `belt_weapon_id` | Belt Loop    | Dedicated swap / utility slot  |
+| `consume_a_id`   | Consume A | Consumables / quick items      |
+| `consume_b_id`   | Consume B | Consumables / quick items      |
 
 ## Starting Equipment
 

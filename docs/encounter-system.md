@@ -42,6 +42,20 @@ Dice pool composition (how many dice, color mix, face values) is **per-portal**,
 - **Die selection**: Player does **not** choose which die to roll — it is a random draw from the remaining pool.
 - **Selection UX**: Die selection is shown with a tension-building animation (e.g., roulette wheel style) to build anticipation before each battle.
 
+## Run Start (Decided: 2026-09-11)
+
+When a player starts a portal run:
+
+1. Show the portal's dice (the pool, colors) to the player.
+2. Ask what gear to bring — LH / RH / Belt / Consumables — chosen from the player's inventory.
+3. Player enters the loadout.
+4. Randomly select a die from the pool, and roll it.
+5. Generate the monsters for the portal instance from the roll.
+
+Ownership chain (Spahrep, 2026-09-11): the LH/RH/Belt/Consume and monsters are all assigned to the portal run; the monsters specifically are assigned to the first battle, which is assigned to the portal.
+
+Implementation status: `POST /api/combat/runs` takes hand_l/hand_r/belt (ownership-validated); `consume_a_id`/`consume_b_id` exist on `portal_run` as placeholders on `weapon_instance` (consumable_instance table pending); the dice pool is materialized at run creation (`portal_run_dice`); the draw + roll + monster-generation engine is Slice 3, unbuilt — monsters are currently generated at battle start.
+
 ## Battle Generation
 
 1. Draw a die randomly from the remaining pool (player does not choose).

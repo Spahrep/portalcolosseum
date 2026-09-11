@@ -33,6 +33,7 @@ Sorted array of `{id, label, event, tics}`. Every tick: decrement all; fire even
 ## portal_run Integration
 
 - **Create run** (`POST /api/combat/runs`): JWT user must own the loadout `weapon_instance`s (hand_l/hand_r/belt), have < 3 active runs, portal_template exists → INSERT `portal_run` (status active, current_battle 1, total_battles = template.fights, player_hp 1000, battle_state {}). Entry cost (AP/gold) NOT enforced — profiles lacks the columns (future slice).
+   - Run-start flow (Decided 2026-09-11): show the portal dice → player picks loadout (LH/RH/Belt/Consumables) from inventory → random die draw + roll → generate battle-1 monsters from the roll. POST /runs accepts hand_l/hand_r/belt today; consumable assignment and the draw/roll engine are pending slices.
 - **Start battle:** MVP stub group (simple pick from seeded templates) — dice-pool generation is Slice 3. `generate_monster()` per member; init battle_state; return participants (words only) + queue.
 - **Commit:** validate hand ready + attack belongs to weapon; roll cast/cooldown; insert queue row; resolve events to the next decision point; persist; return state.
 - **Battle end:** won → current_battle += 1; last battle → status completed. Continue → next battle; stop → abandoned; player dead → dead. Prize pool/loot = future slice (monster_loot_mapping empty).

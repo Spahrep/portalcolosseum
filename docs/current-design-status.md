@@ -126,6 +126,14 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Gold spread tuning (sigma value)
 - Exact weight/cost/min-max values per item/monster
 
+## Run Start & Inventory (Decided 2026-09-11)
+
+- CLI: `inventory` shows everything assigned to the player (weapons today; consumables when they exist). `/inventory` accepted as an ungated alias; legacy `gear` kept as an alias.
+- Rule: inventory should only ever be assigned to a player; the run records its own loadout.
+- Run start: show dice → pick loadout (LH/RH/Belt/Consumables) → random die draw + roll → generate monsters for battle 1 (monsters assigned to the first battle; battle assigned to the portal).
+- Status: loadout columns live on `portal_run` (consume_a/b placeholders on weapon_instance); dice pool materialized at creation; draw/roll/monster generation = Slice 3, unbuilt.
+- Docs: encounter-system.md §Run Start · inventory-slots.md · combat-engine-plan.md §portal_run Integration
+
 ## Open / Undocumented Points
 
 1. **Loot Rules on Stop** — exact % of prize pool kept when stopping early; how random selection works (uniform? weighted by rarity?)
