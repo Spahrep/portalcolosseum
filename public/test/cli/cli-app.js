@@ -346,6 +346,7 @@ async function cmdRunNew() {
     } else {
       appendLine('battle-1 monsters: (none or see state)', 'dim');
     }
+    await refreshRunPanels();
   } catch (e) {
     printError('run new: ' + e.message);
   }
@@ -587,21 +588,18 @@ async function cmdDevEquip(args) {
       let msg = `${data.slot} → ${w.template_name} (dmg ${w.damage}, #${w.instance_id})`;
       if (data.displaced) msg += ` (displaced ${data.displaced.template_name} → inventory)`;
       printGreen(msg);
+      await refreshRunPanels();
     } catch (e) { printError('equip: ' + e.message); }
     return;
   }
-  const body = slot ? { slot } : {};
   try {
-    const data = await apiCall('POST', '/dev/equip', body);
+    const data = await apiCall('POST', '/dev/equip', { slot: slot || undefined });
     const w = data.weapon;
     let msg = `${data.slot} → ${w.template_name} (dmg ${w.damage}, #${w.instance_id})`;
-    if (data.displaced) {
-      msg += ` (displaced ${data.displaced.template_name} → inventory)`;
-    }
+    if (data.displaced) msg += ` (displaced ${data.displaced.template_name} → inventory)`;
     printGreen(msg);
-  } catch (e) {
-    printError('equip: ' + e.message);
-  }
+    await refreshRunPanels();
+  } catch (e) { printError('equip: ' + e.message); }
 }
 
 async function cmdDevRoll(args) {
@@ -616,6 +614,7 @@ async function cmdDevRoll(args) {
       const data = await apiCall('POST', '/dev/roll-weapon', { template_id, slot });
       const w = data.weapon;
       printGreen(`${data.slot} → ${w.template_name} (dmg ${w.damage}, #${w.instance_id})`);
+      await refreshRunPanels();
     } catch (e) {
       printError('roll: ' + e.message);
     }
@@ -626,6 +625,7 @@ async function cmdDevRoll(args) {
       const data = await apiCall('POST', '/dev/roll-monster', { template_id });
       const m = data.monster;
       printGreen(`monster ${m.label} hp ${m.current_hp ?? m.max_hp}/${m.max_hp} dmg ${m.damage} spd ${m.speed} acc ${m.accuracy}`);
+      await refreshRunPanels();
     } catch (e) {
       printError('roll: ' + e.message);
     }
@@ -642,6 +642,7 @@ async function cmdDevDel(args) {
   try {
     const data = await apiCall('POST', '/dev/del-monster', { target });
     printGreen(`removed ${data.removed.label} (#${data.removed.id})`);
+    await refreshRunPanels();
   } catch (e) {
     printError('del: ' + e.message);
   }
@@ -656,6 +657,7 @@ async function cmdDevSet(args) {
   try {
     const data = await apiCall('POST', '/dev/set-hp', { target, hp });
     printGreen(`set ${data.target} hp → ${data.hp}`);
+    await refreshRunPanels();
   } catch (e) {
     printError('set: ' + e.message);
   }
@@ -668,6 +670,7 @@ async function cmdDevWin(args) {
     const data = await apiCall('POST', '/dev/win-battle', {});
     printGreen('battle won');
     appendLine(JSON.stringify(data, null, 0), 'dim');
+    await refreshRunPanels();
   } catch (e) {
     printError('win: ' + e.message);
   }
@@ -680,6 +683,7 @@ async function cmdDevKill(args) {
     const data = await apiCall('POST', '/dev/kill-player', {});
     printGreen('player killed');
     appendLine(JSON.stringify(data, null, 0), 'dim');
+    await refreshRunPanels();
   } catch (e) {
     printError('kill: ' + e.message);
   }
@@ -730,6 +734,7 @@ async function cmdDevNuke(args) {
   const n = res.removed || 0;
   if (n > 0) {
     printGreen(`removed ${n} monster(s)`);
+    await refreshRunPanels();
   } else {
     appendLine('no monsters to remove', 'dim');
   }
@@ -794,6 +799,7 @@ async function cmdDevAbandonRun(args) {
   currentRunId = null;
   localStorage.removeItem('cli_current_run_id');
   printGreen(`run #${res.run_id} abandoned — use run new to start fresh`);
+  await refreshRunPanels();
 }
 
 const DEV_COMMANDS = {
@@ -808,6 +814,20 @@ const DEV_COMMANDS = {
   '/inspect': cmdInspect,
   '/abandon': cmdDevAbandonRun
 };
+
+/**
+ * Re-fetch the current run and refresh all 6 side panels from authoritative API state.
+ * Safe no-op if no currentRunId. On error: dim warning only, never throw.
+ */
+async function refreshRunPanels() {
+  if (!currentRunId) return;
+  try {
+    const data = await apiCall('GET', `/runs/${currentRunId}`);
+    updateSidePanelsFromRun(data.run);
+  } catch (e) {
+    printDim('panel refresh warning: ' + e.message);
+  }
+}
 
 function updateSidePanelsFromRun(run) {
   if (!run) return;
