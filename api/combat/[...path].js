@@ -647,6 +647,85 @@ async function handle(request) {
       return json({ weapons });
     }
 
+    // GET /dev/templates — admin-gated template catalog
+    if (path === '/dev/templates' && method === 'GET') {
+      let profile;
+      try {
+        const pRes = await admin.from('profiles').select('is_admin').eq('id', user.id).single();
+        profile = pRes.data;
+        if (pRes.error) throw pRes.error;
+      } catch (e) {
+        console.error('admin profile check error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      if (!profile || !profile.is_admin) {
+        return json({ error: 'Admin access required' }, 403);
+      }
+      let weapons = [];
+      let monsters = [];
+      try {
+        const wRes = await admin.from('weapon_template').select('id, name').order('id');
+        if (wRes.error) throw wRes.error;
+        weapons = wRes.data || [];
+      } catch (e) {
+        console.error('weapon_template query error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      try {
+        const mRes = await admin.from('monster_template').select('id, name').order('id');
+        if (mRes.error) throw mRes.error;
+        monsters = mRes.data || [];
+      } catch (e) {
+        console.error('monster_template query error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      return json({ weapons, monsters });
+    }
+
+    // GET /templates/monster/<id> — player-accessible monster template view
+    const monsterMatch = path.match(/^\/templates\/monster\/(\d+)$/);
+    if (monsterMatch && method === 'GET') {
+      const id = parseInt(monsterMatch[1], 10);
+      if (isNaN(id) || id < 1) {
+        return json({ error: 'Invalid template id' }, 400);
+      }
+      let tpl;
+      try {
+        const tRes = await admin.from('monster_template')
+          .select('id, name, base_hp, damage, speed, accuracy')
+          .eq('id', id)
+          .maybeSingle();
+        if (tRes.error) throw tRes.error;
+        tpl = tRes.data;
+      } catch (e) {
+        console.error('monster_template query error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      if (!tpl) {
+        return json({ error: 'monster template not found' }, 404);
+      }
+      let attacks = [];
+      try {
+        const mapRes = await admin.from('monster_template_attack_mapping')
+          .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time)')
+          .eq('monster_template_id', id);
+        if (mapRes.data) {
+          attacks = mapRes.data.map(m => m.attack).filter(Boolean);
+        }
+      } catch (e) {
+        console.error('monster attack mapping error for template', id, e);
+      }
+      return json({
+        id: tpl.id,
+        name: tpl.name,
+        base_hp: tpl.base_hp,
+        damage: tpl.damage,
+        speed: tpl.speed,
+        accuracy: tpl.accuracy,
+        attacks
+      });
+    }
+
     // POST /api/combat/dev/grant — admin-gated dev helper: create starter weapon_instance for caller
     if (path === '/dev/grant' && method === 'POST') {
       // Gate exactly like api/admin routes (profiles.is_admin check)
@@ -971,6 +1050,28 @@ async function handle(request) {
           await admin.from('portal_run').update({ status: 'dead' }).eq('id', run.id).eq('user_id', user.id);
         }
         return json({ player_dead, status: player_dead ? 'dead' : 'active' });
+      }
+
+      // 9. POST /dev/nuke-monsters
+      if (path === '/dev/nuke-monsters') {
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        const bs = run.battle_state || {};
+        const removed = (bs.monsters || []).length;
+        bs.monsters = [];
+        if (bs.queue) {
+          bs.queue = bs.queue.filter(r => !r.label || r.label.startsWith('LH') || r.label.startsWith('RH'));
+        }
+        await admin.from('portal_run').update({ battle_state: bs }).eq('id', run.id).eq('user_id', user.id);
+        return json({ removed });
+      }
+
+      // 10. POST /dev/abandon-run
+      if (path === '/dev/abandon-run') {
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        await admin.from('portal_run').update({ status: 'abandoned' }).eq('id', run.id).eq('user_id', user.id);
+        return json({ run_id: run.id });
       }
 
       return json({ error: 'unknown dev command' }, 404);
