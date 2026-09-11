@@ -184,6 +184,7 @@ async function cmdHelp() {
     'Available commands:',
     '  help                 — this list',
     '  state                — show current run state (from API)',
+    '  status               — alias for state',
     '  run new              — create new portal_run (default template 1)',
     '  run                  — show current run summary',
     '  battle start         — start next battle on current run',
@@ -336,6 +337,7 @@ function handleCommand(line) {
   switch (cmd) {
     case 'help': cmdHelp(); break;
     case 'state': cmdState(); break;
+    case 'status': cmdState(); break;  // alias — users expect 'status'
     case 'run':
       if (args[0] === 'new') cmdRunNew();
       else cmdRun();
