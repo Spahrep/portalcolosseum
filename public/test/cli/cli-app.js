@@ -57,7 +57,19 @@ async function initAuth() {
     // dynamic import Supabase (esm.sh — matches the rest of the codebase and the CSP allowlist)
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.112.4');
     supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { persistSession: true, storageKey: 'sb-portalcolosseum-cli' }
+      auth: {
+        flowType: 'pkce',
+        detectSessionInUrl: true,
+        // Match the app-wide auth config (game-app.js / utils.js): default
+        // storage key (sb-<ref>-auth-token) so the session written by
+        // /login.html is found. A custom storageKey here made the CLI read
+        // from a key nobody writes to — permanent "no active session".
+        storage: {
+          getItem: (key) => localStorage.getItem(key),
+          setItem: (key, value) => localStorage.setItem(key, value),
+          removeItem: (key) => localStorage.removeItem(key)
+        }
+      }
     });
 
     const { data: { session } } = await supabase.auth.getSession();
