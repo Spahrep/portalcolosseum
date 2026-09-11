@@ -806,7 +806,57 @@ async function handle(request) {
         return json(res);
       }
 
-      // 3. POST /dev/roll-monster
+      // 3. POST /dev/equip-instance
+      if (path === '/dev/equip-instance') {
+        const body = await request.json().catch(() => ({}));
+        const instance_id = parseInt(body.instance_id, 10);
+        let slot = body.slot;
+        if (isNaN(instance_id) || instance_id <= 0) return json({ error: 'Invalid instance_id' }, 400);
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        if (!slot) {
+          if (!run.hand_l_weapon_id) slot = 'LH';
+          else if (!run.hand_r_weapon_id) slot = 'RH';
+          else if (!run.belt_weapon_id) slot = 'belt';
+          else slot = 'LH';
+        }
+        if (!['LH','RH','belt'].includes(slot)) slot = 'LH';
+        // ownership check (fail-closed, mirror PC-21 R7/F7)
+        let inst;
+        try {
+          const iRes = await admin.from('weapon_instance').select('id, damage, template_id, weapon_template:template_id(name)').eq('id', instance_id).eq('user_id', user.id).single();
+          inst = iRes.data;
+          if (iRes.error) throw iRes.error;
+        } catch (e) {
+          console.error('weapon_instance ownership query error', e);
+          return json({ error: 'Internal server error' }, 500);
+        }
+        if (!inst) return json({ error: 'weapon not found in your inventory' }, 404);
+        // already equipped check
+        const equippedSlot = run.hand_l_weapon_id === instance_id ? 'LH' : run.hand_r_weapon_id === instance_id ? 'RH' : run.belt_weapon_id === instance_id ? 'belt' : null;
+        if (equippedSlot) return json({ error: `weapon #${instance_id} already equipped in ${equippedSlot}` }, 400);
+        const col = slot === 'RH' ? 'hand_r_weapon_id' : slot === 'belt' ? 'belt_weapon_id' : 'hand_l_weapon_id';
+        const oldId = run[col];
+        let displaced = null;
+        if (oldId && oldId !== instance_id) {
+          try {
+            const { data: oldInst } = await admin.from('weapon_instance').select('id, template_id, weapon_template:template_id(name)').eq('id', oldId).single();
+            if (oldInst) displaced = { instance_id: oldInst.id, template_name: oldInst.weapon_template?.name || 'Unknown' };
+          } catch (_) {}
+        }
+        try {
+          await admin.from('portal_run').update({ [col]: instance_id }).eq('id', run.id).eq('user_id', user.id);
+        } catch (e) {
+          console.error('run weapon pointer update error', e);
+          return json({ error: 'Internal server error' }, 500);
+        }
+        return json({
+          slot,
+          weapon: { instance_id: inst.id, template_name: inst.weapon_template?.name || 'Unknown', damage: inst.damage },
+          displaced
+        });
+      }
+      // 4. POST /dev/roll-monster
       if (path === '/dev/roll-monster') {
         const body = await request.json().catch(() => ({}));
         const templateId = parseInt(body.template_id, 10);
@@ -828,7 +878,7 @@ async function handle(request) {
         }
       }
 
-      // 4. POST /dev/del-monster
+      // 5. POST /dev/del-monster
       if (path === '/dev/del-monster') {
         const body = await request.json().catch(() => ({}));
         const target = (body.target || '').trim();
@@ -856,7 +906,7 @@ async function handle(request) {
         }
       }
 
-      // 5. POST /dev/set-hp
+      // 6. POST /dev/set-hp
       if (path === '/dev/set-hp') {
         const body = await request.json().catch(() => ({}));
         const target = body.target;
@@ -885,7 +935,7 @@ async function handle(request) {
         }
       }
 
-      // 6. POST /dev/win-battle
+      // 7. POST /dev/win-battle
       if (path === '/dev/win-battle') {
         const run = await findActiveRun(user.id);
         if (!run) return json({ error: 'start a run first' }, 400);
@@ -901,7 +951,7 @@ async function handle(request) {
         return json({ monsters_dead: true });
       }
 
-      // 7. POST /dev/kill-player
+      // 8. POST /dev/kill-player
       if (path === '/dev/kill-player') {
         const run = await findActiveRun(user.id);
         if (!run) return json({ error: 'start a run first' }, 400);
