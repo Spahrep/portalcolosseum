@@ -10,6 +10,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { createEngine, resumeEngine } from '../../js/combat/engine.js';
 import { getHpWord } from '../../js/combat/hp-words.js';
+import { drawRandomDie, rollDieFace, selectMonsterGroup } from '../../js/combat/dice.js';
 
 const CORS = {
   'Content-Type': 'application/json',
@@ -59,6 +60,36 @@ async function handle(request) {
   const { admin, user } = auth;
 
   try {
+    // Helper: generateOneMonster (reused by dice wiring + dev routes; defined early for scope)
+    async function generateOneMonster(templateId, usedLabels) {
+      let tmpl;
+      try {
+        const tRes = await admin.from('monster_template').select('id').eq('id', templateId).single();
+        tmpl = tRes.data;
+        if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
+      } catch (e) {
+        return { error: 'monster template not found', status: 404 };
+      }
+      let gen;
+      try {
+        const { data } = await admin.rpc('generate_monster', { p_template_id: templateId });
+        gen = data;
+        if (!gen) throw new Error('rpc null');
+      } catch (e) {
+        console.error('generate_monster rpc error', e);
+        return { error: 'Internal server error', status: 500 };
+      }
+      // next free A-Z label
+      const used = new Set(usedLabels || []);
+      let label = null;
+      for (let i = 0; i < 26; i++) {
+        const cand = `Monster ${String.fromCharCode(65 + i)}`;
+        if (!used.has(cand)) { label = cand; break; }
+      }
+      if (!label) label = `Monster #${gen.id || templateId}`;
+      return { ...gen, label };
+    }
+
     // POST /api/combat/runs  {portal_template_id, hand_l_weapon_id, hand_r_weapon_id, belt_weapon_id}
     if (path === '/runs' && method === 'POST') {
       const body = await request.json().catch(() => ({}));
@@ -99,7 +130,7 @@ async function handle(request) {
         }
       }
 
-      const { data: tmpl } = await admin.from('portal_template').select('fights, green_dice_count, yellow_dice_count, red_dice_count').eq('id', portalTemplateIdNum).single();
+      const { data: tmpl } = await admin.from('portal_template').select('fights, green_dice_count, yellow_dice_count, red_dice_count, green_faces, yellow_faces, red_faces').eq('id', portalTemplateIdNum).single();
       if (!tmpl) return json({ error: 'Portal template not found' }, 404);
 
       const { data: run, error } = await admin.from('portal_run').insert({
@@ -139,10 +170,46 @@ async function handle(request) {
         }
       }
 
-      return json({ run });
+      // PC-16: draw+roll+generate for battle 1 at run creation (seeds battle_state); faces/pool from DB, no hardcodes
+      let battleStateForRun1 = {};
+      try {
+        const { data: undrawn } = await admin.from('portal_run_dice').select('*').eq('portal_run_id', run.id).is('drawn_battle', null);
+        if (undrawn && undrawn.length > 0) {
+          const die = drawRandomDie(undrawn);
+          if (die) {
+            const facesByColor = { green: tmpl.green_faces || [], yellow: tmpl.yellow_faces || [], red: tmpl.red_faces || [] };
+            const faceVal = rollDieFace(die.color, facesByColor);
+            await admin.from('portal_run_dice').update({ face: faceVal, drawn_battle: 1, rolled_value: faceVal }).eq('id', die.id);
+
+            // monster mapping + select group
+            const { data: mappings } = await admin.from('portal_monster_mapping').select('monster_template_id, point_cost, weight').eq('portal_template_id', portalTemplateIdNum);
+            const group = selectMonsterGroup(faceVal, mappings || []);
+            const monsters = [];
+            const usedLabels = [];
+            for (const gItem of group) {
+              const m = await generateOneMonster(gItem.monster_template_id, usedLabels);
+              if (m && !m.error) {
+                usedLabels.push(m.label);
+                monsters.push(m);
+              }
+            }
+            if (monsters.length > 0) {
+              const participants = { loadout: { hand_l: handL, hand_r: handR }, monsters };
+              const eng = createEngine();
+              eng.startBattle(participants);
+              battleStateForRun1 = eng.state;
+              await admin.from('portal_run').update({ battle_state: battleStateForRun1 }).eq('id', run.id).eq('user_id', user.id);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('battle1 dice/encounter error (non-fatal, legacy fallback)', e);
+      }
+
+      return json({ run: { ...run, battle_state: battleStateForRun1 } });
     }
 
-    // GET /api/combat/runs/:id
+    // GET /api/combat/runs/:id  (state route updated for dice visibility)
     if (path.startsWith('/runs/') && !path.includes('/battle') && method === 'GET') {
       const idStr = path.split('/')[2];
       const id = parseInt(idStr, 10);
@@ -259,7 +326,7 @@ async function handle(request) {
       return json({ run: { ...run, battle_state: safeState } });
     }
 
-    // POST /api/combat/runs/:id/battle/start
+    // POST /api/combat/runs/:id/battle/start  (for battle 2+ and legacy; F3 gate kept)
     if (path.includes('/battle/start') && method === 'POST') {
       const idStr = path.split('/')[2];
       const id = parseInt(idStr, 10);
@@ -268,23 +335,50 @@ async function handle(request) {
       if (!run) return json({ error: 'Run not found' }, 404);
       if (run.status !== 'active') return json({ error: 'Run not active' }, 400);
 
-      // F3: gate against re-start mid-battle (live queue or monsters in battle_state)
+      // F3: gate against re-start mid-battle (live queue or monsters in battle_state)  -- KEPT
       if (run.battle_state && (run.battle_state.queue?.length > 0 || run.battle_state.monsters?.length > 0)) {
         return json({ error: 'Battle already in progress' }, 400);
       }
 
-      // F9: monster inserts bounded by F3 gate (no mid-battle restart) + F4 monsters_dead gate
-      const { data: templates } = await admin.from('monster_template').select('id').order('id', { ascending: true }).limit(2);
-      const monsters = [];
-      for (const t of (templates || [])) {
-        const { data: gen } = await admin.rpc('generate_monster', { p_template_id: t.id });
-        if (gen) {
-          monsters.push({ ...gen, label: `Monster ${String.fromCharCode(65 + monsters.length)}` });
+      // PC-16 wiring: draw+roll+generate via dice engine (reuses generateOneMonster); fallback legacy if no dice
+      let monsters = [];
+      try {
+        const { data: tmpl } = await admin.from('portal_template').select('green_faces, yellow_faces, red_faces').eq('id', run.portal_template_id).single();
+        const { data: undrawn } = await admin.from('portal_run_dice').select('*').eq('portal_run_id', id).is('drawn_battle', null);
+        if (undrawn && undrawn.length > 0) {
+          const die = drawRandomDie(undrawn);
+          if (die) {
+            const facesByColor = { green: tmpl?.green_faces || [], yellow: tmpl?.yellow_faces || [], red: tmpl?.red_faces || [] };
+            const faceVal = rollDieFace(die.color, facesByColor);
+            await admin.from('portal_run_dice').update({ face: faceVal, drawn_battle: run.current_battle, rolled_value: faceVal }).eq('id', die.id);
+
+            const { data: mappings } = await admin.from('portal_monster_mapping').select('monster_template_id, point_cost, weight').eq('portal_template_id', run.portal_template_id);
+            const group = selectMonsterGroup(faceVal, mappings || []);
+            const usedLabels = [];
+            for (const gItem of group) {
+              const m = await generateOneMonster(gItem.monster_template_id, usedLabels);
+              if (m && !m.error) {
+                usedLabels.push(m.label);
+                monsters.push(m);
+              }
+            }
+          }
         }
+      } catch (e) {
+        console.error('battle/start dice error (legacy fallback)', e);
       }
+
+      // F9 legacy fallback if dice path yielded nothing
       if (monsters.length === 0) {
-        monsters.push({ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'Monster A' });
-        monsters.push({ id: 2, max_hp: 90, damage: 12, speed: 5, accuracy: 65, label: 'Monster B' });
+        const { data: templates } = await admin.from('monster_template').select('id').order('id', { ascending: true }).limit(2);
+        for (const t of (templates || [])) {
+          const m = await generateOneMonster(t.id, []);
+          if (m && !m.error) monsters.push(m);
+        }
+        if (monsters.length === 0) {
+          monsters.push({ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'Monster A' });
+          monsters.push({ id: 2, max_hp: 90, damage: 12, speed: 5, accuracy: 65, label: 'Monster B' });
+        }
       }
 
       const participants = {
@@ -623,35 +717,6 @@ async function handle(request) {
         throw e;
       }
       return newState;
-    }
-
-    async function generateOneMonster(templateId, usedLabels) {
-      let tmpl;
-      try {
-        const tRes = await admin.from('monster_template').select('id').eq('id', templateId).single();
-        tmpl = tRes.data;
-        if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
-      } catch (e) {
-        return { error: 'monster template not found', status: 404 };
-      }
-      let gen;
-      try {
-        const { data } = await admin.rpc('generate_monster', { p_template_id: templateId });
-        gen = data;
-        if (!gen) throw new Error('rpc null');
-      } catch (e) {
-        console.error('generate_monster rpc error', e);
-        return { error: 'Internal server error', status: 500 };
-      }
-      // next free A-Z label
-      const used = new Set(usedLabels || []);
-      let label = null;
-      for (let i = 0; i < 26; i++) {
-        const cand = `Monster ${String.fromCharCode(65 + i)}`;
-        if (!used.has(cand)) { label = cand; break; }
-      }
-      if (!label) label = `Monster #${gen.id || templateId}`;
-      return { ...gen, label };
     }
 
     // === New dev routes (all POST, admin-gated) ===
