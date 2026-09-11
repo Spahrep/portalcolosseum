@@ -15,6 +15,14 @@ let currentUser = null;
 let currentRunId = localStorage.getItem('cli_current_run_id') || null;
 let accessToken = null;
 
+// Command history for ArrowUp/ArrowDown (terminal-style recall), capped at 5.
+const HISTORY_KEY = 'cli_command_history';
+const HISTORY_MAX = 5;
+let history = [];
+try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (_) { history = []; }
+let historyIdx = -1;      // -1 = not browsing history (fresh line)
+let historyDraft = '';    // preserves the in-progress line while browsing
+
 function appendLine(text, cls = '') {
   const div = document.createElement('div');
   div.className = 'line' + (cls ? ' ' + cls : '');
@@ -41,6 +49,12 @@ function printGreen(msg) {
 
 function printDim(msg) {
   appendLine(msg, 'dim');
+}
+
+// Record a completed command into history (most recent first), capped at HISTORY_MAX.
+function pushHistory(cmd) {
+  history = [cmd, ...history.filter(h => h !== cmd)].slice(0, HISTORY_MAX);
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch (_) {}
 }
 
 async function initAuth() {
@@ -316,11 +330,26 @@ async function main() {
   }
 
   inputEl.addEventListener('keydown', async (e) => {
-    if (e.key === 'Enter') {
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (history.length === 0) return;
+      if (historyIdx === -1) historyDraft = inputEl.value;   // save the line being edited
+      historyIdx = Math.min(historyIdx + 1, history.length - 1);
+      inputEl.value = history[historyIdx];
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (historyIdx === -1) return;
+      historyIdx -= 1;
+      inputEl.value = historyIdx >= 0 ? history[historyIdx] : historyDraft;
+      if (historyIdx === -1) historyDraft = '';
+    } else if (e.key === 'Enter') {
       const val = inputEl.value.trim();
       if (!val) return;
       appendLine('> ' + val, 'dim');
       inputEl.value = '';
+      historyIdx = -1;
+      historyDraft = '';
+      pushHistory(val);
       handleCommand(val);
     }
   });
