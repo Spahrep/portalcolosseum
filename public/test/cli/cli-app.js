@@ -294,8 +294,11 @@ async function cmdRunNew() {
           continue;
         }
         if (!ans && allowEmpty) return null;
-        const id = parseInt(ans, 10);
-        if (Number.isFinite(id)) return id;
+        const m = ans.match(/(\d+)\s*$/);
+        if (m) {
+          const id = parseInt(m[1], 10);
+          if (Number.isFinite(id)) return id;
+        }
         printAmber('invalid id, try again');
       }
     };
