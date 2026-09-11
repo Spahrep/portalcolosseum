@@ -10,6 +10,14 @@ const outputEl = document.getElementById('output');
 const inputEl = document.getElementById('input');
 const authStatusEl = document.getElementById('auth-status');
 
+// Side panel elements (retro 3-col layout)
+const playerStatsContent = document.getElementById('player-stats-content');
+const monsterRosterContent = document.getElementById('monster-roster-content');
+const runLootContent = document.getElementById('run-loot-content');
+const actionQueueContent = document.getElementById('action-queue-content');
+const diceLeftContent = document.getElementById('dice-left-content');
+const diceRolledContent = document.getElementById('dice-rolled-content');
+
 let supabase = null;
 let currentUser = null;
 let currentRunId = localStorage.getItem('cli_current_run_id') || null;
@@ -179,6 +187,8 @@ function printStateFromRun(run) {
   lines.push(`queue: ${(bs.queue || []).slice(0, 4).map(q => `${q.label || ''}@${q.tics ?? 0}${q.event ? ':' + q.event : ''}`).join(' ') || 'empty'}`);
   lines.push(`feed: ${(bs.feed || []).slice(-3).join(' | ') || '—'}`);
   appendLines(lines, 'green');
+  // Update side panels with real battle_state data (right column uses dice/queue, left uses monsters/player)
+  updateSidePanelsFromRun(run);
 }
 
 async function cmdHelp() {
@@ -684,3 +694,85 @@ const DEV_COMMANDS = {
   '/win': cmdDevWin,
   '/kill': cmdDevKill
 };
+
+function updateSidePanelsFromRun(run) {
+  if (!run) return;
+  const bs = run.battle_state || {};
+  const weapons = bs.weapons || {};
+  const mons = bs.monsters || [];
+  const d = bs.dice || {};
+  const queue = bs.queue || [];
+
+  // LEFT: Player stats (HP + hands + placeholders for BL/C1/C2)
+  if (playerStatsContent) {
+    let html = `<div class="stat-line">HP: ${run.player_hp ?? '—'}</div>`;
+    const lh = weapons.hand_l;
+    html += `<div class="stat-line">LH: ${lh ? `#${lh.id} ${lh.name}` : '—'}</div>`;
+    const rh = weapons.hand_r;
+    html += `<div class="stat-line">RH: ${rh ? `#${rh.id} ${rh.name}` : '—'}</div>`;
+    html += `<div class="stat-line">BL: —</div>`;
+    html += `<div class="stat-line">C1: —</div>`;
+    html += `<div class="stat-line">C2: —</div>`;
+    playerStatsContent.innerHTML = html;
+  }
+
+  // LEFT: Monster roster
+  if (monsterRosterContent) {
+    if (mons.length === 0) {
+      monsterRosterContent.innerHTML = '<div class="dim">No monsters</div>';
+    } else {
+      let html = '';
+      mons.forEach(m => {
+        const letter = (m.label && /[A-Z]$/.test(m.label)) ? m.label.slice(-1) : '';
+        const hp = m.current_hp ?? m.max_hp ?? '?';
+        html += `<div class="monster">${m.name}${letter ? ' ' + letter : ''} #${m.id} hp ${hp}/${m.max_hp || '?'} dmg=${m.damage}</div>`;
+      });
+      monsterRosterContent.innerHTML = html;
+    }
+  }
+
+  // LEFT: Run Loot (display only — no loot field in current state shape)
+  if (runLootContent) {
+    runLootContent.innerHTML = '<div class="dim">— (no loot data)</div>';
+  }
+
+  // RIGHT: Action/tic queue
+  if (actionQueueContent) {
+    if (queue.length === 0) {
+      actionQueueContent.innerHTML = '<div class="dim">empty</div>';
+    } else {
+      let html = '';
+      queue.slice(0, 8).forEach(q => {
+        const label = q.label || '?';
+        const tics = q.tics ?? 0;
+        const ev = q.event ? ':' + q.event : '';
+        html += `<div>${label}@${tics}${ev}</div>`;
+      });
+      actionQueueContent.innerHTML = html;
+    }
+  }
+
+  // RIGHT: Dice Left (from battle_state.dice.remaining)
+  if (diceLeftContent) {
+    const fmt = (o) => `G${o?.green ?? 0} Y${o?.yellow ?? 0} R${o?.red ?? 0}`;
+    const rem = d.remaining ? fmt(d.remaining) : 'G0 Y0 R0';
+    diceLeftContent.innerHTML = `<div class="stat-line">${rem}</div>`;
+    if (d.used) {
+      diceLeftContent.innerHTML += `<div class="dim">used: ${fmt(d.used)}</div>`;
+    }
+  }
+
+  // RIGHT: Dice rolled results (current + any feed info)
+  if (diceRolledContent) {
+    let html = '';
+    if (d.current) {
+      html += `<div>current: ${d.current.color} face=${d.current.face} val=${d.current.rolled_value}</div>`;
+    } else {
+      html += `<div class="dim">no die drawn yet</div>`;
+    }
+    if (bs.feed && bs.feed.length) {
+      html += `<div class="amber">feed: ${bs.feed.slice(-2).join(' | ')}</div>`;
+    }
+    diceRolledContent.innerHTML = html || '<div class="dim">—</div>';
+  }
+}
