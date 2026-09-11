@@ -4,7 +4,7 @@
  * Vercel serverless catch-all for combat engine routes.
  * Mirrors api/admin conventions exactly (CORS, json(), getAdminClient, JWT).
  * Enforces uid == run.user_id (RLS backup). Service-role for portal_run + generate_monster.
- * IDOR closed: all UPDATEs chain .eq('user_id', user.id); all path ids NaN-guarded; non-active rejected.
+ * IDOR closed: all UPDATEs chain .eq('user_id', user.id); all path ids NaN-guarded; non-active rejected; consume_a/b ownership via consumable_instance (R7/F7).
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -90,10 +90,10 @@ async function handle(request) {
       return { ...gen, label };
     }
 
-    // POST /api/combat/runs  {portal_template_id, hand_l_weapon_id, hand_r_weapon_id, belt_weapon_id}
+    // POST /api/combat/runs  {portal_template_id, hand_l_weapon_id, hand_r_weapon_id, belt_weapon_id, consume_a, consume_b}
     if (path === '/runs' && method === 'POST') {
       const body = await request.json().catch(() => ({}));
-      const { portal_template_id, hand_l_weapon_id, hand_r_weapon_id, belt_weapon_id } = body;
+      const { portal_template_id, hand_l_weapon_id, hand_r_weapon_id, belt_weapon_id, consume_a, consume_b } = body;
       // R8: integer validation for portal_template_id (same pattern as weapon ids)
       const portalTemplateIdNum = parseInt(portal_template_id, 10);
       if (isNaN(portalTemplateIdNum) || portalTemplateIdNum <= 0) return json({ error: 'Invalid portal_template_id' }, 400);
@@ -130,6 +130,32 @@ async function handle(request) {
         }
       }
 
+      // F7: fail-closed consumable ownership (positive int + exact length + every owner match + error -> 500)
+      // R7: parse each consume id once; 400 on NaN/<=0; dedupe parsed ids; use parsed values for ownership check AND INSERT
+      const consumeA = consume_a == null ? null : parseInt(consume_a, 10);
+      const consumeB = consume_b == null ? null : parseInt(consume_b, 10);
+      for (const c of [consumeA, consumeB]) {
+        if (c != null && (isNaN(c) || c <= 0)) return json({ error: 'Invalid consume id' }, 400);
+      }
+      const rawC = [consumeA, consumeB].filter(n => n != null);
+      const consumeIds = [...new Set(rawC)];
+      if (consumeIds.length !== rawC.length) return json({ error: 'Duplicate consume id' }, 400);
+      if (consumeIds.length) {
+        let ownsC;
+        try {
+          const res = await admin.from('consumable_instance').select('id,user_id').in('id', consumeIds);
+          ownsC = res.data;
+          if (res.error) throw res.error;
+        } catch (e) {
+          console.error('consumable ownership query error', e);
+          return json({ error: 'Internal server error' }, 500);
+        }
+        // R7: compare against distinct count
+        if (!ownsC || ownsC.length !== consumeIds.length || ownsC.some(c => c.user_id !== user.id)) {
+          return json({ error: 'Consumable ownership mismatch' }, 403);
+        }
+      }
+
       const { data: tmpl } = await admin.from('portal_template').select('fights, green_dice_count, yellow_dice_count, red_dice_count, green_faces, yellow_faces, red_faces').eq('id', portalTemplateIdNum).single();
       if (!tmpl) return json({ error: 'Portal template not found' }, 404);
 
@@ -139,6 +165,8 @@ async function handle(request) {
         hand_l_weapon_id: handL,
         hand_r_weapon_id: handR,
         belt_weapon_id: beltW,
+        consume_a_id: consumeA,
+        consume_b_id: consumeB,
         status: 'active',
         current_battle: 1,
         total_battles: tmpl.fights || 5,
