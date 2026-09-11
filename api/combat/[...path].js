@@ -45,7 +45,11 @@ async function verifyUser(request) {
 export default async function handler(request) {
   if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
 
-  const url = new URL(request.url);
+  // Vercel may pass request.url as a relative path (e.g. "/api/combat/runs?path=runs")
+  // when the function is invoked via a filesystem rewrite rather than a direct
+  // function route. new URL() with no base throws ERR_INVALID_URL on relative
+  // input; the base makes both forms work (absolute URLs ignore it).
+  const url = new URL(request.url, 'https://portalcolosseum.com');
   const path = url.pathname.replace('/api/combat', '');
   const method = request.method;
 

@@ -150,6 +150,10 @@
       "dest": "/api/admin/[...path].js"
     },
     {
+      "src": "/api/combat/(.*)",
+      "dest": "/api/combat/[...path].js"
+    },
+    {
       "src": "/api/(.*)",
       "dest": "/api/$1"
     },
