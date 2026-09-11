@@ -134,14 +134,38 @@ function printStateFromRun(run) {
     return;
   }
   const bs = run.battle_state || {};
+  const weapons = bs.weapons || {};
+  const fmtAttacks = (list) => (list || []).map(a =>
+    `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`
+  ).join(' | ') || 'none';
+  const letterOf = (label) => (label && /[A-Z]$/.test(label)) ? label.slice(-1) : '';
+
   const lines = [
     `RUN #${run.id} status=${run.status} battle ${run.current_battle}/${run.total_battles}`,
-    `player_hp: ${run.player_hp}  tic: ${bs.tic || 0}`,
-    `hands: LH=${run.hand_l_weapon_id || '—'} RH=${run.hand_r_weapon_id || '—'}`,
-    `monsters: ${(bs.monsters || []).map(m => `${m.label}(#${m.id} ${m.hp_word})`).join(' ') || 'none'}`,
-    `queue: ${(bs.queue || []).slice(0,4).map(q => `${q.hand||''}@${q.tic||0}`).join(' ') || 'empty'}`,
-    `feed: ${(bs.feed || []).slice(-3).join(' | ') || '—'}`
+    `player_hp: ${run.player_hp}  tic: ${bs.tic || 0}`
   ];
+  for (const [hand, key] of [['LH', 'hand_l'], ['RH', 'hand_r']]) {
+    const w = weapons[key];
+    if (w) {
+      lines.push(`${hand} #${w.id} ${w.name} dmg=${w.damage} spd=${w.speed} acc=${w.accuracy}`);
+      lines.push(`    attacks: ${fmtAttacks(w.attacks)}`);
+    } else {
+      lines.push(`${hand} — no weapon`);
+    }
+  }
+  const mons = bs.monsters || [];
+  if (mons.length) {
+    lines.push('monsters:');
+    for (const m of mons) {
+      const letter = letterOf(m.label);
+      lines.push(`  ${m.name}${letter ? ' ' + letter : ''}  (#${m.id} ${m.hp_word}) dmg=${m.damage} spd=${m.speed} acc=${m.accuracy}`);
+      lines.push(`      attacks: ${fmtAttacks(m.attacks)}`);
+    }
+  } else {
+    lines.push('monsters: none');
+  }
+  lines.push(`queue: ${(bs.queue || []).slice(0, 4).map(q => `${q.label || ''}@${q.tics ?? 0}${q.event ? ':' + q.event : ''}`).join(' ') || 'empty'}`);
+  lines.push(`feed: ${(bs.feed || []).slice(-3).join(' | ') || '—'}`);
   appendLines(lines, 'green');
 }
 

@@ -130,17 +130,87 @@ async function handle(request) {
       const { data: run } = await admin.from('portal_run').select('*').eq('id', id).eq('user_id', user.id).single();
       if (!run) return json({ error: 'Not found or not owner' }, 404);
       const state = run.battle_state || {};
+
+      // --- monsters: battle_state already carries stats + granted attacks (slot_*_attack
+      // full attack rows from generate_monster); join template names for readable display ---
+      const rawMonsters = state.monsters || [];
+      const templateIds = [...new Set(rawMonsters.map(m => m.template_id).filter(Boolean))];
+      const templateNames = {};
+      if (templateIds.length) {
+        const { data: trows } = await admin.from('monster_template').select('id, name').in('id', templateIds);
+        for (const t of (trows || [])) templateNames[t.id] = t.name;
+      }
+      const monsters = rawMonsters.map(m => {
+        const attacks = ['slot_0_attack', 'slot_1_attack', 'slot_2_attack', 'slot_3_attack', 'slot_4_attack']
+          .map(k => m[k])
+          .filter(a => a && typeof a === 'object' && a.id)
+          .map(a => ({
+            id: a.id,
+            name: a.name,
+            is_multi_target: !!a.is_multi_target,
+            prepare_time: a.prepare_time || 3,
+            cooldown_time: a.cooldown_time || 2
+          }));
+        return {
+          id: m.id,
+          label: m.label,
+          template_id: m.template_id,
+          name: templateNames[m.template_id] || m.template_name || m.label || 'Monster',
+          hp_word: getHpWord(m.current_hp, m.max_hp),
+          damage: m.damage,
+          speed: m.speed,
+          accuracy: m.accuracy,
+          attacks
+        };
+      });
+
+      // --- equipped weapons: instance stats + template name + granted attacks (same join as /weapons) ---
+      const weaponIds = [run.hand_l_weapon_id, run.hand_r_weapon_id].filter(Boolean);
+      let weaponRows = [];
+      if (weaponIds.length) {
+        const res = await admin.from('weapon_instance')
+          .select('id, damage, speed, accuracy, template_id, weapon_template:template_id (name)')
+          .in('id', weaponIds);
+        weaponRows = res.data || [];
+      }
+      const weaponById = Object.fromEntries(weaponRows.map(w => [w.id, w]));
+      async function weaponInfo(weaponId) {
+        const w = weaponById[weaponId];
+        if (!w) return null;
+        let attacks = [];
+        try {
+          const mapRes = await admin.from('weapon_template_attack_mapping')
+            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time)')
+            .eq('weapon_template_id', w.template_id);
+          if (mapRes.data) attacks = mapRes.data.map(m => m.attack).filter(Boolean);
+        } catch (e) {
+          console.error('attack mapping error for weapon', w.id, e);
+        }
+        return {
+          id: w.id,
+          name: w.weapon_template?.name || 'Unknown',
+          damage: w.damage,
+          speed: w.speed,
+          accuracy: w.accuracy,
+          attacks: attacks.map(a => ({
+            id: a.id,
+            name: a.name,
+            is_multi_target: !!a.is_multi_target,
+            prepare_time: a.prepare_time || 3,
+            cooldown_time: a.cooldown_time || 2
+          }))
+        };
+      }
+      const [handL, handR] = await Promise.all([weaponInfo(run.hand_l_weapon_id), weaponInfo(run.hand_r_weapon_id)]);
+
       const safeState = {
         queue: state.queue || [],
         player: state.player ? { hp: state.player.hp, hands: state.player.hands } : null,
         feed: state.feed || [],
         tic: state.tic || 0,
         buffs: state.buffs || [],
-        monsters: (state.monsters || []).map(m => ({
-          label: m.label,
-          hp_word: getHpWord(m.current_hp, m.max_hp),
-          id: m.id
-        }))
+        weapons: { hand_l: handL, hand_r: handR },
+        monsters
       };
       return json({ run: { ...run, battle_state: safeState } });
     }
