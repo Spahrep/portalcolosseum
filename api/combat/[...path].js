@@ -430,7 +430,7 @@ async function handle(request) {
       // pick first existing weapon_template
       let tmpl;
       try {
-        const tRes = await admin.from('weapon_template').select('id, name').order('id', { ascending: true }).limit(1).single();
+        const tRes = await admin.from('weapon_template').select('id, name, slot_0_attack_id').order('id', { ascending: true }).limit(1).single();
         tmpl = tRes.data;
         if (tRes.error || !tmpl) throw tRes.error || new Error('no templates');
       } catch (e) {
@@ -439,12 +439,15 @@ async function handle(request) {
       }
 
       // create weapon_instance with sane deterministic damage (constant 15 as example 12-18 range)
+      // slot_0_attack_id is NOT NULL (no default) since migration 20260905040000 —
+      // materialize the template's slot-0 attack on the instance, like weapon generation does.
       const damage = 15;
       let inst;
       try {
         const iRes = await admin.from('weapon_instance').insert({
           user_id: user.id,
           template_id: tmpl.id,
+          slot_0_attack_id: tmpl.slot_0_attack_id,
           damage,
           speed: 6,
           accuracy: 70
