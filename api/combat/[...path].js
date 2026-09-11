@@ -99,7 +99,7 @@ async function handle(request) {
         }
       }
 
-      const { data: tmpl } = await admin.from('portal_template').select('fights').eq('id', portalTemplateIdNum).single();
+      const { data: tmpl } = await admin.from('portal_template').select('fights, green_dice_count, yellow_dice_count, red_dice_count').eq('id', portalTemplateIdNum).single();
       if (!tmpl) return json({ error: 'Portal template not found' }, 404);
 
       const { data: run, error } = await admin.from('portal_run').insert({
@@ -119,6 +119,26 @@ async function handle(request) {
         console.error('run insert error', error);
         return json({ error: 'Internal server error' }, 500);
       }
+
+      // Materialize dice pool from template counts (green/yellow/red rows, all NULL state)
+      // Defensive: if pool insert fails, delete the run (never leave orphan run with no dice)
+      const diceRows = [];
+      const g = tmpl.green_dice_count || 0;
+      const y = tmpl.yellow_dice_count || 0;
+      const r = tmpl.red_dice_count || 0;
+      for (let i = 0; i < g; i++) diceRows.push({ portal_run_id: run.id, color: 'green', face: null, drawn_battle: null, rolled_value: null });
+      for (let i = 0; i < y; i++) diceRows.push({ portal_run_id: run.id, color: 'yellow', face: null, drawn_battle: null, rolled_value: null });
+      for (let i = 0; i < r; i++) diceRows.push({ portal_run_id: run.id, color: 'red', face: null, drawn_battle: null, rolled_value: null });
+      if (diceRows.length > 0) {
+        const { error: diceErr } = await admin.from('portal_run_dice').insert(diceRows);
+        if (diceErr) {
+          console.error('dice pool insert error', diceErr);
+          // cleanup: delete the run so caller never sees a run with no dice
+          await admin.from('portal_run').delete().eq('id', run.id);
+          return json({ error: 'Internal server error' }, 500);
+        }
+      }
+
       return json({ run });
     }
 
@@ -130,6 +150,29 @@ async function handle(request) {
       const { data: run } = await admin.from('portal_run').select('*').eq('id', id).eq('user_id', user.id).single();
       if (!run) return json({ error: 'Not found or not owner' }, 404);
       const state = run.battle_state || {};
+
+      // Dice state: fetch all dice for this run, compute remaining/used/current
+      const { data: diceRows } = await admin.from('portal_run_dice')
+        .select('color, face, drawn_battle, rolled_value')
+        .eq('portal_run_id', id);
+      let dice = null;
+      if (diceRows && diceRows.length > 0) {
+        const remaining = { green: 0, yellow: 0, red: 0 };
+        const used = { green: 0, yellow: 0, red: 0 };
+        let current = null;
+        for (const d of diceRows) {
+          const c = d.color;
+          if (d.drawn_battle === null) {
+            remaining[c] = (remaining[c] || 0) + 1;
+          } else {
+            used[c] = (used[c] || 0) + 1;
+            if (d.drawn_battle === run.current_battle) {
+              current = { color: d.color, face: d.face, rolled_value: d.rolled_value };
+            }
+          }
+        }
+        dice = { remaining, used, current };
+      }
 
       // --- monsters: battle_state already carries stats + granted attacks (slot_*_attack
       // full attack rows from generate_monster); join template names for readable display ---
@@ -210,7 +253,8 @@ async function handle(request) {
         tic: state.tic || 0,
         buffs: state.buffs || [],
         weapons: { hand_l: handL, hand_r: handR },
-        monsters
+        monsters,
+        dice
       };
       return json({ run: { ...run, battle_state: safeState } });
     }

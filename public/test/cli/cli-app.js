@@ -144,6 +144,16 @@ function printStateFromRun(run) {
     `RUN #${run.id} status=${run.status} battle ${run.current_battle}/${run.total_battles}`,
     `player_hp: ${run.player_hp}  tic: ${bs.tic || 0}`
   ];
+  const d = bs.dice;
+  if (d) {
+    const fmtC = (o) => `G${o.green ?? 0} Y${o.yellow ?? 0} R${o.red ?? 0}`;
+    const cur = d.current
+      ? `current: ${d.current.color} die face=${d.current.face} budget=${d.current.rolled_value}`
+      : 'current: — (no die drawn this battle yet)';
+    lines.push(`dice remaining: ${fmtC(d.remaining)}  used: ${fmtC(d.used)}  ${cur}`);
+  } else {
+    lines.push('dice: none');
+  }
   for (const [hand, key] of [['LH', 'hand_l'], ['RH', 'hand_r']]) {
     const w = weapons[key];
     if (w) {

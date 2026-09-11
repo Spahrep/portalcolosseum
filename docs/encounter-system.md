@@ -29,6 +29,11 @@ Each face is a **point value** (threat budget for that battle). A red die is mor
 
 Dice pool composition (how many dice, color mix, face values) is **per-portal**, stored in database tables. The system is global; the pools are per-portal configuration via a mapping table.
 
+### Dice State (Schema)
+
+- **Decided 2026-09-11:** Dice state is normalized, not JSONB — `portal_run_dice`, one row per die in the run's pool (color, face, drawn_battle, rolled_value). The pool is materialized at run creation from the portal's dice counts; dice are drawn without replacement per battle (drawn_battle set, die leaves the pool).
+- **Decided 2026-09-11:** The CLI/test harness state shows exact die faces and the point budget (playtesting transparency).
+
 ## Player Visibility
 
 - **Before starting**: Player sees the full dice distribution (colors) for the portal.
