@@ -50,3 +50,6 @@ email_integration.py
 
 # Hermes plan/brief scratch (not project code)
 .hermes/
+
+# Generated artifacts (harness output)
+scripts/run-summary.json
