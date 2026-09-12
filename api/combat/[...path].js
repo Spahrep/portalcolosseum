@@ -87,7 +87,11 @@ async function handle(request) {
         if (!used.has(cand)) { label = cand; break; }
       }
       if (!label) label = `Monster #${gen.id || templateId}`;
-      return { ...gen, label };
+      // normalize attacks from RPC JSONB slot objects (never [null])
+      const attacks = ['slot_0_attack', 'slot_1_attack', 'slot_2_attack', 'slot_3_attack', 'slot_4_attack']
+        .map(k => gen[k])
+        .filter(a => a && typeof a === 'object' && a.id);
+      return { ...gen, attacks, label };
     }
 
     // POST /api/combat/runs  {portal_template_id, hand_l_weapon_id, hand_r_weapon_id, belt_weapon_id, consume_a, consume_b}

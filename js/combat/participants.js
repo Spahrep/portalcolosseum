@@ -16,16 +16,23 @@ export function createPlayer(loadout) {
 }
 
 export function createMonster(instance, templateName = 'mob') {
+  // spread instance FIRST so slot_0_attack..slot_4_attack (and id/template_id) survive for state route
+  // attacks: non-empty array wins; else map+filter slots; else [] (never [null]/[undefined])
+  const attacks = (Array.isArray(instance?.attacks) && instance.attacks.some(a => a && typeof a === 'object' && a.id))
+    ? instance.attacks
+    : ['slot_0_attack', 'slot_1_attack', 'slot_2_attack', 'slot_3_attack', 'slot_4_attack']
+        .map(k => instance?.[k])
+        .filter(a => a && typeof a === 'object' && a.id) || [];
   return {
+    ...instance,
     type: 'monster',
-    id: instance.id,
     label: instance.label || 'M',
     max_hp: instance.max_hp, // secret
     current_hp: instance.max_hp,
     damage: instance.damage,
     speed: Math.max(1, Number(instance.speed) || 1), // R9: clamp speed >=1 to prevent zero-tic re-fire
     accuracy: instance.accuracy,
-    attacks: instance.attacks || [instance.slot_0_attack_id],
+    attacks,
     template_name: templateName
   };
 }
