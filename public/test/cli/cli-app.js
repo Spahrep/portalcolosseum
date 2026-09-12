@@ -314,9 +314,9 @@ async function cmdRunNew() {
     const cb = await getId('Consume B', true);
 
     const payload = { portal_template_id: 1 };
-    if (lh != null) payload.hand_l = lh;
-    if (rh != null) payload.hand_r = rh;
-    if (belt != null) payload.belt = belt;
+    if (lh != null) payload.hand_l_weapon_id = lh;
+    if (rh != null) payload.hand_r_weapon_id = rh;
+    if (belt != null) payload.belt_weapon_id = belt;
     if (ca != null) payload.consume_a = ca;
     if (cb != null) payload.consume_b = cb;
 
