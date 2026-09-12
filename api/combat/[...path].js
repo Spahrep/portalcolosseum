@@ -299,6 +299,7 @@ async function handle(request) {
           template_id: m.template_id,
           name: templateNames[m.template_id] || m.template_name || m.label || 'Monster',
           hp_word: getHpWord(m.current_hp, m.max_hp),
+          dead: m.current_hp <= 0,
           damage: m.damage,
           speed: m.speed,
           accuracy: m.accuracy,
@@ -590,6 +591,21 @@ async function handle(request) {
           await admin.from('portal_run')
             .update({ battle_state: newBattleState, current_battle: newBattle, player_hp: carryHp })
             .eq('id', id).eq('user_id', user.id);
+          // PC-33 fix: draw + roll the next battle's die (mirrors run-new battle-1 / battle/start)
+          try {
+            const { data: tmpl } = await admin.from('portal_template').select('green_faces, yellow_faces, red_faces').eq('id', run.portal_template_id).single();
+            const { data: undrawn } = await admin.from('portal_run_dice').select('*').eq('portal_run_id', id).is('drawn_battle', null);
+            if (undrawn && undrawn.length > 0) {
+              const die = drawRandomDie(undrawn);
+              if (die) {
+                const facesByColor = { green: tmpl?.green_faces || [], yellow: tmpl?.yellow_faces || [], red: tmpl?.red_faces || [] };
+                const faceVal = rollDieFace(die.color, facesByColor);
+                await admin.from('portal_run_dice').update({ face: faceVal, drawn_battle: newBattle, rolled_value: faceVal }).eq('id', die.id);
+              }
+            }
+          } catch (e) {
+            console.error('battle/end next-die draw error (non-fatal)', e);
+          }
           return json({ status: 'active', current_battle: newBattle, battle_state: { participants: freshEngine.getState().participants } });
         } else {
           // only complete if monsters_dead on final battle
