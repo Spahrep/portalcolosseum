@@ -22,7 +22,7 @@ let supabase = null;
 let currentUser = null;
 let currentRunId = localStorage.getItem('cli_current_run_id') || null;
 let accessToken = null;
-let devMode = false;
+let devMode = localStorage.getItem('cli_dev_mode') === '1';
 let pendingInputResolver = null;
 
 // Command history for ArrowUp/ArrowDown (terminal-style recall), capped at 5.
@@ -190,7 +190,8 @@ function printStateFromRun(run) {
     lines.push('monsters:');
     for (const m of mons) {
       const letter = letterOf(m.label);
-      lines.push(`  ${m.name}${letter ? ' ' + letter : ''}  (#${m.id} ${m.hp_word}) dmg=${m.damage} spd=${m.speed} acc=${m.accuracy}`);
+      const deadMark = m.dead ? ' (dead)' : '';
+      lines.push(`  ${m.name}${letter ? ' ' + letter : ''}  (#${m.id} ${m.hp_word}${deadMark}) dmg=${m.damage} spd=${m.speed} acc=${m.accuracy}`);
       lines.push(`      attacks: ${fmtAttacks(m.attacks)}`);
     }
   } else {
@@ -326,8 +327,14 @@ async function cmdRunNew() {
     printGreen(`Created run #${currentRunId}`);
 
     // render dice + budget + battle-1 monsters (from response or run)
-    const run = data.run;
-    const bs = run.battle_state || {};
+    // fetch full state — POST response is thin (participants only, no dice/hp_word)
+    let bs = {};
+    try {
+      const fresh = await apiCall('GET', `/runs/${data.run.id}`);
+      bs = (fresh.run && fresh.run.battle_state) || {};
+    } catch {
+      bs = (data.run && data.run.battle_state) || {};
+    }
     const d = bs.dice || {};
     if (d.remaining || d.current) {
       const fmtC = (o) => `G${o.green ?? 0} Y${o.yellow ?? 0} R${o.red ?? 0}`;
@@ -336,15 +343,15 @@ async function cmdRunNew() {
         : 'current: —';
       appendLine(`dice remaining: ${fmtC(d.remaining || {})}  used: ${fmtC(d.used || {})}  ${cur}`, 'green');
     }
-    // monsters: prefer participants if returned by POST, else battle_state
-    const mons = (data.participants || bs.monsters || []);
+    const mons = bs.monsters || [];
     if (mons.length) {
       appendLine('battle-1 monsters:', 'dim');
       mons.forEach(m => {
-        printGreen(`monster ${m.label} hp ${m.current_hp ?? m.max_hp}/${m.max_hp} dmg ${m.damage} spd ${m.speed} acc ${m.accuracy}`);
+        const deadMark = m.dead ? ' (dead)' : '';
+        printGreen(`monster ${m.label} hp_word=${m.hp_word || 'Healthy'}${deadMark} dmg=${m.damage} spd=${m.speed} acc=${m.accuracy}`);
       });
     } else {
-      appendLine('battle-1 monsters: (none or see state)', 'dim');
+      appendLine('battle-1 monsters: (none — see state)', 'dim');
     }
     await refreshRunPanels();
   } catch (e) {
@@ -463,6 +470,7 @@ async function cmdGrant() {
     const data = await apiCall('POST', '/dev/grant', {});
     if (data.dev_mode === true) {
       devMode = true;
+      localStorage.setItem('cli_dev_mode', '1');
       printGreen('Dev tools unlocked. Type help for the full command list.');
     } else {
       appendLine(JSON.stringify(data), 'dim');
@@ -478,6 +486,7 @@ async function cmdGrant() {
 
 function cmdClear() {
   outputEl.innerHTML = '';
+  localStorage.removeItem('cli_dev_mode');
 }
 
 function handleCommand(line) {
@@ -617,8 +626,9 @@ async function cmdDevRoll(args) {
   if (sub === 'weapon') {
     const template_id = parseInt(args[1], 10);
     if (!Number.isFinite(template_id)) { printError('usage: /roll weapon <id> [LH|RH|belt] | /roll monster <id>'); return; }
-    let slot = args[2] ? args[2].toUpperCase() : 'LH';
-    if (!['LH','RH','belt'].includes(slot)) slot = 'LH';
+    let slot = args[2] ? args[2].toLowerCase() : 'lh';
+    if (!['lh','rh','belt'].includes(slot)) slot = 'lh';
+    slot = slot === 'belt' ? 'belt' : slot.toUpperCase();
     try {
       const data = await apiCall('POST', '/dev/roll-weapon', { template_id, slot });
       const w = data.weapon;
