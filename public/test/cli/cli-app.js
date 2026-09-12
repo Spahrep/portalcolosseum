@@ -176,7 +176,7 @@ function printStateFromRun(run) {
   } else {
     lines.push('dice: none');
   }
-  for (const [hand, key] of [['LH', 'hand_l'], ['RH', 'hand_r']]) {
+  for (const [hand, key] of [['LH', 'hand_l'], ['RH', 'hand_r'], ['BL', 'belt']]) {
     const w = weapons[key];
     if (w) {
       lines.push(`${hand} #${w.id} ${w.name} dmg=${w.damage} spd=${w.speed} acc=${w.accuracy}`);
@@ -853,7 +853,8 @@ function updateSidePanelsFromRun(run) {
     html += `<div class="stat-line">LH: ${lh ? `#${lh.id} ${lh.name}` : '—'}</div>`;
     const rh = weapons.hand_r;
     html += `<div class="stat-line">RH: ${rh ? `#${rh.id} ${rh.name}` : '—'}</div>`;
-    html += `<div class="stat-line">BL: —</div>`;
+    const bl = weapons.belt;
+    html += `<div class="stat-line">BL: ${bl ? `#${bl.id} ${bl.name}` : '—'}</div>`;
     html += `<div class="stat-line">C1: —</div>`;
     html += `<div class="stat-line">C2: —</div>`;
     playerStatsContent.innerHTML = html;

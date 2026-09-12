@@ -307,7 +307,7 @@ async function handle(request) {
       });
 
       // --- equipped weapons: instance stats + template name + granted attacks (same join as /weapons) ---
-      const weaponIds = [run.hand_l_weapon_id, run.hand_r_weapon_id].filter(Boolean);
+      const weaponIds = [run.hand_l_weapon_id, run.hand_r_weapon_id, run.belt_weapon_id].filter(Boolean);
       let weaponRows = [];
       if (weaponIds.length) {
         const res = await admin.from('weapon_instance')
@@ -343,7 +343,7 @@ async function handle(request) {
           }))
         };
       }
-      const [handL, handR] = await Promise.all([weaponInfo(run.hand_l_weapon_id), weaponInfo(run.hand_r_weapon_id)]);
+      const [handL, handR, beltW] = await Promise.all([weaponInfo(run.hand_l_weapon_id), weaponInfo(run.hand_r_weapon_id), weaponInfo(run.belt_weapon_id)]);
 
       const safeState = {
         queue: state.queue || [],
@@ -351,7 +351,7 @@ async function handle(request) {
         feed: state.feed || [],
         tic: state.tic || 0,
         buffs: state.buffs || [],
-        weapons: { hand_l: handL, hand_r: handR },
+        weapons: { hand_l: handL, hand_r: handR, belt: beltW },
         monsters,
         dice
       };
