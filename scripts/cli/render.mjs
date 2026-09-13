@@ -113,6 +113,7 @@ export function cmdHelp(devMode = false) {
     '  wait                 — explicit commit to advance busy hand / clock',
     '  grant                — admin dev: unlock dev tools (403 if not admin)',
     '  inspect [id]         — monster template info (bare lists ids)',
+    '  equip LH|RH <id>     — equip weapon id into hand (only in run-start gate)',
     '  clear                — clear terminal output',
     '',
     'Notes: run id auto-saved to ~/.config/portalcolosseum/current-run. Unknown cmd shows error. State printed after mutations.',

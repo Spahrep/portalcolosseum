@@ -26,12 +26,15 @@ let devMode = localStorage.getItem('cli_dev_mode') === '1';
 let pendingInputResolver = null;
 let flowState = null; // 'preamble' | 'confirm' | null — run-start gate
 let pendingPicks = null; // {lh, rh, belt, ca, cb} captured at the ready step
+let selectMode = false; // UX select mode for player stats slots
+let selectIndex = 0; // 0=LH,1=RH,2=BL,3=C1,4=C2
 let offeredBattleNum = null; // last battle the after-battle offer was shown for
 
 // --- PC-36 pure text builders (tested in isolation) ---
 
 function buildPreambleText() {
-  return '\nThe air shimmers. Something ancient watches from the other side.\n\nYou stand before an open portal. A run of battles awaits on the other side.\nWhat you bring now is all you will have.\n\nCommands: inventory | inspect # | ready | help\nType "ready" when you are prepared.\n';
+  // PC-36 short placeholder per spec (replaces atmospheric text; leading \n preserved for output parity)
+  return '\nPrepare to start your run.\n\nCommands: inventory | inspect # | equip LH|RH <id> | ready\nType "ready" when ready.\n';
 }
 
 function buildRecapText(weapons, consumables, picks) {
@@ -528,6 +531,7 @@ async function cmdRunNew() {
   // Re-entry from any gate phase always lands back at the preamble, so
   // 'ready' works no matter when 'run new' is typed.
   flowState = 'preamble';
+  pendingPicks = { lh: null, rh: null, belt: null, ca: null, cb: null };
   if (actionQueueContent) actionQueueContent.innerHTML = '<div class="dim">—</div>';
   appendLine(buildPreambleText());
 }
@@ -537,44 +541,13 @@ async function cmdReady() {
     appendLine(buildPreambleDenied());
     return;
   }
+  // NEW: ready shows current pendingPicks recap (no interactive picks loop); belt/consume stay empty
   try {
-    // fetch current inventory for loadout choice
     let wData = { weapons: [] };
     let cData = { consumables: [] };
     try { wData = await apiCall('GET', '/weapons'); } catch (_) {}
     try { cData = await apiCall('GET', '/consumables'); } catch (_) {}
-
-    const getId = async (label, allowEmpty = true) => {
-      while (true) {
-        const ans = (await promptUser(`${label} (id${allowEmpty ? ' or empty to skip' : ''}, 'inventory' to re-list):`)).trim();
-        if (ans.toLowerCase() === 'inventory') {
-          // re-list
-          appendLine('weapons:', 'dim');
-          (wData.weapons || []).forEach(w => {
-            const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
-            appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
-          });
-          appendLine('consumables:', 'dim');
-          (cData.consumables || []).forEach(c => appendLine(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`, 'green'));
-          continue;
-        }
-        if (!ans && allowEmpty) return null;
-        const m = ans.match(/(\d+)\s*$/);
-        if (m) {
-          const id = parseInt(m[1], 10);
-          if (Number.isFinite(id)) return id;
-        }
-        printAmber('invalid id, try again');
-      }
-    };
-
-    const lh = await getId('LH');
-    const rh = await getId('RH');
-    const belt = await getId('Belt');
-    const ca = await getId('Consume A', true);
-    const cb = await getId('Consume B', true);
-
-    pendingPicks = { lh, rh, belt, ca, cb };
+    if (!pendingPicks) pendingPicks = { lh: null, rh: null, belt: null, ca: null, cb: null };
     appendLine(buildRecapText(wData.weapons || [], cData.consumables || [], pendingPicks));
     flowState = 'confirm';
   } catch (e) {
@@ -809,7 +782,7 @@ function handleCommand(line) {
   // gate's own confirm/ready transitions — handlers validate their phase);
   // 'run new' re-prints the preamble, everything else gets the neutral denial.
   if (flowState === 'preamble' || flowState === 'confirm') {
-    const gateAllowed = ['inventory', 'gear', 'inspect', 'ready', 'help', 'confirm'];
+    const gateAllowed = ['inventory', 'gear', 'inspect', 'ready', 'help', 'confirm', 'equip'];
     if (cmd === 'run' && args[0] === 'new') { cmdRunNew(); return; }
     if (!gateAllowed.includes(cmd)) { appendLine(buildPreambleDenied()); return; }
   }
@@ -835,6 +808,7 @@ function handleCommand(line) {
     case 'clear': cmdClear(); break;
     case 'ready': cmdReady(); break;
     case 'confirm': cmdConfirm(); break;
+    case 'equip': cmdEquip(args); break;
     case 'continue':
     case 'stop':
       cmdBattleEnd([cmd]);
@@ -854,6 +828,36 @@ async function main() {
   }
 
   inputEl.addEventListener('keydown', async (e) => {
+    // TASK2: Escape toggles UX select mode on player stats slots (only when not in pending resolver)
+    if (e.key === 'Escape' && !pendingInputResolver) {
+      e.preventDefault();
+      if (!selectMode) {
+        enterSelectMode();
+      } else {
+        exitSelectMode();
+      }
+      return;
+    }
+    if (selectMode) {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const dir = e.key === 'ArrowDown' ? 1 : -1;
+        selectIndex = (selectIndex + dir + 5) % 5;
+        updateSelectHighlight();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        showItemDetailForCurrent();
+        return;
+      }
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        e.preventDefault();
+        return;
+      }
+      // other keys exit select mode and let normal handling (but only escape is special per spec)
+      exitSelectMode();
+    }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (history.length === 0) return;
@@ -1196,16 +1200,28 @@ function updateSidePanelsFromRun(run) {
 
   // LEFT: Player stats (HP + hands + placeholders for BL/C1/C2)
   if (playerStatsContent) {
-    let html = `<div class="stat-line">HP: ${run.player_hp ?? '—'}</div>`;
+    let html = `<div class="stat-line" data-slot="hp">HP: ${run.player_hp ?? '—'}</div>`;
     const lh = weapons.hand_l;
-    html += `<div class="stat-line">LH: ${lh ? `#${lh.id} ${lh.name}` : '—'}</div>`;
+    html += `<div class="stat-line selectable" data-slot="lh">LH: ${lh ? `#${lh.id} ${lh.name}` : '—'}</div>`;
     const rh = weapons.hand_r;
-    html += `<div class="stat-line">RH: ${rh ? `#${rh.id} ${rh.name}` : '—'}</div>`;
+    html += `<div class="stat-line selectable" data-slot="rh">RH: ${rh ? `#${rh.id} ${rh.name}` : '—'}</div>`;
     const bl = weapons.belt;
-    html += `<div class="stat-line">BL: ${bl ? `#${bl.id} ${bl.name}` : '—'}</div>`;
-    html += `<div class="stat-line">C1: —</div>`;
-    html += `<div class="stat-line">C2: —</div>`;
+    html += `<div class="stat-line selectable" data-slot="bl">BL: ${bl ? `#${bl.id} ${bl.name}` : '—'}</div>`;
+    html += `<div class="stat-line selectable" data-slot="c1">C1: —</div>`;
+    html += `<div class="stat-line selectable" data-slot="c2">C2: —</div>`;
+    html += `<div id="player-detail" class="player-detail" style="display:none;"></div>`;
     playerStatsContent.innerHTML = html;
+    // attach click handlers for selectable rows (TASK2)
+    const detailEl = playerStatsContent.querySelector('#player-detail');
+    playerStatsContent.querySelectorAll('.stat-line.selectable').forEach((el, idx) => {
+      el.addEventListener('click', () => {
+        if (selectMode) {
+          selectIndex = idx;
+          updateSelectHighlight();
+        }
+        showItemDetailForSlot(el.dataset.slot, detailEl, weapons);
+      });
+    });
   }
 
   // LEFT: Monster roster
@@ -1376,4 +1392,126 @@ function setupPanelNavigation() {
   input.addEventListener('focus', () => {
     if (focusedPanelIdx !== -1) clearPanelFocus();
   });
+}
+
+
+async function cmdEquip(args) {
+  if (flowState !== 'preamble' && flowState !== 'confirm') {
+    appendLine(buildPreambleDenied());
+    return;
+  }
+  if (!args || args.length < 2) {
+    appendLine('usage: equip LH|RH <id>');
+    return;
+  }
+  const hand = (args[0] || '').toUpperCase();
+  const idStr = args[1];
+  if (hand !== 'LH' && hand !== 'RH') {
+    appendLine('usage: equip LH|RH <id>');
+    return;
+  }
+  const id = parseInt(idStr, 10);
+  if (!Number.isFinite(id)) {
+    appendLine('usage: equip LH|RH <id>');
+    return;
+  }
+  try {
+    const wData = await apiCall('GET', '/weapons');
+    const weapons = wData.weapons || [];
+    const w = weapons.find(ww => ww.id === id);
+    if (!w) {
+      appendLine(`#${id} not found — type "inventory" to list your gear.`);
+      return;
+    }
+    if (!pendingPicks) pendingPicks = { lh: null, rh: null, belt: null, ca: null, cb: null };
+    if (hand === 'LH') pendingPicks.lh = id;
+    else pendingPicks.rh = id;
+    const slotName = hand === 'LH' ? 'Left Hand' : 'Right Hand';
+    appendLine(`${slotName}: #${w.id} ${w.name} (${w.damage} dmg)`);
+  } catch (e) {
+    printError('equip: ' + e.message);
+  }
+}
+
+
+// TASK2 UX select mode helpers (small functions, plain JS, yellow border aesthetic)
+function enterSelectMode() {
+  selectMode = true;
+  selectIndex = 0;
+  if (inputEl) inputEl.blur();
+  updateSelectHighlight();
+}
+
+function exitSelectMode() {
+  selectMode = false;
+  if (playerStatsContent) {
+    playerStatsContent.querySelectorAll('.stat-line.selectable').forEach(el => el.classList.remove('highlight'));
+    const d = playerStatsContent.querySelector('#player-detail');
+    if (d) d.style.display = 'none';
+  }
+  if (inputEl) inputEl.focus();
+}
+
+function updateSelectHighlight() {
+  if (!playerStatsContent || !selectMode) return;
+  const rows = playerStatsContent.querySelectorAll('.stat-line.selectable');
+  rows.forEach((el, i) => {
+    if (i === selectIndex) el.classList.add('highlight');
+    else el.classList.remove('highlight');
+  });
+}
+
+async function showItemDetailForCurrent() {
+  if (!playerStatsContent) return;
+  const rows = playerStatsContent.querySelectorAll('.stat-line.selectable');
+  const row = rows[selectIndex];
+  if (!row) return;
+  const detailEl = playerStatsContent.querySelector('#player-detail');
+  if (detailEl) {
+    await showItemDetailForSlot(row.dataset.slot, detailEl, null);
+  }
+}
+
+async function showItemDetailForSlot(slot, detailEl, preloadedWeapons) {
+  if (!detailEl) return;
+  detailEl.style.display = 'block';
+  if (slot === 'hp' || !['lh','rh','bl','c1','c2'].includes(slot)) {
+    detailEl.innerHTML = 'No item';
+    return;
+  }
+  if (slot === 'c1' || slot === 'c2') {
+    detailEl.innerHTML = 'No item';
+    return;
+  }
+  // parse id from the row text e.g. "LH: #12 Sword"
+  const rowText = document.querySelector(`.stat-line.selectable[data-slot="${slot}"]`)?.textContent || '';
+  const m = rowText.match(/#(\d+)/);
+  if (!m) {
+    detailEl.innerHTML = 'No item';
+    return;
+  }
+  const id = parseInt(m[1], 10);
+  try {
+    let wData = preloadedWeapons ? {weapons: Object.values(preloadedWeapons || {})} : null; // rough, but use fetch
+    if (!wData || !wData.weapons) {
+      wData = await apiCall('GET', '/weapons');
+    }
+    const weapons = wData.weapons || [];
+    const w = weapons.find(ww => ww.id === id);
+    if (!w) {
+      detailEl.innerHTML = `#${id} not found`;
+      return;
+    }
+    let html = `<div><strong>${w.name}</strong></div>`;
+    const delta = w.damage_delta != null ? ` (+${w.damage_delta})` : '';
+    html += `<div>Damage: ${w.damage}${delta}</div>`;
+    if (w.attacks && w.attacks.length) {
+      w.attacks.forEach(a => {
+        html += `<div>#${a.id} ${a.name} (p${a.prepare_time}/c${a.cooldown_time})</div>`;
+      });
+    }
+    detailEl.innerHTML = html;
+  } catch (e) {
+    detailEl.innerHTML = 'Error loading detail';
+  }
 }

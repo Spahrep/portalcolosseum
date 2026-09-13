@@ -380,6 +380,7 @@ export async function cmdRunNew(args, flags = {}) {
   // Re-entry from any gate phase always lands back at the preamble, so
   // 'ready' works no matter when 'run new' is typed.
   flowState = 'preamble';
+  pendingPicks = { lh: null, rh: null, belt: null, ca: null, cb: null };
   console.log(buildPreambleText());
 }
 
@@ -388,45 +389,15 @@ export async function cmdReady() {
     if (!isQuiet() && !isJson()) console.log(buildPreambleDenied());
     return;
   }
+  // PC-36 rework: ready shows the current pendingPicks recap (set via equip);
+  // the interactive picks loop was removed per spec — belt/consume stay empty.
   try {
     let wData = { weapons: [] };
     let cData = { consumables: [] };
     try { wData = await apiCall('GET', '/weapons'); } catch (_) {}
     try { cData = await apiCall('GET', '/consumables'); } catch (_) {}
-
-    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    const getId = async (label, allowEmpty = true) => {
-      while (true) {
-        const ans = await new Promise(r => rl.question(`${label} (id${allowEmpty ? ' or empty to skip' : ''}, 'inventory' to re-list): `, r));
-        const trimmed = (ans || '').trim();
-        if (trimmed.toLowerCase() === 'inventory') {
-          console.log('weapons:');
-          (wData.weapons || []).forEach(w => {
-            const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
-            console.log(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`);
-          });
-          console.log('consumables:');
-          (cData.consumables || []).forEach(c => console.log(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`));
-          continue;
-        }
-        if (!trimmed && allowEmpty) return null;
-        const m = trimmed.match(/(\d+)\s*$/);
-        if (m) {
-          const id = parseInt(m[1], 10);
-          if (Number.isFinite(id)) return id;
-        }
-        printAmber('invalid id, try again');
-      }
-    };
-    const lh = await getId('LH');
-    const rh = await getId('RH');
-    const belt = await getId('Belt');
-    const ca = await getId('Consume A', true);
-    const cb = await getId('Consume B', true);
-    rl.close();
-
-    pendingPicks = { lh, rh, belt, ca, cb };
-    console.log(buildRecapText(wData.weapons || [], cData.consumables || [], pendingPicks));
+    if (!pendingPicks) pendingPicks = { lh: null, rh: null, belt: null, ca: null, cb: null };
+    if (!isQuiet() && !isJson()) console.log(buildRecapText(wData.weapons || [], cData.consumables || [], pendingPicks));
     flowState = 'confirm';
   } catch (e) {
     printError('ready: ' + e.message);
@@ -913,3 +884,42 @@ export async function handleSlashCommand(cmd, args) {
 
 export function getCurrentRun() { return currentRunId; }
 export function setCurrentRun(id) { updateRunId(id); }
+
+
+export async function cmdEquip(args) {
+  if (flowState !== 'preamble' && flowState !== 'confirm') {
+    if (!isQuiet() && !isJson()) console.log(buildPreambleDenied());
+    return;
+  }
+  if (!args || args.length < 2) {
+    if (!isQuiet() && !isJson()) console.log('usage: equip LH|RH <id>');
+    return;
+  }
+  const hand = (args[0] || '' ).toUpperCase();
+  const idStr = args[1];
+  if (hand !== 'LH' && hand !== 'RH') {
+    if (!isQuiet() && !isJson()) console.log('usage: equip LH|RH <id>');
+    return;
+  }
+  const id = parseInt(idStr, 10);
+  if (!Number.isFinite(id)) {
+    if (!isQuiet() && !isJson()) console.log('usage: equip LH|RH <id>');
+    return;
+  }
+  try {
+    const wData = await apiCall('GET', '/weapons');
+    const weapons = wData.weapons || [];
+    const w = weapons.find(ww => ww.id === id);
+    if (!w) {
+      if (!isQuiet() && !isJson()) console.log(`#${id} not found — type "inventory" to list your gear.`);
+      return;
+    }
+    if (!pendingPicks) pendingPicks = { lh: null, rh: null, belt: null, ca: null, cb: null };
+    if (hand === 'LH') pendingPicks.lh = id;
+    else pendingPicks.rh = id;
+    const slotName = hand === 'LH' ? 'Left Hand' : 'Right Hand';
+    if (!isQuiet() && !isJson()) console.log(`${slotName}: #${w.id} ${w.name} (${w.damage} dmg)`);
+  } catch (e) {
+    printError('equip: ' + e.message);
+  }
+}

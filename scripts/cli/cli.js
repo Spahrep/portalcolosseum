@@ -8,7 +8,7 @@ import { cmdHelp, setFlags, printError, isJson, isQuiet } from './render.mjs';
 import {
   cmdLogin, cmdLogout, cmdRunNew, cmdRun, cmdState, cmdBattleStart,
   cmdAttack, cmdBattleEnd, cmdInventory, cmdWait, cmdClear, cmdGrant, handleSlashCommand, getCurrentRun, setCurrentRun, getDevMode, setDevMode,
-  cmdReady, cmdConfirm, cmdInspect, isInFlowGate, buildPreambleDenied
+  cmdReady, cmdConfirm, cmdInspect, cmdEquip, isInFlowGate, buildPreambleDenied
 } from './commands.mjs';
 import { loadSession, getAccessToken } from './auth.mjs';
 
@@ -26,7 +26,7 @@ async function dispatch(cmd, subArgs) {
   // gate's own confirm/ready transitions — handlers validate their phase);
   // 'run new' re-prints the preamble, everything else gets the neutral denial.
   if (isInFlowGate()) {
-    const gateAllowed = ['inventory', 'gear', 'ready', 'help', 'inspect', 'confirm'];
+    const gateAllowed = ['inventory', 'gear', 'ready', 'help', 'inspect', 'confirm', 'equip'];
     if (cmd === 'run' && subArgs[0] === 'new') { await cmdRunNew(subArgs.slice(1), parseFlags([...args, ...subArgs])); return; }
     if (!gateAllowed.includes(cmd)) { if (!isQuiet() && !isJson()) console.log(buildPreambleDenied()); return; }
   }
@@ -54,6 +54,7 @@ async function dispatch(cmd, subArgs) {
     case 'clear': cmdClear(); break;
     case 'ready': await cmdReady(); break;
     case 'confirm': await cmdConfirm(); break;
+    case 'equip': await cmdEquip(subArgs); break;
     case 'continue':
     case 'stop': await cmdBattleEnd([cmd]); break;
     default:
