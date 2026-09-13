@@ -10,6 +10,180 @@
 import readline from 'readline';
 import { apiCall } from './api.mjs';
 import { printError, printGreen, printAmber, printState, printDim, isQuiet, isJson } from './render.mjs';
+
+const seenFeed = new Set();
+
+function narrateFeed(feedLines, participants = null) {
+  if (!feedLines || !Array.isArray(feedLines) || feedLines.length === 0) return;
+  if (isQuiet && isQuiet()) return;
+
+  const monsterLabels = [];
+  const p = participants || {};
+  if (p.monsters && Array.isArray(p.monsters)) {
+    p.monsters.forEach(m => { if (m && m.label) monsterLabels.push(m.label); });
+  }
+  const getMonsterLabel = (text) => {
+    for (const lbl of monsterLabels) if (text.includes(lbl)) return lbl;
+    const m = text.match(/tic \d+ — ([A-Za-z]+(?:\s+[A-Z])?)/);
+    return m ? m[1] : null;
+  };
+
+  const newLines = feedLines.filter(l => !seenFeed.has(l));
+  newLines.forEach(l => seenFeed.add(l));
+
+  const outputEntries = []; // {text, matched} for defect 3
+  let consecutiveHits = [];
+
+  const flushHits = () => {
+    if (consecutiveHits.length >= 3) {
+      const mons = [];
+      const dmgs = [];
+      consecutiveHits.forEach(h => {
+        const mm = h.raw.match(/([A-Za-z]+(?:\s+[A-Z])?) .*? hits player for (\d+)/);
+        if (mm) { mons.push(mm[1]); dmgs.push(mm[2]); }
+      });
+      if (mons.length >= 3) {
+        // defect 4: abbreviate shared prefix
+        let monStr;
+        const firstWords = mons.map(m => m.split(' '));
+        const minLen = Math.min(...firstWords.map(w => w.length));
+        let commonPrefixWords = 0;
+        for (let i = 0; i < minLen; i++) {
+          const w = firstWords[0][i];
+          if (firstWords.every(fw => fw[i] === w)) commonPrefixWords++;
+          else break;
+        }
+        if (commonPrefixWords > 0) {
+          const prefix = firstWords[0].slice(0, commonPrefixWords).join(' ') + ' ';
+          const suffixes = mons.map((m, i) => firstWords[i].slice(commonPrefixWords).join(' '));
+          const last = suffixes.pop();
+          monStr = suffixes.join(', ') + ', and ' + last;
+          monStr = prefix + monStr;
+        } else {
+          const last = mons.pop();
+          monStr = mons.join(', ') + ', and ' + last;
+        }
+        const lastD = dmgs.pop();
+        const dmgStr = dmgs.join(', ') + ', and ' + lastD;
+        outputEntries.push({ text: `${monStr} attack you for ${dmgStr}.`, matched: true });
+      }
+      // no fallback re-push; group regex handles all since labels from participants
+    } else if (consecutiveHits.length > 0) {
+      consecutiveHits.forEach(h => outputEntries.push({ text: h.mapped, matched: true }));
+    }
+    consecutiveHits = [];
+  };
+
+  for (const raw of newLines) {
+    let mapped = null;
+    // DEFECT 1: getMonsterLabel + greedy fallback for hits
+    let label = getMonsterLabel(raw);
+    let m;
+    if (label) {
+      const remainder = raw.replace(label, '').replace(/^tic \d+ — \s*/, '');
+      m = remainder.match(/^(.+?) hits player for (\d+)$/);
+      if (m) {
+        const atk = m[1].trim();
+        mapped = `${label}'s ${atk} hits you for ${m[2]}.`;
+        consecutiveHits.push({ mapped, raw });
+        continue;
+      }
+    }
+    m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?) (.+?) hits player for (\d+)$/);
+    if (m) {
+      const mon = m[1];
+      const atk = m[2].trim();
+      mapped = `${mon}'s ${atk} hits you for ${m[3]}.`;
+      consecutiveHits.push({ mapped, raw });
+      continue;
+    }
+
+    // misses
+    label = getMonsterLabel(raw);
+    if (label) {
+      const remainder = raw.replace(label, '').replace(/^tic \d+ — \s*/, '');
+      m = remainder.match(/^(.+?) misses$/);
+      if (m) {
+        flushHits();
+        const atk = m[1].trim();
+        mapped = `${label}'s ${atk} misses you.`;
+        outputEntries.push({ text: mapped, matched: true });
+        continue;
+      }
+    }
+    m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?) (.+?) misses$/);
+    if (m) {
+      flushHits();
+      const mon = m[1];
+      const atk = m[2].trim();
+      mapped = `${mon}'s ${atk} misses you.`;
+      outputEntries.push({ text: mapped, matched: true });
+      continue;
+    }
+
+    m = raw.match(/^tic \d+ — (.+?) is defeated$/);
+    if (m) { flushHits(); mapped = `${m[1]} is defeated!`; outputEntries.push({ text: mapped, matched: true }); continue; }
+    m = raw.match(/^tic \d+ — LH Ready$/);
+    if (m) { flushHits(); mapped = 'Your left hand is ready.'; outputEntries.push({ text: mapped, matched: true }); continue; }
+    m = raw.match(/^tic \d+ — RH Ready$/);
+    if (m) { flushHits(); mapped = 'Your right hand is ready.'; outputEntries.push({ text: mapped, matched: true }); continue; }
+    m = raw.match(/^tic \d+ — LH commits (.+?) \(cast \d+\)$/);
+    if (m) { flushHits(); mapped = `Your left hand begins casting ${m[1]}…`; outputEntries.push({ text: mapped, matched: true }); continue; }
+    m = raw.match(/^tic \d+ — RH commits (.+?) \(cast \d+\)$/);
+    if (m) { flushHits(); mapped = `Your right hand begins casting ${m[1]}…`; outputEntries.push({ text: mapped, matched: true }); continue; }
+    m = raw.match(/^tic \d+ — LH (.+?) hits (.+?) for (\d+)$/);
+    if (m) { flushHits(); mapped = `Your left hand's ${m[1]} hits ${m[2]} for ${m[3]}.`; outputEntries.push({ text: mapped, matched: true }); continue; }
+    m = raw.match(/^tic \d+ — RH (.+?) hits (.+?) for (\d+)$/);
+    if (m) { flushHits(); mapped = `Your right hand's ${m[1]} hits ${m[2]} for ${m[3]}.`; outputEntries.push({ text: mapped, matched: true }); continue; }
+
+    flushHits();
+    outputEntries.push({ text: raw, matched: false });
+  }
+  flushHits();
+
+  let finalEntries = outputEntries;
+  if (finalEntries.length > 5) {
+    finalEntries = finalEntries.slice(0, 5);
+    finalEntries.push({ text: '…the fight continues.', matched: false });
+  }
+
+  finalEntries.forEach((entry, idx) => {
+    const isTrailer = idx === finalEntries.length - 1 && entry.text.includes('…the fight continues');
+    if (isTrailer || !entry.matched) {
+      printDim(entry.text);
+    } else {
+      printGreen(entry.text);
+    }
+  });
+}
+
+function turnPromptFromState(stateObj) {
+  if (isQuiet && isQuiet()) return;
+  const s = stateObj && stateObj.state ? stateObj.state : stateObj;
+  if (!s) { printAmber('Ready — what do you do?'); return; }
+  if (s.player_dead) { printAmber('You have been defeated.'); return; }
+  if (s.battle_over) { printGreen('The battle is over. The crowd roars.'); return; }
+  const parts = s.participants || {};
+  const player = parts.player || {};
+  const hands = player.hands || {};
+  // defect 2 fix
+  const lhEmpty = !hands.LH || hands.LH.weaponId == null;
+  const rhEmpty = !hands.RH || hands.RH.weaponId == null;
+  if (lhEmpty && rhEmpty) {
+    return; // empty hands: nothing printed
+  }
+  const ready = [];
+  if (hands.LH && hands.LH.state === 'Ready' && hands.LH.weaponId != null) ready.push('left');
+  if (hands.RH && hands.RH.state === 'Ready' && hands.RH.weaponId != null) ready.push('right');
+  if (ready.length === 0) {
+    printAmber('Both hands are busy — waiting…');
+  } else if (ready.length === 1) {
+    printGreen(`Your ${ready[0]} hand is ready.`);
+  } else {
+    printGreen('Your left hand is ready.');
+    printGreen('Your right hand is ready.');
+  }
+}
 import { getCurrentRunId, saveCurrentRunId, clearCurrentRunId, login as doLogin, logout as doLogout, loadDevMode, saveDevMode, clearDevMode } from './auth.mjs';
 
 let currentRunId = getCurrentRunId();
@@ -185,9 +359,14 @@ export async function cmdState(args = [], opts = {}) {
 export async function cmdBattleStart() {
   if (!currentRunId) { printError('no run'); return; }
   try {
-    await apiCall('POST', `/runs/${currentRunId}/battle/start`, {});
+    const data = await apiCall('POST', `/runs/${currentRunId}/battle/start`, {});
     printGreen('Battle started');
-    await cmdState();
+    if (isJson()) {
+      await cmdState();
+    } else {
+      if (data && data.feed) narrateFeed(data.feed, data.participants);
+      turnPromptFromState(data);
+    }
   } catch (e) {
     if ((e.message || '').includes('Battle already in progress')) {
       printAmber('Battle already in progress');
@@ -217,10 +396,9 @@ export async function cmdAttack(args) {
       console.log(JSON.stringify(data));
       return;
     }
-    if (data.state && (data.state.battle_over || data.state.player_dead)) {
-      printAmber(data.state.player_dead ? 'player_dead' : 'battle_over');
-    }
-    await cmdState();
+    const feedSrc = data.state && data.state.feed ? data.state : data;
+    if (feedSrc.feed) narrateFeed(feedSrc.feed, feedSrc.participants);
+    turnPromptFromState(data.state || data);
   } catch (e) {
     if ((e.message || '').includes('Hand not ready')) {
       printAmber('Hand not ready (use wait to advance)');
@@ -286,13 +464,21 @@ export async function cmdWait() {
       console.log(JSON.stringify({ advanced: !!data.advanced }));
       return;
     }
-    await cmdState();
+    const feedSrc = data.state && data.state.feed ? data.state : data;
+    if (feedSrc.feed) narrateFeed(feedSrc.feed, feedSrc.participants);
+    turnPromptFromState(data.state || data);
   } catch (e) {
     const msg = e.message || '';
     if (msg.includes('Hand not ready')) {
       printAmber('(advanced)');
       if (isJson()) console.log(JSON.stringify({ advanced: true }));
-      await cmdState();
+      if (isJson()) {
+        await cmdState();
+      } else {
+        const feedSrc = data.state && data.state.feed ? data.state : data;
+        if (feedSrc.feed) narrateFeed(feedSrc.feed, feedSrc.participants);
+        turnPromptFromState(data.state || data);
+      }
       return;
     }
     printError('wait: ' + msg);

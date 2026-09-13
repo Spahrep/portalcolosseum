@@ -45,7 +45,13 @@ export function createEngine(rng = Math.random) {
           const attacker = { damage: row.damage, accuracy: 100, damage_range: 0 };
           const results = resolveAttack(attacker, targets, attackObj, state.rng);
           results.forEach(r => {
-            if (r.hit) log(`${row.label} attack hits ${r.target} for ${r.damage}`);  // F6: intentional damage numbers in feed (GUI shows exact; band scheme cosmetic-in-practice)
+            if (r.hit) {
+              log(`${row.label} ${row.attackName || 'attack'} hits ${r.target} for ${r.damage}`);
+              const tgtMon = state.monsters.find(m => m.label === r.target);
+              if (tgtMon && isMonsterDead(tgtMon)) {
+                log(`${r.target} is defeated`);
+              }
+            }
           });
         }
         const cd = row.cooldownTicks || 2;
@@ -60,10 +66,14 @@ export function createEngine(rng = Math.random) {
     } else {
       const mon = state.monsters.find(m => m.label === row.label);
       if (mon && !isMonsterDead(mon)) {
+        const atks = (mon.attacks||[]).filter(a => a && typeof a.name === 'string' && a.name);
+        const atkName = atks.length ? atks[Math.floor(state.rng()*atks.length)].name : null;
         const dmg = rollDamage(mon.damage, 3, state.rng);
         if (checkHit(mon.accuracy, state.rng)) {
           applyDamage(state.player, dmg);
-          log(`${row.label} hits player for ${dmg}`);
+          log(`${row.label} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}`);
+        } else {
+          log(`${row.label} ${atkName ? atkName + ' ' : ''}misses`);
         }
         if (!isMonsterDead(mon)) {
           commitNewRow(state.queue, row.label, 'attack', mon.speed);
@@ -80,7 +90,6 @@ export function createEngine(rng = Math.random) {
       steps++;
       const fired = tick(state.queue, (row) => handleFire(row));
       state.tic++;
-      if (fired.length > 0) break;
       if (checkPlayerReady() || isBattleOver()) break;
     }
     sortQueue(state.queue);
@@ -104,15 +113,17 @@ export function createEngine(rng = Math.random) {
     const cooldownTicks = params.cooldownTicks || 2;
     const playerDamage = params.playerDamage || 10;
     const isMultiTarget = !!params.isMultiTarget;
+    const attackName = params.attackName || null;
     const row = commitNewRow(state.queue, hand, 'winding', castTicks);
     row.attackId = attackId;
     row.targetIds = targetIds;
     row.damage = playerDamage;
     row.isMultiTarget = isMultiTarget;
     row.cooldownTicks = cooldownTicks;
+    row.attackName = attackName;
     state.player.hands[hand].state = 'winding';
     state.player.hands[hand].attackId = attackId;
-    log(`${hand} commits attack ${attackId} (cast ${castTicks})`);
+    log(`${hand} commits ${attackName ? attackName : `attack ${attackId}`} (cast ${castTicks})`);
     return advanceToNextDecision();
   }
 
