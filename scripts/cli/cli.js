@@ -7,7 +7,8 @@ import readline from 'readline';
 import { cmdHelp, setFlags, printError, isJson, isQuiet } from './render.mjs';
 import {
   cmdLogin, cmdLogout, cmdRunNew, cmdRun, cmdState, cmdBattleStart,
-  cmdAttack, cmdBattleEnd, cmdInventory, cmdWait, cmdClear, cmdGrant, handleSlashCommand, getCurrentRun, setCurrentRun, getDevMode, setDevMode
+  cmdAttack, cmdBattleEnd, cmdInventory, cmdWait, cmdClear, cmdGrant, handleSlashCommand, getCurrentRun, setCurrentRun, getDevMode, setDevMode,
+  cmdReady, cmdConfirm, isInFlowGate, buildPreambleDenied
 } from './commands.mjs';
 import { loadSession, getAccessToken } from './auth.mjs';
 
@@ -42,8 +43,13 @@ async function dispatch(cmd, subArgs) {
     case 'wait': await cmdWait(); break;
     case 'grant': await cmdGrant(); break;
     case 'clear': cmdClear(); break;
+    case 'ready': await cmdReady(); break;
+    case 'confirm': await cmdConfirm(); break;
+    case 'continue':
+    case 'stop': await cmdBattleEnd([cmd]); break;
     default:
-      if (!isQuiet() && !isJson()) printError('unknown command — type help');
+      if (isInFlowGate() && !isQuiet() && !isJson()) console.log(buildPreambleDenied());
+      else if (!isQuiet() && !isJson()) printError('unknown command — type help');
   }
 }
 

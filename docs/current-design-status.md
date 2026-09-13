@@ -134,6 +134,14 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Status: loadout columns live on `portal_run` (consume_a/b placeholders on weapon_instance); dice pool materialized at creation; draw/roll/monster generation = Slice 3, unbuilt.
 - Docs: encounter-system.md §Run Start · inventory-slots.md · combat-engine-plan.md §portal_run Integration
 
+## Run UX Flow (documented in run-ux-flow.md) — NEW 2026-09-13
+
+- Run start is a **three-phase gate**: preamble (`run new`; inventory/inspect/ready/help only, run NOT created) → `ready` (existing loadout pick → assembled recap + neutral lock note) → `confirm` (creates the run).
+- `inspect #` during preamble = item inspect (client-side from /weapons + /consumables payloads); monster inspect unchanged in-run.
+- After every battle **win**, CLI offers continue/stop explicitly (bare `continue`/`stop` commands; `battle end X` alias stays). Offer once per battle.
+- Loot + consumables NOT implemented (2026-09-13) — pool line is honest ("The prize pool has grown"), no fake numbers.
+- Native CLI same flow; `run new` flags + `--quiet`/`--json` bypass the interactive gate (parity preserved).
+
 ## Open / Undocumented Points
 
 1. **Loot Rules on Stop** — exact % of prize pool kept when stopping early; how random selection works (uniform? weighted by rarity?)

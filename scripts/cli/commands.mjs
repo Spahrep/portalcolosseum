@@ -105,7 +105,28 @@ function turnPromptFromState(stateObj) {
   const s = stateObj && stateObj.state ? stateObj.state : stateObj;
   if (!s) { printAmber('Ready — what do you do?'); return; }
   if (s.player_dead) { printAmber('You have been defeated.'); return; }
-  if (s.battle_over) { printGreen('The battle is over. The crowd roars.'); return; }
+  if (s.battle_over) {
+    printGreen('The battle is over. The crowd roars.');
+    // AFTER-BATTLE OFFER — once per completed battle, keyed on the run row's
+    // current_battle (the engine state exposes no battle counter).
+    if (!isQuiet() && !isJson() && currentRunId) {
+      (async () => {
+        try {
+          const runData = await apiCall('GET', `/runs/${currentRunId}`);
+          const run = runData.run || {};
+          const curB = run.current_battle;
+          if (curB != null && offeredBattleNum !== curB) {
+            offeredBattleNum = curB;
+            const hpCur = (s.player && s.player.hp) || run.player_hp || 0;
+            console.log(buildAfterBattleOffer(curB, run.total_battles, hpCur, null, curB === 1));
+          }
+        } catch (_) {
+          // silent — the offer is cosmetic; a later commit retries
+        }
+      })();
+    }
+    return;
+  }
   const parts = s.participants || {};
   const player = parts.player || {};
   const hands = player.hands || {};
@@ -138,6 +159,85 @@ function updateRunId(id) {
   else clearCurrentRunId();
 }
 
+// --- PC-36 pure text builders (exported for isolated testing) ---
+
+export function buildPreambleText() {
+  return '\nThe air shimmers. Something ancient watches from the other side.\n\nYou stand before an open portal. A run of battles awaits on the other side.\nWhat you bring now is all you will have.\n\nCommands: inventory | inspect # | ready | help\nType "ready" when you are prepared.\n';
+}
+
+export function buildRecapText(weapons, consumables, picks) {
+  const lines = [];
+  lines.push('You check your straps one last time.');
+  lines.push('');
+  lines.push('Your loadout for this run:');
+  const fmtAtk = (w) => {
+    if (!w || !w.attacks || !w.attacks.length) return '';
+    return w.attacks.map(a => `#${a.id} ${a.name} (p${a.prepare_time}/c${a.cooldown_time})`).join(', ');
+  };
+  const findW = (id) => (weapons || []).find(w => w.id === id) || null;
+  const findC = (id) => (consumables || []).find(c => c.id === id) || null;
+  const lh = picks && picks.lh != null ? findW(picks.lh) : null;
+  const rh = picks && picks.rh != null ? findW(picks.rh) : null;
+  const belt = picks && picks.belt != null ? findW(picks.belt) : null;
+  const ca = picks && picks.ca != null ? findC(picks.ca) : null;
+  const cb = picks && picks.cb != null ? findC(picks.cb) : null;
+  lines.push(`  Left Hand: ${lh ? `#${lh.id} ${lh.name} (${lh.damage} dmg) — ${fmtAtk(lh)}` : 'empty'}`);
+  lines.push(`  Right Hand: ${rh ? `#${rh.id} ${rh.name} (${rh.damage} dmg) — ${fmtAtk(rh)}` : 'empty'}`);
+  lines.push(`  Belt: ${belt ? `#${belt.id} ${belt.name} (${belt.damage} dmg) — ${fmtAtk(belt)}` : 'empty'}`);
+  lines.push(`  Consume A: ${ca ? `#${ca.id} ${ca.name} ×${ca.quantity ?? 1}` : 'empty'}`);
+  lines.push(`  Consume B: ${cb ? `#${cb.id} ${cb.name} ×${cb.quantity ?? 1}` : 'empty'}`);
+  lines.push('');
+  lines.push('This loadout locks the moment you step through the portal. You cannot change it between fights.');
+  lines.push('');
+  lines.push('Type "confirm" to enter, or "inventory" to adjust.');
+  return lines.join('\n');
+}
+
+export function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax, isFirstWin) {
+  const lines = [];
+  if (isFirstWin) {
+    lines.push('The first monster falls. The pool stirs.');
+    lines.push('');
+  }
+  const hpLine = (hpMax == null || hpMax === 0) ? `Your HP: ${hpCur}.` : `Your HP: ${hpCur}/${hpMax}.`;
+  const numPart = totalBattles ? `Battle ${currentBattle} of ${totalBattles} complete.` : `Battle ${currentBattle} complete.`;
+  lines.push(`${numPart} ${hpLine}`);
+  lines.push('The prize pool has grown.');
+  lines.push('');
+  lines.push('Type "continue" to risk the next fight, or "stop" to claim your current share and end the run.');
+  return lines.join('\n');
+}
+
+export function buildItemInspectText(weapons, consumables, id) {
+  const w = (weapons || []).find(x => x.id === id);
+  if (w) {
+    const atks = (w.attacks || []).map(a => `#${a.id} ${a.name} (p${a.prepare_time}/c${a.cooldown_time})`).join(', ');
+    return `#${w.id} ${w.name} (${w.damage} dmg)\n  Attacks: ${atks || 'none'}`;
+  }
+  const c = (consumables || []).find(x => x.id === id);
+  if (c) {
+    return `#${c.id} ${c.name} ×${c.quantity ?? 1}`;
+  }
+  return `No item #${id} found in your inventory.`;
+}
+
+export function buildPreambleDenied() {
+  return 'Type "inventory", "inspect #", "ready", or "help".';
+}
+
+export function buildConfirmDenied() {
+  return 'Type "confirm" to enter, or "inventory" to adjust.';
+}
+
+// Module state for the three-phase run-start gate (interactive no-flag REPL only)
+let flowState = null; // 'preamble' | 'confirm' | null
+let pendingPicks = null;
+let offeredBattleNum = null; // last completed battle the after-battle offer was shown for
+
+export function isInFlowGate() {
+  return flowState !== null;
+}
+
 export function setDevMode(v) { devMode = !!v; } // for static verification of grant gating
 export function getDevMode() { return devMode; }
 
@@ -161,7 +261,10 @@ export async function cmdLogout() {
 }
 
 export async function cmdRunNew(args, flags = {}) {
-  try {
+  const hasFlags = !!(flags.lh != null || flags.rh != null || flags.belt != null || flags.ca != null || flags.cb != null);
+  if (hasFlags || isQuiet() || isJson()) {
+    // ORIGINAL create path, byte-for-byte (flags / quiet / json bypass the gate)
+    try {
     // fetch inventory (non-fatal)
     let wData = { weapons: [] };
     let cData = { consumables: [] };
@@ -262,8 +365,131 @@ export async function cmdRunNew(args, flags = {}) {
       });
     }
     await cmdState([], { silentIfJson: true });
+    } catch (e) {
+      printError('run new: ' + e.message);
+    }
+    return;
+  }
+
+  // Interactive three-phase gate path (no flags, not quiet, not json, REPL)
+  if (flowState === 'preamble' || flowState === 'confirm') {
+    console.log(buildPreambleText());
+    return;
+  }
+  flowState = 'preamble';
+  console.log(buildPreambleText());
+}
+
+export async function cmdReady() {
+  if (flowState !== 'preamble') {
+    if (!isQuiet() && !isJson()) console.log(buildPreambleDenied());
+    return;
+  }
+  try {
+    let wData = { weapons: [] };
+    let cData = { consumables: [] };
+    try { wData = await apiCall('GET', '/weapons'); } catch (_) {}
+    try { cData = await apiCall('GET', '/consumables'); } catch (_) {}
+
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
+    const getId = async (label, allowEmpty = true) => {
+      while (true) {
+        const ans = await new Promise(r => rl.question(`${label} (id${allowEmpty ? ' or empty to skip' : ''}, 'inventory' to re-list): `, r));
+        const trimmed = (ans || '').trim();
+        if (trimmed.toLowerCase() === 'inventory') {
+          console.log('weapons:');
+          (wData.weapons || []).forEach(w => {
+            const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
+            console.log(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`);
+          });
+          console.log('consumables:');
+          (cData.consumables || []).forEach(c => console.log(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`));
+          continue;
+        }
+        if (!trimmed && allowEmpty) return null;
+        const m = trimmed.match(/(\d+)\s*$/);
+        if (m) {
+          const id = parseInt(m[1], 10);
+          if (Number.isFinite(id)) return id;
+        }
+        printAmber('invalid id, try again');
+      }
+    };
+    const lh = await getId('LH');
+    const rh = await getId('RH');
+    const belt = await getId('Belt');
+    const ca = await getId('Consume A', true);
+    const cb = await getId('Consume B', true);
+    rl.close();
+
+    pendingPicks = { lh, rh, belt, ca, cb };
+    console.log(buildRecapText(wData.weapons || [], cData.consumables || [], pendingPicks));
+    flowState = 'confirm';
   } catch (e) {
-    printError('run new: ' + e.message);
+    printError('ready: ' + e.message);
+    flowState = null;
+    pendingPicks = null;
+  }
+}
+
+export async function cmdConfirm() {
+  if (flowState !== 'confirm' || !pendingPicks) {
+    if (flowState === null) {
+      if (!isQuiet() && !isJson()) console.log('Type "run new" to begin.');
+    } else {
+      if (!isQuiet() && !isJson()) console.log(buildConfirmDenied());
+    }
+    return;
+  }
+  try {
+    const p = pendingPicks;
+    const payload = { portal_template_id: 1 };
+    if (p.lh != null) payload.hand_l_weapon_id = p.lh;
+    if (p.rh != null) payload.hand_r_weapon_id = p.rh;
+    if (p.belt != null) payload.belt_weapon_id = p.belt;
+    if (p.ca != null) payload.consume_a = p.ca;
+    if (p.cb != null) payload.consume_b = p.cb;
+
+    const data = await apiCall('POST', '/runs', payload);
+    setCurrentRun(data.run.id);
+    console.log('The portal pulls you through.');
+    printGreen(`Created run #${data.run.id}`);
+    if (isJson()) {
+      console.log(JSON.stringify({ run: data.run }));
+      flowState = null;
+      pendingPicks = null;
+      offeredBattleNum = null;
+      return;
+    }
+    let bs = {};
+    try {
+      const fresh = await apiCall('GET', `/runs/${data.run.id}`);
+      bs = (fresh.run && fresh.run.battle_state) || {};
+    } catch {
+      bs = (data.run && data.run.battle_state) || {};
+    }
+    const d = bs.dice || {};
+    if (d.remaining || d.current) {
+      const fmtC = (o) => `G${o.green ?? 0} Y${o.yellow ?? 0} R${o.red ?? 0}`;
+      const cur = d.current ? `current: ${d.current.color} die face=${d.current.face} budget=${d.current.rolled_value}` : 'current: —';
+      printGreen(`dice remaining: ${fmtC(d.remaining || {})}  used: ${fmtC(d.used || {})}  ${cur}`);
+    }
+    const mons = (data.participants || bs.monsters || []);
+    if (mons.length) {
+      printDim('battle-1 monsters:');
+      mons.forEach(m => {
+        printGreen(`monster ${m.label || m.name} hp_word=${m.hp_word || 'Unknown'} dmg ${m.damage} spd ${m.speed} acc ${m.accuracy}`);
+      });
+    }
+    await cmdState([], { silentIfJson: true });
+    console.log('Type "battle start" to begin.');
+    flowState = null;
+    pendingPicks = null;
+    offeredBattleNum = null;
+  } catch (e) {
+    printError('confirm: ' + e.message);
+    flowState = null;
+    pendingPicks = null;
   }
 }
 
@@ -357,6 +583,22 @@ export async function cmdBattleEnd(args) {
   if (!['continue', 'stop'].includes(choice)) { printError('usage: battle end continue|stop'); return; }
   try {
     const data = await apiCall('POST', `/runs/${currentRunId}/battle/end`, { choice });
+    if (!isQuiet() && !isJson()) {
+      if (choice === 'continue') {
+        printGreen('The next fight begins.');
+        const bs = data.battle_state || {};
+        const mons = bs.participants && bs.participants.monsters ? bs.participants.monsters : (bs.monsters || []);
+        if (mons.length) {
+          printDim(`battle-${data.current_battle || 1} monsters:`);
+          mons.forEach(m => {
+            // battle_state monsters are engine state: {label, hp_word, id} only
+            printGreen(`monster ${m.label || m.name} hp_word=${m.hp_word || 'Unknown'}`);
+          });
+        }
+      } else if (choice === 'stop') {
+        printGreen('You step back through the portal. The prize is yours — for now.');
+      }
+    }
     printGreen(`Battle ended: ${data.status} battle ${data.current_battle}`);
     await cmdState();
   } catch (e) {

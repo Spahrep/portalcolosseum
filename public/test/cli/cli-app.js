@@ -24,6 +24,97 @@ let currentRunId = localStorage.getItem('cli_current_run_id') || null;
 let accessToken = null;
 let devMode = localStorage.getItem('cli_dev_mode') === '1';
 let pendingInputResolver = null;
+let flowState = null; // 'preamble' | 'confirm' | null — run-start gate
+let pendingPicks = null; // {lh, rh, belt, ca, cb} captured at the ready step
+let offeredBattleNum = null; // last battle the after-battle offer was shown for
+
+// --- PC-36 pure text builders (tested in isolation) ---
+
+function buildPreambleText() {
+  return '\nThe air shimmers. Something ancient watches from the other side.\n\nYou stand before an open portal. A run of battles awaits on the other side.\nWhat you bring now is all you will have.\n\nCommands: inventory | inspect # | ready | help\nType "ready" when you are prepared.\n';
+}
+
+function buildRecapText(weapons, consumables, picks) {
+  const lines = [];
+  lines.push('You check your straps one last time.');
+  lines.push('');
+  lines.push('Your loadout for this run:');
+  const fmtAtk = (w) => {
+    if (!w || !w.attacks || !w.attacks.length) return '';
+    return w.attacks.map(a => `#${a.id} ${a.name} (p${a.prepare_time}/c${a.cooldown_time})`).join(', ');
+  };
+  const findW = (id) => (weapons || []).find(w => w.id === id) || null;
+  const findC = (id) => (consumables || []).find(c => c.id === id) || null;
+  const lh = picks && picks.lh != null ? findW(picks.lh) : null;
+  const rh = picks && picks.rh != null ? findW(picks.rh) : null;
+  const belt = picks && picks.belt != null ? findW(picks.belt) : null;
+  const ca = picks && picks.ca != null ? findC(picks.ca) : null;
+  const cb = picks && picks.cb != null ? findC(picks.cb) : null;
+  lines.push(`  Left Hand: ${lh ? `#${lh.id} ${lh.name} (${lh.damage} dmg) — ${fmtAtk(lh)}` : 'empty'}`);
+  lines.push(`  Right Hand: ${rh ? `#${rh.id} ${rh.name} (${rh.damage} dmg) — ${fmtAtk(rh)}` : 'empty'}`);
+  lines.push(`  Belt: ${belt ? `#${belt.id} ${belt.name} (${belt.damage} dmg) — ${fmtAtk(belt)}` : 'empty'}`);
+  lines.push(`  Consume A: ${ca ? `#${ca.id} ${ca.name} ×${ca.quantity ?? 1}` : 'empty'}`);
+  lines.push(`  Consume B: ${cb ? `#${cb.id} ${cb.name} ×${cb.quantity ?? 1}` : 'empty'}`);
+  lines.push('');
+  lines.push('This loadout locks the moment you step through the portal. You cannot change it between fights.');
+  lines.push('');
+  lines.push('Type "confirm" to enter, or "inventory" to adjust.');
+  return lines.join('\n');
+}
+
+function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax, isFirstWin) {
+  const lines = [];
+  if (isFirstWin) {
+    lines.push('The first monster falls. The pool stirs.');
+    lines.push('');
+  }
+  const hpPart = hpMax ? `Your HP: ${hpCur}/${hpMax}.` : `Your HP: ${hpCur}.`;
+  const battleLine = totalBattles ? `Battle ${currentBattle} of ${totalBattles} complete.` : `Battle ${currentBattle} complete.`;
+  lines.push(`${battleLine} ${hpPart}`);
+  lines.push('The prize pool has grown.');
+  lines.push('');
+  lines.push('Type "continue" to risk the next fight, or "stop" to claim your current share and end the run.');
+  return lines.join('\n');
+}
+
+function buildItemInspectText(weapons, consumables, id) {
+  const w = (weapons || []).find(x => x.id === id);
+  if (w) {
+    const atks = (w.attacks || []).map(a => `#${a.id} ${a.name} (p${a.prepare_time}/c${a.cooldown_time})`).join(', ');
+    return `#${w.id} ${w.name} (${w.damage} dmg)\n  Attacks: ${atks || 'none'}`;
+  }
+  const c = (consumables || []).find(x => x.id === id);
+  if (c) {
+    return `#${c.id} ${c.name} ×${c.quantity ?? 1}`;
+  }
+  return `No item #${id} found in your inventory.`;
+}
+
+function buildPreambleDenied() {
+  return 'Type "inventory", "inspect #", "ready", or "help".';
+}
+
+function buildConfirmDenied() {
+  return 'Type "confirm" to enter, or "inventory" to adjust.';
+}
+
+// After-battle offer: once per completed battle, keyed on the run's current_battle
+// (the engine state exposes no battle counter, so we fetch the run row).
+async function showAfterBattleOffer(s) {
+  if (!currentRunId) return;
+  try {
+    const runData = await apiCall('GET', `/runs/${currentRunId}`);
+    const r = runData.run || {};
+    const curB = r.current_battle || 0;
+    if (offeredBattleNum === curB) return;
+    offeredBattleNum = curB;
+    const totB = r.total_battles;
+    const hpCur = (s.player && s.player.hp) || r.player_hp || 0;
+    appendLine(buildAfterBattleOffer(curB, totB, hpCur, null, curB === 1));
+  } catch (_) {
+    // silent — the offer is cosmetic; a later commit will retry
+  }
+}
 
 // Command history for ArrowUp/ArrowDown (terminal-style recall), capped at 5.
 const HISTORY_KEY = 'cli_command_history';
@@ -301,6 +392,7 @@ function turnPromptFromState(stateObj) {
   }
   if (s.battle_over) {
     printGreen('The battle is over. The crowd roars.');
+    showAfterBattleOffer(s);
     return;
   }
   const parts = s.participants || {};
@@ -438,27 +530,25 @@ async function promptUser(question) {
 }
 
 async function cmdRunNew() {
+  if (flowState === 'preamble' || flowState === 'confirm') {
+    appendLine(buildPreambleText());
+    return;
+  }
+  flowState = 'preamble';
+  appendLine(buildPreambleText());
+}
+
+async function cmdReady() {
+  if (flowState !== 'preamble') {
+    appendLine(buildPreambleDenied());
+    return;
+  }
   try {
     // fetch current inventory for loadout choice
     let wData = { weapons: [] };
     let cData = { consumables: [] };
     try { wData = await apiCall('GET', '/weapons'); } catch (_) {}
     try { cData = await apiCall('GET', '/consumables'); } catch (_) {}
-
-    appendLine('=== Loadout for new run (weapons + consumables) ===', 'dim');
-    appendLine('weapons:', 'dim');
-    (wData.weapons || []).forEach(w => {
-      const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
-      appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
-    });
-    appendLine('consumables:', 'dim');
-    if (!cData.consumables || cData.consumables.length === 0) {
-      appendLine('  (consumables on hold)', 'dim');
-    } else {
-      cData.consumables.forEach(c => {
-        appendLine(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`, 'green');
-      });
-    }
 
     const getId = async (label, allowEmpty = true) => {
       while (true) {
@@ -490,16 +580,36 @@ async function cmdRunNew() {
     const ca = await getId('Consume A', true);
     const cb = await getId('Consume B', true);
 
+    pendingPicks = { lh, rh, belt, ca, cb };
+    appendLine(buildRecapText(wData.weapons || [], cData.consumables || [], pendingPicks));
+    flowState = 'confirm';
+  } catch (e) {
+    printError('ready: ' + e.message);
+  }
+}
+
+async function cmdConfirm() {
+  if (flowState !== 'confirm' || !pendingPicks) {
+    if (!flowState) {
+      appendLine('Type "run new" to begin.');
+    } else {
+      appendLine(buildConfirmDenied());
+    }
+    return;
+  }
+  try {
+    const p = pendingPicks;
     const payload = { portal_template_id: 1 };
-    if (lh != null) payload.hand_l_weapon_id = lh;
-    if (rh != null) payload.hand_r_weapon_id = rh;
-    if (belt != null) payload.belt_weapon_id = belt;
-    if (ca != null) payload.consume_a = ca;
-    if (cb != null) payload.consume_b = cb;
+    if (p.lh != null) payload.hand_l_weapon_id = p.lh;
+    if (p.rh != null) payload.hand_r_weapon_id = p.rh;
+    if (p.belt != null) payload.belt_weapon_id = p.belt;
+    if (p.ca != null) payload.consume_a = p.ca;
+    if (p.cb != null) payload.consume_b = p.cb;
 
     const data = await apiCall('POST', '/runs', payload);
     currentRunId = data.run.id;
     localStorage.setItem('cli_current_run_id', currentRunId);
+    appendLine('The portal pulls you through.');
     printGreen(`Created run #${currentRunId}`);
 
     // render dice + budget + battle-1 monsters (from response or run)
@@ -529,9 +639,13 @@ async function cmdRunNew() {
     } else {
       appendLine('battle-1 monsters: (none — see state)', 'dim');
     }
+    appendLine('Type "battle start" to begin.');
+    flowState = null;
+    pendingPicks = null;
+    offeredBattleNum = null;
     await refreshRunPanels();
   } catch (e) {
-    printError('run new: ' + e.message);
+    printError('confirm: ' + e.message);
   }
 }
 
@@ -605,6 +719,15 @@ async function cmdBattleEnd(args) {
   if (!['continue', 'stop'].includes(choice)) { printError('usage: battle end continue|stop'); return; }
   try {
     const data = await apiCall('POST', `/runs/${currentRunId}/battle/end`, { choice });
+    if (choice === 'continue') {
+      appendLine('The next fight begins.');
+      const mons = (data.battle_state && (data.battle_state.participants || {}).monsters) || (data.battle_state && data.battle_state.monsters) || [];
+      mons.forEach(m => {
+        printGreen(`monster ${m.label} hp_word=${m.hp_word || 'Healthy'}`);
+      });
+    } else if (choice === 'stop') {
+      appendLine('You step back through the portal. The prize is yours — for now.');
+    }
     printGreen(`Battle ended: ${data.status} battle ${data.current_battle}`);
     await cmdState();
   } catch (e) {
@@ -705,8 +828,18 @@ function handleCommand(line) {
     case 'grant': cmdGrant(); break;
     case 'inspect': cmdInspect(args); break;
     case 'clear': cmdClear(); break;
+    case 'ready': cmdReady(); break;
+    case 'confirm': cmdConfirm(); break;
+    case 'continue':
+    case 'stop':
+      cmdBattleEnd([cmd]);
+      break;
     default:
-      appendLine('unknown command — type help', 'amber');
+      if (flowState === 'preamble' || flowState === 'confirm') {
+        appendLine(buildPreambleDenied());
+      } else {
+        appendLine('unknown command — type help', 'amber');
+      }
   }
 }
 
@@ -955,6 +1088,31 @@ async function cmdListTemplates(args) {
 }
 
 async function cmdInspect(args) {
+  // During the run-start gate, inspect means ITEM inspect (from inventory payloads)
+  if (flowState === 'preamble' || flowState === 'confirm') {
+    const idStr = (args[0] || '').trim();
+    if (!idStr) {
+      printAmber('Usage: inspect #');
+      return;
+    }
+    const id = parseInt(idStr, 10);
+    if (isNaN(id) || id < 1) {
+      printAmber('Invalid id');
+      return;
+    }
+    try {
+      const [wData, cData] = await Promise.allSettled([
+        apiCall('GET', '/weapons'),
+        apiCall('GET', '/consumables')
+      ]);
+      const weapons = (wData.status === 'fulfilled' ? wData.value.weapons : []) || [];
+      const consumables = (cData.status === 'fulfilled' ? cData.value.consumables : []) || [];
+      appendLine(buildItemInspectText(weapons, consumables, id), 'green');
+    } catch (e) {
+      printError('inspect: ' + e.message);
+    }
+    return;
+  }
   const idStr = (args[0] || '').trim();
   if (!idStr) {
     const res = await apiCall('GET', '/dev/templates');
