@@ -809,6 +809,14 @@ function handleCommand(line) {
     return;
   }
 
+  // PC-36 run-start gate: only the preamble's listed commands work; 'run new'
+  // re-prints the preamble, everything else gets the neutral denial.
+  if (flowState === 'preamble' || flowState === 'confirm') {
+    const gateAllowed = ['inventory', 'gear', 'inspect', 'ready', 'help'];
+    if (cmd === 'run' && args[0] === 'new') { cmdRunNew(); return; }
+    if (!gateAllowed.includes(cmd)) { appendLine(buildPreambleDenied()); return; }
+  }
+
   switch (cmd) {
     case 'help': cmdHelp(); break;
     case 'state': cmdState(); break;
@@ -835,11 +843,7 @@ function handleCommand(line) {
       cmdBattleEnd([cmd]);
       break;
     default:
-      if (flowState === 'preamble' || flowState === 'confirm') {
-        appendLine(buildPreambleDenied());
-      } else {
-        appendLine('unknown command — type help', 'amber');
-      }
+      appendLine('unknown command — type help', 'amber');
   }
 }
 

@@ -493,6 +493,23 @@ export async function cmdConfirm() {
   }
 }
 
+export async function cmdInspect(args) {
+  // Pre-run item pretty-print (PC-36): inspect <id> → item card from the
+  // same /weapons + /consumables payloads the inventory re-list uses.
+  if (!args[0]) { printError('usage: inspect <id>'); return; }
+  const id = parseInt(args[0], 10);
+  if (!Number.isFinite(id)) { printError('usage: inspect <id>'); return; }
+  try {
+    let wData = { weapons: [] };
+    let cData = { consumables: [] };
+    try { wData = await apiCall('GET', '/weapons'); } catch (_) {}
+    try { cData = await apiCall('GET', '/consumables'); } catch (_) {}
+    console.log(buildItemInspectText(wData.weapons || [], cData.consumables || [], id));
+  } catch (e) {
+    printError('inspect: ' + e.message);
+  }
+}
+
 export async function cmdRun() {
   if (!currentRunId) {
     printAmber('No current run. Use run new first.');
@@ -813,7 +830,7 @@ export async function cmdListTemplates() {
   }
 }
 
-export async function cmdInspect(args) {
+export async function cmdDevInspect(args) {
   const idStr = (args[0] || '').trim();
   if (!idStr) {
     try {
@@ -880,7 +897,7 @@ export async function handleSlashCommand(cmd, args) {
     '/roll': cmdDevRoll,
     '/nuke': cmdDevNuke,
     '/abandon': cmdDevAbandon,
-    '/inspect': cmdInspect,
+    '/inspect': cmdDevInspect,
     '/list': (a) => { if (a[0]==='templates') return cmdListTemplates(); printError('usage: /list templates'); },
     '/set': cmdDevSet,
   };

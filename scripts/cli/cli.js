@@ -8,7 +8,7 @@ import { cmdHelp, setFlags, printError, isJson, isQuiet } from './render.mjs';
 import {
   cmdLogin, cmdLogout, cmdRunNew, cmdRun, cmdState, cmdBattleStart,
   cmdAttack, cmdBattleEnd, cmdInventory, cmdWait, cmdClear, cmdGrant, handleSlashCommand, getCurrentRun, setCurrentRun, getDevMode, setDevMode,
-  cmdReady, cmdConfirm, isInFlowGate, buildPreambleDenied
+  cmdReady, cmdConfirm, cmdInspect, isInFlowGate, buildPreambleDenied
 } from './commands.mjs';
 import { loadSession, getAccessToken } from './auth.mjs';
 
@@ -22,6 +22,13 @@ const cmdArgs = args.filter(a => !a.startsWith('--'));
 
 async function dispatch(cmd, subArgs) {
   if (await handleSlashCommand(cmd, subArgs)) return;
+  // PC-36 run-start gate: only the preamble's listed commands work; 'run new'
+  // re-prints the preamble, everything else gets the neutral denial.
+  if (isInFlowGate()) {
+    const gateAllowed = ['inventory', 'gear', 'ready', 'help', 'inspect'];
+    if (cmd === 'run' && subArgs[0] === 'new') { await cmdRunNew(subArgs.slice(1), parseFlags([...args, ...subArgs])); return; }
+    if (!gateAllowed.includes(cmd)) { if (!isQuiet() && !isJson()) console.log(buildPreambleDenied()); return; }
+  }
   switch (cmd) {
     case 'help': cmdHelp(getDevMode()); break;
     case 'state':
@@ -38,6 +45,7 @@ async function dispatch(cmd, subArgs) {
     case 'attack': await cmdAttack(subArgs); break;
     case 'inventory':
     case 'gear': await cmdInventory(); break;
+    case 'inspect': await cmdInspect(subArgs); break;
     case 'login': await cmdLogin(subArgs); break;
     case 'logout': await cmdLogout(); break;
     case 'wait': await cmdWait(); break;
@@ -48,8 +56,7 @@ async function dispatch(cmd, subArgs) {
     case 'continue':
     case 'stop': await cmdBattleEnd([cmd]); break;
     default:
-      if (isInFlowGate() && !isQuiet() && !isJson()) console.log(buildPreambleDenied());
-      else if (!isQuiet() && !isJson()) printError('unknown command — type help');
+      if (!isQuiet() && !isJson()) printError('unknown command — type help');
   }
 }
 
