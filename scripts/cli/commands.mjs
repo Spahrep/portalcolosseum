@@ -159,7 +159,7 @@ function updateRunId(id) {
 const letterOf = (label) => (label && /[A-Z]$/.test(label)) ? label.slice(-1) : '';
 
 export function buildPreambleText() {
-  return '\nThe air shimmers. Something ancient watches from the other side.\n\nYou stand before an open portal. A run of battles awaits on the other side.\nWhat you bring now is all you will have.\n\nCommands: inventory | inspect # | ready | help\nType "ready" when you are prepared.\n';
+  return '\nPrepare to start your run.\n\nCommands: inventory | inspect # | equip LH|RH <id> | ready\nType "ready" when ready.\n';
 }
 
 export function buildRecapText(weapons, consumables, picks) {
