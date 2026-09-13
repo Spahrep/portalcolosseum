@@ -729,6 +729,7 @@ async function cmdBattleEnd(args) {
     if (choice === 'continue') {
       appendLine('The next fight begins.');
       const mons = (data.battle_state && (data.battle_state.participants || {}).monsters) || (data.battle_state && data.battle_state.monsters) || [];
+      if (mons.length) appendLine(`battle-${data.current_battle || 1} monsters:`, 'dim');
       mons.forEach(m => {
         printGreen(`monster ${m.label} hp_word=${m.hp_word || 'Healthy'}`);
       });
