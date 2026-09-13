@@ -184,7 +184,7 @@ function narrateFeed(feedLines, participants = null) {
       const mons = [];
       const dmgs = [];
       consecutiveHits.forEach(h => {
-        const mm = h.raw.match(/([A-Za-z]+(?:\s+[A-Z])?) .*? hits player for (\d+)/);
+        const mm = h.raw.match(/^tic \d+ — ([A-Za-z]+(?:\s+[A-Z])?)(?: .*?)? hits player for (\d+)$/);
         if (mm) { mons.push(mm[1]); dmgs.push(mm[2]); }
       });
       if (mons.length >= 3) {
@@ -228,20 +228,18 @@ function narrateFeed(feedLines, participants = null) {
     let m;
     if (label) {
       const remainder = raw.replace(label, '').replace(/^tic \d+ — \s*/, '');
-      m = remainder.match(/^(.+?) hits player for (\d+)$/);
+      m = remainder.match(/^(.+?)?\s*hits player for (\d+)$/);
       if (m) {
-        const atk = m[1].trim();
-        mapped = `${label}'s ${atk} hits you for ${m[2]}.`;
+        mapped = m[1] && m[1].trim() ? `${label}'s ${m[1].trim()} hits you for ${m[2]}.` : `${label} hits you for ${m[2]}.`;
         consecutiveHits.push({ mapped, raw });
         continue;
       }
     }
     // greedy fallback when no known labels
-    m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?) (.+?) hits player for (\d+)$/);
+    m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?)(?: (.+?))? hits player for (\d+)$/);
     if (m) {
       const mon = m[1];
-      const atk = m[2].trim();
-      mapped = `${mon}'s ${atk} hits you for ${m[3]}.`;
+      mapped = m[2] && m[2].trim() ? `${mon}'s ${m[2].trim()} hits you for ${m[3]}.` : `${mon} hits you for ${m[3]}.`;
       consecutiveHits.push({ mapped, raw });
       continue;
     }
@@ -250,21 +248,19 @@ function narrateFeed(feedLines, participants = null) {
     label = getMonsterLabel(raw);
     if (label) {
       const remainder = raw.replace(label, '').replace(/^tic \d+ — \s*/, '');
-      m = remainder.match(/^(.+?) misses$/);
+      m = remainder.match(/^(.+?)?\s*misses$/);
       if (m) {
         flushHits();
-        const atk = m[1].trim();
-        mapped = `${label}'s ${atk} misses you.`;
+        mapped = m[1] && m[1].trim() ? `${label}'s ${m[1].trim()} misses you.` : `${label} misses you.`;
         outputEntries.push({ text: mapped, matched: true });
         continue;
       }
     }
-    m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?) (.+?) misses$/);
+    m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?)(?: (.+?))? misses$/);
     if (m) {
       flushHits();
       const mon = m[1];
-      const atk = m[2].trim();
-      mapped = `${mon}'s ${atk} misses you.`;
+      mapped = m[2] && m[2].trim() ? `${mon}'s ${m[2].trim()} misses you.` : `${mon} misses you.`;
       outputEntries.push({ text: mapped, matched: true });
       continue;
     }
