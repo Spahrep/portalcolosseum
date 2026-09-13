@@ -31,48 +31,7 @@ function narrateFeed(feedLines, participants = null) {
   const newLines = feedLines.filter(l => !seenFeed.has(l));
   newLines.forEach(l => seenFeed.add(l));
 
-  const outputEntries = []; // {text, matched} for defect 3
-  let consecutiveHits = [];
-
-  const flushHits = () => {
-    if (consecutiveHits.length >= 3) {
-      const mons = [];
-      const dmgs = [];
-      consecutiveHits.forEach(h => {
-        const mm = h.raw.match(/^tic \d+ — ([A-Za-z]+(?:\s+[A-Z])?)(?: .*?)? hits player for (\d+)$/);
-        if (mm) { mons.push(mm[1]); dmgs.push(mm[2]); }
-      });
-      if (mons.length >= 3) {
-        // defect 4: abbreviate shared prefix
-        let monStr;
-        const firstWords = mons.map(m => m.split(' '));
-        const minLen = Math.min(...firstWords.map(w => w.length));
-        let commonPrefixWords = 0;
-        for (let i = 0; i < minLen; i++) {
-          const w = firstWords[0][i];
-          if (firstWords.every(fw => fw[i] === w)) commonPrefixWords++;
-          else break;
-        }
-        if (commonPrefixWords > 0) {
-          const prefix = firstWords[0].slice(0, commonPrefixWords).join(' ') + ' ';
-          const suffixes = mons.map((m, i) => firstWords[i].slice(commonPrefixWords).join(' '));
-          const last = suffixes.pop();
-          monStr = suffixes.join(', ') + ', and ' + last;
-          monStr = prefix + monStr;
-        } else {
-          const last = mons.pop();
-          monStr = mons.join(', ') + ', and ' + last;
-        }
-        const lastD = dmgs.pop();
-        const dmgStr = dmgs.join(', ') + ', and ' + lastD;
-        outputEntries.push({ text: `${monStr} attack you for ${dmgStr}.`, matched: true });
-      }
-      // no fallback re-push; group regex handles all since labels from participants
-    } else if (consecutiveHits.length > 0) {
-      consecutiveHits.forEach(h => outputEntries.push({ text: h.mapped, matched: true }));
-    }
-    consecutiveHits = [];
-  };
+  const outputEntries = []; // {text, matched}
 
   for (const raw of newLines) {
     let mapped = null;
@@ -84,7 +43,7 @@ function narrateFeed(feedLines, participants = null) {
       m = remainder.match(/^(.+?)?\s*hits player for (\d+)$/);
       if (m) {
         mapped = m[1] && m[1].trim() ? `${label}'s ${m[1].trim()} hits you for ${m[2]}.` : `${label} hits you for ${m[2]}.`;
-        consecutiveHits.push({ mapped, raw });
+        outputEntries.push({ text: mapped, matched: true });
         continue;
       }
     }
@@ -92,7 +51,7 @@ function narrateFeed(feedLines, participants = null) {
     if (m) {
       const mon = m[1];
       mapped = m[2] && m[2].trim() ? `${mon}'s ${m[2].trim()} hits you for ${m[3]}.` : `${mon} hits you for ${m[3]}.`;
-      consecutiveHits.push({ mapped, raw });
+      outputEntries.push({ text: mapped, matched: true });
       continue;
     }
 
@@ -102,7 +61,6 @@ function narrateFeed(feedLines, participants = null) {
       const remainder = raw.replace(label, '').replace(/^tic \d+ — \s*/, '');
       m = remainder.match(/^(.+?)?\s*misses$/);
       if (m) {
-        flushHits();
         mapped = m[1] && m[1].trim() ? `${label}'s ${m[1].trim()} misses you.` : `${label} misses you.`;
         outputEntries.push({ text: mapped, matched: true });
         continue;
@@ -110,7 +68,6 @@ function narrateFeed(feedLines, participants = null) {
     }
     m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?)(?: (.+?))? misses$/);
     if (m) {
-      flushHits();
       const mon = m[1];
       mapped = m[2] && m[2].trim() ? `${mon}'s ${m[2].trim()} misses you.` : `${mon} misses you.`;
       outputEntries.push({ text: mapped, matched: true });
@@ -118,34 +75,24 @@ function narrateFeed(feedLines, participants = null) {
     }
 
     m = raw.match(/^tic \d+ — (.+?) is defeated$/);
-    if (m) { flushHits(); mapped = `${m[1]} is defeated!`; outputEntries.push({ text: mapped, matched: true }); continue; }
+    if (m) { mapped = `${m[1]} is defeated!`; outputEntries.push({ text: mapped, matched: true }); continue; }
     m = raw.match(/^tic \d+ — LH Ready$/);
-    if (m) { flushHits(); mapped = 'Your left hand is ready.'; outputEntries.push({ text: mapped, matched: true }); continue; }
+    if (m) { mapped = 'Your left hand is ready.'; outputEntries.push({ text: mapped, matched: true }); continue; }
     m = raw.match(/^tic \d+ — RH Ready$/);
-    if (m) { flushHits(); mapped = 'Your right hand is ready.'; outputEntries.push({ text: mapped, matched: true }); continue; }
+    if (m) { mapped = 'Your right hand is ready.'; outputEntries.push({ text: mapped, matched: true }); continue; }
     m = raw.match(/^tic \d+ — LH commits (.+?) \(cast \d+\)$/);
-    if (m) { flushHits(); mapped = `Your left hand begins casting ${m[1]}…`; outputEntries.push({ text: mapped, matched: true }); continue; }
+    if (m) { mapped = `Your left hand begins casting ${m[1]}…`; outputEntries.push({ text: mapped, matched: true }); continue; }
     m = raw.match(/^tic \d+ — RH commits (.+?) \(cast \d+\)$/);
-    if (m) { flushHits(); mapped = `Your right hand begins casting ${m[1]}…`; outputEntries.push({ text: mapped, matched: true }); continue; }
+    if (m) { mapped = `Your right hand begins casting ${m[1]}…`; outputEntries.push({ text: mapped, matched: true }); continue; }
     m = raw.match(/^tic \d+ — LH (.+?) hits (.+?) for (\d+)$/);
-    if (m) { flushHits(); mapped = `Your left hand's ${m[1]} hits ${m[2]} for ${m[3]}.`; outputEntries.push({ text: mapped, matched: true }); continue; }
+    if (m) { mapped = `Your left hand's ${m[1]} hits ${m[2]} for ${m[3]}.`; outputEntries.push({ text: mapped, matched: true }); continue; }
     m = raw.match(/^tic \d+ — RH (.+?) hits (.+?) for (\d+)$/);
-    if (m) { flushHits(); mapped = `Your right hand's ${m[1]} hits ${m[2]} for ${m[3]}.`; outputEntries.push({ text: mapped, matched: true }); continue; }
-
-    flushHits();
+    if (m) { mapped = `Your right hand's ${m[1]} hits ${m[2]} for ${m[3]}.`; outputEntries.push({ text: mapped, matched: true }); continue; }
     outputEntries.push({ text: raw, matched: false });
   }
-  flushHits();
 
-  let finalEntries = outputEntries;
-  if (finalEntries.length > 5) {
-    finalEntries = finalEntries.slice(0, 5);
-    finalEntries.push({ text: '…the fight continues.', matched: false });
-  }
-
-  finalEntries.forEach((entry, idx) => {
-    const isTrailer = idx === finalEntries.length - 1 && entry.text.includes('…the fight continues');
-    if (isTrailer || !entry.matched) {
+  outputEntries.forEach(entry => {
+    if (!entry.matched) {
       printDim(entry.text);
     } else {
       printGreen(entry.text);
