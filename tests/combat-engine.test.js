@@ -241,4 +241,47 @@ describe('F16 end-to-end attack lifecycle + security', () => {
   it('R2 regression noted: single-target with 3 targets only first damaged (enforced by API slice)', () => {
     assert.ok(true, 'R2 fix verified via API code + readback; engine allows multi-targetIds but API restricts for !isMultiTarget');
   });
+  it('single commit resolves the full cycle to Ready', () => {
+    const eng = createEngine(seededRNG(42));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
+    });
+    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
+    eng.commitAttack('RH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
+    for (let i = 0; i < 10; i++) eng.advanceToNextDecision();
+    const hands = eng.state.player.hands;
+    assert.equal(hands.LH.state, 'Ready');
+    assert.equal(hands.RH.state, 'Ready');
+    const hits = eng.state.feed.filter(l => /hits .+ for \d+/.test(l));
+    assert.ok(hits.length >= 2, 'at least two player hit lines');
+  });
+
+  it('feed carries attack names', () => {
+    const eng = createEngine(seededRNG(99));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A', attacks: [{id:5, name:'quick attack'}] }]
+    });
+    const res1 = eng.commitAttack('LH', 42, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 12, isMultiTarget: false, attackName: 'Quick Jab' });
+    assert.ok(res1.feed.some(l => l.includes('Quick Jab')), 'player attack name in feed');
+    // advance until monster attacks to test real monster attack name
+    for (let i = 0; i < 30; i++) {
+      eng.advanceToNextDecision();
+      if (eng.state.feed.some(l => l.includes('quick attack'))) break;
+    }
+    assert.ok(eng.state.feed.some(l => l.includes('quick attack')), 'monster attack name in feed');
+  });
+
+  it('monster miss line', () => {
+    const rng = () => 0.99;
+    const eng = createEngine(rng);
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A' }]
+    });
+    for (let i = 0; i < 20; i++) eng.advanceToNextDecision();
+    const hasMiss = eng.state.feed.some(l => l.includes('misses'));
+    assert.ok(hasMiss, 'monster miss line present');
+  });
 });

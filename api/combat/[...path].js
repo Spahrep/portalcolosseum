@@ -450,7 +450,7 @@ async function handle(request) {
 
       // Fetch attack early to know isMultiTarget for R2 single-target restriction
       const { data: attackRow } = await admin.from('attack')
-        .select('prepare_time, cooldown_time, is_multi_target, base_damage_multiplier')
+        .select('prepare_time, cooldown_time, is_multi_target, base_damage_multiplier, name')
         .eq('id', attackIdNum).single();
       const isMultiTarget = !!attackRow?.is_multi_target;
 
@@ -507,7 +507,7 @@ async function handle(request) {
       // F11: advance-when-busy instead of 500 on unready hand
       let advanced = false;
       try {
-        engine.commitAttack(hand, attackIdNum, effectiveTargetIds.map(Number), { castTicks, cooldownTicks, playerDamage, isMultiTarget });
+        engine.commitAttack(hand, attackIdNum, effectiveTargetIds.map(Number), { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName: attackRow?.name || null });
       } catch (e) {
         if (e.message === 'Hand not ready' && engine.state && engine.state.queue && engine.state.queue.length > 0) {
           engine.advanceToNextDecision();

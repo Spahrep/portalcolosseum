@@ -139,7 +139,7 @@ function analyzeFeed(feed, prevHp, currHp) {
   let dealt = 0;
   let taken = 0;
   for (const line of feed) {
-    const m = line.match(/tic \d+ — (LH|RH|Monster .+?) attack hits .+? for (\d+)/);
+    const m = line.match(/tic \d+ — (LH|RH) .+? hits .+? for (\d+)/);
     if (!m) continue;
     const dmg = parseInt(m[2], 10);
     if (m[1] === 'LH' || m[1] === 'RH') dealt += dmg;
