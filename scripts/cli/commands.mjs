@@ -181,11 +181,18 @@ export function buildRecapText(weapons, consumables, picks) {
   const belt = picks && picks.belt != null ? findW(picks.belt) : null;
   const ca = picks && picks.ca != null ? findC(picks.ca) : null;
   const cb = picks && picks.cb != null ? findC(picks.cb) : null;
-  lines.push(`  Left Hand: ${lh ? `#${lh.id} ${lh.name} (${lh.damage} dmg) — ${fmtAtk(lh)}` : 'empty'}`);
-  lines.push(`  Right Hand: ${rh ? `#${rh.id} ${rh.name} (${rh.damage} dmg) — ${fmtAtk(rh)}` : 'empty'}`);
-  lines.push(`  Belt: ${belt ? `#${belt.id} ${belt.name} (${belt.damage} dmg) — ${fmtAtk(belt)}` : 'empty'}`);
-  lines.push(`  Consume A: ${ca ? `#${ca.id} ${ca.name} ×${ca.quantity ?? 1}` : 'empty'}`);
-  lines.push(`  Consume B: ${cb ? `#${cb.id} ${cb.name} ×${cb.quantity ?? 1}` : 'empty'}`);
+  const fmtSlot = (id, item, isWeapon) => {
+    if (id == null) return 'empty';
+    if (item) return isWeapon
+      ? `#${item.id} ${item.name} (${item.damage} dmg) — ${fmtAtk(item)}`
+      : `#${item.id} ${item.name} ×${item.quantity ?? 1}`;
+    return `#${id} (unavailable)`;
+  };
+  lines.push(`  Left Hand: ${fmtSlot(picks.lh, lh, true)}`);
+  lines.push(`  Right Hand: ${fmtSlot(picks.rh, rh, true)}`);
+  lines.push(`  Belt: ${fmtSlot(picks.belt, belt, true)}`);
+  lines.push(`  Consume A: ${fmtSlot(picks.ca, ca, false)}`);
+  lines.push(`  Consume B: ${fmtSlot(picks.cb, cb, false)}`);
   lines.push('');
   lines.push('This loadout locks the moment you step through the portal. You cannot change it between fights.');
   lines.push('');

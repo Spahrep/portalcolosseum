@@ -31,6 +31,7 @@ All combat outcomes incorporate variance:
   unpredictable: the uncertainty doesn't erode with play the way a bell curve's
   mean-clustering would.
 - Other monster stat rolls (damage, etc.) are not yet specified — distribution TBD per stat.
+- **PMVP (Spahrep 2026-09-13):** certain attacks unlock when a monster reaches a certain HP threshold.
 
 ## Encounters Are Groups (1–5 Monsters)
 
