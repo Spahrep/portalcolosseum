@@ -528,6 +528,7 @@ async function cmdRunNew() {
   // Re-entry from any gate phase always lands back at the preamble, so
   // 'ready' works no matter when 'run new' is typed.
   flowState = 'preamble';
+  if (actionQueueContent) actionQueueContent.innerHTML = '<div class="dim">—</div>';
   appendLine(buildPreambleText());
 }
 
@@ -1215,8 +1216,8 @@ function updateSidePanelsFromRun(run) {
       let html = '';
       mons.forEach(m => {
         const letter = (m.label && /[A-Z]$/.test(m.label)) ? m.label.slice(-1) : '';
-        const hp = m.current_hp ?? m.max_hp ?? '?';
-        html += `<div class="monster">${m.name}${letter ? ' ' + letter : ''} #${m.id} hp ${hp}/${m.max_hp || '?'} dmg=${m.damage}</div>`;
+        const deadMark = m.dead ? ' (dead)' : '';
+        html += `<div class="monster">${m.name}${letter ? ' ' + letter : ''} - ${m.hp_word || 'Healthy'}${deadMark}</div>`;
       });
       monsterRosterContent.innerHTML = html;
     }
@@ -1229,15 +1230,17 @@ function updateSidePanelsFromRun(run) {
 
   // RIGHT: Action/tic queue
   if (actionQueueContent) {
-    if (queue.length === 0) {
-      actionQueueContent.innerHTML = '<div class="dim">empty</div>';
+    const inFight = bs.tic > 0 || (bs.feed && bs.feed.length > 0);
+    if (!inFight || queue.length === 0) {
+      // Blank until the first fight starts (Spahrep 2026-09-13)
+      actionQueueContent.innerHTML = '<div class="dim">—</div>';
     } else {
       let html = '';
       queue.slice(0, 8).forEach(q => {
         const label = q.label || '?';
         const tics = q.tics ?? 0;
-        const ev = q.event ? ':' + q.event : '';
-        html += `<div>${label}@${tics}${ev}</div>`;
+        const ev = QUEUE_ACTION_LABELS[q.event] || (q.event ? q.event[0].toUpperCase() + q.event.slice(1) : '?');
+        html += `<div>${tics} - ${label}: ${ev}</div>`;
       });
       actionQueueContent.innerHTML = html;
     }
