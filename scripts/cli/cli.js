@@ -22,10 +22,11 @@ const cmdArgs = args.filter(a => !a.startsWith('--'));
 
 async function dispatch(cmd, subArgs) {
   if (await handleSlashCommand(cmd, subArgs)) return;
-  // PC-36 run-start gate: only the preamble's listed commands work; 'run new'
-  // re-prints the preamble, everything else gets the neutral denial.
+  // PC-36 run-start gate: only the preamble's listed commands work (plus the
+  // gate's own confirm/ready transitions — handlers validate their phase);
+  // 'run new' re-prints the preamble, everything else gets the neutral denial.
   if (isInFlowGate()) {
-    const gateAllowed = ['inventory', 'gear', 'ready', 'help', 'inspect'];
+    const gateAllowed = ['inventory', 'gear', 'ready', 'help', 'inspect', 'confirm'];
     if (cmd === 'run' && subArgs[0] === 'new') { await cmdRunNew(subArgs.slice(1), parseFlags([...args, ...subArgs])); return; }
     if (!gateAllowed.includes(cmd)) { if (!isQuiet() && !isJson()) console.log(buildPreambleDenied()); return; }
   }

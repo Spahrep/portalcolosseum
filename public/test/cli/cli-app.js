@@ -809,10 +809,11 @@ function handleCommand(line) {
     return;
   }
 
-  // PC-36 run-start gate: only the preamble's listed commands work; 'run new'
-  // re-prints the preamble, everything else gets the neutral denial.
+  // PC-36 run-start gate: only the preamble's listed commands work (plus the
+  // gate's own confirm/ready transitions — handlers validate their phase);
+  // 'run new' re-prints the preamble, everything else gets the neutral denial.
   if (flowState === 'preamble' || flowState === 'confirm') {
-    const gateAllowed = ['inventory', 'gear', 'inspect', 'ready', 'help'];
+    const gateAllowed = ['inventory', 'gear', 'inspect', 'ready', 'help', 'confirm'];
     if (cmd === 'run' && args[0] === 'new') { cmdRunNew(); return; }
     if (!gateAllowed.includes(cmd)) { appendLine(buildPreambleDenied()); return; }
   }
