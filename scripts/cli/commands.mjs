@@ -375,10 +375,8 @@ export async function cmdRunNew(args, flags = {}) {
   }
 
   // Interactive three-phase gate path (no flags, not quiet, not json, REPL)
-  if (flowState === 'preamble' || flowState === 'confirm') {
-    console.log(buildPreambleText());
-    return;
-  }
+  // Re-entry from any gate phase always lands back at the preamble, so
+  // 'ready' works no matter when 'run new' is typed.
   flowState = 'preamble';
   console.log(buildPreambleText());
 }

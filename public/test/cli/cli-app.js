@@ -525,10 +525,8 @@ async function promptUser(question) {
 }
 
 async function cmdRunNew() {
-  if (flowState === 'preamble' || flowState === 'confirm') {
-    appendLine(buildPreambleText());
-    return;
-  }
+  // Re-entry from any gate phase always lands back at the preamble, so
+  // 'ready' works no matter when 'run new' is typed.
   flowState = 'preamble';
   appendLine(buildPreambleText());
 }
