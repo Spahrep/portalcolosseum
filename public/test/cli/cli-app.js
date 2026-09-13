@@ -325,22 +325,6 @@ function narrateFeed(feedLines, participants = null) {
       continue;
     }
 
-    // Rule: tic N — LH Ready → "Your left hand is ready."
-    m = raw.match(/^tic \d+ — LH Ready$/);
-    if (m) {
-      mapped = 'Your left hand is ready.';
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-
-    // Rule: tic N — RH Ready
-    m = raw.match(/^tic \d+ — RH Ready$/);
-    if (m) {
-      mapped = 'Your right hand is ready.';
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-
     // Rule: tic N — LH commits AttackName (cast N) → "Your left hand begins casting AttackName…"
     m = raw.match(/^tic \d+ — LH commits (.+?) \(cast \d+\)$/);
     if (m) {
@@ -386,6 +370,9 @@ function narrateFeed(feedLines, participants = null) {
     }
   });
 }
+
+// Queue events shown in the state dump, humanized (engine sends raw event names).
+const QUEUE_ACTION_LABELS = { cooldown: 'Ready', winding: 'Casting', impact: 'Attack', attack: 'Attack' };
 
 function turnPromptFromState(stateObj) {
   const s = stateObj && stateObj.state ? stateObj.state : stateObj;
@@ -472,7 +459,8 @@ function printStateFromRun(run) {
   } else {
     lines.push('monsters: none');
   }
-  lines.push(`queue: ${(bs.queue || []).slice(0, 4).map(q => `${q.label || ''}@${q.tics ?? 0}${q.event ? ':' + q.event : ''}`).join(' ') || 'empty'}`);
+  const queueLine = (bs.queue || []).slice(0, 4).map(q => `${q.tics ?? 0} - ${q.label || '?'}: ${QUEUE_ACTION_LABELS[q.event] || (q.event ? q.event[0].toUpperCase() + q.event.slice(1) : '?')}`).join(' | ');
+  lines.push(`queue: ${queueLine || 'empty'}`);
   lines.push(`feed: ${(bs.feed || []).slice(-3).join(' | ') || '—'}`);
   appendLines(lines, 'green');
   // Update side panels with real battle_state data (right column uses dice/queue, left uses monsters/player)
@@ -711,7 +699,6 @@ async function cmdAttack(args) {
     const payload = { hand, attack_id: attackId, target_ids: targets };
     const data = await apiCall('POST', `/runs/${currentRunId}/commit`, payload);
     printGreen(`Attack ${hand} #${attackId} → ${targets.length ? targets.join(',') : 'auto'}`);
-    if (data.advanced) printAmber(' (hand was busy — advanced)');
     const feedSrc = data.state && data.state.feed ? data.state : data;
     if (feedSrc.feed) narrateFeed(feedSrc.feed, feedSrc.participants);
     turnPromptFromState(data.state || data);

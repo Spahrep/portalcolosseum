@@ -76,10 +76,6 @@ function narrateFeed(feedLines, participants = null) {
 
     m = raw.match(/^tic \d+ — (.+?) is defeated$/);
     if (m) { mapped = `${m[1]} is defeated!`; outputEntries.push({ text: mapped, matched: true }); continue; }
-    m = raw.match(/^tic \d+ — LH Ready$/);
-    if (m) { mapped = 'Your left hand is ready.'; outputEntries.push({ text: mapped, matched: true }); continue; }
-    m = raw.match(/^tic \d+ — RH Ready$/);
-    if (m) { mapped = 'Your right hand is ready.'; outputEntries.push({ text: mapped, matched: true }); continue; }
     m = raw.match(/^tic \d+ — LH commits (.+?) \(cast \d+\)$/);
     if (m) { mapped = `Your left hand begins casting ${m[1]}…`; outputEntries.push({ text: mapped, matched: true }); continue; }
     m = raw.match(/^tic \d+ — RH commits (.+?) \(cast \d+\)$/);
@@ -584,7 +580,6 @@ export async function cmdAttack(args) {
   try {
     const data = await apiCall('POST', `/runs/${currentRunId}/commit`, payload);
     printGreen(`Attack ${hand} #${attackId} → auto`);
-    if (data.advanced) printAmber(' (advanced)');
     if (isJson()) {
       console.log(JSON.stringify(data));
       return;
