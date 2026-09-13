@@ -34,7 +34,7 @@ let offeredBattleNum = null; // last battle the after-battle offer was shown for
 
 function buildPreambleText() {
   // PC-36 short placeholder per spec (replaces atmospheric text; leading \n preserved for output parity)
-  return '\nPrepare to start your run.\n\nCommands: inventory | inspect # | equip LH|RH <id> | ready\nType "ready" when ready.\n';
+  return '\nPrepare to start your run.\n\nCommands: inventory | inspect # | equip LH|RH <id> | ready | cancel\nType "ready" when ready.\n';
 }
 
 function buildRecapText(weapons, consumables, picks) {
@@ -782,7 +782,7 @@ function handleCommand(line) {
   // gate's own confirm/ready transitions — handlers validate their phase);
   // 'run new' re-prints the preamble, everything else gets the neutral denial.
   if (flowState === 'preamble' || flowState === 'confirm') {
-    const gateAllowed = ['inventory', 'gear', 'inspect', 'ready', 'help', 'confirm', 'equip'];
+    const gateAllowed = ['inventory', 'gear', 'inspect', 'ready', 'help', 'confirm', 'equip', 'cancel'];
     if (cmd === 'run' && args[0] === 'new') { cmdRunNew(); return; }
     if (!gateAllowed.includes(cmd)) { appendLine(buildPreambleDenied()); return; }
   }
@@ -809,6 +809,7 @@ function handleCommand(line) {
     case 'ready': cmdReady(); break;
     case 'confirm': cmdConfirm(); break;
     case 'equip': cmdEquip(args); break;
+    case 'cancel': cmdCancel(); break;
     case 'continue':
     case 'stop':
       cmdBattleEnd([cmd]);
@@ -1431,6 +1432,20 @@ async function cmdEquip(args) {
   } catch (e) {
     printError('equip: ' + e.message);
   }
+}
+
+
+function cmdCancel() {
+  // Exit the run-start gate without creating a run (Spahrep 2026-09-13).
+  // Restores the run panels so a mid-run player lands back where they were.
+  if (flowState !== 'preamble' && flowState !== 'confirm') {
+    appendLine('Nothing to cancel.');
+    return;
+  }
+  flowState = null;
+  pendingPicks = null;
+  appendLine('Run preparation cancelled.');
+  if (currentRunId) refreshRunPanels();
 }
 
 

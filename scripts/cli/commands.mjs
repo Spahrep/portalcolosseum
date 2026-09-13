@@ -159,7 +159,7 @@ function updateRunId(id) {
 const letterOf = (label) => (label && /[A-Z]$/.test(label)) ? label.slice(-1) : '';
 
 export function buildPreambleText() {
-  return '\nPrepare to start your run.\n\nCommands: inventory | inspect # | equip LH|RH <id> | ready\nType "ready" when ready.\n';
+  return '\nPrepare to start your run.\n\nCommands: inventory | inspect # | equip LH|RH <id> | ready | cancel\nType "ready" when ready.\n';
 }
 
 export function buildRecapText(weapons, consumables, picks) {
@@ -884,6 +884,18 @@ export async function handleSlashCommand(cmd, args) {
 
 export function getCurrentRun() { return currentRunId; }
 export function setCurrentRun(id) { updateRunId(id); }
+
+
+export async function cmdCancel() {
+  // Exit the run-start gate without creating a run (Spahrep 2026-09-13).
+  if (flowState !== 'preamble' && flowState !== 'confirm') {
+    if (!isQuiet() && !isJson()) console.log('Nothing to cancel.');
+    return;
+  }
+  flowState = null;
+  pendingPicks = null;
+  if (!isQuiet() && !isJson()) console.log('Run preparation cancelled.');
+}
 
 
 export async function cmdEquip(args) {
