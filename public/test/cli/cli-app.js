@@ -453,7 +453,7 @@ function printStateFromRun(run) {
     for (const m of mons) {
       const letter = letterOf(m.label);
       const deadMark = m.dead ? ' (dead)' : '';
-      lines.push(`  ${m.name}${letter ? ' ' + letter : ''}  (#${m.id} ${m.hp_word}${deadMark}) dmg=${m.damage} spd=${m.speed} acc=${m.accuracy}`);
+      lines.push(`  ${m.name || m.label}${letter ? ' ' + letter : ''} - ${m.hp_word || 'Healthy'}${deadMark}`);
       lines.push(`      attacks: ${fmtAttacks(m.attacks)}`);
     }
   } else {
@@ -627,7 +627,8 @@ async function cmdConfirm() {
       appendLine('battle-1 monsters:', 'dim');
       mons.forEach(m => {
         const deadMark = m.dead ? ' (dead)' : '';
-        printGreen(`monster ${m.label} hp_word=${m.hp_word || 'Healthy'}${deadMark} dmg=${m.damage} spd=${m.speed} acc=${m.accuracy}`);
+        const letter = letterOf(m.label);
+        printGreen(`monster ${m.name || m.label}${letter ? ' ' + letter : ''} - ${m.hp_word || 'Healthy'}${deadMark}`);
       });
     } else {
       appendLine('battle-1 monsters: (none — see state)', 'dim');
@@ -716,7 +717,8 @@ async function cmdBattleEnd(args) {
       const mons = (data.battle_state && (data.battle_state.participants || {}).monsters) || (data.battle_state && data.battle_state.monsters) || [];
       if (mons.length) appendLine(`battle-${data.current_battle || 1} monsters:`, 'dim');
       mons.forEach(m => {
-        printGreen(`monster ${m.label} hp_word=${m.hp_word || 'Healthy'}`);
+        const letter = letterOf(m.label);
+        printGreen(`monster ${m.name || m.label}${letter ? ' ' + letter : ''} - ${m.hp_word || 'Healthy'}`);
       });
     } else if (choice === 'stop') {
       appendLine('You step back through the portal. The prize is yours — for now.');

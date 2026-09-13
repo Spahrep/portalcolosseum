@@ -156,6 +156,7 @@ function updateRunId(id) {
 }
 
 // --- PC-36 pure text builders (exported for isolated testing) ---
+const letterOf = (label) => (label && /[A-Z]$/.test(label)) ? label.slice(-1) : '';
 
 export function buildPreambleText() {
   return '\nThe air shimmers. Something ancient watches from the other side.\n\nYou stand before an open portal. A run of battles awaits on the other side.\nWhat you bring now is all you will have.\n\nCommands: inventory | inspect # | ready | help\nType "ready" when you are prepared.\n';
@@ -364,7 +365,8 @@ export async function cmdRunNew(args, flags = {}) {
       printDim('battle-1 monsters:');
       mons.forEach(m => {
         // do not print numeric hp — spec forbids numeric_hp entirely in new code
-        printGreen(`monster ${m.label || m.name} hp_word=${m.hp_word || 'Unknown'} dmg ${m.damage} spd ${m.speed} acc ${m.accuracy}`);
+        const letter = letterOf(m.label);
+        printGreen(`monster ${m.name || m.label}${letter ? ' ' + letter : ''} - ${m.hp_word || 'Unknown'}`);
       });
     }
     await cmdState([], { silentIfJson: true });
@@ -479,7 +481,8 @@ export async function cmdConfirm() {
     if (mons.length) {
       printDim('battle-1 monsters:');
       mons.forEach(m => {
-        printGreen(`monster ${m.label || m.name} hp_word=${m.hp_word || 'Unknown'} dmg ${m.damage} spd ${m.speed} acc ${m.accuracy}`);
+        const letter = letterOf(m.label);
+        printGreen(`monster ${m.name || m.label}${letter ? ' ' + letter : ''} - ${m.hp_word || 'Unknown'}`);
       });
     }
     await cmdState([], { silentIfJson: true });
@@ -609,7 +612,8 @@ export async function cmdBattleEnd(args) {
           printDim(`battle-${data.current_battle || 1} monsters:`);
           mons.forEach(m => {
             // battle_state monsters are engine state: {label, hp_word, id} only
-            printGreen(`monster ${m.label || m.name} hp_word=${m.hp_word || 'Unknown'}`);
+            const letter = letterOf(m.label);
+            printGreen(`monster ${m.name || m.label}${letter ? ' ' + letter : ''} - ${m.hp_word || 'Unknown'}`);
           });
         }
       } else if (choice === 'stop') {
