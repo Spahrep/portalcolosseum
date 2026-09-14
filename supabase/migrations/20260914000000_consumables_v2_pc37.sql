@@ -4,12 +4,14 @@
 -- Purpose: Replace single potency with floor/window + speed design per docs/consumables.md
 --   - consumable_template: floor_base, floor_delta, window_base, window_delta, speed_base, speed_delta, effect_type
 --   - consumable_instance: rolled_floor, rolled_window, rolled_speed, grade, template_id, user_id
---   - Add Postgres RPC generate_consumable_instance(template_id, user_id)
---   - Ensure RLS, ownership, portal_run FKs remain valid
---   - Follows weapon_instance patterns + loot tables + api/combat
--- ============================================================
+|--   - Add Postgres RPC generate_consumable_instance(template_id)
+|--   - Ensure RLS, ownership, portal_run FKs remain valid
+|--   - Follows weapon_instance patterns + loot tables + api/combat
+|-- ============================================================
 
--- 1. Update consumable_template (drop potency, add floor/window/speed params)
+|-- 1. Update consumable_template (drop potency, add floor/window/speed params)
+-- Fix effect_type CHECK collision from PC-17 migration (old constraint blocks 'speed'/'accuracy' inserts)
+ALTER TABLE public.consumable_template DROP CONSTRAINT IF EXISTS consumable_template_effect_type_check;
 ALTER TABLE public.consumable_template
   DROP COLUMN IF EXISTS potency;
 
@@ -20,8 +22,11 @@ ALTER TABLE public.consumable_template
   ADD COLUMN IF NOT EXISTS window_delta int NOT NULL DEFAULT 10,
   ADD COLUMN IF NOT EXISTS speed_base int NOT NULL DEFAULT 3,
   ADD COLUMN IF NOT EXISTS speed_delta int NOT NULL DEFAULT 1,
-  ADD COLUMN IF NOT EXISTS effect_type text NOT NULL DEFAULT 'heal' CHECK (effect_type IN ('heal','speed','accuracy','damage')),
+  ADD COLUMN IF NOT EXISTS effect_type text NOT NULL DEFAULT 'heal',
   ADD COLUMN IF NOT EXISTS duration_ticks int;  -- NULL for heals (instant); set for speed/accuracy/damage templates
+
+-- Re-add the correctly-named constraint (inline CHECK on ADD COLUMN IF NOT EXISTS is a no-op for existing column)
+ALTER TABLE public.consumable_template ADD CONSTRAINT consumable_template_effect_type_check CHECK (effect_type IN ('heal','speed','accuracy','damage'));
 
 COMMENT ON TABLE public.consumable_template IS
   'Static consumable templates. Effect value = floor_base + floor_delta*rand + window_base + window_delta*rand. Speed rolled per instance. +only deltas per locked design.';

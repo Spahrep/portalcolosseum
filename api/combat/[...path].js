@@ -346,6 +346,32 @@ async function handle(request) {
       }
       const [handL, handR, beltW] = await Promise.all([weaponInfo(run.hand_l_weapon_id), weaponInfo(run.hand_r_weapon_id), weaponInfo(run.belt_weapon_id)]);
 
+      // --- potions (consumable slots A/B) for state response ---
+      async function potionInfo(consumeId) {
+        if (!consumeId) return null;
+        try {
+          const { data: inst } = await admin
+            .from('consumable_instance')
+            .select('id, rolled_floor, rolled_window, grade, consumable_template:template_id (name, effect_type)')
+            .eq('id', consumeId)
+            .maybeSingle();
+          if (!inst) return null;
+          const effectLabel = `${inst.rolled_floor}+, up to ${inst.rolled_floor + (inst.rolled_window || 0)}`;
+          return {
+            instance_id: inst.id,
+            template_name: inst.consumable_template?.name || 'Unknown',
+            effect_type: inst.consumable_template?.effect_type || 'heal',
+            effect_label: effectLabel,
+            grade: inst.grade,
+            used: false
+          };
+        } catch (e) {
+          console.error('potion fetch error', e);
+          return null;
+        }
+      }
+      const [potionA, potionB] = await Promise.all([potionInfo(run.consume_a_id), potionInfo(run.consume_b_id)]);
+
       const safeState = {
         queue: state.queue || [],
         player: state.player ? { hp: state.player.hp, hands: state.player.hands } : null,
@@ -353,10 +379,11 @@ async function handle(request) {
         tic: state.tic || 0,
         buffs: state.buffs || [],
         weapons: { hand_l: handL, hand_r: handR, belt: beltW },
+        potions: { potion_a: potionA, potion_b: potionB },
         monsters,
         dice
       };
-      return json({ run: { ...run, battle_state: safeState } });
+      return json({ run: { ...run, potion_a: potionA, potion_b: potionB, battle_state: safeState } });
     }
 
     // POST /api/combat/runs/:id/battle/start  (for battle 2+ and legacy; F3 gate kept)
@@ -939,6 +966,45 @@ async function handle(request) {
         const res = await createAndEquipWeapon(admin, user.id, run, templateId, slot);
         if (res.error) return json({ error: res.error }, res.status || 400);
         return json(res);
+      }
+
+      // 2b. POST /dev/roll-consumable (mirror roll-weapon pattern exactly; slot A/B, single-arg RPC, effect_label "X+, up to Y")
+      if (path === '/dev/roll-consumable') {
+        const body = await request.json().catch(() => ({}));
+        const templateId = parseInt(body.template_id, 10);
+        let slot = body.slot || 'A';
+        if (isNaN(templateId) || templateId <= 0) return json({ error: 'Invalid template_id' }, 400);
+        if (!['A','B'].includes(slot)) slot = 'A';
+        const run = await findActiveRun(user.id);
+        if (!run) return json({ error: 'start a run first' }, 400);
+        let instanceId;
+        try {
+          const rpcRes = await admin.rpc('generate_consumable_instance', { p_template_id: templateId });
+          if (rpcRes.error) throw rpcRes.error;
+          instanceId = rpcRes.data;
+        } catch (e) {
+          console.error('generate_consumable_instance error', e);
+          return json({ error: 'Failed to generate consumable' }, 500);
+        }
+        if (!instanceId) return json({ error: 'generation returned no id' }, 500);
+        const col = slot === 'B' ? 'consume_b_id' : 'consume_a_id';
+        const { error: updErr } = await admin.from('portal_run').update({ [col]: instanceId }).eq('id', run.id);
+        if (updErr) return json({ error: 'Failed to assign consumable to run' }, 500);
+        // fetch joined row for response shape
+        const { data: inst } = await admin
+          .from('consumable_instance')
+          .select('id, rolled_floor, rolled_window, grade, consumable_template:template_id (name, effect_type)')
+          .eq('id', instanceId)
+          .maybeSingle();
+        const effectLabel = inst ? `${inst.rolled_floor}+, up to ${inst.rolled_floor + (inst.rolled_window || 0)}` : '';
+        const consumable = inst ? {
+          instance_id: inst.id,
+          template_name: inst.consumable_template?.name || 'Unknown',
+          effect_type: inst.consumable_template?.effect_type || 'heal',
+          effect_label: effectLabel,
+          grade: inst.grade
+        } : null;
+        return json({ slot, consumable });
       }
 
       // 3. POST /dev/equip-instance
