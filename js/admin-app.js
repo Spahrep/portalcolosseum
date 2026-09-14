@@ -177,6 +177,7 @@ async function loadTab(tab) {
     else if (tab === 'weapon-templates') await renderWeaponTemplates(content);
     else if (tab === 'monster-templates') await renderMonsterTemplates(content);
     else if (tab === 'portal-templates') await renderPortalTemplates(content);
+    else if (tab === 'consumable-templates') await renderConsumableTemplates(content);
   } catch (e) {
     content.innerHTML = `<p class="error">Error: ${e.message}</p>`;
   }
@@ -1193,6 +1194,142 @@ async function showPortalLootMappingEditor(templateId) {
 
   } catch (e) {
     container.innerHTML = `<p class="error">Error loading loot mappings: ${e.message}</p>`;
+  }
+}
+
+// ============================================================
+// CONSUMABLE TEMPLATES TAB (PC-38)
+// ============================================================
+
+async function renderConsumableTemplates(container) {
+  container.innerHTML = `
+    <h2>Consumable Templates</h2>
+    <button class="btn" id="create-ct-btn">+ Create New Consumable Template</button>
+    <div id="ct-form-container"></div>
+    <table>
+      <thead><tr><th>Name</th><th>Effect</th><th>Floor Base/Delta</th><th>Window Base/Delta</th><th>Speed</th><th>Actions</th></tr></thead>
+      <tbody id="ct-tbody"></tbody>
+    </table>
+  `;
+  document.getElementById('create-ct-btn').addEventListener('click', () => showConsumableTemplateForm());
+
+  const res = await apiCall('/api/admin/consumable-templates');
+  const templates = res.data || [];
+  const tbody = document.getElementById('ct-tbody');
+  templates.forEach(t => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(t.name)}</td>
+      <td>${esc(t.effect_type)}</td>
+      <td>${t.floor_base} ± ${t.floor_delta}</td>
+      <td>${t.window_base} ± ${t.window_delta}</td>
+      <td>${t.speed_base} ± ${t.speed_delta}</td>
+      <td>
+        <button class="btn" data-edit="${t.id}">Edit</button>
+        <button class="btn btn-danger" data-delete="${t.id}">Delete</button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  tbody.querySelectorAll('[data-edit]').forEach(btn => {
+    btn.addEventListener('click', () => showConsumableTemplateForm(btn.dataset.edit));
+  });
+  tbody.querySelectorAll('[data-delete]').forEach(btn => {
+    btn.addEventListener('click', () => deleteConsumableTemplate(btn.dataset.delete));
+  });
+}
+
+function showConsumableTemplateForm(id = null) {
+  const container = document.getElementById('ct-form-container');
+  apiCall('/api/admin/consumable-templates').then(res => {
+    const templates = res.data || [];
+    const t = id ? templates.find(x => String(x.id) === String(id)) : {};
+
+    container.innerHTML = `
+      <div class="form-card">
+        <h3>${id ? 'Edit Consumable Template' : 'Create Consumable Template'}</h3>
+        <div class="form-group"><label>Name</label><input id="ct-name" value="${esc(t.name || '')}"></div>
+        <div class="form-group"><label>Description</label><textarea id="ct-description" rows="2">${esc(t.description || '')}</textarea></div>
+        <div class="form-group">
+          <label>Effect Type</label>
+          <select id="ct-effect_type">
+            <option value="heal" ${t.effect_type === 'heal' ? 'selected' : ''}>heal</option>
+            <option value="damage" ${t.effect_type === 'damage' ? 'selected' : ''}>damage</option>
+            <option value="speed" ${t.effect_type === 'speed' ? 'selected' : ''}>speed</option>
+            <option value="accuracy" ${t.effect_type === 'accuracy' ? 'selected' : ''}>accuracy</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Floor Base</label><input id="ct-floor_base" type="number" value="${t.floor_base ?? 50}"></div>
+        <div class="form-group"><label>Floor Delta</label><input id="ct-floor_delta" type="number" value="${t.floor_delta ?? 10}"></div>
+        <div class="form-group"><label>Window Base</label><input id="ct-window_base" type="number" value="${t.window_base ?? 20}"></div>
+        <div class="form-group"><label>Window Delta</label><input id="ct-window_delta" type="number" value="${t.window_delta ?? 10}"></div>
+        <div class="form-group"><label>Speed Base</label><input id="ct-speed_base" type="number" value="${t.speed_base ?? 2}"></div>
+        <div class="form-group"><label>Speed Delta</label><input id="ct-speed_delta" type="number" value="${t.speed_delta ?? 1}"></div>
+        <div class="form-group"><label>Duration Ticks (null for instant)</label><input id="ct-duration_ticks" type="number" value="${t.duration_ticks ?? ''}"></div>
+        
+        <div class="form-group">
+          <label>Live Label Preview</label>
+          <div id="ct-preview" style="background:#0a1428; border:1px solid #ff6b3b; padding:10px; font-family:monospace; white-space:pre;"></div>
+        </div>
+
+        <button class="btn" id="save-ct-btn">${id ? 'Update' : 'Create'}</button>
+        <button class="btn btn-secondary" id="cancel-ct-btn">Cancel</button>
+      </div>
+    `;
+
+    // Live preview setup
+    const preview = document.getElementById('ct-preview');
+    function updatePreview() {
+      const name = val('ct-name') || 'Unnamed';
+      const effect = val('ct-effect_type') || 'heal';
+      const fb = parseInt(val('ct-floor_base') || 0);
+      const fd = parseInt(val('ct-floor_delta') || 0);
+      const wb = parseInt(val('ct-window_base') || 0);
+      const wd = parseInt(val('ct-window_delta') || 0);
+      const minFloor = fb;
+      const maxFloor = fb + fd;
+      const minWindow = wb;
+      const maxTotal = fb + fd + wb + wd;
+      preview.innerHTML = `${esc(name)} (${effect})<br>${minFloor}+, up to ${maxTotal} <span class="muted">(floor ${minFloor}–${maxFloor}, window ${minWindow}–${minWindow+wd})</span>`;
+    }
+    ['ct-name','ct-effect_type','ct-floor_base','ct-floor_delta','ct-window_base','ct-window_delta'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener('input', updatePreview);
+    });
+    updatePreview(); // initial
+
+    document.getElementById('cancel-ct-btn').addEventListener('click', () => { container.innerHTML = ''; });
+    document.getElementById('save-ct-btn').addEventListener('click', async () => {
+      const body = {
+        name: val('ct-name'),
+        description: val('ct-description') || null,
+        effect_type: val('ct-effect_type'),
+        floor_base: parseInt(val('ct-floor_base')),
+        floor_delta: parseInt(val('ct-floor_delta')),
+        window_base: parseInt(val('ct-window_base')),
+        window_delta: parseInt(val('ct-window_delta')),
+        speed_base: parseInt(val('ct-speed_base')),
+        speed_delta: parseInt(val('ct-speed_delta')),
+        duration_ticks: val('ct-duration_ticks') ? parseInt(val('ct-duration_ticks')) : null,
+      };
+      try {
+        if (id) await apiCall(`/api/admin/consumable-templates/${id}`, 'PUT', body);
+        else await apiCall('/api/admin/consumable-templates', 'POST', body);
+        container.innerHTML = '';
+        loadTab(currentTab);
+      } catch (e) { alert('Error: ' + e.message); }
+    });
+  });
+}
+
+async function deleteConsumableTemplate(id) {
+  if (!confirm('Delete this consumable template? This will be blocked if other records reference it.')) return;
+  try {
+    await apiCall(`/api/admin/consumable-templates/${id}`, 'DELETE');
+    loadTab(currentTab);
+  } catch (e) {
+    alert('Delete blocked: ' + e.message);
   }
 }
 
