@@ -667,6 +667,42 @@ async function handle(request) {
       return json({ weapons });
     }
 
+    // GET /api/combat/consumables — caller's owned consumables + template + computed labels (player-facing, mirrors /weapons)
+    if (path === '/consumables' && method === 'GET') {
+      let instances;
+      try {
+        const res = await admin.from('consumable_instance')
+          .select('id, rolled_floor, rolled_window, rolled_speed, grade, template_id, consumable_template: template_id (name, effect_type, duration_ticks, description)')
+          .eq('user_id', user.id)
+          .order('id');
+        instances = res.data;
+        if (res.error) throw res.error;
+      } catch (e) {
+        console.error('consumables query error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      const consumables = (instances || []).map(inst => {
+        const t = inst.consumable_template || {};
+        const window_top = inst.rolled_floor + inst.rolled_window;
+        const effect_label = `${inst.rolled_floor}+, up to ${window_top}`;
+        const type_label = t.effect_type ? (t.effect_type.charAt(0).toUpperCase() + t.effect_type.slice(1)) : 'Unknown';
+        return {
+          id: inst.id,
+          template_name: t.name || 'Unknown',
+          effect_type: t.effect_type,
+          effect_label,
+          type_label,
+          rolled_floor: inst.rolled_floor,
+          window_top,
+          drink_speed: inst.rolled_speed,
+          grade: inst.grade,
+          duration_ticks: t.duration_ticks || null,
+          description: t.description || null
+        };
+      });
+      return json({ consumables });
+    }
+
     // GET /dev/templates — admin-gated template catalog
     if (path === '/dev/templates' && method === 'GET') {
       let profile;
