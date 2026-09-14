@@ -9,6 +9,8 @@ import { createQueue, commitNewRow, tick, sortQueue, morphHandRow } from './tic-
 import { createPlayer, createMonster, isPlayerDead, isMonsterDead, applyDamage } from './participants.js';
 import { getHpWord } from './hp-words.js';
 import { rollDamage, checkHit, resolveAttack, multiTargetReduction } from './damage.js';
+import { POTION_SLOTS, ALL_EFFECT_TYPES, HAND_LABELS, POTION_PHASES, potionPrePostTicks } from './potion-contract.js';
+import { buildPotionPayload, applyPotionEffect } from './potion-effects.js';
 
 export function createEngine(rng = Math.random) {
   let state = {
@@ -18,6 +20,7 @@ export function createEngine(rng = Math.random) {
     feed: [],
     tic: 0,
     buffs: [],
+    potions: null,
     rng
   };
 
@@ -57,6 +60,23 @@ export function createEngine(rng = Math.random) {
         const cd = row.cooldownTicks || 2;
         morphHandRow(state.queue, row.label, 'cooldown', cd);
       } else if (row.event === 'cooldown') {
+        const handState = state.player.hands[row.label];
+        if (handState) handState.state = 'Ready';
+        const idx = state.queue.findIndex(r => r.id === row.id);
+        if (idx !== -1) state.queue.splice(idx, 1);
+        log(`${row.label} Ready`);
+      } else if (row.event === 'drinking') {
+        const potion = state.potions?.[row.potionSlot];
+        if (!potion || potion.used) {
+          // defensive: reloaded state already used must not double-apply
+          morphHandRow(state.queue, row.label, 'recovery', row.postTicks ?? 0);
+          return;
+        }
+        potion.used = true;
+        const result = applyPotionEffect(state, buildPotionPayload(potion, state.tic), state.tic);
+        log(`${row.label} ${describeEffect(result)}`);
+        morphHandRow(state.queue, row.label, 'recovery', row.postTicks ?? 0);
+      } else if (row.event === 'recovery') {
         const handState = state.player.hands[row.label];
         if (handState) handState.state = 'Ready';
         const idx = state.queue.findIndex(r => r.id === row.id);
@@ -142,6 +162,15 @@ export function createEngine(rng = Math.random) {
     state.feed = [];
     state.tic = 0;
     state.buffs = [];
+    // PC-39: seed potions from loadout (backward compatible, consume_a/b optional)
+    function normalizePotion(p) {
+      if (!p) return null;
+      return { ...p, used: !!p.used };
+    }
+    state.potions = {
+      A: normalizePotion(participants.loadout?.consume_a),
+      B: normalizePotion(participants.loadout?.consume_b)
+    };
     state.monsters.forEach(mon => {
       if (!isMonsterDead(mon)) {
         commitNewRow(state.queue, mon.label, 'attack', mon.speed);
@@ -166,7 +195,8 @@ export function createEngine(rng = Math.random) {
       tic: state.tic,
       battle_over: isBattleOver(),
       player_dead: isPlayerDead(state.player),
-      monsters_dead: state.monsters.length > 0 && state.monsters.every(isMonsterDead)
+      monsters_dead: state.monsters.length > 0 && state.monsters.every(isMonsterDead),
+      potions: state.potions ? { A: state.potions.A, B: state.potions.B } : null
     };
   }
 
@@ -178,9 +208,76 @@ export function createEngine(rng = Math.random) {
     state.feed = persisted.feed ? [...persisted.feed] : [];
     state.tic = persisted.tic || 0;
     state.buffs = persisted.buffs || [];
+    state.potions = persisted.potions || null;
   }
 
-  return { startBattle, commitAttack, advanceToNextDecision, getState, state, loadState };
+  function describeEffect(result) {
+    if (result.kind === 'heal') {
+      return `healed ${result.healed}`;
+    }
+    const p = result.payload || result.buff || result;
+    const type = p.type || 'buff';
+    return `${type} +${p.value} until tic ${p.endTic}`;
+  }
+
+  function commitPotion(slot, params = {}) {
+    if (!POTION_SLOTS.includes(slot)) {
+      throw new Error('Invalid potion slot');
+    }
+    const potion = state.potions?.[slot];
+    if (!potion) {
+      throw new Error('No potion in slot ' + slot);
+    }
+    if (potion.used) {
+      throw new Error('Potion already used');
+    }
+    if (!ALL_EFFECT_TYPES.includes(potion.effect_type)) {
+      throw new Error('Not a potion: ' + potion.effect_type);
+    }
+    if (!state.player) {
+      throw new Error('No active combatant — call startBattle or loadState first');
+    }
+    const battleActive = state.monsters.some(m => !isMonsterDead(m));
+    let phase = params.phase || (battleActive ? 'in-battle' : 'between-fights');
+    if (params.phase && !POTION_PHASES.includes(phase)) {
+      throw new Error('Invalid phase');
+    }
+    // BETWEEN-FIGHTS path (instant apply, no hand/queue)
+    if (phase === 'between-fights') {
+      const payload = buildPotionPayload(potion, state.tic);
+      const result = applyPotionEffect(state, payload, state.tic);
+      potion.used = true;
+      log(`Potion ${slot} used — ${describeEffect(result)}`);
+      return getState();
+    }
+    // IN-BATTLE path
+    let hand = params.hand;
+    if (hand) {
+      if (!HAND_LABELS.includes(hand) || state.player.hands[hand]?.state !== 'Ready') {
+        throw new Error('Hand not ready');
+      }
+    } else {
+      // deterministic: first Ready in LH then RH order
+      hand = HAND_LABELS.find(h => state.player.hands[h]?.state === 'Ready');
+      if (!hand) {
+        throw new Error('No free hand');
+      }
+    }
+    const weaponSpeed = Number(params.weaponSpeed) || 0;
+    const pre = potionPrePostTicks(weaponSpeed, potion.rolled_speed);
+    const post = pre;
+    // lock hand
+    state.player.hands[hand].state = 'drinking';
+    state.player.hands[hand].attackId = null;
+    const row = commitNewRow(state.queue, hand, 'drinking', pre);
+    row.potionSlot = slot;
+    row.postTicks = post;
+    log(`${hand} drinks ${potion.template_name || potion.effect_type} (${pre} tics)`);
+    // Action cost: hand locked for pre + post = weapon.speed + potion.rolled_speed total (contract §7)
+    return advanceToNextDecision();
+  }
+
+  return { startBattle, commitAttack, commitPotion, advanceToNextDecision, getState, state, loadState };
 }
 
 export function resumeEngine(persistedState, rng = Math.random) {
