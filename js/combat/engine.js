@@ -11,6 +11,7 @@ import { getHpWord } from './hp-words.js';
 import { rollDamage, checkHit, resolveAttack, multiTargetReduction } from './damage.js';
 import { POTION_SLOTS, ALL_EFFECT_TYPES, HAND_LABELS, POTION_PHASES, potionPrePostTicks } from './potion-contract.js';
 import { buildPotionPayload, applyPotionEffect } from './potion-effects.js';
+import { applyBuffs } from './buffs.js';
 
 export function createEngine(rng = Math.random) {
   let state = {
@@ -44,8 +45,7 @@ export function createEngine(rng = Math.random) {
         }
         if (targets.length && typeof row.damage === 'number') {
           const attackObj = { is_multi_target: !!row.isMultiTarget };
-          // F15: MVP accuracy always 100 (player accuracy not factored yet)
-          const attacker = { damage: row.damage, accuracy: 100, damage_range: 0 };
+          const attacker = { damage: row.damage, accuracy: row.accuracy ?? 100, damage_range: 0 };
           const results = resolveAttack(attacker, targets, attackObj, state.rng);
           results.forEach(r => {
             if (r.hit) {
@@ -110,6 +110,16 @@ export function createEngine(rng = Math.random) {
       steps++;
       const fired = tick(state.queue, (row) => handleFire(row));
       state.tic++;
+      // PC-39: expire buffs at the start of the new tic (after increment), log each
+      const stillActive = [];
+      for (const b of state.buffs) {
+        if (b.endTic <= state.tic) {
+          log(`${b.name} buff expired`);
+        } else {
+          stillActive.push(b);
+        }
+      }
+      state.buffs = stillActive;
       if (checkPlayerReady() || isBattleOver()) break;
     }
     sortQueue(state.queue);
@@ -129,9 +139,12 @@ export function createEngine(rng = Math.random) {
     if (!state.player.hands[hand] || state.player.hands[hand].state !== 'Ready') {
       throw new Error('Hand not ready');
     }
-    const castTicks = params.castTicks || 3;
-    const cooldownTicks = params.cooldownTicks || 2;
-    const playerDamage = params.playerDamage || 10;
+    const dmgBuff = applyBuffs(state.buffs, state.tic, 'damage');
+    const spdBuff = applyBuffs(state.buffs, state.tic, 'speed');
+    const accBuff = applyBuffs(state.buffs, state.tic, 'accuracy');
+    let castTicks = Math.max(1, (params.castTicks || 3) - spdBuff);
+    let cooldownTicks = Math.max(1, (params.cooldownTicks || 2) - spdBuff);
+    const playerDamage = (params.playerDamage || 10) + dmgBuff;
     const isMultiTarget = !!params.isMultiTarget;
     const attackName = params.attackName || null;
     const row = commitNewRow(state.queue, hand, 'winding', castTicks);
@@ -141,6 +154,7 @@ export function createEngine(rng = Math.random) {
     row.isMultiTarget = isMultiTarget;
     row.cooldownTicks = cooldownTicks;
     row.attackName = attackName;
+    row.accuracy = 100 + accBuff;
     state.player.hands[hand].state = 'winding';
     state.player.hands[hand].attackId = attackId;
     log(`${hand} commits ${attackName ? attackName : `attack ${attackId}`} (cast ${castTicks})`);
@@ -196,7 +210,8 @@ export function createEngine(rng = Math.random) {
       battle_over: isBattleOver(),
       player_dead: isPlayerDead(state.player),
       monsters_dead: state.monsters.length > 0 && state.monsters.every(isMonsterDead),
-      potions: state.potions ? { A: state.potions.A, B: state.potions.B } : null
+      potions: state.potions ? { A: state.potions.A, B: state.potions.B } : null,
+      buffs: state.buffs.map(b => ({ ...b }))
     };
   }
 

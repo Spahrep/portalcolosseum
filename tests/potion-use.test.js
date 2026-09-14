@@ -195,3 +195,188 @@ describe('Potion use (PC-39)', () => {
     assert.throws(() => eng2.commitPotion('A'), /Potion already used/);
   });
 });
+
+describe('Buff potion effects and duration (PC-39)', () => {
+  it('damage buff: in-battle damage potion adds to committed attack damage', () => {
+    const eng = createEngine(seededRNG(100));
+    const p = makeParticipants({ effect_type: 'damage', rolled_floor: 8, rolled_speed: 2, duration_ticks: 5, template_name: 'Dmg' });
+    eng.startBattle(p);
+    eng.commitPotion('A', { weaponSpeed: 0 });
+    let s;
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('damage +8'))) break;
+    }
+    const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    assert.equal(attackRow.damage, 10 + 8);
+  });
+
+  it('speed buff: reduces cast and cooldown to min 1', () => {
+    const eng = createEngine(seededRNG(101));
+    const p = makeParticipants({ effect_type: 'speed', rolled_floor: 2, rolled_speed: 2, duration_ticks: 5, template_name: 'Spd' });
+    eng.startBattle(p);
+    eng.commitPotion('A', { weaponSpeed: 0 });
+    let s;
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('speed +2'))) break;
+    }
+    eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
+    const attackRow = eng.state.queue.find(r => r.label === 'RH' && typeof r.tics === 'number');
+    assert.equal(attackRow.tics, 3);
+    assert.equal(attackRow.cooldownTicks, 1);
+  });
+
+  it('speed buff min-1: never goes to 0 or negative', () => {
+    const eng = createEngine(seededRNG(102));
+    const p = makeParticipants({ effect_type: 'speed', rolled_floor: 10, rolled_speed: 2, duration_ticks: 5, template_name: 'Spd' });
+    eng.startBattle(p);
+    eng.commitPotion('A', { weaponSpeed: 0 });
+    let s;
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('speed +10'))) break;
+    }
+    eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
+    const attackRow = eng.state.queue.find(r => r.label === 'RH' && typeof r.tics === 'number');
+    assert.equal(attackRow.tics, 1);
+    assert.equal(attackRow.cooldownTicks, 1);
+  });
+
+  it('accuracy buff: row.accuracy set to 100 + value', () => {
+    const eng = createEngine(seededRNG(103));
+    const p = makeParticipants({ effect_type: 'accuracy', rolled_floor: 15, rolled_speed: 2, duration_ticks: 5, template_name: 'Acc' });
+    eng.startBattle(p);
+    eng.commitPotion('A', { weaponSpeed: 0 });
+    let s;
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('accuracy +15'))) break;
+    }
+    const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    assert.equal(attackRow.accuracy, 100 + 15);
+  });
+
+  it('duration tracking / remaining decrement', () => {
+    const eng = createEngine(seededRNG(104));
+    const p = makeParticipants({ effect_type: 'damage', rolled_floor: 5, rolled_speed: 2, duration_ticks: 4, template_name: 'Dmg' });
+    eng.startBattle(p);
+    eng.commitPotion('A', { weaponSpeed: 0 });
+    let s;
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('damage +5'))) break;
+    }
+    const initialRemaining = s.buffs[0].endTic - s.tic;
+    assert.ok(initialRemaining > 0);
+    s = eng.advanceToNextDecision();
+    const nextRemaining = s.buffs[0].endTic - s.tic;
+    assert.equal(nextRemaining, initialRemaining - 1);
+  });
+
+  it('expiry at the correct tick and removes modifier', () => {
+    const eng = createEngine(seededRNG(105));
+    const p = makeParticipants({ effect_type: 'damage', rolled_floor: 8, rolled_speed: 2, duration_ticks: 3, template_name: 'Dmg' });
+    eng.startBattle(p);
+    eng.commitPotion('A', { weaponSpeed: 0 });
+    let s;
+    for (let i = 0; i < 20; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('Dmg buff expired'))) break;
+    }
+    const expireLine = s.feed.find(l => l.includes('Dmg buff expired'));
+    assert.ok(expireLine);
+    assert.ok(expireLine.includes(`tic ${s.tic}`));
+    assert.equal(s.buffs.length, 0);
+    const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    assert.equal(attackRow.damage, 10);
+  });
+
+  it('stacking identical: two damage buffs add values, separate endTics', () => {
+    const eng = createEngine(seededRNG(106));
+    const dmgA = { effect_type: 'damage', rolled_floor: 5, rolled_speed: 2, duration_ticks: 5, template_name: 'DmgA' };
+    const dmgB = { effect_type: 'damage', rolled_floor: 7, rolled_speed: 2, duration_ticks: 6, template_name: 'DmgB' };
+    const p = makeParticipants(dmgA, dmgB);
+    eng.startBattle(p);
+    eng.commitPotion('A', { weaponSpeed: 0 });
+    let s;
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('damage +5'))) break;
+    }
+    eng.commitPotion('B', { weaponSpeed: 0 });
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('damage +7'))) break;
+    }
+    assert.equal(s.buffs.length, 2);
+    const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    assert.equal(attackRow.damage, 10 + 5 + 7);
+    const ends = s.buffs.map(b => b.endTic).sort();
+    assert.ok(ends[0] !== ends[1]);
+  });
+
+  it('stacking different: speed + damage both apply to same attack', () => {
+    const eng = createEngine(seededRNG(107));
+    const spd = { effect_type: 'speed', rolled_floor: 2, rolled_speed: 2, duration_ticks: 5, template_name: 'Spd' };
+    const dmg = { effect_type: 'damage', rolled_floor: 6, rolled_speed: 2, duration_ticks: 5, template_name: 'Dmg' };
+    const p = makeParticipants(spd, dmg);
+    eng.startBattle(p);
+    eng.commitPotion('A', { weaponSpeed: 0 });
+    let s;
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('speed +2'))) break;
+    }
+    eng.commitPotion('B', { weaponSpeed: 0 });
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('damage +6'))) break;
+    }
+    const res = eng.commitAttack('RH', 1, [1], { castTicks: 4, cooldownTicks: 3, playerDamage: 10 });
+    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    assert.equal(attackRow.damage, 10 + 6);
+    assert.equal(attackRow.tics, 1);
+    assert.equal(attackRow.cooldownTicks, 1);
+  });
+
+  it('expiry of one stacked buff does not kill the other', () => {
+    const eng = createEngine(seededRNG(108));
+    const short = { effect_type: 'damage', rolled_floor: 4, rolled_speed: 2, duration_ticks: 2, template_name: 'Short' };
+    const long = { effect_type: 'damage', rolled_floor: 9, rolled_speed: 2, duration_ticks: 6, template_name: 'Long' };
+    const p = makeParticipants(short, long);
+    eng.startBattle(p);
+    eng.commitPotion('A', { weaponSpeed: 0 });
+    let s;
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('damage +4'))) break;
+    }
+    eng.commitPotion('B', { weaponSpeed: 0 });
+    for (let i = 0; i < 10; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('damage +9'))) break;
+    }
+    for (let i = 0; i < 20; i++) {
+      s = eng.advanceToNextDecision();
+      if (s.feed.some(l => l.includes('Short buff expired'))) break;
+    }
+    assert.equal(s.buffs.length, 1);
+    assert.equal(s.buffs[0].name, 'Long');
+    assert.ok(s.buffs[0].endTic > s.tic);
+  });
+
+  it('attack before buff lands gets no buff (pre>0 case)', () => {
+    const eng = createEngine(seededRNG(109));
+    const p = makeParticipants({ effect_type: 'damage', rolled_floor: 8, rolled_speed: 6, duration_ticks: 5, template_name: 'Dmg' });
+    eng.startBattle(p);
+    eng.commitPotion('A', { weaponSpeed: 4 });
+    eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    const attackRow = eng.state.queue.find(r => r.label === 'RH' && typeof r.damage === 'number');
+    assert.equal(attackRow.damage, 10);
+  });
+});

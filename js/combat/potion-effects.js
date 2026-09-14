@@ -27,12 +27,15 @@ export function buildPotionPayload(potion, tic) {
 
 export function applyPotionEffect(state, payload, tic) {
   if (payload.type === 'heal') {
+    if (payload.amount == null || !Number.isFinite(payload.amount) || payload.amount <= 0) {
+      throw new Error('Heal potion missing rolled_floor');
+    }
     const before = state.player.hp;
     state.player.hp = Math.min(PLAYER_MAX_HP, state.player.hp + payload.amount);
     return { kind: 'heal', healed: state.player.hp - before };
   } else {
     // buff branch
-    const buff = createBuff(payload.name || `${payload.type} potion`, payload.value, payload.endTic);
+    const buff = createBuff(payload.name || `${payload.type} potion`, payload.value, payload.endTic, payload.type);
     state.buffs.push(buff);
     return { kind: 'buff', buff, payload };
   }
