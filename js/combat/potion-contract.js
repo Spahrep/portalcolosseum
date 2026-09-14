@@ -80,6 +80,7 @@ export function potionTotalTicks(weaponSpeed, potionSpeed) {
  * @property {string} name
  * @property {number} value
  * @property {number} endTic
+ * @property {'speed' | 'accuracy' | 'damage'} type
  */
 
 /**
