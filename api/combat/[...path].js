@@ -226,7 +226,11 @@ async function handle(request) {
               }
             }
             if (monsters.length > 0) {
-              const participants = { loadout: { hand_l: handL, hand_r: handR }, monsters };
+              const potionLoadout = await buildPotionLoadout(run);
+              const participants = {
+                loadout: { hand_l: handL, hand_r: handR, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
+                monsters
+              };
               const eng = createEngine();
               eng.startBattle(participants);
               battleStateForRun1 = eng.state;
@@ -347,7 +351,9 @@ async function handle(request) {
       const [handL, handR, beltW] = await Promise.all([weaponInfo(run.hand_l_weapon_id), weaponInfo(run.hand_r_weapon_id), weaponInfo(run.belt_weapon_id)]);
 
       // --- potions (consumable slots A/B) for state response ---
-      async function potionInfo(consumeId) {
+      // used mirrors the portal_run.consume_*_used flag (DB is the source of truth,
+      // so a reloaded run cannot re-drink an already-consumed potion).
+      async function potionInfo(consumeId, used = false) {
         if (!consumeId) return null;
         try {
           const { data: inst } = await admin
@@ -363,14 +369,17 @@ async function handle(request) {
             effect_type: inst.consumable_template?.effect_type || 'heal',
             effect_label: effectLabel,
             grade: inst.grade,
-            used: false
+            used: !!used
           };
         } catch (e) {
           console.error('potion fetch error', e);
           return null;
         }
       }
-      const [potionA, potionB] = await Promise.all([potionInfo(run.consume_a_id), potionInfo(run.consume_b_id)]);
+      const [potionA, potionB] = await Promise.all([
+        potionInfo(run.consume_a_id, !!run.consume_a_used),
+        potionInfo(run.consume_b_id, !!run.consume_b_used)
+      ]);
 
       const safeState = {
         queue: state.queue || [],
@@ -441,8 +450,9 @@ async function handle(request) {
         }
       }
 
+      const potionLoadout = await buildPotionLoadout(run);
       const participants = {
-        loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id },
+        loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
         monsters
       };
       const engine = createEngine();
@@ -606,8 +616,9 @@ async function handle(request) {
             monsters.push({ id: 10 + newBattle, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'Monster A' });
             monsters.push({ id: 11 + newBattle, max_hp: 90, damage: 12, speed: 5, accuracy: 65, label: 'Monster B' });
           }
+          const potionLoadout = await buildPotionLoadout(run);
           const participants = {
-            loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id },
+            loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
             monsters
           };
           const freshEngine = createEngine();
@@ -648,6 +659,99 @@ async function handle(request) {
         .update({ status: newStatus, current_battle: newBattle, battle_state: newBattleState })
         .eq('id', id).eq('user_id', user.id);
       return json({ status: newStatus, current_battle: newBattle });
+    }
+
+    // POST /api/combat/runs/:id/use-potion {slot: 'A'|'B'}  (PC-39: drink a potion)
+    if (path.includes('/use-potion') && method === 'POST') {
+      const idStr = path.split('/')[2];
+      const id = parseInt(idStr, 10);
+      if (isNaN(id)) return json({ error: 'Invalid run id' }, 400);
+      const body = await request.json().catch(() => ({}));
+      const slot = String(body.slot || '').toUpperCase();
+      if (slot !== 'A' && slot !== 'B') return json({ error: 'Invalid potion slot' }, 400);
+
+      const { data: run } = await admin.from('portal_run').select('*').eq('id', id).eq('user_id', user.id).single();
+      if (!run) return json({ error: 'Run not found' }, 404);
+      if (run.status !== 'active') return json({ error: 'Run not active' }, 400);
+      if (run.player_hp <= 0) return json({ error: 'Run over — player dead' }, 400);
+
+      // DB flag is the source of truth: a consumed potion can never be re-drunk.
+      const usedFlag = slot === 'A' ? !!run.consume_a_used : !!run.consume_b_used;
+      if (usedFlag) return json({ error: 'Potion already used' }, 400);
+      const consumeId = slot === 'A' ? run.consume_a_id : run.consume_b_id;
+      if (!consumeId) return json({ error: `No potion in slot ${slot}` }, 400);
+
+      // Resume the engine (or build it) so potion.used lands in battle_state too.
+      const persisted = run.battle_state || {};
+      let engine = null;
+      if (persisted && persisted.player) {
+        engine = resumeEngine(persisted, Math.random);
+        // PC-39: legacy battle_state may predate potion seeding — backfill from DB
+        if (!engine.state.potions || !engine.state.potions[slot]) {
+          const potionLoadout = await buildPotionLoadout(run);
+          engine.state.potions = { A: potionLoadout.A, B: potionLoadout.B };
+        }
+      } else {
+        const potionLoadout = await buildPotionLoadout(run);
+        engine = createEngine();
+        engine.startBattle({
+          loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
+          monsters: []
+        }, null, run.player_hp > 0 ? run.player_hp : null);
+      }
+
+      const inBattle = !!engine.state.player && engine.state.monsters.some(m => (m.current_hp || 0) > 0);
+      const params = { phase: inBattle ? 'in-battle' : 'between-fights' };
+      if (inBattle) {
+        const hand = ['LH', 'RH'].find(h => engine.state.player?.hands?.[h]?.state === 'Ready');
+        if (!hand) return json({ error: 'No free hand' }, 400);
+        const weaponId = hand === 'LH' ? run.hand_l_weapon_id : run.hand_r_weapon_id;
+        let weaponSpeed = 0;
+        if (weaponId) {
+          try {
+            const { data: wInst } = await admin.from('weapon_instance').select('speed').eq('id', weaponId).single();
+            weaponSpeed = Number(wInst?.speed) || 0;
+          } catch (_) {
+            // non-fatal: defaults to 0, drink resolves at the player's next tic
+          }
+        }
+        params.hand = hand;
+        params.weaponSpeed = weaponSpeed;
+      }
+
+      let newState;
+      try {
+        newState = engine.commitPotion(slot, params);
+      } catch (e) {
+        return json({ error: e.message || 'Potion use failed' }, 400);
+      }
+      const potionUsed = !!(engine.state.potions?.[slot]?.used);
+      await admin.from('portal_run')
+        .update({
+          battle_state: engine.state,
+          player_hp: engine.state.player ? engine.state.player.hp : run.player_hp,
+          [slot === 'A' ? 'consume_a_used' : 'consume_b_used']: potionUsed
+        })
+        .eq('id', id).eq('user_id', user.id);
+
+      return json({
+        slot,
+        phase: params.phase,
+        hand: params.hand || null,
+        potion_used: potionUsed,
+        player_hp: engine.state.player ? engine.state.player.hp : run.player_hp,
+        state: {
+          queue: newState.queue,
+          participants: newState.participants,
+          feed: newState.feed,
+          tic: newState.tic,
+          battle_over: newState.battle_over,
+          player_dead: newState.player_dead,
+          monsters_dead: newState.monsters_dead,
+          potions: newState.potions,
+          buffs: newState.buffs
+        }
+      });
     }
 
     // GET /api/combat/weapons — caller's owned weapons + template attacks (for gear command)
@@ -891,9 +995,42 @@ async function handle(request) {
       };
     }
 
+    // Shared potion-loadout builder: engine-shape potion objects for slots A/B,
+    // seeded from the run's consumable instances (PC-39). used mirrors the DB flag.
+    async function buildPotionLoadout(run) {
+      const ids = [run.consume_a_id, run.consume_b_id].filter(Boolean);
+      const map = {};
+      if (ids.length) {
+        try {
+          const { data: rows } = await admin
+            .from('consumable_instance')
+            .select('id, rolled_floor, rolled_window, rolled_speed, consumable_template:template_id (name, effect_type, duration_ticks)')
+            .in('id', ids);
+          for (const inst of (rows || [])) {
+            map[inst.id] = {
+              effect_type: inst.consumable_template?.effect_type || 'heal',
+              template_name: inst.consumable_template?.name || 'Potion',
+              rolled_floor: inst.rolled_floor,
+              rolled_window: inst.rolled_window,
+              rolled_speed: inst.rolled_speed,
+              duration_ticks: inst.consumable_template?.duration_ticks,
+              used: run.consume_a_id === inst.id ? !!run.consume_a_used : !!run.consume_b_used
+            };
+          }
+        } catch (e) {
+          console.error('potion loadout fetch error', e);
+        }
+      }
+      return {
+        A: run.consume_a_id ? (map[run.consume_a_id] || null) : null,
+        B: run.consume_b_id ? (map[run.consume_b_id] || null) : null
+      };
+    }
+
     async function rebuildBattleState(run, monsters, playerHp) {
+      const potionLoadout = await buildPotionLoadout(run);
       const participants = {
-        loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id },
+        loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
         monsters
       };
       const freshEngine = createEngine();

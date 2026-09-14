@@ -7,7 +7,7 @@ import readline from 'readline';
 import { cmdHelp, setFlags, printError, isJson, isQuiet } from './render.mjs';
 import {
   cmdLogin, cmdLogout, cmdRunNew, cmdRun, cmdState, cmdBattleStart,
-  cmdAttack, cmdBattleEnd, cmdInventory, cmdWait, cmdClear, cmdGrant, handleSlashCommand, getCurrentRun, setCurrentRun, getDevMode, setDevMode,
+  cmdAttack, cmdBattleEnd, cmdUsePotion, cmdInventory, cmdWait, cmdClear, cmdGrant, handleSlashCommand, getCurrentRun, setCurrentRun, getDevMode, setDevMode,
   cmdReady, cmdConfirm, cmdInspect, cmdEquip, cmdCancel, isInFlowGate, buildPreambleDenied
 } from './commands.mjs';
 import { loadSession, getAccessToken } from './auth.mjs';
@@ -44,6 +44,8 @@ async function dispatch(cmd, subArgs) {
       else printError('unknown battle subcommand');
       break;
     case 'attack': await cmdAttack(subArgs); break;
+    case 'use':
+    case 'drink': await cmdUsePotion(subArgs); break;
     case 'inventory':
     case 'gear': await cmdInventory(); break;
     case 'inspect': await cmdInspect(subArgs); break;

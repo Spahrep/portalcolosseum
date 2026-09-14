@@ -78,6 +78,20 @@ export function printState(run) {
   console.log(`RH: ${rh ? `#${rh.id} ${rh.name} dmg=${rh.damage}` : '—'}`);
   console.log(`BL: ${bl ? `#${bl.id} ${bl.name} dmg=${bl.damage}` : '—'}`);
 
+  // PC-39 potion slots (battle_state safeState shape potion_a/potion_b, or engine A/B)
+  const pots = bs.potions || {};
+  const potA = pots.potion_a || pots.A || null;
+  const potB = pots.potion_b || pots.B || null;
+  const fmtPotion = (p) => {
+    if (!p) return '—';
+    const parts = [p.template_name || 'Potion'];
+    if (p.effect_label) parts.push(p.effect_label);
+    parts.push(p.used ? 'used' : 'ready');
+    return parts.join(' ');
+  };
+  console.log(`POT A: ${fmtPotion(potA)}`);
+  console.log(`POT B: ${fmtPotion(potB)}`);
+
   const mons = bs.monsters || [];
   if (mons.length) {
     console.log('monsters:');
@@ -111,6 +125,7 @@ export function cmdHelp(devMode = false) {
     '  login                — sign in with Supabase (stores session)',
     '  logout               — clear local session',
     '  wait                 — explicit commit to advance busy hand / clock',
+    '  use A|B              — drink potion in slot A or B (alias: drink)',
     '  grant                — admin dev: unlock dev tools (403 if not admin)',
     '  inspect [id]         — monster template info (bare lists ids)',
     '  equip LH|RH <id>     — equip weapon id into hand (only in run-start gate)',

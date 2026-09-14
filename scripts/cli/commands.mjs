@@ -10,6 +10,7 @@
 import readline from 'readline';
 import { apiCall } from './api.mjs';
 import { printError, printGreen, printAmber, printState, printDim, isQuiet, isJson } from './render.mjs';
+import { parsePotionSlot, classifyPotionError, formatPotionSummary, mapPotionFeedLine, formatConsumableSummary } from './potion-format.mjs';
 
 const seenFeed = new Set();
 
@@ -84,6 +85,12 @@ function narrateFeed(feedLines, participants = null) {
     if (m) { mapped = `Your left hand's ${m[1]} hits ${m[2]} for ${m[3]}.`; outputEntries.push({ text: mapped, matched: true }); continue; }
     m = raw.match(/^tic \d+ — RH (.+?) hits (.+?) for (\d+)$/);
     if (m) { mapped = `Your right hand's ${m[1]} hits ${m[2]} for ${m[3]}.`; outputEntries.push({ text: mapped, matched: true }); continue; }
+    // PC-39 potion feed lines (drink commit / effect land / between-fights / buff expiry)
+    const potionLine = mapPotionFeedLine(raw);
+    if (potionLine.matched) {
+      outputEntries.push({ text: potionLine.text, matched: true });
+      continue;
+    }
     outputEntries.push({ text: raw, matched: false });
   }
 
@@ -114,7 +121,7 @@ function turnPromptFromState(stateObj) {
           if (curB != null && offeredBattleNum !== curB) {
             offeredBattleNum = curB;
             const hpCur = (s.player && s.player.hp) || run.player_hp || 0;
-            console.log(buildAfterBattleOffer(curB, run.total_battles, hpCur, null, curB === 1));
+            console.log(buildAfterBattleOffer(curB, run.total_battles, hpCur, null, curB === 1, pickUnusedPotionHint(run)));
           }
         } catch (_) {
           // silent — the offer is cosmetic; a later commit retries
@@ -197,7 +204,7 @@ export function buildRecapText(weapons, consumables, picks) {
   return lines.join('\n');
 }
 
-export function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax, isFirstWin) {
+export function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax, isFirstWin, potionHint = null) {
   const lines = [];
   if (isFirstWin) {
     lines.push('The first monster falls. The pool stirs.');
@@ -208,8 +215,20 @@ export function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax,
   lines.push(`${numPart} ${hpLine}`);
   lines.push('The prize pool has grown.');
   lines.push('');
-  lines.push('Type "continue" to risk the next fight, or "stop" to claim your current share and end the run.');
+  if (potionHint) {
+    lines.push(`Type "use ${potionHint}" to drink your remaining potion first, "continue" to risk the next fight, or "stop" to claim your current share and end the run.`);
+  } else {
+    lines.push('Type "continue" to risk the next fight, or "stop" to claim your current share and end the run.');
+  }
   return lines.join('\n');
+}
+
+// PC-39: which slot still holds an unused potion (A before B)? null when none.
+export function pickUnusedPotionHint(run) {
+  if (!run) return null;
+  if (run.consume_a_id && !run.consume_a_used) return 'A';
+  if (run.consume_b_id && !run.consume_b_used) return 'B';
+  return null;
 }
 
 export function buildItemInspectText(weapons, consumables, id) {
@@ -220,7 +239,7 @@ export function buildItemInspectText(weapons, consumables, id) {
   }
   const c = (consumables || []).find(x => x.id === id);
   if (c) {
-    return `#${c.id} ${c.name} ×${c.quantity ?? 1}`;
+    return formatConsumableSummary(c);
   }
   return `No item #${id} found in your inventory.`;
 }
@@ -286,7 +305,7 @@ export async function cmdRunNew(args, flags = {}) {
       if (!cData.consumables || cData.consumables.length === 0) {
         console.log('  (consumables on hold)');
       } else {
-        cData.consumables.forEach(c => console.log(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`));
+        cData.consumables.forEach(c => console.log(`  ${formatConsumableSummary(c)}`));
       }
     }
 
@@ -311,7 +330,7 @@ export async function cmdRunNew(args, flags = {}) {
               console.log(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`);
             });
             console.log('consumables:');
-            (cData.consumables || []).forEach(c => console.log(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`));
+            (cData.consumables || []).forEach(c => console.log(`  ${formatConsumableSummary(c)}`));
             continue;
           }
           if (!trimmed && allowEmpty) return null;
@@ -565,6 +584,31 @@ export async function cmdAttack(args) {
       return;
     }
     printError('attack: ' + e.message);
+  }
+}
+
+export async function cmdUsePotion(args) {
+  if (!currentRunId) { printError('no run'); return; }
+  const parsed = parsePotionSlot(args);
+  if (parsed.error) { printError(parsed.error); return; }
+  const slot = parsed.slot;
+  try {
+    const data = await apiCall('POST', `/runs/${currentRunId}/use-potion`, { slot });
+    if (isJson()) {
+      console.log(JSON.stringify(data));
+      return;
+    }
+    const feedSrc = data.state && data.state.feed ? data.state : data;
+    if (feedSrc.feed) narrateFeed(feedSrc.feed, feedSrc.participants);
+    if (data.potion_used) printGreen(formatPotionSummary(data.state || data, data));
+    turnPromptFromState(data.state || data);
+  } catch (e) {
+    const cls = classifyPotionError(e.message);
+    if (cls.level === 'amber') {
+      printAmber(cls.text);
+    } else {
+      printError('use: ' + cls.text);
+    }
   }
 }
 

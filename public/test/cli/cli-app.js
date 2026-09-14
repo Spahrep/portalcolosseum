@@ -72,7 +72,7 @@ function buildRecapText(weapons, consumables, picks) {
   return lines.join('\n');
 }
 
-function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax, isFirstWin) {
+function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax, isFirstWin, potionHint = null) {
   const lines = [];
   if (isFirstWin) {
     lines.push('The first monster falls. The pool stirs.');
@@ -83,7 +83,11 @@ function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax, isFirs
   lines.push(`${battleLine} ${hpPart}`);
   lines.push('The prize pool has grown.');
   lines.push('');
-  lines.push('Type "continue" to risk the next fight, or "stop" to claim your current share and end the run.');
+  if (potionHint) {
+    lines.push(`Type "use ${potionHint}" to drink your remaining potion first, "continue" to risk the next fight, or "stop" to claim your current share and end the run.`);
+  } else {
+    lines.push('Type "continue" to risk the next fight, or "stop" to claim your current share and end the run.');
+  }
   return lines.join('\n');
 }
 
@@ -95,7 +99,12 @@ function buildItemInspectText(weapons, consumables, id) {
   }
   const c = (consumables || []).find(x => x.id === id);
   if (c) {
-    return `#${c.id} ${c.name} ×${c.quantity ?? 1}`;
+    // consumable rows carry template_name + effect_label (API /consumables shape)
+    const parts = [`#${c.id}`, c.template_name || 'Unknown'];
+    if (c.effect_label) parts.push(c.effect_label);
+    if (c.grade) parts.push(`grade ${c.grade}`);
+    if (c.used) parts.push('(used)');
+    return parts.join(' ');
   }
   return `No item #${id} found in your inventory.`;
 }
@@ -120,7 +129,11 @@ async function showAfterBattleOffer(s) {
     offeredBattleNum = curB;
     const totB = r.total_battles;
     const hpCur = (s.player && s.player.hp) || r.player_hp || 0;
-    appendLine(buildAfterBattleOffer(curB, totB, hpCur, null, curB === 1));
+    // PC-39: hint which potion is still drinkable (A before B), if any
+    let hint = null;
+    if (r.consume_a_id && !r.consume_a_used) hint = 'A';
+    else if (r.consume_b_id && !r.consume_b_used) hint = 'B';
+    appendLine(buildAfterBattleOffer(curB, totB, hpCur, null, curB === 1, hint));
   } catch (_) {
     // silent — the offer is cosmetic; a later commit will retry
   }
@@ -360,6 +373,38 @@ function narrateFeed(feedLines, participants = null) {
       continue;
     }
 
+    // PC-39 potion rules (mirror scripts/cli/potion-format.mjs mapPotionFeedLine)
+    m = raw.match(/^tic \d+ — (LH|RH) drinks (.+?) \((\d+) tics\)$/);
+    if (m) {
+      mapped = `Your ${m[1] === 'LH' ? 'left' : 'right'} hand drinks ${m[2]} (${m[3]} tics)…`;
+      outputEntries.push({ text: mapped, matched: true });
+      continue;
+    }
+    m = raw.match(/^tic \d+ — (LH|RH) healed (\d+)$/);
+    if (m) {
+      mapped = `Your ${m[1] === 'LH' ? 'left' : 'right'} hand's potion restores ${m[2]} HP.`;
+      outputEntries.push({ text: mapped, matched: true });
+      continue;
+    }
+    m = raw.match(/^tic \d+ — (LH|RH) (damage|speed|accuracy) \+(\d+) until tic (\d+)$/);
+    if (m) {
+      mapped = `Your ${m[1] === 'LH' ? 'left' : 'right'} hand's potion grants ${m[2]} +${m[3]} until tic ${m[4]}.`;
+      outputEntries.push({ text: mapped, matched: true });
+      continue;
+    }
+    m = raw.match(/^tic \d+ — Potion ([AB]) used — (.+)$/);
+    if (m) {
+      mapped = `You drink potion ${m[1].toLowerCase()} — ${m[2]}.`;
+      outputEntries.push({ text: mapped, matched: true });
+      continue;
+    }
+    m = raw.match(/^tic \d+ — (.+?) buff expired$/);
+    if (m) {
+      mapped = `The ${m[1]} buff fades.`;
+      outputEntries.push({ text: mapped, matched: true });
+      continue;
+    }
+
     // unmatched
     outputEntries.push({ text: raw, matched: false });
   }
@@ -481,6 +526,7 @@ async function cmdHelp() {
     '  battle start         — start next battle on current run',
     '  attack <LH|RH> <attack_id> [target_id ...]  — commit attack (targets default to first live monster)',
     '  battle end <continue|stop> — end current battle',
+    '  use A|B              — drink potion in slot A or B (alias: drink)',
     '  inventory            — everything assigned to you (weapons; consumables when they exist)',
     '  grant                — admin dev: unlock dev tools (403 if not admin)',
     '  inspect [id]         — monster template info (bare lists ids)',
@@ -680,6 +726,28 @@ async function cmdAttack(args) {
   }
 }
 
+async function cmdUsePotion(args) {
+  if (!currentRunId) { printError('no run'); return; }
+  let slot = String(args[0] || '').trim();
+  if (slot.toLowerCase() === 'potion') slot = String(args[1] || '').trim();
+  slot = slot.toUpperCase();
+  if (slot !== 'A' && slot !== 'B') { printError('usage: use A|B  (alias: drink A|B)'); return; }
+  try {
+    const data = await apiCall('POST', `/runs/${currentRunId}/use-potion`, { slot });
+    const feedSrc = data.state && data.state.feed ? data.state : data;
+    if (feedSrc.feed) narrateFeed(feedSrc.feed, feedSrc.participants);
+    if (data.potion_used) {
+      const hp = data.state && data.state.participants && data.state.participants.player
+        ? data.state.participants.player.hp : null;
+      const hpPart = hp != null ? `HP: ${hp}` : '';
+      appendLine(`Potion ${slot} used (${data.phase === 'in-battle' ? 'in battle' : 'between fights'}). ${hpPart}`.trim(), 'green');
+    }
+    turnPromptFromState(data.state || data);
+  } catch (e) {
+    printError('use: ' + e.message);
+  }
+}
+
 async function cmdBattleEnd(args) {
   if (!currentRunId) { printError('no run'); return; }
   const choice = (args[0] || '').toLowerCase();
@@ -801,6 +869,8 @@ function handleCommand(line) {
       else printError('unknown battle subcommand');
       break;
     case 'attack': cmdAttack(args); break;
+    case 'use':
+    case 'drink': cmdUsePotion(args); break;
     case 'inventory':
     case 'gear': cmdInventory(); break;
     case 'grant': cmdGrant(); break;
@@ -1208,8 +1278,14 @@ function updateSidePanelsFromRun(run) {
     html += `<div class="stat-line selectable" data-slot="rh">RH: ${rh ? `#${rh.id} ${rh.name}` : '—'}</div>`;
     const bl = weapons.belt;
     html += `<div class="stat-line selectable" data-slot="bl">BL: ${bl ? `#${bl.id} ${bl.name}` : '—'}</div>`;
-    html += `<div class="stat-line selectable" data-slot="c1">C1: —</div>`;
-    html += `<div class="stat-line selectable" data-slot="c2">C2: —</div>`;
+    const pots = bs.potions || {};
+    const potA = pots.potion_a || pots.A || null;
+    const potB = pots.potion_b || pots.B || null;
+    const fmtPot = (p) => p
+      ? `${p.template_name || 'Potion'}${p.used ? ' (used)' : ''}`
+      : '—';
+    html += `<div class="stat-line selectable" data-slot="c1">C1: ${fmtPot(potA)}</div>`;
+    html += `<div class="stat-line selectable" data-slot="c2">C2: ${fmtPot(potB)}</div>`;
     html += `<div id="player-detail" class="player-detail" style="display:none;"></div>`;
     playerStatsContent.innerHTML = html;
     // attach click handlers for selectable rows (TASK2)
