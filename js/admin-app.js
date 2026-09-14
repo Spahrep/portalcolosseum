@@ -1207,7 +1207,7 @@ async function renderConsumableTemplates(container) {
     <button class="btn" id="create-ct-btn">+ Create New Consumable Template</button>
     <div id="ct-form-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Effect</th><th>Floor Base/Delta</th><th>Window Base/Delta</th><th>Speed</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Type</th><th>Effect</th><th>EV</th><th>Drink Speed</th><th>Duration</th><th># Instances</th><th>Actions</th></tr></thead>
       <tbody id="ct-tbody"></tbody>
     </table>
   `;
@@ -1221,9 +1221,11 @@ async function renderConsumableTemplates(container) {
     tr.innerHTML = `
       <td>${esc(t.name)}</td>
       <td>${esc(t.effect_type)}</td>
-      <td>${t.floor_base} ± ${t.floor_delta}</td>
-      <td>${t.window_base} ± ${t.window_delta}</td>
-      <td>${t.speed_base} ± ${t.speed_delta}</td>
+      <td>${t.floor_base}+, up to ${t.floor_base + t.floor_delta + t.window_base + t.window_delta}</td>
+      <td>${Math.round((t.floor_base + t.floor_delta / 2 + (t.window_base + t.window_delta / 2) / 2) * 10) / 10}</td>
+      <td>${t.speed_base}+, up to ${t.speed_base + t.speed_delta}</td>
+      <td>${t.duration_ticks ?? 'instant'}</td>
+      <td>${t.instance_count ?? 0}</td>
       <td>
         <button class="btn" data-edit="${t.id}">Edit</button>
         <button class="btn btn-danger" data-delete="${t.id}">Delete</button>
@@ -1313,6 +1315,13 @@ function showConsumableTemplateForm(id = null) {
         speed_delta: parseInt(val('ct-speed_delta')),
         duration_ticks: val('ct-duration_ticks') ? parseInt(val('ct-duration_ticks')) : null,
       };
+      // Client-side validation: +only deltas (all >= 0), floor_base >= 1, heal has no duration
+      const numFields = [['floor_base', body.floor_base], ['floor_delta', body.floor_delta], ['window_base', body.window_base], ['window_delta', body.window_delta], ['speed_base', body.speed_base], ['speed_delta', body.speed_delta]];
+      const bad = numFields.filter(([, v]) => !Number.isFinite(v) || v < 0);
+      if (body.floor_base < 1) bad.push(['floor_base', body.floor_base]);
+      if (!['heal', 'speed', 'accuracy', 'damage'].includes(body.effect_type)) bad.push(['effect_type', body.effect_type]);
+      if (body.effect_type === 'heal' && body.duration_ticks !== null) bad.push(['duration_ticks', body.duration_ticks]);
+      if (bad.length) { alert('Invalid values: ' + bad.map(([k, v]) => `${k}=${v}`).join(', ')); return; }
       try {
         if (id) await apiCall(`/api/admin/consumable-templates/${id}`, 'PUT', body);
         else await apiCall('/api/admin/consumable-templates', 'POST', body);

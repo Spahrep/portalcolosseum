@@ -20,6 +20,11 @@
  *   POST   /api/admin/weapon-templates/:id/mappings
  *   PATCH  /api/admin/weapon-templates/:id/mappings/:mappingId
  *   DELETE /api/admin/weapon-templates/:id/mappings/:mappingId
+ *   GET    /api/admin/consumable-templates
+ *   POST   /api/admin/consumable-templates
+ *   GET    /api/admin/consumable-templates/:id
+ *   PUT    /api/admin/consumable-templates/:id
+ *   DELETE /api/admin/consumable-templates/:id
  *   GET    /api/admin/monster-templates
  *   POST   /api/admin/monster-templates
  *   GET    /api/admin/monster-templates/:id
@@ -136,6 +141,31 @@ async function checkPortalTemplateDeleteBlockers(admin, id) {
   const { data: plm } = await admin.from('portal_loot_mapping').select('id').eq('portal_template_id', id);
   if (plm?.length) blockers.push(`portal_loot_mapping: ${plm.length} row(s)`);
   return blockers;
+}
+
+async function checkConsumableTemplateDeleteBlockers(admin, id) {
+  const blockers = [];
+  const { data: ci } = await admin.from('consumable_instance').select('id').eq('template_id', id);
+  if (ci?.length) blockers.push(`consumable_instance: ${ci.length} row(s)`);
+  return blockers;
+}
+
+function validateConsumableTemplate(b) {
+  const EFFECT_TYPES = ['heal', 'speed', 'accuracy', 'damage'];
+  if (!b.name || typeof b.name !== 'string' || !b.name.trim()) return 'name is required';
+  if (!EFFECT_TYPES.includes(b.effect_type)) return `effect_type must be one of: ${EFFECT_TYPES.join(', ')}`;
+  for (const f of ['floor_base', 'floor_delta', 'window_base', 'window_delta', 'speed_base', 'speed_delta']) {
+    const v = b[f];
+    if (!Number.isInteger(v)) return `${f} must be an integer`;
+    if (v < 0) return `${f} must be >= 0 (+only deltas, no negative values)`;
+  }
+  if (b.floor_base < 1) return 'floor_base must be >= 1';
+  if (b.effect_type === 'heal' && b.duration_ticks !== null && b.duration_ticks !== undefined)
+    return 'heal templates have no duration (duration_ticks must be null)';
+  if (b.effect_type !== 'heal' && b.duration_ticks !== null && b.duration_ticks !== undefined
+      && (!Number.isInteger(b.duration_ticks) || b.duration_ticks <= 0))
+    return 'duration_ticks must be a positive integer';
+  return null;
 }
 
 // ============================================================
@@ -515,6 +545,52 @@ async function handle(request, method) {
     }
     if (method === 'DELETE' && id && subResource === 'loot' && mappingId) {
       const { error } = await admin.from('portal_loot_mapping').delete().eq('id', mappingId);
+      if (error) return json({ error: error.message }, 400);
+      return json({ success: true });
+    }
+  }
+
+  // ---- CONSUMABLE TEMPLATES ----
+  if (resource === 'consumable-templates') {
+    const table = 'consumable_template';
+
+    if (method === 'GET' && !id) {
+      const { data, error } = await admin.from(table).select('*').order('name');
+      if (error) return json({ error: error.message }, 500);
+      const { data: instances } = await admin.from('consumable_instance').select('template_id');
+      const counts = {};
+      for (const row of instances || []) counts[row.template_id] = (counts[row.template_id] || 0) + 1;
+      return json({ data: data.map(t => ({ ...t, instance_count: counts[t.id] || 0 })) });
+    }
+    if (method === 'POST' && !id) {
+      const body = await getBody(request);
+      if (!body) return json({ error: 'Invalid JSON' }, 400);
+      const v = validateConsumableTemplate(body);
+      if (v) return json({ error: v }, 400);
+      delete body.id; delete body.created_at; delete body.updated_at;
+      const { data, error } = await admin.from(table).insert(body).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ data }, 201);
+    }
+    if (method === 'GET' && id) {
+      const { data, error } = await admin.from(table).select('*').eq('id', id).single();
+      if (error) return json({ error: error.message }, 404);
+      return json({ data });
+    }
+    if (method === 'PUT' && id) {
+      const body = await getBody(request);
+      if (!body) return json({ error: 'Invalid JSON' }, 400);
+      const v = validateConsumableTemplate(body);
+      if (v) return json({ error: v }, 400);
+      delete body.id; delete body.created_at; delete body.updated_at;
+      const { data, error } = await admin.from(table).update(body).eq('id', id).select().single();
+      if (error) return json({ error: error.message }, 400);
+      return json({ data });
+    }
+    if (method === 'DELETE' && id) {
+      const blockers = await checkConsumableTemplateDeleteBlockers(admin, id);
+      if (blockers.length) return json({ error: 'Cannot delete: referenced by other records.', blockers }, 409);
+      const { error } = await admin.from(table).delete().eq('id', id);
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
     }
