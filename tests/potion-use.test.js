@@ -239,17 +239,18 @@ describe('Buff potion effects and duration (PC-39)', () => {
       if (s.feed.some(l => l.includes('speed +10'))) break;
     }
     const res = eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
-    // cast 5-10 ->1, then 1 tick in advance fires it (tics->0), so observable via feed hit + cooldown row
-    const hitLine = res.feed.find(l => /RH (?:attack )?hits .+ for 10/.test(l));
-    assert.ok(hitLine, 'expected hit for base damage 10');
-    // advance bounded until cooldown row for RH appears (tics=1 proves clamp)
-    let s = res;
+    // cast 5-10 -> clamped to 1, so the attack fires inside commitAttack's own advance and the
+    // impact row (tics 0) resolves on the NEXT advance — the hit is not yet in res.feed.
+    // Advance bounded until RH reaches cooldown: cooldown 3-10 -> clamped to 1 (tics===1 proves
+    // the min-1 clamp; a 0/negative clamp could not produce a cooldown row with tics 1).
+    s = res;
     for (let i = 0; i < 10; i++) {
       if (s.queue.some(r => r.label === 'RH' && r.event === 'cooldown' && r.tics === 1)) break;
       s = eng.advanceToNextDecision();
     }
     const cdRow = s.queue.find(r => r.label === 'RH' && r.event === 'cooldown');
     assert.ok(cdRow && cdRow.tics === 1);
+    assert.ok(s.feed.some(l => /RH (?:attack )?hits .+ for 10/.test(l)), 'hit for base damage 10');
   });
 
   it('accuracy buff: row.accuracy set to 100 + value', () => {
@@ -387,6 +388,6 @@ describe('Buff potion effects and duration (PC-39)', () => {
     // pre>0 means buff lands after commit; damage frozen at base 10 (observable in feed, not winding row)
     const hitLine = res.feed.find(l => /RH (?:attack )?hits .+ for 10/.test(l));
     assert.ok(hitLine, 'expected base damage hit (no buff)');
-    assert.ok(!res.feed.some(l => /for (1[1-9]|2[0-9])/.test(l)), 'no buffed damage');
+    assert.equal(eng.state.monsters[0].current_hp, 90, 'monster took exactly base 10 (no buff)');
   });
 });

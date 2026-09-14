@@ -19,7 +19,7 @@ export function multiTargetReduction(damage, numTargets) {
 export function resolveAttack(attacker, targets, attack, rng = Math.random) {
   const results = [];
   const isMulti = attack && attack.is_multi_target;
-  let dmg = rollDamage(attacker.damage || 10, attacker.damage_range || 3, rng);
+  let dmg = rollDamage(attacker.damage || 10, attacker.damage_range ?? 3, rng);
   if (!checkHit(attacker.accuracy || 80, rng)) {
     return [{ hit: false, damage: 0, targets: targets.map(t => t.label || t.id) }];
   }
