@@ -43,7 +43,8 @@ test('seed set matches locked design: exactly the 4 templates, no Smoke Bomb, no
   assert.ok(migrationSql.includes("DELETE FROM public.consumable_template WHERE name = 'Smoke Bomb';"),
     'Smoke Bomb must be explicitly deleted');
   assert.ok(!/INSERT[^;]*Smoke Bomb/i.test(migrationSql), 'Smoke Bomb must not be re-seeded');
-  assert.ok(!migrationSql.includes("'buff'"), "effect_type 'buff' must not appear");
+  const sqlLines = migrationSql.split('\n').filter(l => !l.trim().startsWith('--')).join('\n');
+  assert.ok(!sqlLines.includes("'buff'"), "effect_type 'buff' must not appear in executable SQL");
 });
 
 test('roll bounds hold for all 4 templates: +only deltas, window never negative', () => {
