@@ -4,12 +4,12 @@
 -- Purpose: Replace single potency with floor/window + speed design per docs/consumables.md
 --   - consumable_template: floor_base, floor_delta, window_base, window_delta, speed_base, speed_delta, effect_type
 --   - consumable_instance: rolled_floor, rolled_window, rolled_speed, grade, template_id, user_id
-|--   - Add Postgres RPC generate_consumable_instance(template_id)
-|--   - Ensure RLS, ownership, portal_run FKs remain valid
-|--   - Follows weapon_instance patterns + loot tables + api/combat
-|-- ============================================================
+--   - Add Postgres RPC generate_consumable_instance(template_id)
+--   - Ensure RLS, ownership, portal_run FKs remain valid
+--   - Follows weapon_instance patterns + loot tables + api/combat
+-- ============================================================
 
-|-- 1. Update consumable_template (drop potency, add floor/window/speed params)
+-- 1. Update consumable_template (drop potency, add floor/window/speed params)
 -- Fix effect_type CHECK collision from PC-17 migration (old constraint blocks 'speed'/'accuracy' inserts)
 ALTER TABLE public.consumable_template DROP CONSTRAINT IF EXISTS consumable_template_effect_type_check;
 ALTER TABLE public.consumable_template
@@ -25,8 +25,8 @@ ALTER TABLE public.consumable_template
   ADD COLUMN IF NOT EXISTS effect_type text NOT NULL DEFAULT 'heal',
   ADD COLUMN IF NOT EXISTS duration_ticks int;  -- NULL for heals (instant); set for speed/accuracy/damage templates
 
--- Re-add the correctly-named constraint (inline CHECK on ADD COLUMN IF NOT EXISTS is a no-op for existing column)
-ALTER TABLE public.consumable_template ADD CONSTRAINT consumable_template_effect_type_check CHECK (effect_type IN ('heal','speed','accuracy','damage'));
+-- UNIQUE(name) must exist BEFORE the ON CONFLICT (name) seed upserts below (PC-17 created no such constraint)
+ALTER TABLE public.consumable_template ADD CONSTRAINT consumable_template_name_key UNIQUE (name);
 
 COMMENT ON TABLE public.consumable_template IS
   'Static consumable templates. Effect value = floor_base + floor_delta*rand + window_base + window_delta*rand. Speed rolled per instance. +only deltas per locked design.';
@@ -43,7 +43,8 @@ UPDATE public.consumable_template SET
   floor_base = 5, floor_delta = 2, window_base = 3, window_delta = 2, speed_base = 1, speed_delta = 1, effect_type = 'damage', duration_ticks = 8
 WHERE name = 'Power Tonic';
 
--- Retired throwable (PMVP, not in MVP); if row exists, repurpose or delete handled by name change above
+-- Retired throwable (PMVP, not in MVP): Smoke Bomb must not exist as an MVP template
+DELETE FROM public.consumable_template WHERE name = 'Smoke Bomb';
 
 -- New: Swift Tonic (speed effect)
 INSERT INTO public.consumable_template (name, description, floor_base, floor_delta, window_base, window_delta, speed_base, speed_delta, effect_type, duration_ticks)
@@ -55,6 +56,9 @@ INSERT INTO public.consumable_template (name, description, floor_base, floor_del
 VALUES ('Accuracy Tonic', 'Temporarily increases accuracy.', 10, 5, 5, 5, 1, 1, 'accuracy', 8)
 ON CONFLICT (name) DO UPDATE SET floor_base=EXCLUDED.floor_base, floor_delta=EXCLUDED.floor_delta, window_base=EXCLUDED.window_base, window_delta=EXCLUDED.window_delta, speed_base=EXCLUDED.speed_base, speed_delta=EXCLUDED.speed_delta, effect_type=EXCLUDED.effect_type, duration_ticks=EXCLUDED.duration_ticks;
 
+-- Re-add the correctly-named CHECK AFTER seeds hold valid v2 values (old 'buff' row would violate otherwise)
+ALTER TABLE public.consumable_template ADD CONSTRAINT consumable_template_effect_type_check CHECK (effect_type IN ('heal','speed','accuracy','damage'));
+
 -- 2. Update consumable_instance (add rolled stats, grade, speed; drop old if any)
 ALTER TABLE public.consumable_instance
   ADD COLUMN IF NOT EXISTS rolled_floor int,
@@ -64,7 +68,7 @@ ALTER TABLE public.consumable_instance
 
 -- +only guarantee at data layer (defensive)
 ALTER TABLE public.consumable_instance
-  ADD CONSTRAINT IF NOT EXISTS chk_rolled_window_nonneg CHECK (rolled_window >= 0);
+  ADD CONSTRAINT chk_rolled_window_nonneg CHECK (rolled_window >= 0);
 
 COMMENT ON TABLE public.consumable_instance IS
   'Player-owned consumable instances. Rolled per template floor/window/speed. Grade computed post-generation from EV = floor + window/2. Loadout via portal_run.consume_a/b.';
