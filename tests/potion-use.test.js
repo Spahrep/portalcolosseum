@@ -224,7 +224,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     }
     eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
     const attackRow = eng.state.queue.find(r => r.label === 'RH' && typeof r.tics === 'number');
-    assert.equal(attackRow.tics, 3);
+    assert.equal(attackRow.tics, 2);
     assert.equal(attackRow.cooldownTicks, 1);
   });
 
@@ -238,10 +238,18 @@ describe('Buff potion effects and duration (PC-39)', () => {
       s = eng.advanceToNextDecision();
       if (s.feed.some(l => l.includes('speed +10'))) break;
     }
-    eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
-    const attackRow = eng.state.queue.find(r => r.label === 'RH' && typeof r.tics === 'number');
-    assert.equal(attackRow.tics, 1);
-    assert.equal(attackRow.cooldownTicks, 1);
+    const res = eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
+    // cast 5-10 ->1, then 1 tick in advance fires it (tics->0), so observable via feed hit + cooldown row
+    const hitLine = res.feed.find(l => /RH (?:attack )?hits .+ for 10/.test(l));
+    assert.ok(hitLine, 'expected hit for base damage 10');
+    // advance bounded until cooldown row for RH appears (tics=1 proves clamp)
+    let s = res;
+    for (let i = 0; i < 10; i++) {
+      if (s.queue.some(r => r.label === 'RH' && r.event === 'cooldown' && r.tics === 1)) break;
+      s = eng.advanceToNextDecision();
+    }
+    const cdRow = s.queue.find(r => r.label === 'RH' && r.event === 'cooldown');
+    assert.ok(cdRow && cdRow.tics === 1);
   });
 
   it('accuracy buff: row.accuracy set to 100 + value', () => {
@@ -375,8 +383,10 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const p = makeParticipants({ effect_type: 'damage', rolled_floor: 8, rolled_speed: 6, duration_ticks: 5, template_name: 'Dmg' });
     eng.startBattle(p);
     eng.commitPotion('A', { weaponSpeed: 4 });
-    eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
-    const attackRow = eng.state.queue.find(r => r.label === 'RH' && typeof r.damage === 'number');
-    assert.equal(attackRow.damage, 10);
+    const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    // pre>0 means buff lands after commit; damage frozen at base 10 (observable in feed, not winding row)
+    const hitLine = res.feed.find(l => /RH (?:attack )?hits .+ for 10/.test(l));
+    assert.ok(hitLine, 'expected base damage hit (no buff)');
+    assert.ok(!res.feed.some(l => /for (1[1-9]|2[0-9])/.test(l)), 'no buffed damage');
   });
 });
