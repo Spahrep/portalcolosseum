@@ -285,7 +285,7 @@ function selectMenuCommand() {
 
 function showItemConfirm(label, promptText, narrationText) {
   const menu = commandMenu();
-  menu.innerHTML = '';
+  menu.querySelectorAll('.command-row').forEach(el => el.remove());
   menu.classList.add('visible');
   menuVisible = true;
 
