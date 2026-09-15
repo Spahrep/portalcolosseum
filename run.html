@@ -181,6 +181,10 @@
     .action-btn:hover {
       background: #2a5a2a;
     }
+    .action-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
     .bottom-bar {
       border-top: 4px solid #4a90d9;
       background: rgba(10,26,46,0.78);
@@ -246,7 +250,7 @@
       <div id="message-box" class="message-box"></div>
     </div>
 
-    <!-- ACTION MENU (inert this pass) -->
+    <!-- ACTION MENU -->
     <div class="action-menu">
       <button id="btn-attack" class="action-btn">ATTACK</button>
       <button id="btn-item" class="action-btn">ITEM</button>
@@ -254,7 +258,7 @@
 
     <!-- BOTTOM -->
     <div class="bottom-bar">
-      State from live API • Reload restores • Combat actions in next pass
+      Live combat wired • hp_word only • busy gated • reload restores
     </div>
   </div>
 

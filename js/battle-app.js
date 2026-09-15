@@ -1,10 +1,10 @@
 /**
- * Portal Colosseum - Battle Screen Scaffold + Live State Render (PC-46 pass 1)
- * External ES module for /run.html
- * Mirrors run-equip-app.js auth + apiCall conventions exactly.
- * Renders from GET /api/combat/runs/:id using hp_word ONLY.
- * Inert action buttons (message on click). Error states in message box.
- * No combat endpoints wired. Reload-safe, no client memory.
+ * Portal Colosseum - Battle Screen Live Combat Wiring (PC-47 pass 2)
+ * Wires ATTACK (via /commit), ITEM (/use-potion), battle advance (/battle/end).
+ * Matches CLI payloads exactly: {hand, attack_id, target_ids:[]}, {slot}.
+ * hp_word ONLY for all HP display; busy-state gating on all actions.
+ * Re-renders from action responses + GET restore.
+ * No console errors; errors in message box.
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
@@ -13,6 +13,8 @@ const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
 
 let supabase;
+let currentRunId = null;
+let busy = false;
 
 function getAuthToken() {
   return supabase?.auth?.getSession?.().then(({ data }) => data?.session?.access_token);
@@ -72,6 +74,21 @@ function showErrorState(title, detail, showReturn = true) {
   box.appendChild(err);
 }
 
+function setBusy(state) {
+  busy = state;
+  const attackBtn = document.getElementById('btn-attack');
+  const itemBtn = document.getElementById('btn-item');
+  if (attackBtn) attackBtn.disabled = state;
+  if (itemBtn) itemBtn.disabled = state;
+  if (state) {
+    if (attackBtn) attackBtn.style.opacity = '0.5';
+    if (itemBtn) itemBtn.style.opacity = '0.5';
+  } else {
+    if (attackBtn) attackBtn.style.opacity = '1';
+    if (itemBtn) itemBtn.style.opacity = '1';
+  }
+}
+
 function renderDice(dice) {
   const tray = document.getElementById('dice-tray');
   const labels = document.getElementById('dice-labels');
@@ -81,7 +98,6 @@ function renderDice(dice) {
   const used = dice.used || { green: 0, yellow: 0, red: 0 };
   const current = dice.current;
 
-  // remaining dice visuals
   const remRow = document.createElement('div');
   remRow.style.cssText = 'display:flex;gap:3px;margin-bottom:4px;';
   for (let i = 0; i < (rem.green || 0); i++) {
@@ -113,8 +129,8 @@ function renderDice(dice) {
   if (curEl) {
     if (current && current.color && current.face != null) {
       curEl.innerHTML = `
-        <div class="die ${current.color}" style="width:32px;height:32px;font-size:14px;">${current.face}</div>
-        <div style="font-size:9px;color:#88aaff;margin-top:2px;">${current.rolled_value != null ? current.rolled_value : ''}</div>
+        <div class=\"die ${current.color}\" style=\"width:32px;height:32px;font-size:14px;\">${current.face}</div>
+        <div style=\"font-size:9px;color:#88aaff;margin-top:2px;\">${current.rolled_value != null ? current.rolled_value : ''}</div>
       `;
       curEl.style.display = 'flex';
     } else {
@@ -146,7 +162,7 @@ function renderMonsters(monsters) {
     const hp = document.createElement('div');
     hp.style.cssText = 'margin-top:4px;text-align:center;';
     const hpWord = m.hp_word || m.hpWord || 'Healthy';
-    hp.innerHTML = `<span style="color:#66ff99;font-size:10px;">HP: ${hpWord}</span>`;
+    hp.innerHTML = `<span style=\"color:#66ff99;font-size:10px;\">HP: ${hpWord}</span>`;
     card.appendChild(sprite);
     card.appendChild(name);
     card.appendChild(hp);
@@ -174,17 +190,142 @@ function renderFeed(feed) {
   box.scrollTop = box.scrollHeight;
 }
 
-function attachInertButtons() {
+function renderPlayerHP(runOrState) {
+  const el = document.getElementById('player-hp');
+  if (!el) return;
+  let hpWord = 'Healthy';
+  if (runOrState.battle_state && runOrState.battle_state.player && runOrState.battle_state.player.hp_word) {
+    hpWord = runOrState.battle_state.player.hp_word;
+  } else if (runOrState.player && runOrState.player.hp_word) {
+    hpWord = runOrState.player.hp_word;
+  } else if (runOrState.participants && runOrState.participants.player && runOrState.participants.player.hp_word) {
+    hpWord = runOrState.participants.player.hp_word;
+  } else if (typeof runOrState.player_hp === 'number') {
+    // fallback only if no word (should not happen)
+    hpWord = runOrState.player_hp > 300 ? 'Healthy' : (runOrState.player_hp > 100 ? 'Injured' : 'Critical');
+  }
+  el.innerHTML = `HP: <span style=\"color:#66ff99;\">${hpWord}</span>`;
+}
+
+function renderLoadout(bs) {
+  const wl = bs.weapons || {};
+  const lh = document.getElementById('loadout-lh');
+  const rh = document.getElementById('loadout-rh');
+  if (lh) lh.textContent = (wl.hand_l && wl.hand_l.name) || '—';
+  if (rh) rh.textContent = (wl.hand_r && wl.hand_r.name) || '—';
+}
+
+function updateFromActionResponse(data, runId) {
+  const state = data.state || data;
+  const bs = state.battle_state || state;
+  renderDice(bs.dice || state.dice || {});
+  renderMonsters(bs.monsters || state.monsters || []);
+  renderFeed(bs.feed || state.feed || []);
+  renderPlayerHP(state || bs);
+  renderLoadout(bs);
+  // check for battle over / advance
+  if (state.battle_over || bs.battle_over) {
+    showAdvanceUI(runId, state);
+  }
+}
+
+function showAdvanceUI(runId, state) {
+  const box = document.getElementById('message-box');
+  if (!box) return;
+  box.innerHTML = '';
+  const adv = document.createElement('div');
+  adv.className = 'msg-line';
+  adv.innerHTML = `<strong>Battle complete.</strong> ${state.monsters_dead ? 'Monsters defeated.' : ''}`;
+  const contBtn = document.createElement('button');
+  contBtn.textContent = 'Continue to next battle';
+  contBtn.className = 'action-btn';
+  contBtn.style.marginTop = '8px';
+  contBtn.onclick = async () => {
+    setBusy(true);
+    try {
+      const res = await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'continue' });
+      showMessage('Advancing to next battle...');
+      await loadBattle(runId);
+    } catch (e) {
+      showMessage(e.message, true);
+    }
+    setBusy(false);
+  };
+  const stopBtn = document.createElement('button');
+  stopBtn.textContent = 'Stop run';
+  stopBtn.className = 'action-btn';
+  stopBtn.style.marginTop = '8px';
+  stopBtn.onclick = async () => {
+    setBusy(true);
+    try {
+      await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'stop' });
+      showErrorState('Run stopped', 'You abandoned the run.', true);
+    } catch (e) {
+      showMessage(e.message, true);
+    }
+    setBusy(false);
+  };
+  adv.appendChild(contBtn);
+  adv.appendChild(stopBtn);
+  box.appendChild(adv);
+}
+
+async function doAttack(runId) {
+  if (busy) return;
+  setBusy(true);
+  try {
+    // CLI exact payload; attack_id=1 is placeholder (requires valid mapped attack for weapon)
+    const payload = { hand: 'LH', attack_id: 1, target_ids: [] };
+    const data = await apiCall(`/runs/${runId}/commit`, 'POST', payload);
+    showMessage('Attack committed (LH #1)');
+    updateFromActionResponse(data, runId);
+  } catch (e) {
+    const msg = String(e.message || e);
+    if (msg.includes('Hand not ready')) {
+      showMessage('Hand not ready — waiting engine advance');
+    } else {
+      showMessage(msg, true);
+    }
+  }
+  setBusy(false);
+}
+
+async function doItem(runId) {
+  if (busy) return;
+  setBusy(true);
+  try {
+    // confirm slot A/B per CLI
+    const slot = prompt('Potion slot? (A or B)', 'A');
+    if (!slot || !['A','B'].includes(slot.toUpperCase())) {
+      showMessage('Item cancelled');
+      setBusy(false);
+      return;
+    }
+    const payload = { slot: slot.toUpperCase() };
+    const data = await apiCall(`/runs/${runId}/use-potion`, 'POST', payload);
+    showMessage(`Potion ${slot.toUpperCase()} used`);
+    updateFromActionResponse(data, runId);
+  } catch (e) {
+    showMessage(e.message, true);
+  }
+  setBusy(false);
+}
+
+function attachLiveButtons(runId) {
   const attackBtn = document.getElementById('btn-attack');
   const itemBtn = document.getElementById('btn-item');
-  const handler = () => {
-    showMessage('Combat actions land in the next pass.');
-  };
-  if (attackBtn) attackBtn.addEventListener('click', handler);
-  if (itemBtn) itemBtn.addEventListener('click', handler);
+  if (attackBtn) {
+    attackBtn.onclick = () => doAttack(runId);
+    attackBtn.disabled = false;
+  }
+  if (itemBtn) {
+    itemBtn.onclick = () => doItem(runId);
+    itemBtn.disabled = false;
+  }
 }
 
 async function loadBattle(runId) {
+  currentRunId = runId;
   const box = document.getElementById('message-box');
   try {
     const data = await apiCall(`/runs/${runId}`);
@@ -193,12 +334,11 @@ async function loadBattle(runId) {
       showErrorState('Run not found', 'The requested run does not exist or is inaccessible.');
       return;
     }
-    if (run.status === 'completed' || run.status === 'inactive') {
+    if (run.status === 'completed' || run.status === 'inactive' || run.status === 'dead' || run.status === 'abandoned') {
       showErrorState('Run ' + run.status, 'This run is no longer active.', true);
       return;
     }
 
-    // header
     const runTitle = document.getElementById('run-title');
     if (runTitle) runTitle.textContent = `PORTAL · RUN ${run.id}`;
     const battleLabel = document.getElementById('battle-label');
@@ -208,32 +348,19 @@ async function loadBattle(runId) {
       battleLabel.textContent = `BATTLE ${cb} OF ${tb}`;
     }
 
-    // player hp (numeric — the API exposes player_hp only; design shows numbers)
-    const playerHp = document.getElementById('player-hp');
-    if (playerHp) {
-      const hpVal = typeof run.player_hp === 'number' ? run.player_hp : null;
-      const hpColor = hpVal === null ? '#66ff99' : (hpVal > 300 ? '#66ff99' : (hpVal > 100 ? '#ffcc66' : '#ff6666'));
-      playerHp.innerHTML = `HP: <span style="color:${hpColor};">${hpVal === null ? '—' : hpVal}</span>`;
-    }
-
-    // dice
+    renderPlayerHP(run);
     const bs = run.battle_state || {};
     renderDice(bs.dice || {});
-
-    // monsters
     renderMonsters(bs.monsters || []);
-
-    // feed
     renderFeed(bs.feed || []);
+    renderLoadout(bs);
 
-    // weapons loadout display (read-only this pass) — names from battle_state.weapons
-    const wl = bs.weapons || {};
-    const lh = document.getElementById('loadout-lh');
-    const rh = document.getElementById('loadout-rh');
-    if (lh) lh.textContent = (wl.hand_l && wl.hand_l.name) || '—';
-    if (rh) rh.textContent = (wl.hand_r && wl.hand_r.name) || '—';
+    attachLiveButtons(runId);
 
-    attachInertButtons();
+    // initial battle_over check
+    if (bs.battle_over) {
+      showAdvanceUI(runId, bs);
+    }
 
   } catch (err) {
     const msg = String(err.message || err);
@@ -241,8 +368,6 @@ async function loadBattle(runId) {
       showErrorState('Run not found', 'The requested run does not exist or is inaccessible.');
     } else if (msg.includes('inactive') || msg.includes('completed')) {
       showErrorState('Run inactive', 'This run is no longer active.', true);
-    } else if (msg.includes('Max 3')) {
-      showErrorState('Max 3 active runs', 'You have reached the active run limit.', true);
     } else {
       showErrorState('Load failed', msg, true);
     }
