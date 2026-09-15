@@ -3,18 +3,269 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PORTAL COLOSSEUM - EQUIP</title>
-  <link rel="stylesheet" href="/public/game.css">
+  <title>Portal Colosseum • Run Equip</title>
+  <link rel="stylesheet" href="/fonts/pixeloid-mono/pixeloid-mono.css">
+  <script src="/api/env.js"></script>
   <style>
-    .dice-panel { background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 4px; min-width: 220px; }
-    .dice-header { font-size: 10px; letter-spacing: 1px; color: #ffcc66; margin-bottom: 4px; }
-    .dice-tray { display: flex; gap: 8px; align-items: center; }
-    .die { width: 18px; height: 18px; border: 1px solid #666; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; }
-    .die.green { background: #224422; color: #66ff99; border-color: #66ff99; }
-    .die.yellow { background: #443322; color: #ffcc66; border-color: #ffcc66; }
-    .die.red { background: #442222; color: #ff6666; border-color: #ff6666; }
-    .dice-labels { display: flex; gap: 12px; font-size: 9px; color: #888; }
-    .message-error { color: #ff6666; font-size: 12px; }
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #000 url('/public/pictures/town/town_pano.jpg') center/cover no-repeat;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      color: #e0e0ff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      image-rendering: pixelated;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 900px;
+      max-width: 100%;
+      background: rgba(0,0,0,0.30);
+      border: 4px solid #4a90d9;
+      box-shadow: 0 0 0 2px #000;
+    }
+    .top-bar {
+      display: flex;
+      border-bottom: 4px solid #4a90d9;
+      background: rgba(10,26,46,0.78);
+    }
+    .run-info {
+      flex: 1;
+      padding: 10px 14px;
+      border-right: 2px solid #334466;
+    }
+    .run-info h1 {
+      margin: 0 0 2px;
+      font-size: 16px;
+      color: #66ccff;
+      letter-spacing: 1px;
+    }
+    .run-info .subtitle {
+      color: #4a90d9;
+      font-size: 10px;
+      margin-bottom: 4px;
+    }
+    .run-info .breadcrumb {
+      color: #88aaff;
+      font-size: 9px;
+    }
+    .dice-panel {
+      width: 320px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.55);
+    }
+    .dice-header {
+      color: #88aaff;
+      font-size: 9px;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .dice-tray {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+    }
+    .die {
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: bold;
+      color: #000;
+      border: 1px solid #000;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35), inset 0 0 0 3px rgba(0,0,0,0.2);
+      cursor: default;
+    }
+    .die.green  { background: #66ff99; }
+    .die.yellow { background: #ffcc66; }
+    .die.red    { background: #ff6666; }
+    .dice-labels {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      margin-left: 8px;
+      font-size: 9px;
+      color: #88aaff;
+    }
+    .main-area {
+      display: flex;
+      gap: 0;
+    }
+    .loadout-panel {
+      width: 380px;
+      padding: 14px;
+      background: rgba(0,0,0,0.45);
+      border-right: 2px solid #334466;
+    }
+    .backpack-panel {
+      flex: 1;
+      padding: 14px;
+      background: rgba(0,0,0,0.45);
+    }
+    .panel-title {
+      color: #88aaff;
+      font-size: 11px;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #334466;
+    }
+    .slot-row {
+      display: flex;
+      align-items: center;
+      margin-bottom: 8px;
+      cursor: pointer;
+    }
+    .slot-label {
+      width: 32px;
+      font-size: 12px;
+      color: #66ccff;
+      font-weight: bold;
+    }
+    .slot-content {
+      flex: 1;
+      background: #0a1a2e;
+      border: 2px solid #4a90d9;
+      padding: 6px 10px;
+      font-size: 12px;
+      min-height: 36px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+    }
+    .slot-content.empty {
+      color: #556677;
+      font-style: italic;
+    }
+    .slot-content .stats {
+      font-size: 9px;
+      color: #a8c8ea;
+      margin-top: 2px;
+    }
+    .backpack-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+    }
+    .inv-slot {
+      background: #0a1a2e;
+      border: 2px solid #4a90d9;
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      cursor: pointer;
+      text-align: center;
+      padding: 2px;
+    }
+    .inv-slot.empty {
+      color: #556677;
+      font-size: 10px;
+    }
+    .inv-slot.selected {
+      border-color: #66ff99;
+      box-shadow: 0 0 0 2px #66ff99;
+    }
+    .bottom-bar {
+      border-top: 4px solid #4a90d9;
+      background: rgba(10,26,46,0.78);
+      padding: 12px;
+      text-align: center;
+    }
+    .enter-btn {
+      background: #1a3a1a;
+      color: #66ff99;
+      border: 3px solid #66ff99;
+      padding: 8px 32px;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+    .enter-btn:hover {
+      background: #2a5a2a;
+    }
+    .note {
+      margin-top: 8px;
+      font-size: 9px;
+      color: #7a8ca6;
+    }
+    .info-popup {
+      position: absolute;
+      background: #000;
+      border: 2px solid #ccc;
+      padding: 6px 10px;
+      font-size: 10px;
+      color: #fff;
+      z-index: 200;
+      line-height: 1.4;
+      box-shadow: 0 0 0 1px #000;
+      min-width: 220px;
+      display: none;
+    }
+    .info-popup .name {
+      color: #ffcc66;
+      font-size: 12px;
+      margin-bottom: 2px;
+    }
+    .info-popup .type {
+      color: #88aaff;
+      font-size: 9px;
+    }
+    .info-popup .stat-line {
+      color: #a8c8ea;
+      font-size: 9px;
+    }
+    .info-popup .attacks {
+      color: #ffcc66;
+      font-size: 9px;
+      margin-top: 4px;
+    }
+    .error-flash {
+      color: #ff6666;
+      font-size: 9px;
+      animation: flash 0.6s;
+    }
+    @keyframes flash {
+      0%,100% { opacity: 1; }
+      50% { opacity: 0.2; }
+    }
+    .message-locked {
+      background: #0a1a2e;
+      border: 3px solid #ccc;
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #e0e0ff;
+      text-align: center;
+      margin: 0 auto;
+      max-width: 420px;
+    }
+    .message-error {
+      background: #2e0a0a;
+      border: 2px solid #ff6666;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #ff9999;
+      text-align: center;
+      margin: 10px auto 0 auto;
+      max-width: 420px;
+    }
   </style>
 </head>
 <body>
@@ -32,7 +283,22 @@
           <span>PORTAL DICE</span>
         </div>
         <div class="dice-tray">
-          <!-- Populated dynamically by JS from currentPortal counts -->
+          <div>
+            <div style="display:flex;gap:3px;margin-bottom:2px;">
+              <div class="die green" title="Normal Die">G</div>
+              <div class="die green" title="Normal Die">G</div>
+              <div class="die green" title="Normal Die">G</div>
+              <div class="die green" title="Normal Die">G</div>
+              <div class="die yellow" title="Crit Die">Y</div>
+              <div class="die yellow" title="Crit Die">Y</div>
+              <div class="die red" title="Fumble Die">R</div>
+              <div class="die red" title="Fumble Die">R</div>
+            </div>
+            <div class="dice-labels">
+              <div>REMAINING (8)</div>
+              <div>USED (0)</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

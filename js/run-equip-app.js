@@ -155,16 +155,16 @@ function showInspectPopup(itemName, targetEl) {
   popupEl.style.left = (rect.left - contRect.left + 30) + 'px';
   popupEl.style.top = (rect.top - contRect.top - 10) + 'px';
 
-  let html = `<div class=\"name\">${itemName}</div>`;
+  let html = `<div class="name">${itemName}</div>`;
   if (weaponsMap[itemName]) {
     const w = weaponsMap[itemName];
-    html += `<div class=\"type\">WEAPON</div>`;
-    html += `<div class=\"stat-line\">DMG ${w.damage || '??'} / ACC ??</div>`;
-    if (w.attacks && w.attacks.length) html += `<div class=\"attacks\">Attacks: ${w.attacks.map(a=>a.name).join(', ')}</div>`;
+    html += `<div class="type">WEAPON</div>`;
+    html += `<div class="stat-line">DMG ${w.damage || '??'} / ACC ??</div>`;
+    if (w.attacks && w.attacks.length) html += `<div class="attacks">Attacks: ${w.attacks.map(a=>a.name).join(', ')}</div>`;
   } else if (consumablesMap[itemName]) {
     const c = consumablesMap[itemName];
-    html += `<div class=\"type\">CONSUMABLE</div>`;
-    html += `<div class=\"stat-line\">${c.consumable_template?.description || c.description || c.template_name || 'Effect'}</div>`;
+    html += `<div class="type">CONSUMABLE</div>`;
+    html += `<div class="stat-line">${c.consumable_template?.description || c.description || c.template_name || 'Effect'}</div>`;
   }
   popupEl.innerHTML = html;
 
@@ -188,9 +188,9 @@ function assignToSlot(slotIndex) {
   const isConsumableSlot = slotIndex >= 3;
 
   if ((isW && !isWeaponSlot) || (isC && !isConsumableSlot)) {
-    const row = document.querySelector(`[data-slot=\"${slotIndex}\"]`);
+    const row = document.querySelector(`[data-slot="${slotIndex}"]`);
     const orig = row.querySelector('.slot-content').innerHTML;
-    row.querySelector('.slot-content').innerHTML = `<span class=\"error-flash\">${isW ? 'Weapons go in hand/belt slots' : 'Consumables go in C1/C2'}</span>`;
+    row.querySelector('.slot-content').innerHTML = `<span class="error-flash">${isW ? 'Weapons go in hand/belt slots' : 'Consumables go in C1/C2'}</span>`;
     setTimeout(() => {
       if (row.querySelector('.slot-content')) row.querySelector('.slot-content').innerHTML = orig;
       clearHighlights();
@@ -230,7 +230,7 @@ function renderLoadout() {
       let stats = '';
       if (weaponsMap[name]) stats = `DMG ${weaponsMap[name].damage || '??'}`;
       else if (consumablesMap[name]) stats = consumablesMap[name].consumable_template?.description || consumablesMap[name].description || 'Effect';
-      content.innerHTML = `<span>${name}</span><span class=\"stats\">${stats}</span>`;
+      content.innerHTML = `<span>${name}</span><span class="stats">${stats}</span>`;
       content.classList.remove('empty');
       row.onclick = () => unequipSlot(i);
     } else {
