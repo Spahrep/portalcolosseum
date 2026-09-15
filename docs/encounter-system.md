@@ -41,6 +41,7 @@ Dice pool composition (how many dice, color mix, face values) is **per-portal**,
 - **Face values**: Whether the player sees exact face values or just colors is **TBD** (see Open Questions).
 - **Die selection**: Player does **not** choose which die to roll — it is a random draw from the remaining pool.
 - **Selection UX**: Die selection is shown with a tension-building animation (e.g., roulette wheel style) to build anticipation before each battle.
+- **Selection animation (Spahrep 2026-09-15)**: Casino-style / roulette. At run start and in between each battle starting, a highlight or indicator moves across all the dice boxes quickly, then slows down, landing on the selected one. (The indicator style is his example, not a locked visual; the sweep fast → slow → land-on-selected behavior is the spec.)
 
 ## Run Start (Decided: 2026-09-11)
 

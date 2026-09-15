@@ -80,7 +80,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Color = risk profile, not monster type
 - Dice drawn **without replacement** — pool shrinks over the 5 battles
 - Player sees full color distribution before starting; tracks remaining dice throughout
-- Die selection is random (player doesn't choose), with tension-building animation
+- Die selection is random (player doesn't choose) — casino/roulette sweep animation (indicator fast→slow across the dice boxes, lands on the selected die) at run start + between battles
 - Die roll produces a **point budget** → spent on a monster group (1–5 monsters) via weighted selection from per-portal monster mapping table
 - Max 5 monsters per battle; 5th monster absorbs remaining points
 - Battles are **groups of monsters**, not single encounters — multi-enemy attacks (Cleave, Whirlwind) become core

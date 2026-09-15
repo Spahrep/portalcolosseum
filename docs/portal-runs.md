@@ -47,6 +47,7 @@ Summary:
 - Dice are drawn **without replacement** — each die is removed from the pool after creating a battle.
 - Player sees the full color distribution before starting and tracks remaining dice throughout the run.
 - Die selection is random (player does not choose) with a tension-building animation (e.g., roulette wheel).
+  - **Animation spec (Spahrep 2026-09-15)**: casino/roulette style — at run start and in between each battle starting, a highlight or indicator sweeps across all the dice boxes quickly, slows down, and lands on the selected one.
 - Each die roll produces a **point budget** for that battle, which is spent on a monster group (1–5 monsters) via weighted selection from a per-portal monster mapping table.
 
 ## Loot Scaling
