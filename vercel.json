@@ -132,6 +132,26 @@
       }
     },
     {
+      "src": "/test/ap-gold",
+      "dest": "/public/test/ap-gold/index.html",
+      "headers": {
+        "Content-Security-Policy": "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
+      }
+    },
+    {
+      "src": "/test/ap-gold/(.*)",
+      "dest": "/public/test/ap-gold/$1",
+      "headers": {
+        "Content-Security-Policy": "default-src 'self'; script-src 'self'; connect-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
+      }
+    },
+    {
       "src": "/favicon.ico",
       "dest": "/public/pictures/ui/favicon.ico",
       "headers": {
