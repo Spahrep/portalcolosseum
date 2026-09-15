@@ -271,6 +271,21 @@ async function initGame() {
     return;
   }
 
+  // PC-50r: auto-resume into active run (never show town to a player with an active run)
+  // Fetch failure is soft (console + continue to town) — a redirect loop is worse.
+  try {
+    const res = await fetch('/api/combat/runs/active', { credentials: 'include' });
+    if (res.ok) {
+      const { run } = await res.json();
+      if (run && run.id) {
+        window.location.href = '/run.html?id=' + run.id;
+        return;
+      }
+    }
+  } catch (e) {
+    console.error('Active run check failed (soft):', e);
+  }
+
   // Initialize the game canvas context (placeholder for future rendering)
   // No placeholder text drawn — the canvas is ready for arena battle rendering
   const canvas = document.getElementById('game');

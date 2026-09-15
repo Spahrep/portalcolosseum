@@ -63,3 +63,9 @@ Type "continue" to risk the next fight, or "stop" to claim your current share an
 
 - Native CLI gets the same flow. `run new --lh --rh --belt --ca --cb` flags and `--quiet`/`--json` skip the interactive gate entirely (byte-for-byte parity preserved).
 - Presentation layer only: no API, engine, schema, dice, or balance changes. No new dependencies, plain JS.
+
+## PC-50r: One active run, auto-resume, End Run (2026-09-15)
+
+- One active run enforced by partial unique index on portal_run (user_id) WHERE status='active' + API 400 on duplicate + migration purge of extras (richest battle_state kept).
+- Auto-resume: game.html (town) and run-equip.html check GET /runs/active on load; if active run exists, redirect to /run.html?id=... before any town/equip UI (no flash).
+- End Run button: always visible in run.html top bar. Opens confirm dialog with exact copy: "you will lose all loot from this run and nothing will be refunded. Type 'End Run' to confirm." Confirm button disabled until input trims + lowercases to exactly 'end run'. On confirm: POST abandon endpoint, clear localStorage currentRunId, redirect to town. Post-battle Stop run button untouched.

@@ -399,7 +399,14 @@ function setupEnterButton() {
     lockMsg.className = 'message-locked';
     lockMsg.textContent = 'Loadout locked. Entering portal...';
     bottom.insertBefore(lockMsg, btn);
-    await enterPortal();
+    // double-submit lock
+    const originalDisabled = btn.disabled;
+    btn.disabled = true;
+    try {
+      await enterPortal();
+    } finally {
+      btn.disabled = originalDisabled;
+    }
   };
 }
 
@@ -420,6 +427,19 @@ async function init() {
     });
   }
   if (!await checkAuth()) return;
+  // PC-50r: active-run bounce on load (equip screen only for brand-new runs)
+  try {
+    const res = await fetch('/api/combat/runs/active', { credentials: 'include' });
+    if (res.ok) {
+      const { run } = await res.json();
+      if (run && run.id) {
+        window.location.href = '/run.html?id=' + run.id;
+        return;
+      }
+    }
+  } catch (e) {
+    console.error('Active run check failed (soft):', e);
+  }
   try {
     await loadData();
   } catch (e) {
