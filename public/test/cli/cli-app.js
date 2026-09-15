@@ -659,7 +659,11 @@ async function cmdConfirm() {
     offeredBattleNum = null;
     await refreshRunPanels();
   } catch (e) {
-    printError('confirm: ' + e.message);
+    if (e.message && e.message.includes('You already have an active run')) {
+      appendLine('You already have an active run. End it before starting a new one.', 'amber');
+    } else {
+      printError('confirm: ' + e.message);
+    }
   }
 }
 

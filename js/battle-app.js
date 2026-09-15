@@ -505,6 +505,48 @@ async function loadBattle(runId) {
   }
 }
 
+function setupEndRunButton(runId) {
+  const btn = document.getElementById('end-run-btn');
+  if (!btn) return;
+  btn.onclick = () => {
+    // exact dialog per spec
+    const dialog = document.createElement('div');
+    dialog.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    dialog.innerHTML = `
+      <div style="background:#112233;border:3px solid #4a90d9;padding:20px;max-width:420px;color:#e0e0ff;font-family:'Pixeloid Mono',monospace;font-size:12px;">
+        <div style="margin-bottom:12px;">you will lose all loot from this run and nothing will be refunded. Type 'End Run' to confirm.</div>
+        <input id="end-run-input" type="text" style="width:100%;background:#000;border:2px solid #335577;color:#e0e0ff;padding:6px;margin-bottom:12px;" placeholder="type here">
+        <div style="display:flex;gap:8px;justify-content:flex-end;">
+          <button id="end-run-cancel" class="action-btn">Cancel</button>
+          <button id="end-run-confirm" class="action-btn" disabled>Confirm End Run</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(dialog);
+    const input = dialog.querySelector('#end-run-input');
+    const confirmBtn = dialog.querySelector('#end-run-confirm');
+    const cancelBtn = dialog.querySelector('#end-run-cancel');
+    const checkInput = () => {
+      const val = (input.value || '').trim().toLowerCase();
+      confirmBtn.disabled = val !== 'end run';
+    };
+    input.oninput = checkInput;
+    cancelBtn.onclick = () => dialog.remove();
+    confirmBtn.onclick = async () => {
+      dialog.remove();
+      try {
+        await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'stop' });
+        localStorage.removeItem('currentRunId');
+        window.location.href = '/game.html';
+      } catch (e) {
+        // surface error without crash
+        alert('End Run failed: ' + (e.message || e));
+      }
+    };
+    input.focus();
+  };
+}
+
 async function init() {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
     showErrorState('Configuration error', 'Missing Supabase ENV.');
@@ -531,6 +573,7 @@ async function init() {
   }
 
   await loadBattle(runId);
+  setupEndRunButton(runId);
 }
 
 init();
