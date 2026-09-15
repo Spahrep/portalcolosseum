@@ -834,6 +834,22 @@ async function handle(request) {
       return json({ consumables });
     }
 
+    // GET /api/combat/portals — portal templates with dice counts (public read-only, for run-entry screen)
+    if (path === '/portals' && method === 'GET') {
+      let portals;
+      try {
+        const res = await admin.from('portal_template')
+          .select('id,name,fights,green_dice_count,yellow_dice_count,red_dice_count')
+          .order('id');
+        portals = res.data;
+        if (res.error) throw res.error;
+      } catch (e) {
+        console.error('portals query error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      return json({ portals: portals || [] });
+    }
+
     // GET /dev/templates — admin-gated template catalog
     if (path === '/dev/templates' && method === 'GET') {
       let profile;
