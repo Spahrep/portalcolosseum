@@ -91,7 +91,7 @@ function pauseNarration() {
 
 function buildMenuRows(hand) {
   const menu = commandMenu();
-  const existingRows = menu.querySelectorAll('.command-row, .section-header');
+  const existingRows = menu.querySelectorAll('.command-row, .section-header, .item-confirm');
   existingRows.forEach(el => el.remove());
 
   const attacks = ATTACKS[hand];
@@ -286,14 +286,18 @@ function selectMenuCommand() {
 function showItemConfirm(label, promptText, narrationText) {
   const menu = commandMenu();
   menu.querySelectorAll('.command-row').forEach(el => el.remove());
+  menu.querySelectorAll('.item-confirm').forEach(el => el.remove());
   menu.classList.add('visible');
   menuVisible = true;
+
+  const block = document.createElement('div');
+  block.className = 'item-confirm';
 
   const p = document.createElement('div');
   p.style.padding = '4px';
   p.style.fontSize = '10px';
   p.textContent = promptText;
-  menu.appendChild(p);
+  block.appendChild(p);
 
   const btns = document.createElement('div');
   btns.style.marginTop = '4px';
@@ -323,7 +327,8 @@ function showItemConfirm(label, promptText, narrationText) {
 
   btns.appendChild(confirmBtn);
   btns.appendChild(cancelBtn);
-  menu.appendChild(btns);
+  block.appendChild(btns);
+  menu.appendChild(block);
 
   // keyboard support for confirm/cancel
   pendingConfirmAction = { confirm: confirmBtn.onclick, cancel: cancelBtn.onclick };
