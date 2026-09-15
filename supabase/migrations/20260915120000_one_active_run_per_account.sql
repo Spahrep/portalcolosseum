@@ -5,13 +5,13 @@
 -- Do NOT apply this migration until review + human signoff.
 
 -- 1. PURGE extra active runs (hard delete). Keep the richest per user:
---    jsonb_length(battle_state) DESC, id DESC tiebreak. Child rows (dice) cascade.
+--    length(battle_state::text) DESC, id DESC tiebreak. Child rows (dice) cascade.
 DELETE FROM public.portal_run r
 WHERE r.status = 'active'
   AND r.id NOT IN (
     SELECT DISTINCT ON (user_id) id FROM public.portal_run
     WHERE status = 'active'
-    ORDER BY user_id, jsonb_length(battle_state) DESC, id DESC
+    ORDER BY user_id, length(battle_state::text) DESC, id DESC
   );
 
 -- 2. Now safe to create the partial unique index (hard guarantee).
