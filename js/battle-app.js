@@ -459,6 +459,8 @@ function renderActionMenu(bs) {
   if (!wrap) return;
   wrap.innerHTML = '';
   pendingAttack = null;
+  const confirmBtn = document.getElementById('btn-confirm');
+  if (confirmBtn) confirmBtn.disabled = true;
   wrap.style.display = 'flex';
   wrap.style.gap = '0';
   const hands = (bs.player && bs.player.hands) || {};
@@ -481,6 +483,7 @@ function renderActionMenu(bs) {
     showInfo('');
     selectedCmd = null;
     pendingAttack = null;
+    if (confirmBtn) confirmBtn.disabled = true;
   }
 
   function selectCommand(cmdEl, hand, attack, weapon) {
@@ -488,6 +491,7 @@ function renderActionMenu(bs) {
     cmdEl.classList.add('selected');
     pendingAttack = { hand, attackId: attack.id };
     selectedCmd = { hand, attack, weapon };
+    if (confirmBtn) confirmBtn.disabled = false;
     // toggle marker to [x]
     const nameEsc = escHtml(attack.name);
     cmdEl.innerHTML = `[x] ${nameEsc}`;
@@ -760,6 +764,15 @@ function attachLiveButtons(runId) {
   const itemCancel = document.getElementById('btn-item-cancel');
   if (itemCancel) {
     itemCancel.onclick = closeItemMenu;
+  }
+  // CONFIRM — commit the pending (selected) attack
+  const confirmBtn = document.getElementById('btn-confirm');
+  if (confirmBtn) {
+    confirmBtn.onclick = () => {
+      if (pendingAttack && currentRunId) {
+        doAttack(currentRunId, pendingAttack.hand, pendingAttack.attackId);
+      }
+    };
   }
 }
 

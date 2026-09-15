@@ -296,6 +296,21 @@
       color: #668866;
       border-color: #446644;
     }
+    /* CONFIRM — commit the selected attack; amber to stand out from slots */
+    .confirm-btn {
+      flex: 0 0 140px;
+      width: 140px;
+      color: #ffcc66;
+      border-color: #ffcc66;
+      background: #3a2a1a;
+    }
+    .confirm-btn:hover:not(:disabled) {
+      background: #5a3a1a;
+    }
+    .confirm-btn:disabled {
+      color: #886666;
+      border-color: #664444;
+    }
     .footer-info {
       background: rgba(10,26,46,0.92);
       border-top: 2px solid #334466;
@@ -437,6 +452,7 @@
       <button id="btn-slot-bl" class="slot-btn">BL</button>
       <button id="btn-slot-c1" class="slot-btn">C1</button>
       <button id="btn-slot-c2" class="slot-btn">C2</button>
+      <button id="btn-confirm" class="slot-btn confirm-btn" disabled>CONFIRM</button>
     </div>
     <!-- FOOTER INFO BAR (hover/selection readout) -->
     <div id="footer-info" class="footer-info">Select an attack to see details</div>
