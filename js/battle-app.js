@@ -151,9 +151,11 @@ function renderDice(dice) {
         const drawnEl = document.createElement('div');
         drawnEl.className = `die ${current.color}`;
         drawnEl.textContent = current.color.substring(0, 1).toUpperCase();
-        // Random position in the row: if the drawn die always sat at the end,
-        // the sweep would visibly always land on the right-most box.
-        const insertAt = Math.floor(Math.random() * (remRow.children.length + 1));
+        // Keep the row in NORMAL order (G block, Y block, R block): the
+        // drawn die sits with its own color's dice, so no odd box out of
+        // place ever gives the pick away. The landing is random instead.
+        const insertAt = (rem.green || 0) + (rem.yellow || 0)
+          + (current.color === 'red' ? (rem.red || 0) : 0);
         remRow.insertBefore(drawnEl, remRow.children[insertAt] || null);
         // Labels match the visible pool during the sweep (the drawn die is
         // still "in play"); the cleanup render below restores true counts.
@@ -180,7 +182,11 @@ function renderDice(dice) {
           diceEls[0].classList.add('highlight');
           setTimeout(() => selectAndRoll(diceEls[0]), DICE_ANIM.LAND_PAUSE);
         } else {
-          performSweepAnimation(diceEls, insertAt, selectAndRoll);
+          // Landing is pure theater: stop on a RANDOM box each run, fully
+          // uncorrelated with where the drawn die sits. The landed box
+          // morphs into the drawn die when the roll starts.
+          const targetIndex = Math.floor(Math.random() * diceEls.length);
+          performSweepAnimation(diceEls, targetIndex, selectAndRoll);
         }
       } else {
         updateCurrentDie(curEl, current);
@@ -235,11 +241,18 @@ function performSweepAnimation(diceEls, targetIndex, onLand) {
   step();
 }
 
-// Stage 2 (roll): the box the sweep landed on tumbles through the die's
-// REAL face pool (fast→slow), landing on the drawn face with a small pop.
-// Tumble values come from the template's faces for this color — never
-// invented numbers (dice roll 10/20/30, not fake 1-6).
+// Stage 2 (roll): the box the sweep landed on MORPHS into the drawn die —
+// color swap + letter → real-face tumble (fast→slow), landing on the drawn
+// face with a small pop. Tumble values come from the template's faces for
+// this color — never invented numbers (dice roll 10/20/30, not fake 1-6).
 function rollDiceAnimation(box, current, faces, onDone) {
+  // The landed box is now the drawn die (keep its highlight class): swap
+  // color AND letter in one beat, so a red landing that becomes a yellow
+  // draw never shows a mismatched letter even for one frame.
+  box.classList.remove('green', 'yellow', 'red');
+  box.classList.add(current.color);
+  box.textContent = current.color.substring(0, 1).toUpperCase();
+
   const pool = (faces && faces[current.color] && faces[current.color].length > 0)
     ? faces[current.color]
     : [current.face]; // defensive: unknown pool → die just settles
