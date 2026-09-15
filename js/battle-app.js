@@ -17,6 +17,16 @@ let currentRunId = null;
 let lastBs = null; // last loaded battle_state (safeState) — source for attack/potion lookups
 let busy = false;
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
+let shouldAnimateDice = false;
+
+// Tuning constants for PC-51 roulette dice sweep (fast→slow easing)
+const DICE_ANIM = {
+  INITIAL_INTERVAL: 55,
+  MIN_INTERVAL: 260,
+  DECELERATION: 1.22,
+  MAX_SWEEPS: 4,
+  LAND_PAUSE: 220
+};
 
 function getAuthToken() {
   return supabase?.auth?.getSession?.().then(({ data }) => data?.session?.access_token);
@@ -124,15 +134,63 @@ function renderDice(dice) {
   const curEl = document.getElementById('current-die');
   if (curEl) {
     if (current && current.color && current.face != null) {
-      curEl.innerHTML = `
-        <div class="die ${current.color}" style="width:32px;height:32px;font-size:14px;">${current.face}</div>
-        <div style="font-size:9px;color:#88aaff;margin-top:2px;">${current.rolled_value != null ? current.rolled_value : ''}</div>
-      `;
-      curEl.style.display = 'flex';
+      if (shouldAnimateDice) {
+        shouldAnimateDice = false;
+        curEl.style.display = 'none';
+        const diceEls = Array.from(remRow.children);
+        if (diceEls.length === 0) {
+          updateCurrentDie(curEl, current);
+        } else if (diceEls.length === 1) {
+          diceEls[0].classList.add('highlight');
+          setTimeout(() => {
+            diceEls[0].classList.remove('highlight');
+            updateCurrentDie(curEl, current);
+          }, DICE_ANIM.LAND_PAUSE);
+        } else {
+          performSweepAnimation(diceEls, () => updateCurrentDie(curEl, current));
+        }
+      } else {
+        updateCurrentDie(curEl, current);
+      }
     } else {
       curEl.style.display = 'none';
     }
   }
+}
+
+function updateCurrentDie(curEl, current) {
+  curEl.innerHTML = `
+    <div class="die ${current.color}" style="width:32px;height:32px;font-size:14px;">${current.face}</div>
+    <div style="font-size:9px;color:#88aaff;margin-top:2px;">${current.rolled_value != null ? current.rolled_value : ''}</div>
+  `;
+  curEl.style.display = 'flex';
+}
+
+function performSweepAnimation(diceEls, onLand) {
+  let idx = 0;
+  let interval = DICE_ANIM.INITIAL_INTERVAL;
+  let sweeps = 0;
+  const total = diceEls.length;
+
+  function step() {
+    diceEls.forEach(el => el.classList.remove('highlight'));
+    diceEls[idx % total].classList.add('highlight');
+    idx++;
+
+    interval = Math.min(DICE_ANIM.MIN_INTERVAL, Math.floor(interval * DICE_ANIM.DECELERATION));
+    if (idx % total === 0) sweeps++;
+
+    if (sweeps < DICE_ANIM.MAX_SWEEPS || interval < DICE_ANIM.MIN_INTERVAL) {
+      setTimeout(step, interval);
+    } else {
+      setTimeout(() => {
+        diceEls.forEach(el => el.classList.remove('highlight'));
+        onLand();
+      }, DICE_ANIM.LAND_PAUSE);
+    }
+  }
+
+  step();
 }
 
 function renderMonsters(monsters) {
@@ -274,6 +332,7 @@ function showAdvanceUI(runId, state) {
     try {
       const res = await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'continue' });
       showMessage('Advancing to next battle...');
+      shouldAnimateDice = true; // post-continue battle-start transition
       await loadBattle(runId);
     } catch (e) {
       showMessage(e.message, true);
@@ -775,6 +834,7 @@ async function init() {
     return;
   }
 
+  shouldAnimateDice = true; // run start transition
   await loadBattle(runId);
   setupEndRunButton(runId);
 }
