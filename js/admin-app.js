@@ -311,7 +311,7 @@ async function renderWeaponTemplates(container) {
     tr.innerHTML = `
       <td>${esc(t.name)}</td>
       <td>${t.base_damage} ± ${t.damage_range}</td>
-      <td>${t.base_speed} ± ${t.speed_variance}</td>
+      <td>${t.base_speed} ± ${t.speed_range}</td>
       <td>${t.base_accuracy} ± ${t.accuracy_range}</td>
       <td>${t.slot_0_attack?.name ? esc(t.slot_0_attack.name) : '<span class="muted">—</span>'}</td>
       <td>
@@ -348,7 +348,7 @@ function showWeaponTemplateForm(id = null) {
         <div class="form-group"><label>Base Damage</label><input id="wt-base_damage" type="number" value="${t.base_damage ?? ''}"></div>
         <div class="form-group"><label>Damage Range</label><input id="wt-damage_range" type="number" value="${t.damage_range ?? 0}"></div>
         <div class="form-group"><label>Base Speed (lower=faster)</label><input id="wt-base_speed" type="number" value="${t.base_speed ?? ''}"></div>
-        <div class="form-group"><label>Speed Variance</label><input id="wt-speed_variance" type="number" value="${t.speed_variance ?? 0}"></div>
+        <div class="form-group"><label>Speed Range</label><input id="wt-speed_range" type="number" value="${t.speed_range ?? 0}"></div>
         <div class="form-group"><label>Base Accuracy</label><input id="wt-base_accuracy" type="number" value="${t.base_accuracy ?? ''}"></div>
         <div class="form-group"><label>Accuracy Range</label><input id="wt-accuracy_range" type="number" value="${t.accuracy_range ?? 0}"></div>
         <div class="form-group">
@@ -373,7 +373,7 @@ function showWeaponTemplateForm(id = null) {
         base_damage: parseInt(val('wt-base_damage')),
         damage_range: parseInt(val('wt-damage_range')),
         base_speed: parseInt(val('wt-base_speed')),
-        speed_variance: parseInt(val('wt-speed_variance')),
+        speed_range: parseInt(val('wt-speed_range')),
         base_accuracy: parseInt(val('wt-base_accuracy')),
         accuracy_range: parseInt(val('wt-accuracy_range')),
         slot_0_attack_id: parseInt(val('wt-slot_0_attack_id')),
@@ -424,7 +424,7 @@ async function showWeaponMappingEditor(templateId) {
     let html = `
       <div class="form-card mapping-editor">
         <h3>Attack Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Base stats: DMG ${template.base_damage}±${template.damage_range} · SPD ${template.base_speed}±${template.speed_variance} · ACC ${template.base_accuracy}±${template.accuracy_range}</p>
+        <p class="muted">Base stats: DMG ${template.base_damage}±${template.damage_range} · SPD ${template.base_speed}±${template.speed_range} · ACC ${template.base_accuracy}±${template.accuracy_range}</p>
         <p class="muted">Slot 0 (always): ${template.slot_0_attack?.name ? esc(template.slot_0_attack.name) : '—'} · S1: ${(template.slot_1_chance*100)}% · S2: ${(template.slot_2_chance*100)}% · S3: ${(template.slot_3_chance*100)}% · S4: ${(template.slot_4_chance*100)}%</p>
     `;
 
@@ -538,7 +538,7 @@ async function renderMonsterTemplates(container) {
     tr.innerHTML = `
       <td>${esc(t.name)}</td>
       <td>${t.base_damage} ± ${t.damage_range}</td>
-      <td>${t.base_speed} ± ${t.speed_variance}</td>
+      <td>${t.base_speed} ± ${t.speed_range}</td>
       <td>${t.base_accuracy} ± ${t.accuracy_range}</td>
       <td>${t.slot_0_attack?.name ? esc(t.slot_0_attack.name) : '<span class="muted">—</span>'}</td>
       <td>
@@ -578,7 +578,7 @@ function showMonsterTemplateForm(id = null) {
         <div class="form-group"><label>Base Damage</label><input id="mt-base_damage" type="number" value="${t.base_damage ?? ''}"></div>
         <div class="form-group"><label>Damage Range</label><input id="mt-damage_range" type="number" value="${t.damage_range ?? 0}"></div>
         <div class="form-group"><label>Base Speed</label><input id="mt-base_speed" type="number" value="${t.base_speed ?? ''}"></div>
-        <div class="form-group"><label>Speed Variance</label><input id="mt-speed_variance" type="number" value="${t.speed_variance ?? 0}"></div>
+        <div class="form-group"><label>Speed Range</label><input id="mt-speed_range" type="number" value="${t.speed_range ?? 0}"></div>
         <div class="form-group"><label>Base Accuracy</label><input id="mt-base_accuracy" type="number" value="${t.base_accuracy ?? ''}"></div>
         <div class="form-group"><label>Accuracy Range</label><input id="mt-accuracy_range" type="number" value="${t.accuracy_range ?? 0}"></div>
         <div class="form-group">
@@ -605,7 +605,7 @@ function showMonsterTemplateForm(id = null) {
         base_damage: parseInt(val('mt-base_damage')),
         damage_range: parseInt(val('mt-damage_range')),
         base_speed: parseInt(val('mt-base_speed')),
-        speed_variance: parseInt(val('mt-speed_variance')),
+        speed_range: parseInt(val('mt-speed_range')),
         base_accuracy: parseInt(val('mt-base_accuracy')),
         accuracy_range: parseInt(val('mt-accuracy_range')),
         slot_0_attack_id: parseInt(val('mt-slot_0_attack_id')),
@@ -656,7 +656,7 @@ async function showMonsterMappingEditor(templateId) {
     let html = `
       <div class="form-card mapping-editor">
         <h3>Attack Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Base stats: DMG ${template.base_damage}±${template.damage_range} · SPD ${template.base_speed}±${template.speed_variance} · ACC ${template.base_accuracy}±${template.accuracy_range}</p>
+        <p class="muted">Base stats: DMG ${template.base_damage}±${template.damage_range} · SPD ${template.base_speed}±${template.speed_range} · ACC ${template.base_accuracy}±${template.accuracy_range}</p>
         <p class="muted">Slot 0 (always): ${template.slot_0_attack?.name ? esc(template.slot_0_attack.name) : '—'}</p>
     `;
 

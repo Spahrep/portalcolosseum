@@ -1007,7 +1007,7 @@ async function handle(request) {
       // template lookup
       let tmpl;
       try {
-        const tRes = await adminClient.from('weapon_template').select('id, name, slot_0_attack_id, base_damage, damage_range, base_speed, speed_variance, base_accuracy, accuracy_range').eq('id', templateId).single();
+        const tRes = await adminClient.from('weapon_template').select('id, name, slot_0_attack_id, base_damage, damage_range, base_speed, speed_range, base_accuracy, accuracy_range').eq('id', templateId).single();
         tmpl = tRes.data;
         if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
       } catch (e) {
@@ -1017,10 +1017,10 @@ async function handle(request) {
       let inst;
       try {
         const d = rollStat(tmpl.base_damage, tmpl.damage_range);
-        const s = rollStat(tmpl.base_speed, tmpl.speed_variance);
+        const s = rollStat(tmpl.base_speed, tmpl.speed_range);
         const a = rollStat(tmpl.base_accuracy, tmpl.accuracy_range);
         const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
-        const zs = tmpl.speed_variance ? (tmpl.base_speed - s) / tmpl.speed_variance : 0;
+        const zs = tmpl.speed_range ? (tmpl.base_speed - s) / tmpl.speed_range : 0;
         const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
         const z = (zd + zs + za) / 3;
         const g = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
