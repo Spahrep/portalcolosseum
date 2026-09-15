@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Colosseum • Run Battle</title>
+  <link rel="stylesheet" href="/fonts/pixeloid-mono/pixeloid-mono.css">
+  <script src="/api/env.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #000 url('/public/pictures/town/town_pano.jpg') center/cover no-repeat;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      color: #e0e0ff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      image-rendering: pixelated;
+    }
+    .overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.35);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .container {
+      position: relative;
+      z-index: 1;
+      width: 960px;
+      max-width: 100%;
+      background: rgba(0,0,0,0.30);
+      border: 4px solid #4a90d9;
+      box-shadow: 0 0 0 2px #000;
+    }
+    .top-bar {
+      display: flex;
+      border-bottom: 4px solid #4a90d9;
+      background: rgba(10,26,46,0.78);
+    }
+    .run-info {
+      flex: 1;
+      padding: 10px 14px;
+      border-right: 2px solid #334466;
+    }
+    .run-info h1 {
+      margin: 0 0 2px;
+      font-size: 16px;
+      color: #66ccff;
+      letter-spacing: 1px;
+    }
+    .run-info .subtitle {
+      color: #4a90d9;
+      font-size: 10px;
+      margin-bottom: 4px;
+    }
+    .run-info .breadcrumb {
+      color: #88aaff;
+      font-size: 9px;
+    }
+    .dice-panel {
+      width: 340px;
+      padding: 8px 12px;
+      background: rgba(0,0,0,0.55);
+    }
+    .dice-header {
+      color: #88aaff;
+      font-size: 9px;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: flex;
+      justify-content: space-between;
+    }
+    .dice-tray {
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .die {
+      width: 26px;
+      height: 26px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: bold;
+      color: #000;
+      border: 1px solid #000;
+      box-shadow: inset 0 0 0 2px rgba(255,255,255,0.35), inset 0 0 0 3px rgba(0,0,0,0.2);
+      cursor: default;
+    }
+    .die.green  { background: #66ff99; }
+    .die.yellow { background: #ffcc66; }
+    .die.red    { background: #ff6666; }
+    .dice-labels {
+      font-size: 9px;
+      color: #88aaff;
+      line-height: 1.3;
+    }
+    .current-die {
+      margin-left: 12px;
+      display: none;
+      flex-direction: column;
+      align-items: center;
+    }
+    .main-area {
+      display: flex;
+      gap: 0;
+    }
+    .player-panel {
+      width: 220px;
+      padding: 14px;
+      background: rgba(0,0,0,0.45);
+      border-right: 2px solid #334466;
+    }
+    .monsters-panel {
+      flex: 1;
+      padding: 14px;
+      background: rgba(0,0,0,0.45);
+      min-height: 220px;
+    }
+    .panel-title {
+      color: #88aaff;
+      font-size: 11px;
+      letter-spacing: 1px;
+      margin-bottom: 10px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #334466;
+    }
+    .stat-block {
+      background: #000;
+      border: 1px solid #ccc;
+      padding: 4px 8px;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    .loadout-mini {
+      font-size: 10px;
+      color: #a8c8ea;
+      margin-top: 8px;
+    }
+    .message-box {
+      background: #0a1a2e;
+      border: 3px solid #4a90d9;
+      padding: 12px 14px;
+      font-size: 12px;
+      color: #e0e0ff;
+      height: 140px;
+      overflow-y: auto;
+      line-height: 1.45;
+    }
+    .msg-line { margin-bottom: 3px; }
+    .msg-error {
+      background: #2e0a0a;
+      border: 2px solid #ff6666;
+      padding: 10px 14px;
+      font-size: 12px;
+      color: #ff9999;
+      margin: 4px 0;
+    }
+    .action-menu {
+      display: flex;
+      gap: 8px;
+      padding: 12px;
+      background: rgba(10,26,46,0.78);
+      border-top: 2px solid #334466;
+    }
+    .action-btn {
+      flex: 1;
+      background: #1a3a1a;
+      color: #66ff99;
+      border: 3px solid #66ff99;
+      padding: 10px 0;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: 1px;
+    }
+    .action-btn:hover {
+      background: #2a5a2a;
+    }
+    .bottom-bar {
+      border-top: 4px solid #4a90d9;
+      background: rgba(10,26,46,0.78);
+      padding: 10px;
+      text-align: center;
+      font-size: 10px;
+      color: #7a8ca6;
+    }
+    .monster-card {
+      display: inline-block;
+      width: 140px;
+      margin: 4px;
+      vertical-align: top;
+    }
+  </style>
+</head>
+<body>
+  <div class="overlay"></div>
+  <div class="container">
+    <!-- TOP BAR -->
+    <div class="top-bar">
+      <div class="run-info">
+        <h1 id="run-title">PORTAL · RUN —</h1>
+        <div class="subtitle" id="battle-label">BATTLE — OF —</div>
+        <div class="breadcrumb">PORTALS → BATTLE</div>
+      </div>
+      <div class="dice-panel">
+        <div class="dice-header">
+          <span>PORTAL DICE</span>
+        </div>
+        <div class="dice-tray">
+          <div>
+            <div id="dice-tray"></div>
+            <div id="dice-labels" class="dice-labels"></div>
+          </div>
+          <div id="current-die" class="current-die"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN AREA -->
+    <div class="main-area">
+      <!-- PLAYER -->
+      <div class="player-panel">
+        <div class="panel-title">PLAYER</div>
+        <div class="stat-block" id="player-hp">HP: <span style="color:#66ff99;">Healthy</span></div>
+        <div class="loadout-mini">
+          LH: <span id="loadout-lh">—</span><br>
+          RH: <span id="loadout-rh">—</span>
+        </div>
+      </div>
+
+      <!-- MONSTERS -->
+      <div class="monsters-panel">
+        <div class="panel-title">MONSTERS</div>
+        <div id="monsters"></div>
+      </div>
+    </div>
+
+    <!-- MESSAGE BOX -->
+    <div style="padding:0 14px 8px 14px;">
+      <div class="panel-title" style="margin:0 0 6px;">MESSAGE LOG</div>
+      <div id="message-box" class="message-box"></div>
+    </div>
+
+    <!-- ACTION MENU (inert this pass) -->
+    <div class="action-menu">
+      <button id="btn-attack" class="action-btn">ATTACK</button>
+      <button id="btn-item" class="action-btn">ITEM</button>
+    </div>
+
+    <!-- BOTTOM -->
+    <div class="bottom-bar">
+      State from live API • Reload restores • Combat actions in next pass
+    </div>
+  </div>
+
+  <script type="module" src="/js/battle-app.js"></script>
+</body>
+</html>
