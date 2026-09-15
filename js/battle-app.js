@@ -23,9 +23,8 @@ let shouldAnimateDice = false;
 // Sweep: uniform left→right walk, stops on random same-color box (incl phantom).
 // Landed box IS selection (no morph). Roll: real faces from payload, weighty decel.
 const DICE_ANIM = {
-  SWEEP_PASSES: 3,      // full high-speed passes before the landing walk (constant every run — carries no info about the draw)
-  SWEEP_FAST: 50,       // ms per box during the high-speed passes (roulette whir)
-  SWEEP_STEP: 140,      // ms per box during the final uniform walk (Spahrep's k-count walk)
+  COUNTDOWN_WHIR: 12,   // Spahrep's countdown: steps = 12*(n-1) + r, r in 1..n solved so the countdown ends on a drawn-color box
+  SWEEP_FAST: 45,       // ms per die during the countdown whir (high speed)
   LAND_PAUSE: 350,      // beat on the landed box before the roll starts
   ROLL_TICKS: 12,       // tumbles before settle
   ROLL_INITIAL: 100,    // ms start for weighty roll
@@ -216,28 +215,29 @@ function updateCurrentDie(curEl, current) {
 
 function performSweepAnimation(diceEls, targetIndex, onLand) {
   const total = diceEls.length;
-  // Roulette feel: a CONSTANT number of full high-speed passes (identical
-  // every run — carries no information about the draw, so no tell), then
-  // Spahrep's walk: left→right from box 0, exactly k steps, stop on box k
-  // (the caller chose the target from the drawn color's boxes, so the
-  // landing IS the selection). Continuous index keeps the highlight from
-  // teleporting when the passes hand over to the walk.
-  const fastSteps = DICE_ANIM.SWEEP_PASSES * total;
-  const walkEnd = fastSteps + targetIndex; // final highlighted box
+  // Spahrep's countdown: start at the first die, hop to the next, reduce
+  // the count, stop on zero. Count = 12*(n-1) + r (r in 1..n) — the whir
+  // term is pure theater (12-ish laps of the loop at high speed, same
+  // every run, no info about the draw), and r is SOLVED BACKWARDS so the
+  // countdown lands exactly on the target box. The caller picked the
+  // target uniformly from the drawn color's boxes, so the landing IS the
+  // selection — no morph, ever.
+  const whir = DICE_ANIM.COUNTDOWN_WHIR * (total - 1);
+  const r = ((targetIndex + DICE_ANIM.COUNTDOWN_WHIR) % total) || total; // (r + whir) % total === targetIndex, r in 1..n
+  let count = whir + r; // steps remaining
   let idx = 0;
 
   function step() {
     diceEls.forEach(el => el.classList.remove('highlight'));
     diceEls[idx % total].classList.add('highlight');
-    if (idx === walkEnd) {
-      // leave the highlight on the landed box through the reveal
-      setTimeout(() => onLand(diceEls[targetIndex]), DICE_ANIM.LAND_PAUSE);
+    if (count === 0) {
+      // countdown hit zero: this box IS the drawn die
+      setTimeout(() => onLand(diceEls[idx % total]), DICE_ANIM.LAND_PAUSE);
       return;
     }
     idx++;
-    // next step's speed: fast during the passes, uniform during the walk
-    const speed = idx <= fastSteps ? DICE_ANIM.SWEEP_FAST : DICE_ANIM.SWEEP_STEP;
-    setTimeout(step, speed);
+    count--;
+    setTimeout(step, DICE_ANIM.SWEEP_FAST);
   }
   step();
 }
