@@ -185,6 +185,48 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+    .item-menu {
+      margin: 0 14px 8px 14px;
+      background: rgba(10,26,46,0.92);
+      border: 3px solid #4a90d9;
+      padding: 10px;
+    }
+    .item-menu-title {
+      color: #88aaff;
+      font-size: 10px;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+    }
+    .item-menu-item {
+      display: block;
+      width: 100%;
+      text-align: left;
+      background: #000;
+      border: 2px solid #335577;
+      color: #e0e0ff;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 11px;
+      padding: 8px 10px;
+      margin-bottom: 6px;
+      cursor: pointer;
+    }
+    .item-menu-item:hover:not(:disabled) {
+      border-color: #66ccff;
+    }
+    .item-menu-item:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .item-menu-item .potion-name { color: #ffcc66; }
+    .item-menu-item .potion-used { color: #ff6666; }
+    .item-cancel {
+      background: #1a1a2e;
+      color: #88aaff;
+      border-color: #335577;
+      font-size: 11px;
+      padding: 6px 0;
+    }
+    .item-cancel:hover { background: #2a2a4e; }
     .bottom-bar {
       border-top: 4px solid #4a90d9;
       background: rgba(10,26,46,0.78);
@@ -254,6 +296,13 @@
     <div class="action-menu">
       <button id="btn-attack" class="action-btn">ATTACK</button>
       <button id="btn-item" class="action-btn">ITEM</button>
+    </div>
+
+    <!-- ITEM MENU (potion slots; hidden until ITEM clicked) -->
+    <div id="item-menu" class="item-menu" hidden>
+      <div class="item-menu-title">USE ITEM</div>
+      <div id="item-menu-list"></div>
+      <button id="btn-item-cancel" class="action-btn item-cancel">CANCEL</button>
     </div>
 
     <!-- BOTTOM -->

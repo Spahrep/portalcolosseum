@@ -283,31 +283,63 @@ async function doAttack(runId) {
   setBusy(false);
 }
 
-async function doItem(runId) {
+function openItemMenu(runId) {
+  const menu = document.getElementById('item-menu');
+  const list = document.getElementById('item-menu-list');
+  if (!menu || !list) return;
+  list.innerHTML = '';
+  const potions = (lastBs && lastBs.potions) || {};
+  const slots = ['A', 'B'];
+  for (const s of slots) {
+    const p = potions[s];
+    const row = document.createElement('button');
+    row.className = 'item-menu-item';
+    if (!p) {
+      row.innerHTML = `<span class="potion-name">SLOT ${s}</span> — empty`;
+      row.disabled = true;
+    } else if (p.used) {
+      row.innerHTML = `<span class="potion-name">${p.template_name}</span> · ${p.effect_label} <span class="potion-used">(USED)</span>`;
+      row.disabled = true;
+    } else {
+      row.innerHTML = `<span class="potion-name">${p.template_name}</span> · ${p.effect_label}`;
+      row.onclick = async () => {
+        closeItemMenu();
+        await usePotion(runId, s);
+      };
+    }
+    list.appendChild(row);
+  }
+  menu.hidden = false;
+}
+
+function closeItemMenu() {
+  const menu = document.getElementById('item-menu');
+  if (menu) menu.hidden = true;
+}
+
+async function usePotion(runId, slot) {
   if (busy) return;
   setBusy(true);
   try {
-    const potions = (lastBs && lastBs.potions) || {};
-    const available = ['A', 'B'].filter(s => potions[s] && !potions[s].used);
-    if (available.length === 0) {
-      showMessage('No unused potions equipped.', true);
-      setBusy(false);
-      return;
-    }
-    const slot = prompt(`Potion slot? (${available.join(' or ')})`, available[0]);
-    if (!slot || !['A', 'B'].includes(slot.toUpperCase())) {
-      showMessage('Item cancelled');
-      setBusy(false);
-      return;
-    }
-    const payload = { slot: slot.toUpperCase() };
-    const data = await apiCall(`/runs/${runId}/use-potion`, 'POST', payload);
-    showMessage(`Potion ${slot.toUpperCase()} used`);
+    const payload = { slot };
+    await apiCall(`/runs/${runId}/use-potion`, 'POST', payload);
+    showMessage(`Potion ${slot} used`);
     await loadBattle(runId);
   } catch (e) {
     showMessage(e.message, true);
   }
   setBusy(false);
+}
+
+function doItem(runId) {
+  if (busy) return;
+  const potions = (lastBs && lastBs.potions) || {};
+  const available = ['A', 'B'].filter(s => potions[s] && !potions[s].used);
+  if (available.length === 0) {
+    showMessage('No unused potions equipped.', true);
+    return;
+  }
+  openItemMenu(runId);
 }
 
 function attachLiveButtons(runId) {
@@ -320,6 +352,10 @@ function attachLiveButtons(runId) {
   if (itemBtn) {
     itemBtn.onclick = () => doItem(runId);
     itemBtn.disabled = false;
+  }
+  const itemCancel = document.getElementById('btn-item-cancel');
+  if (itemCancel) {
+    itemCancel.onclick = closeItemMenu;
   }
 }
 
