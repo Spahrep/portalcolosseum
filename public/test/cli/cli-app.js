@@ -44,7 +44,13 @@ function buildRecapText(weapons, consumables, picks) {
   lines.push('Your loadout for this run:');
   const fmtAtk = (w) => {
     if (!w || !w.attacks || !w.attacks.length) return '';
-    return w.attacks.map(a => `#${a.id} ${a.name} (p${a.prepare_time}/c${a.cooldown_time})`).join(', ');
+    return w.attacks.map(a => {
+      const pVar = a.prepare_time_variance || 0;
+      const cVar = a.cooldown_time_variance || 0;
+      const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+      const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+      return `#${a.id} ${a.name} (${pPart}/${cPart})`;
+    }).join(', ');
   };
   const findW = (id) => (weapons || []).find(w => w.id === id) || null;
   const findC = (id) => (consumables || []).find(c => c.id === id) || null;
@@ -94,7 +100,13 @@ function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax, isFirs
 function buildItemInspectText(weapons, consumables, id) {
   const w = (weapons || []).find(x => x.id === id);
   if (w) {
-    const atks = (w.attacks || []).map(a => `#${a.id} ${a.name} (p${a.prepare_time}/c${a.cooldown_time})`).join(', ');
+    const atks = (w.attacks || []).map(a => {
+      const pVar = a.prepare_time_variance || 0;
+      const cVar = a.cooldown_time_variance || 0;
+      const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+      const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+      return `#${a.id} ${a.name} (${pPart}/${cPart})`;
+    }).join(', ');
     return `#${w.id} ${w.name} (${w.damage} dmg)\n  Attacks: ${atks || 'none'}`;
   }
   const c = (consumables || []).find(x => x.id === id);
@@ -468,7 +480,7 @@ function printStateFromRun(run) {
   const bs = run.battle_state || {};
   const weapons = bs.weapons || {};
   const fmtAttacks = (list) => (list || []).map(a =>
-    `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`
+    `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}${ (a.prepare_time_variance||0) > 0 ? '-' + (a.prepare_time + (a.prepare_time_variance||0)) : '' }/c${a.cooldown_time}${ (a.cooldown_time_variance||0) > 0 ? '-' + (a.cooldown_time + (a.cooldown_time_variance||0)) : '' }`
   ).join(' | ') || 'none';
   const letterOf = (label) => (label && /[A-Z]$/.test(label)) ? label.slice(-1) : '';
 
@@ -790,7 +802,13 @@ async function cmdInventory() {
       appendLine('  (none)', 'dim');
     } else {
       weapons.forEach(w => {
-        const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
+        const atkList = w.attacks.map(a => {
+          const pVar = a.prepare_time_variance || 0;
+          const cVar = a.cooldown_time_variance || 0;
+          const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+          const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+          return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
+        }).join(' ');
         appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
       });
     }
@@ -1110,7 +1128,13 @@ async function cmdDevList(args) {
         return;
       }
       data.weapons.forEach(w => {
-        const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
+        const atkList = w.attacks.map(a => {
+          const pVar = a.prepare_time_variance || 0;
+          const cVar = a.cooldown_time_variance || 0;
+          const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+          const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+          return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
+        }).join(' ');
         appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
       });
     } catch (e) {
@@ -1602,7 +1626,11 @@ async function showItemDetailForSlot(slot, detailEl, preloadedWeapons) {
     html += `<div>Damage: ${w.damage}${delta}</div>`;
     if (w.attacks && w.attacks.length) {
       w.attacks.forEach(a => {
-        html += `<div>#${a.id} ${a.name} (p${a.prepare_time}/c${a.cooldown_time})</div>`;
+        const pVar = a.prepare_time_variance || 0;
+        const cVar = a.cooldown_time_variance || 0;
+        const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+        const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+        html += `<div>#${a.id} ${a.name} (${pPart}/${cPart})</div>`;
       });
     }
     detailEl.innerHTML = html;

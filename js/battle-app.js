@@ -386,7 +386,11 @@ function renderActionMenu(bs) {
     const desc = attack.description ? ` — ${attack.description}` : '';
     const descEsc = attack.description ? ` — ${escHtml(attack.description)}` : '';
     const nameForInfo = escHtml(attack.name);
-    showInfo(`<strong>${nameForInfo}</strong> ${dmgText} | Windup: ${attack.prepare_time}t | CD: ${attack.cooldown_time}t${multi}${descEsc}`);
+    const pVar = attack.prepare_time_variance || 0;
+    const cVar = attack.cooldown_time_variance || 0;
+    const pText = pVar > 0 ? `${attack.prepare_time}-${attack.prepare_time + pVar}` : `${attack.prepare_time}`;
+    const cText = cVar > 0 ? `${attack.cooldown_time}-${attack.cooldown_time + cVar}` : `${attack.cooldown_time}`;
+    showInfo(`<strong>${nameForInfo}</strong> ${dmgText} | Windup: ${pText}t | CD: ${cText}t${multi}${descEsc}`);
   }
 
   ['LH', 'RH'].forEach(hand => {
@@ -429,7 +433,11 @@ function renderActionMenu(bs) {
               const desc = a.description ? ` — ${a.description}` : '';
               const descEscH = a.description ? ` — ${escHtml(a.description)}` : '';
               const nameForInfoH = escHtml(a.name);
-              showInfo(`<strong>${nameForInfoH}</strong> ${dmgText} | Windup: ${a.prepare_time}t | CD: ${a.cooldown_time}t${multi}${descEscH}`);
+              const pVarH = a.prepare_time_variance || 0;
+              const cVarH = a.cooldown_time_variance || 0;
+              const pTextH = pVarH > 0 ? `${a.prepare_time}-${a.prepare_time + pVarH}` : `${a.prepare_time}`;
+              const cTextH = cVarH > 0 ? `${a.cooldown_time}-${a.cooldown_time + cVarH}` : `${a.cooldown_time}`;
+              showInfo(`<strong>${nameForInfoH}</strong> ${dmgText} | Windup: ${pTextH}t | CD: ${cTextH}t${multi}${descEscH}`);
             }
           };
           cmd.onmouseleave = () => {
@@ -567,7 +575,11 @@ function attachSlotButtons(bs, showInfo) {
     const multi = attack.is_multi_target ? ' <span style=\"color:#ffaa66\">[MULTI]</span>' : '';
     const descEsc = attack.description ? ` — ${escHtml(attack.description)}` : '';
     const nameForInfo = escHtml(attack.name);
-    showInfo(`<strong>${nameForInfo}</strong> ${dmgText} | Windup: ${attack.prepare_time}t | CD: ${attack.cooldown_time}t${multi}${descEsc}`);
+    const pVar = attack.prepare_time_variance || 0;
+    const cVar = attack.cooldown_time_variance || 0;
+    const pText = pVar > 0 ? `${attack.prepare_time}-${attack.prepare_time + pVar}` : `${attack.prepare_time}`;
+    const cText = cVar > 0 ? `${attack.cooldown_time}-${attack.cooldown_time + cVar}` : `${attack.cooldown_time}`;
+    showInfo(`<strong>${nameForInfo}</strong> ${dmgText} | Windup: ${pText}t | CD: ${cText}t${multi}${descEsc}`);
   }
 }
 

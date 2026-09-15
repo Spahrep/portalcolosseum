@@ -176,7 +176,13 @@ export function buildRecapText(weapons, consumables, picks) {
   lines.push('Your loadout for this run:');
   const fmtAtk = (w) => {
     if (!w || !w.attacks || !w.attacks.length) return '';
-    return w.attacks.map(a => `#${a.id} ${a.name} (p${a.prepare_time}/c${a.cooldown_time})`).join(', ');
+    return w.attacks.map(a => {
+      const pVar = a.prepare_time_variance || 0;
+      const cVar = a.cooldown_time_variance || 0;
+      const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+      const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+      return `#${a.id} ${a.name} (${pPart}/${cPart})`;
+    }).join(', ');
   };
   const findW = (id) => (weapons || []).find(w => w.id === id) || null;
   const findC = (id) => (consumables || []).find(c => c.id === id) || null;
@@ -234,7 +240,13 @@ export function pickUnusedPotionHint(run) {
 export function buildItemInspectText(weapons, consumables, id) {
   const w = (weapons || []).find(x => x.id === id);
   if (w) {
-    const atks = (w.attacks || []).map(a => `#${a.id} ${a.name} (p${a.prepare_time}/c${a.cooldown_time})`).join(', ');
+    const atks = (w.attacks || []).map(a => {
+      const pVar = a.prepare_time_variance || 0;
+      const cVar = a.cooldown_time_variance || 0;
+      const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+      const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+      return `#${a.id} ${a.name} (${pPart}/${cPart})`;
+    }).join(', ');
     return `#${w.id} ${w.name} (${w.damage} dmg)\n  Attacks: ${atks || 'none'}`;
   }
   const c = (consumables || []).find(x => x.id === id);
@@ -298,7 +310,13 @@ export async function cmdRunNew(args, flags = {}) {
       console.log('=== Loadout for new run (weapons + consumables) ===');
       console.log('weapons:');
       (wData.weapons || []).forEach(w => {
-        const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
+        const atkList = w.attacks.map(a => {
+          const pVar = a.prepare_time_variance || 0;
+          const cVar = a.cooldown_time_variance || 0;
+          const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+          const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+          return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
+        }).join(' ');
         console.log(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`);
       });
       console.log('consumables:');
@@ -326,7 +344,13 @@ export async function cmdRunNew(args, flags = {}) {
           if (trimmed.toLowerCase() === 'inventory') {
             console.log('weapons:');
             (wData.weapons || []).forEach(w => {
-              const atkList = w.attacks.map(a => `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`).join(' ');
+              const atkList = w.attacks.map(a => {
+          const pVar = a.prepare_time_variance || 0;
+          const cVar = a.cooldown_time_variance || 0;
+          const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+          const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+          return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
+        }).join(' ');
               console.log(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`);
             });
             console.log('consumables:');

@@ -12,6 +12,20 @@ import { createEngine, resumeEngine } from '../../js/combat/engine.js';
 import { getHpWord } from '../../js/combat/hp-words.js';
 import { drawRandomDie, rollDieFace, selectMonsterGroup } from '../../js/combat/dice.js';
 
+/**
+ * rollStat(base, variance)
+ * Returns base + uniform random int in [-variance, +variance].
+ * If variance <= 0 or falsy → exactly base (critical for ±0 existing data).
+ * Result clamped to >= 1.
+ */
+function rollStat(base, variance) {
+  const b = Number(base) || 1;
+  const v = Number(variance) || 0;
+  if (v <= 0) return Math.max(1, b);
+  const delta = Math.floor(Math.random() * (v * 2 + 1)) - v;
+  return Math.max(1, b + delta);
+}
+
 const CORS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': 'https://portalcolosseum.com',
@@ -309,7 +323,9 @@ async function handle(request) {
             name: a.name,
             is_multi_target: !!a.is_multi_target,
             prepare_time: a.prepare_time || 3,
-            cooldown_time: a.cooldown_time || 2
+            cooldown_time: a.cooldown_time || 2,
+            prepare_time_variance: a.prepare_time_variance || 0,
+            cooldown_time_variance: a.cooldown_time_variance || 0
           }));
         return {
           id: m.id,
@@ -341,7 +357,7 @@ async function handle(request) {
         let attacks = [];
         try {
           const mapRes = await admin.from('weapon_template_attack_mapping')
-            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time, description, base_damage_multiplier)')
+            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time, prepare_time_variance, cooldown_time_variance, description, base_damage_multiplier)')
             .eq('weapon_template_id', w.template_id);
           if (mapRes.data) attacks = mapRes.data.map(m => m.attack).filter(Boolean);
         } catch (e) {
@@ -361,6 +377,8 @@ async function handle(request) {
             is_multi_target: !!a.is_multi_target,
             prepare_time: a.prepare_time || 3,
             cooldown_time: a.cooldown_time || 2,
+            prepare_time_variance: a.prepare_time_variance || 0,
+            cooldown_time_variance: a.cooldown_time_variance || 0,
             description: a.description || '',
             base_damage_multiplier: a.base_damage_multiplier ?? 1
           }))
@@ -505,7 +523,7 @@ async function handle(request) {
 
       // Fetch attack early to know isMultiTarget for R2 single-target restriction
       const { data: attackRow } = await admin.from('attack')
-        .select('prepare_time, cooldown_time, is_multi_target, base_damage_multiplier, name')
+        .select('prepare_time, cooldown_time, prepare_time_variance, cooldown_time_variance, is_multi_target, base_damage_multiplier, name')
         .eq('id', attackIdNum).single();
       const isMultiTarget = !!attackRow?.is_multi_target;
 
@@ -544,9 +562,9 @@ async function handle(request) {
         .eq('weapon_template_id', wInst.template_id).eq('attack_id', attackIdNum);
       if (!mapCount) return json({ error: 'Attack not on equipped weapon' }, 403);
 
-      // F14: clamp prepare/cooldown to >=1
-      const castTicks = Math.max(1, Number(attackRow?.prepare_time) || 3);
-      const cooldownTicks = Math.max(1, Number(attackRow?.cooldown_time) || 2);
+      // F14: clamp prepare/cooldown to >=1 (rollStat already clamps; variance 0 returns base exactly)
+      const castTicks = rollStat(attackRow?.prepare_time, attackRow?.prepare_time_variance);
+      const cooldownTicks = rollStat(attackRow?.cooldown_time, attackRow?.cooldown_time_variance);
       const multiplier = attackRow?.base_damage_multiplier || 0;
 
       const { data: weapon } = await admin.from('weapon_instance').select('damage').eq('id', weaponId).single();
@@ -792,7 +810,7 @@ async function handle(request) {
         let attacks = [];
         try {
           const mapRes = await admin.from('weapon_template_attack_mapping')
-            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time, base_damage_multiplier, description)')
+            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time, prepare_time_variance, cooldown_time_variance, base_damage_multiplier, description)')
             .eq('weapon_template_id', inst.template_id);
           if (mapRes.data) {
             attacks = mapRes.data.map(m => m.attack).filter(Boolean);
@@ -812,6 +830,8 @@ async function handle(request) {
             is_multi_target: !!a.is_multi_target,
             prepare_time: a.prepare_time || 3,
             cooldown_time: a.cooldown_time || 2,
+            prepare_time_variance: a.prepare_time_variance || 0,
+            cooldown_time_variance: a.cooldown_time_variance || 0,
             base_damage_multiplier: a.base_damage_multiplier ?? null,
             description: a.description ?? null
           }))
@@ -932,7 +952,7 @@ async function handle(request) {
       let attacks = [];
       try {
         const mapRes = await admin.from('monster_template_attack_mapping')
-          .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time)')
+          .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time, prepare_time_variance, cooldown_time_variance)')
           .eq('monster_template_id', id);
         if (mapRes.data) {
           attacks = mapRes.data.map(m => m.attack).filter(Boolean);

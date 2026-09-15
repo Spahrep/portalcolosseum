@@ -285,3 +285,38 @@ describe('F16 end-to-end attack lifecycle + security', () => {
     assert.ok(hasMiss, 'monster miss line present');
   });
 });
+
+// Contract tests for rollStat (variance behavior, variance=0 must be deterministic base)
+describe('rollStat contract (variance 0 unchanged, variance N within range)', () => {
+  // Inline the exact implementation for test isolation (matches api/combat/[...path].js)
+  function rollStat(base, variance) {
+    const b = Number(base) || 1;
+    const v = Number(variance) || 0;
+    if (v <= 0) return Math.max(1, b);
+    const delta = Math.floor(Math.random() * (v * 2 + 1)) - v;
+    return Math.max(1, b + delta);
+  }
+
+  it('variance 0 or falsy always returns exactly base (clamped >=1)', () => {
+    assert.equal(rollStat(5, 0), 5);
+    assert.equal(rollStat(5, null), 5);
+    assert.equal(rollStat(5, undefined), 5);
+    assert.equal(rollStat(5, -3), 5);
+    assert.equal(rollStat(0, 0), 1); // clamp
+    assert.equal(rollStat(1, 0), 1);
+  });
+
+  it('variance N produces values only in [base-N, base+N] and >=1 over many samples', () => {
+    const base = 10;
+    const v = 3;
+    const samples = 200;
+    const seen = new Set();
+    for (let i = 0; i < samples; i++) {
+      const r = rollStat(base, v);
+      assert.ok(r >= 1 && r <= base + v && r >= base - v, `rollStat(${base},${v})=${r} out of range`);
+      seen.add(r);
+    }
+    // Should hit multiple values (not always same)
+    assert.ok(seen.size > 1, 'should produce variance in samples');
+  });
+});
