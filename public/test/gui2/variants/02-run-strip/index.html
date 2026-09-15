@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Colosseum • Battle Test GUI2 - Variant 02</title>
+  <link rel="stylesheet" href="/public/fonts/pixeloid-mono/pixeloid-mono.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 30px 20px;
+      background: #000;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      color: #e0e0ff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      image-rendering: pixelated;
+    }
+
+    .dw4-window {
+      width: 960px;
+      background: #000;
+      border: 6px solid #4a90d9;
+      box-shadow: 0 0 0 3px #000, inset 0 0 0 3px #1a3a6e;
+    }
+
+    .run-strip {
+      background: #0a1a2e;
+      border-bottom: 4px solid #4a90d9;
+      padding: 8px 16px;
+      font-size: 10px;
+    }
+
+    .run-strip-line1 {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+
+    .run-strip .dim {
+      color: #6688aa;
+    }
+
+    .run-strip .battle {
+      color: #ffcc66;
+      font-size: 14px;
+    }
+
+    .dice-compact {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 9px;
+    }
+
+    .dice-compact .dice-row {
+      display: flex;
+      gap: 3px;
+    }
+
+    .die {
+      width: 18px;
+      height: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 9px;
+      font-weight: bold;
+      color: #000;
+      border: 1px solid #000;
+    }
+
+    .die.green  { background: #66ff99; }
+    .die.yellow { background: #ffcc66; }
+    .die.red    { background: #ff6666; }
+
+    .die.used {
+      background: #1a2a44;
+      color: #6688aa;
+      border-color: #334466;
+      text-decoration: line-through;
+      font-size: 8px;
+    }
+
+    .die.used .rolled {
+      color: #ffcc66;
+      text-decoration: none;
+    }
+
+    .legend-line {
+      font-size: 8px;
+      color: #5577aa;
+      letter-spacing: 0.5px;
+    }
+
+    .legend-line .g { color: #66ff99; }
+    .legend-line .y { color: #ffcc66; }
+    .legend-line .r { color: #ff6666; }
+
+    .top-status {
+      background: #0a1a2e;
+      border-bottom: 4px solid #4a90d9;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+    }
+
+    .player-block {
+      display: flex;
+      gap: 30px;
+    }
+
+    .stat-block {
+      min-width: 150px;
+    }
+
+    .name {
+      color: #ffcc66;
+      margin-bottom: 3px;
+    }
+
+    .hp-mp {
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .equip-panel {
+      font-size: 10px;
+      min-width: 170px;
+    }
+
+    .equip-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 2px 0;
+      cursor: pointer;
+    }
+
+    .equip-row:hover {
+      background: #1a3a6e;
+      color: #ffcc66;
+    }
+
+    .equip-label {
+      color: #6688aa;
+      margin-right: 8px;
+    }
+
+    .middle-section {
+      display: flex;
+    }
+
+    .arena {
+      flex: 1;
+      background: #0a1a2e;
+      padding: 18px;
+      text-align: center;
+      position: relative;
+      min-height: 210px;
+      border-right: 4px solid #4a90d9;
+    }
+
+    .battle-terminal {
+      background: #0a0f0a;
+      border: 2px solid #334433;
+      height: 190px;
+      display: flex;
+      flex-direction: column;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 10px;
+      color: #88ff88;
+      overflow: hidden;
+      text-align: left;
+      width: 100%;
+    }
+
+    .terminal-header {
+      background: #112211;
+      color: #aaffaa;
+      padding: 2px 8px;
+      font-size: 9px;
+      border-bottom: 1px solid #334433;
+      flex-shrink: 0;
+      letter-spacing: 0.5px;
+    }
+
+    .battle-log {
+      flex: 1;
+      padding: 6px 8px;
+      overflow-y: auto;
+      line-height: 1.32;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .terminal-line {
+      white-space: pre;
+      margin: 1px 0;
+      color: #88ff88;
+    }
+
+    .terminal-line.dim {
+      color: #557755;
+    }
+
+    .blink-cursor {
+      display: inline-block;
+      width: 7px;
+      height: 11px;
+      background: #88ff88;
+      vertical-align: bottom;
+      margin-left: 1px;
+      animation: blink 1s step-end infinite;
+    }
+
+    @keyframes blink {
+      0%, 50% { opacity: 1; }
+      51%, 100% { opacity: 0; }
+    }
+
+    .right-rail {
+      width: 250px;
+      background: #0a1a2e;
+      border-top: 4px solid #4a90d9;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .time-menu {
+      padding: 8px 10px 10px;
+      flex-shrink: 0;
+    }
+
+    .rail-header {
+      color: #88aaff;
+      font-size: 9px;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid #334466;
+      padding-bottom: 3px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .queue-row {
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      font-size: 10px;
+      line-height: 1.5;
+      padding: 2px 4px;
+      margin: 1px 0;
+    }
+
+    .queue-row.top {
+      font-size: 12px;
+      color: #ffffff;
+      background: #12264a;
+      border-left: 3px solid #4a90d9;
+      padding-left: 6px;
+    }
+
+    .q-label {
+      width: 22px;
+      flex-shrink: 0;
+      color: #88aaff;
+      font-weight: bold;
+    }
+
+    .q-event {
+      flex: 1;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .q-tics {
+      width: 20px;
+      text-align: right;
+      flex-shrink: 0;
+    }
+
+    .queue-row.mob .q-event, .queue-row.mob .q-tics { color: #ff9a9a; }
+    .queue-row.ready .q-event, .queue-row.ready .q-tics { color: #ffcc66; }
+    .queue-row.ready .q-label { color: #ffcc66; }
+
+    .queue-more {
+      color: #446688;
+      font-size: 9px;
+      text-align: right;
+      padding: 3px 4px 0;
+    }
+
+    .monsters-panel {
+      border-top: 3px solid #334466;
+      padding: 8px 10px 10px;
+      flex: 1;
+    }
+
+    .monster-target {
+      cursor: pointer;
+      padding: 2px 4px;
+      border: 2px solid transparent;
+      display: block;
+      margin: 3px 0;
+    }
+
+    .monster-target:hover {
+      background: #1a3a6e;
+    }
+
+    .monster-target.selected {
+      border-color: #ffcc66;
+      background: #1a3a6e;
+      color: #ffcc66;
+    }
+
+    .bottom-section {
+      display: flex;
+      border-top: 4px solid #4a90d9;
+    }
+
+    .command-box {
+      flex: 1;
+      background: #0a1a2e;
+      padding: 10px 14px;
+      border-right: 4px solid #4a90d9;
+      position: relative;
+    }
+
+    .command-box:last-child {
+      border-right: none;
+    }
+
+    .hand-header {
+      color: #ffaa66;
+      font-size: 10px;
+      margin-bottom: 2px;
+    }
+
+    .weapon-name {
+      color: #88ccff;
+      font-size: 10px;
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #334466;
+    }
+
+    .command-list {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 12px;
+    }
+
+    .command {
+      padding: 3px 6px;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .command:hover {
+      background: #1a3a6e;
+      color: #ffcc66;
+    }
+
+    .command.selected {
+      color: #ffcc66;
+      background: #1a3a6e;
+    }
+
+    .enemy-list {
+      flex: 1;
+      background: #0a1a2e;
+      padding: 13px 16px;
+      font-size: 11px;
+    }
+
+    .enemy-row {
+      display: flex;
+      justify-content: space-between;
+      margin: 3px 0;
+      padding: 1px 4px;
+    }
+
+    .footer {
+      background: #0a1a2e;
+      text-align: center;
+      padding: 8px 16px;
+      font-size: 10px;
+      color: #aaccff;
+      border-top: 3px solid #4a90d9;
+      min-height: 22px;
+    }
+  </style>
+</head>
+<body>
+  <div class="dw4-window">
+    <!-- Run Strip at very top -->
+    <div class="run-strip">
+      <div class="run-strip-line1">
+        <div class="dim">PORTAL COLOSSEUM · PORTAL 1 · RUN 3</div>
+        <div class="battle">BATTLE 2 OF 5</div>
+        <div class="dice-compact">
+          REMAINING (8)
+          <div class="dice-row">
+            <div class="die green">G</div><div class="die green">G</div><div class="die green">G</div><div class="die green">G</div>
+            <div class="die yellow">Y</div><div class="die yellow">Y</div>
+            <div class="die red">R</div><div class="die red">R</div>
+          </div>
+          USED (2)
+          <div class="dice-row">
+            <div class="die green used">G<span class="rolled">15</span></div>
+            <div class="die yellow used">Y<span class="rolled">20</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="legend-line">
+        GREEN 10·10·10·15·15·20 &nbsp;&nbsp; YELLOW 10·15·15·15·20·25 &nbsp;&nbsp; RED 15·15·20·25·25·30
+      </div>
+    </div>
+
+    <!-- Top Status (player only) -->
+    <div class="top-status">
+      <div class="player-block">
+        <div class="stat-block">
+          <div class="name">SPAHREP</div>
+          <div class="hp-mp">HP 142 / 164</div>
+        </div>
+
+        <div id="equip-panel" class="equip-panel" style="display:none;">
+          <div class="equip-row" data-slot="left-hand">
+            <span class="equip-label">L.HAND:</span>
+            <span id="left-hand">—</span>
+          </div>
+          <div class="equip-row" data-slot="belt">
+            <span class="equip-label">BELT:</span>
+            <span id="belt">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Arena + Right rail -->
+    <div class="middle-section">
+      <div class="arena">
+        <div class="battle-terminal">
+          <div class="terminal-header">BATTLE FEED — tic 214</div>
+          <div class="battle-log">
+            <div class="terminal-line dim">tic 168 — C Glimmerling AcidShot hits for 11</div>
+            <div class="terminal-line">tic 171 — LH Quick Slash hits A for 16 (A Healthy)</div>
+            <div class="terminal-line">tic 174 — B Giant Rat Bite misses</div>
+            <div class="terminal-line">tic 177 — RH Fireball 1 hits B for 29 (B Injured)</div>
+            <div class="terminal-line dim">tic 180 — A Glimmerling strikes for 8</div>
+            <div class="terminal-line">tic 183 — LH Slash hits C for 21 (C Battered)</div>
+            <div class="terminal-line">tic 186 — RH Ice Bolt 2 hits A for 24</div>
+            <div class="terminal-line dim">tic 189 — B attempts HeavyAttack (blocked)</div>
+            <div class="terminal-line">tic 192 — LH Quick Slash hits B for 19</div>
+            <div class="terminal-line">tic 195 — C Glimmerling status: Battered</div>
+            <div class="terminal-line dim">tic 198 — A Glimmerling Bite hits for 6</div>
+            <div class="terminal-line">tic 201 — RH Fireball 1 hits C for 31</div>
+            <div class="terminal-line">tic 204 — LH Slash hits A for 18 (A Healthy)</div>
+            <div class="terminal-line dim">tic 207 — B Giant Rat misses</div>
+            <div class="terminal-line">tic 210 — RH Ice Bolt 2 hits B for 22</div>
+            <div class="terminal-line">tic 213 — LH Quick Slash hits B for 14</div>
+            <div class="terminal-line">tic 214 — RH Slash hits B for 18<span class="blink-cursor"></span></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="right-rail">
+        <div class="time-menu">
+          <div class="rail-header"><span>TIME MENU</span><span>NEXT</span></div>
+
+          <div class="queue-row mob top">
+            <span class="q-label">B</span>
+            <span class="q-event">HeavyAttack</span>
+            <span class="q-tics">3</span>
+          </div>
+          <div class="queue-row top">
+            <span class="q-label">RH</span>
+            <span class="q-event">Slash</span>
+            <span class="q-tics">4</span>
+          </div>
+          <div class="queue-row mob top">
+            <span class="q-label">A</span>
+            <span class="q-event">Bite</span>
+            <span class="q-tics">5</span>
+          </div>
+
+          <div class="queue-row mob">
+            <span class="q-label">C</span>
+            <span class="q-event">AcidShot</span>
+            <span class="q-tics">9</span>
+          </div>
+          <div class="queue-row ready">
+            <span class="q-label">LH</span>
+            <span class="q-event">Ready</span>
+            <span class="q-tics">12</span>
+          </div>
+          <div class="queue-row mob">
+            <span class="q-label">A</span>
+            <span class="q-event">Bite</span>
+            <span class="q-tics">18</span>
+          </div>
+          <div class="queue-row mob">
+            <span class="q-label">B</span>
+            <span class="q-event">HeavyAttack</span>
+            <span class="q-tics">23</span>
+          </div>
+          <div class="queue-row ready">
+            <span class="q-label">RH</span>
+            <span class="q-event">Ready</span>
+            <span class="q-tics">27</span>
+          </div>
+
+          <div class="queue-more">+2 MORE</div>
+        </div>
+
+        <div class="monsters-panel">
+          <div class="rail-header">MONSTERS</div>
+          <div class="monster-target" data-target="0">
+            <span style="color:#88aaff;">A</span> - Glimmerling - <span style="color:#66ff99;">Healthy</span>
+          </div>
+          <div class="monster-target" data-target="1">
+            <span style="color:#88aaff;">B</span> - Giant Rat - <span style="color:#ffcc66;">Injured</span>
+          </div>
+          <div class="monster-target" data-target="2">
+            <span style="color:#88aaff;">C</span> - Glimmerling - <span style="color:#ff6666;">Battered</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Bottom section -->
+    <div class="bottom-section">
+      <div class="command-box">
+        <div class="hand-header">L.HAND</div>
+        <div class="weapon-name" id="left-weapon-name">Iron Sword</div>
+        <div class="command-list">
+          <div class="command" data-col="0" data-row="0" data-name="Quick Slash" data-info="Cast: 3-4 | CD: 1 | Phys/Slash | Dmg 12-22">[ ] Quick Slash</div>
+          <div class="command" data-col="0" data-row="1" data-name="Slash" data-info="Cast: 5-6 | CD: 2 | Phys/Slash | Dmg 18-30">[ ] Slash</div>
+          <div class="command" data-col="0" data-row="2" style="color:#446688; cursor:default;">----</div>
+        </div>
+      </div>
+
+      <div class="command-box">
+        <div class="hand-header">R.HAND</div>
+        <div class="weapon-name" id="right-weapon-name">Arcane Wand</div>
+        <div class="command-list">
+          <div class="command" data-col="1" data-row="0" data-name="Fireball 1" data-info="Cast: 8-10 | CD: 4 | Magic/Fire | Dmg 22-38">[ ] Fireball 1</div>
+          <div class="command" data-col="1" data-row="1" data-name="Ice Bolt 2" data-info="Cast: 10-12 | CD: 3-5 | Magic/Ice | Dmg 20-35">[ ] Ice Bolt 2</div>
+          <div class="command" data-col="1" data-row="2" style="color:#446688; cursor:default;">----</div>
+        </div>
+      </div>
+
+      <div class="enemy-list">
+        <div style="color:#ffaa66; margin-bottom:6px;">Inventory</div>
+        <div style="color:#88aaff; font-size:10px; margin:4px 0 2px;">Belt Loop</div>
+        <div class="enemy-row command" data-col="2" data-row="0" data-name="Bronze Axe" data-info="2h, replace both weapons, 30-40 tic equip time"><span>[ ] Bronze Axe</span></div>
+        <div style="color:#88aaff; font-size:10px; margin:6px 0 2px;">Pouch</div>
+        <div class="enemy-row command" data-col="2" data-row="1" data-name="Herb" data-info="Use: Restores a small amount of HP"><span>[ ] Herb</span></div>
+        <div class="enemy-row command" data-col="2" data-row="2" data-name="Bomb" data-info="Use: Deals damage to all enemies"><span>[ ] Bomb</span></div>
+      </div>
+    </div>
+
+    <div class="footer" id="footer-info">
+      tic 214 — RH Slash hits B for 18
+    </div>
+  </div>
+
+  <script src="/test/gui2/gui2-app.js"></script>
+</body>
+</html>
