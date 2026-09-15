@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PORTAL COLOSSEUM - EQUIP</title>
+  <link rel="stylesheet" href="/public/game.css">
+  <style>
+    .dice-panel { background: rgba(0,0,0,0.6); padding: 8px 12px; border-radius: 4px; min-width: 220px; }
+    .dice-header { font-size: 10px; letter-spacing: 1px; color: #ffcc66; margin-bottom: 4px; }
+    .dice-tray { display: flex; gap: 8px; align-items: center; }
+    .die { width: 18px; height: 18px; border: 1px solid #666; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; }
+    .die.green { background: #224422; color: #66ff99; border-color: #66ff99; }
+    .die.yellow { background: #443322; color: #ffcc66; border-color: #ffcc66; }
+    .die.red { background: #442222; color: #ff6666; border-color: #ff6666; }
+    .dice-labels { display: flex; gap: 12px; font-size: 9px; color: #888; }
+    .message-error { color: #ff6666; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <div class="overlay"></div>
+  <div class="container">
+    <!-- TOP BAR -->
+    <div class="top-bar">
+      <div class="run-info">
+        <h1>PORTAL · RUN 1</h1>
+        <div class="subtitle">EQUIPMENT SELECT</div>
+        <div class="breadcrumb">PORTALS → EQUIP</div>
+      </div>
+      <div class="dice-panel">
+        <div class="dice-header">
+          <span>PORTAL DICE</span>
+        </div>
+        <div class="dice-tray">
+          <!-- Populated dynamically by JS from currentPortal counts -->
+        </div>
+      </div>
+    </div>
+
+    <!-- MAIN AREA -->
+    <div class="main-area">
+      <!-- LOADOUT -->
+      <div class="loadout-panel">
+        <div class="panel-title">LOADOUT</div>
+        <div class="slot-row" data-slot="0"><div class="slot-label">LH</div><div class="slot-content" id="slot-0"><span>—</span></div></div>
+        <div class="slot-row" data-slot="1"><div class="slot-label">RH</div><div class="slot-content" id="slot-1"><span>—</span></div></div>
+        <div class="slot-row" data-slot="2"><div class="slot-label">BL</div><div class="slot-content" id="slot-2"><span>—</span></div></div>
+        <div class="slot-row" data-slot="3"><div class="slot-label">C1</div><div class="slot-content" id="slot-3"><span>—</span></div></div>
+        <div class="slot-row" data-slot="4"><div class="slot-label">C2</div><div class="slot-content" id="slot-4"><span>—</span></div></div>
+      </div>
+
+      <!-- BACKPACK -->
+      <div class="backpack-panel">
+        <div class="panel-title">BACKPACK (20 SLOTS)</div>
+        <div class="backpack-grid" id="backpack-grid"></div>
+      </div>
+    </div>
+
+    <!-- BOTTOM -->
+    <div class="bottom-bar" id="bottom-bar">
+      <button class="enter-btn" id="enter-btn">ENTER PORTAL →</button>
+      <div class="note">Loadout locks at entry — no inventory access between fights.</div>
+    </div>
+  </div>
+
+  <div class="info-popup" id="info-popup"></div>
+
+  <script type="module" src="/js/run-equip-app.js"></script>
+</body>
+</html>
