@@ -29,77 +29,95 @@
     .top-status {
       background: #0a1a2e;
       border-bottom: 4px solid #4a90d9;
-      padding: 10px 16px;
+      padding: 4px 10px 3px;
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      font-size: 10px;
+      min-height: 66px;
+    }
+
+    .top-row {
       display: flex;
       justify-content: space-between;
-      font-size: 11px;
       align-items: center;
     }
 
     .player-block {
       display: flex;
-      gap: 30px;
       align-items: center;
     }
 
     .stat-block {
-      min-width: 150px;
       background: #000;
-      border: 2px solid #ccc;
-      padding: 4px 8px;
+      border: 1px solid #ccc;
+      padding: 1px 6px;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 10px;
+      line-height: 1;
     }
 
     .name {
       color: #ffcc66;
-      margin-bottom: 3px;
-      font-size: 12px;
+      font-size: 10px;
+    }
+
+    .stat-block .sep {
+      color: #888;
+      font-size: 10px;
     }
 
     .hp-mp {
-      font-size: 11px;
-      line-height: 1.35;
+      color: #fff;
+      font-size: 10px;
     }
 
     .run-info {
       text-align: right;
-      font-size: 10px;
       color: #a8c8ea;
-      line-height: 1.3;
+      font-size: 9px;
+      white-space: nowrap;
+      line-height: 1;
     }
 
     .run-info .battle {
       color: #ffcc66;
-      font-size: 12px;
+      font-size: 10px;
     }
 
     .dice-tray-compact {
-      margin-top: 6px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: nowrap;
       text-align: left;
     }
 
     .dice-group-label {
       color: #88aaff;
-      font-size: 9px;
-      letter-spacing: 1px;
-      margin: 4px 0 2px;
+      font-size: 8px;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+      margin: 0;
     }
 
     .dice-row {
       display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
+      gap: 2px;
     }
 
     .die {
-      width: 24px;
-      height: 24px;
+      width: 20px;
+      height: 20px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 10px;
+      font-size: 9px;
       font-weight: bold;
       color: #000;
-      border: 2px solid #000;
+      border: 1px solid #000;
       box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
     }
 
@@ -113,24 +131,13 @@
       border-color: #334466;
       box-shadow: none;
       text-decoration: line-through;
-      font-size: 11px;
+      font-size: 8px;
     }
 
     .die.used .rolled {
       color: #ffcc66;
       text-decoration: none;
     }
-
-    .dice-legend {
-      margin-top: 4px;
-      font-size: 8px;
-      color: #a8c8ea;
-      line-height: 1.4;
-    }
-
-    .dice-legend .g { color: #66ff99; }
-    .dice-legend .y { color: #ffcc66; }
-    .dice-legend .r { color: #ff6666; }
 
     .middle-section {
       display: flex;
@@ -393,40 +400,32 @@
   <div class="dw4-window">
     <!-- TOP BAR -->
     <div class="top-status">
-      <div class="player-block">
-        <div class="stat-block">
-          <div class="name">SPAHREP</div>
-          <div class="hp-mp">HP 142 / 164</div>
+      <div class="top-row">
+        <div class="player-block">
+          <div class="stat-block">
+            <span class="name">SPAHREP</span><span class="sep">—</span><span class="hp-mp">HP 142 / 164</span>
+          </div>
+        </div>
+        <div class="run-info">
+          PORTAL COLOSSEUM · PORTAL 1 · RUN 3 · <span class="battle">BATTLE 2 OF 5</span>
         </div>
       </div>
-
-      <!-- RUN INFO (from 01-tight-dock) -->
-      <div class="run-info">
-        <div>PORTAL COLOSSEUM</div>
-        <div>PORTAL 1 · RUN 3</div>
-        <div class="battle">BATTLE 2 OF 5</div>
-        <div class="dice-tray-compact">
-          <div class="dice-group-label">DICE: REMAINING (8)</div>
-          <div class="dice-row">
-            <div class="die green">G</div>
-            <div class="die green">G</div>
-            <div class="die green">G</div>
-            <div class="die green">G</div>
-            <div class="die yellow">Y</div>
-            <div class="die yellow">Y</div>
-            <div class="die red">R</div>
-            <div class="die red">R</div>
-          </div>
-          <div class="dice-group-label">USED (2)</div>
-          <div class="dice-row">
-            <div class="die used"><span class="rolled">G</span> 15</div>
-            <div class="die used"><span class="rolled">Y</span> 20</div>
-          </div>
-          <div class="dice-legend">
-            <span class="g">GREEN</span> = normal &nbsp;
-            <span class="y">YELLOW</span> = crit &nbsp;
-            <span class="r">RED</span> = fumble
-          </div>
+      <div class="dice-tray-compact" title="GREEN = normal  YELLOW = crit  RED = fumble">
+        <span class="dice-group-label">DICE: REMAINING (8)</span>
+        <div class="dice-row">
+          <div class="die green">G</div>
+          <div class="die green">G</div>
+          <div class="die green">G</div>
+          <div class="die green">G</div>
+          <div class="die yellow">Y</div>
+          <div class="die yellow">Y</div>
+          <div class="die red">R</div>
+          <div class="die red">R</div>
+        </div>
+        <span class="dice-group-label">USED (2)</span>
+        <div class="dice-row">
+          <div class="die used"><span class="rolled">G</span> 15</div>
+          <div class="die used"><span class="rolled">Y</span> 20</div>
         </div>
       </div>
     </div>
