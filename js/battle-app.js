@@ -19,13 +19,18 @@ let busy = false;
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
 let shouldAnimateDice = false;
 
-// Tuning constants for PC-51 roulette dice sweep (fast→slow easing)
+// Tuning constants for PC-51 casino roulette dice reveal (two stages:
+// selection sweep, then the die roll). Both use the same fast→slow decel.
 const DICE_ANIM = {
   INITIAL_INTERVAL: 60,
   MIN_INTERVAL: 180,
   DECELERATION: 1.25,
   MAX_SWEEPS: 2,
-  LAND_PAUSE: 250
+  LAND_PAUSE: 250,
+  ROLL_TICKS: 8,     // face-value tumbles before landing on the rolled face
+  ROLL_INITIAL: 50,  // ms between early tumbles
+  ROLL_DECEL: 1.33,  // grows the gap each tick (fast→slow)
+  ROLL_MIN: 200      // slowest tick gap before the final face
 };
 
 function getAuthToken() {
@@ -137,26 +142,35 @@ function renderDice(dice) {
       if (shouldAnimateDice) {
         shouldAnimateDice = false;
         curEl.style.display = 'none';
-        // append drawn die (as LAST) to sweep row so animation lands on it
+        // Stage 1 (selection): sweep row = remaining pool + the drawn die as an
+        // extra box, so the roulette can land ON it. It shows the color letter
+        // like every other box — never the face, or the result is spoiled early.
         const drawnEl = document.createElement('div');
         drawnEl.className = `die ${current.color}`;
-        drawnEl.textContent = current.face;
+        drawnEl.textContent = current.color.substring(0, 1).toUpperCase();
         remRow.appendChild(drawnEl);
-        const diceEls = Array.from(remRow.children);
-        // after reveal, re-render the tray so the phantom drawn-die box and its
-        // highlight are cleared — final state = true post-draw remaining only
-        const landAndCleanup = () => {
-          updateCurrentDie(curEl, current);
-          setTimeout(() => renderDice(dice), 400);
+        // Labels match the visible pool during the sweep (the drawn die is
+        // still "in play"); the cleanup render below restores true counts.
+        const remTotal = (rem.green || 0) + (rem.yellow || 0) + (rem.red || 0);
+        const usedTotal = (used.green || 0) + (used.yellow || 0) + (used.red || 0);
+        labels.innerHTML = `
+          <div>REMAINING (${remTotal + 1})</div>
+          <div>USED (${usedTotal - 1})</div>
+        `;
+        const diceEls = Array.from(remRow.children); // >= 1 (drawn die appended)
+        // After the roll lands, re-render the tray so the phantom drawn-die
+        // box and its highlight are cleared — final state = true post-draw.
+        const selectAndRoll = () => {
+          rollDiceAnimation(curEl, current, () => {
+            setTimeout(() => renderDice(dice), 350);
+          });
         };
-        if (diceEls.length === 0) {
-          updateCurrentDie(curEl, current);
-        } else if (diceEls.length === 1) {
-          // 0/1 edge: highlight the (drawn) box, keep highlight through reveal
+        if (diceEls.length === 1) {
+          // Only the drawn die in the tray: brief highlight, then roll.
           diceEls[0].classList.add('highlight');
-          setTimeout(landAndCleanup, DICE_ANIM.LAND_PAUSE);
+          setTimeout(selectAndRoll, DICE_ANIM.LAND_PAUSE);
         } else {
-          performSweepAnimation(diceEls, landAndCleanup);
+          performSweepAnimation(diceEls, selectAndRoll);
         }
       } else {
         updateCurrentDie(curEl, current);
@@ -199,6 +213,36 @@ function performSweepAnimation(diceEls, onLand) {
     }
   }
 
+  step();
+}
+
+// Stage 2 (roll): tumble face values in the current-die box (fast→slow),
+// landing on the rolled face with a small pop. The selection sweep already
+// revealed which die; this stage reveals what it rolled.
+function rollDiceAnimation(curEl, current, onDone) {
+  const box = document.createElement('div');
+  box.className = `die ${current.color}`;
+  box.style.cssText = 'width:32px;height:32px;font-size:14px;';
+  curEl.innerHTML = '';
+  curEl.appendChild(box);
+  curEl.style.display = 'flex';
+
+  let tick = 0;
+  let interval = DICE_ANIM.ROLL_INITIAL;
+  function step() {
+    if (tick >= DICE_ANIM.ROLL_TICKS) {
+      // Canonical final layout (same as updateCurrentDie), then pop the die.
+      updateCurrentDie(curEl, current);
+      const landed = curEl.querySelector('.die');
+      if (landed) landed.classList.add('rolled');
+      onDone();
+      return;
+    }
+    box.textContent = 1 + Math.floor(Math.random() * 6); // d6 tumble
+    tick++;
+    interval = Math.min(DICE_ANIM.ROLL_MIN, Math.floor(interval * DICE_ANIM.ROLL_DECEL));
+    setTimeout(step, interval);
+  }
   step();
 }
 

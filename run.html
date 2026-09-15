@@ -99,6 +99,13 @@
       transform: scale(1.08);
       z-index: 2;
     }
+    .die.rolled {
+      animation: die-roll-pop 0.25s ease-out;
+    }
+    @keyframes die-roll-pop {
+      0%   { transform: scale(1.15); }
+      100% { transform: scale(1); }
+    }
     .dice-labels {
       font-size: 9px;
       color: #88aaff;
