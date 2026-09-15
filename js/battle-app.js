@@ -23,12 +23,14 @@ let shouldAnimateDice = false;
 // Sweep: uniform left→right walk, stops on random same-color box (incl phantom).
 // Landed box IS selection (no morph). Roll: real faces from payload, weighty decel.
 const DICE_ANIM = {
-  SWEEP_STEP: 140,     // ms per box, short uniform left→right walk (capped at n-1 steps)
-  LAND_PAUSE: 200,     // pause on landed box before roll
-  ROLL_TICKS: 12,      // tumbles before settle
-  ROLL_INITIAL: 100,   // ms start for weighty roll
-  ROLL_DECEL: 1.15,    // decel factor
-  ROLL_MIN: 380        // final dwell ~2.75s total roll
+  SWEEP_PASSES: 3,      // full high-speed passes before the landing walk (constant every run — carries no info about the draw)
+  SWEEP_FAST: 50,       // ms per box during the high-speed passes (roulette whir)
+  SWEEP_STEP: 140,      // ms per box during the final uniform walk (Spahrep's k-count walk)
+  LAND_PAUSE: 350,      // beat on the landed box before the roll starts
+  ROLL_TICKS: 12,       // tumbles before settle
+  ROLL_INITIAL: 100,    // ms start for weighty roll
+  ROLL_DECEL: 1.15,     // decel factor
+  ROLL_MIN: 380         // final dwell (~2.75s total roll)
 };
 
 function getAuthToken() {
@@ -213,17 +215,29 @@ function updateCurrentDie(curEl, current) {
 }
 
 function performSweepAnimation(diceEls, targetIndex, onLand) {
-  // Uniform walk 0..targetIndex (capped by design). Target always same color as draw.
+  const total = diceEls.length;
+  // Roulette feel: a CONSTANT number of full high-speed passes (identical
+  // every run — carries no information about the draw, so no tell), then
+  // Spahrep's walk: left→right from box 0, exactly k steps, stop on box k
+  // (the caller chose the target from the drawn color's boxes, so the
+  // landing IS the selection). Continuous index keeps the highlight from
+  // teleporting when the passes hand over to the walk.
+  const fastSteps = DICE_ANIM.SWEEP_PASSES * total;
+  const walkEnd = fastSteps + targetIndex; // final highlighted box
   let idx = 0;
+
   function step() {
     diceEls.forEach(el => el.classList.remove('highlight'));
-    diceEls[idx].classList.add('highlight');
-    if (idx === targetIndex) {
+    diceEls[idx % total].classList.add('highlight');
+    if (idx === walkEnd) {
+      // leave the highlight on the landed box through the reveal
       setTimeout(() => onLand(diceEls[targetIndex]), DICE_ANIM.LAND_PAUSE);
       return;
     }
     idx++;
-    setTimeout(step, DICE_ANIM.SWEEP_STEP);
+    // next step's speed: fast during the passes, uniform during the walk
+    const speed = idx <= fastSteps ? DICE_ANIM.SWEEP_FAST : DICE_ANIM.SWEEP_STEP;
+    setTimeout(step, speed);
   }
   step();
 }
