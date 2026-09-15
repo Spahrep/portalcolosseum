@@ -185,6 +185,30 @@
       opacity: 0.5;
       cursor: not-allowed;
     }
+    .action-choices {
+      display: flex;
+      flex: 1;
+      gap: 8px;
+      min-width: 0;
+    }
+    .action-choices .action-btn {
+      flex: 1;
+    }
+    .hand-label {
+      color: #ffcc66;
+    }
+    .action-dmg {
+      color: #88aaff;
+    }
+    .action-status {
+      flex: 1;
+      text-align: center;
+      color: #ffcc66;
+      font-size: 11px;
+      padding: 10px 0;
+      letter-spacing: 1px;
+      align-self: center;
+    }
     .item-menu {
       margin: 0 14px 8px 14px;
       background: rgba(10,26,46,0.92);
@@ -294,7 +318,7 @@
 
     <!-- ACTION MENU -->
     <div class="action-menu">
-      <button id="btn-attack" class="action-btn">ATTACK</button>
+      <div id="action-choices" class="action-choices"></div>
       <button id="btn-item" class="action-btn">ITEM</button>
     </div>
 

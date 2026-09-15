@@ -77,17 +77,11 @@ function showErrorState(title, detail, showReturn = true) {
 
 function setBusy(state) {
   busy = state;
-  const attackBtn = document.getElementById('btn-attack');
-  const itemBtn = document.getElementById('btn-item');
-  if (attackBtn) attackBtn.disabled = state;
-  if (itemBtn) itemBtn.disabled = state;
-  if (state) {
-    if (attackBtn) attackBtn.style.opacity = '0.5';
-    if (itemBtn) itemBtn.style.opacity = '0.5';
-  } else {
-    if (attackBtn) attackBtn.style.opacity = '1';
-    if (itemBtn) itemBtn.style.opacity = '1';
-  }
+  // Dynamic hand buttons + ITEM all live inside #action-menu; gate the whole row.
+  document.querySelectorAll('#action-menu button').forEach(btn => {
+    btn.disabled = state;
+    btn.style.opacity = state ? '0.5' : '1';
+  });
 }
 
 function renderDice(dice) {
@@ -212,6 +206,9 @@ function showAdvanceUI(runId, state) {
   const box = document.getElementById('message-box');
   if (!box) return;
   box.innerHTML = '';
+  // No more actions to pick — clear the action row.
+  const actionWrap = document.getElementById('action-choices');
+  if (actionWrap) actionWrap.innerHTML = '';
   const adv = document.createElement('div');
   adv.className = 'msg-line';
   const monstersDead = state.monsters_dead ?? (Array.isArray(state.monsters) && state.monsters.length > 0 && state.monsters.every(m => m.dead));
@@ -250,22 +247,17 @@ function showAdvanceUI(runId, state) {
   box.appendChild(adv);
 }
 
-async function doAttack(runId) {
+async function doAttack(runId, hand, attackId) {
   if (busy) return;
   setBusy(true);
   try {
-    // Real mapped attack from the equipped LH weapon (server validates the mapping).
+    // Real mapped attack for the clicked hand (server validates the mapping).
     // CLI parity: ALWAYS target_ids: [] — engine auto-targets.
-    const lhAttacks = (lastBs && lastBs.weapons && lastBs.weapons.hand_l && lastBs.weapons.hand_l.attacks) || [];
-    if (lhAttacks.length === 0) {
-      showMessage('No attack available for the LH weapon.', true);
-      setBusy(false);
-      return;
-    }
-    const attack = lhAttacks[0];
-    const payload = { hand: 'LH', attack_id: attack.id, target_ids: [] };
+    const payload = { hand, attack_id: attackId, target_ids: [] };
     const data = await apiCall(`/runs/${runId}/commit`, 'POST', payload);
-    showMessage(`Attack committed (${attack.name})`);
+    const w = (lastBs && lastBs.weapons && lastBs.weapons[hand === 'LH' ? 'hand_l' : 'hand_r']) || {};
+    const attack = (w.attacks || []).find(a => a.id === attackId) || {};
+    showMessage(`Attack committed (${hand} ${attack.name || '#' + attackId})`);
     // Commit response is a minimal engine snapshot — re-render from the well-shaped GET.
     if (data.state && data.state.battle_over) {
       showAdvanceUI(runId, data.state);
@@ -281,6 +273,57 @@ async function doAttack(runId) {
     }
   }
   setBusy(false);
+}
+
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+/**
+ * Action choices = what the player can actually do right now, per design
+ * (attack name + damage only — pure choices). One button per READY hand per
+ * attack; a winding hand shows its remaining cast tics (live queue countdown).
+ */
+function renderActionMenu(bs) {
+  const wrap = document.getElementById('action-choices');
+  if (!wrap) return;
+  wrap.innerHTML = '';
+  const hands = (bs.player && bs.player.hands) || {};
+  const weapons = bs.weapons || {};
+  const queue = bs.queue || [];
+  ['LH', 'RH'].forEach(hand => {
+    const w = weapons[hand === 'LH' ? 'hand_l' : 'hand_r'];
+    const hState = hands[hand];
+    if (!w || !w.id) return; // hand empty
+    if (hState && hState.state === 'Ready') {
+      const attacks = w.attacks || [];
+      if (attacks.length === 0) {
+        const status = document.createElement('div');
+        status.className = 'action-status';
+        status.textContent = `${hand} — no attacks`;
+        wrap.appendChild(status);
+        return;
+      }
+      attacks.forEach(a => {
+        const btn = document.createElement('button');
+        btn.className = 'action-btn hand-action';
+        btn.innerHTML = `<span class="hand-label">${hand}</span> ${escHtml(a.name)} <span class="action-dmg">(${w.damage != null ? w.damage : '?'} dmg)</span>`;
+        btn.onclick = () => doAttack(currentRunId, hand, a.id);
+        wrap.appendChild(btn);
+      });
+    } else if (hState) {
+      const windingRow = queue.find(q => q.event === 'winding' && q.label === hand);
+      const status = document.createElement('div');
+      status.className = 'action-status';
+      status.textContent = `${hand} — winding${windingRow && windingRow.tics != null ? ` ${windingRow.tics} tics` : ''}`;
+      wrap.appendChild(status);
+    }
+  });
 }
 
 function openItemMenu(runId) {
@@ -343,12 +386,7 @@ function doItem(runId) {
 }
 
 function attachLiveButtons(runId) {
-  const attackBtn = document.getElementById('btn-attack');
   const itemBtn = document.getElementById('btn-item');
-  if (attackBtn) {
-    attackBtn.onclick = () => doAttack(runId);
-    attackBtn.disabled = false;
-  }
   if (itemBtn) {
     itemBtn.onclick = () => doItem(runId);
     itemBtn.disabled = false;
@@ -380,7 +418,8 @@ async function loadBattle(runId) {
     if (battleLabel) {
       const cb = run.current_battle || 1;
       const tb = run.total_battles || 1;
-      battleLabel.textContent = `BATTLE ${cb} OF ${tb}`;
+      const bsTic = (run.battle_state && run.battle_state.tic != null) ? run.battle_state.tic : 0;
+      battleLabel.textContent = `BATTLE ${cb} OF ${tb} — TIC ${bsTic}`;
     }
 
     renderPlayerHP(run);
@@ -390,6 +429,7 @@ async function loadBattle(runId) {
     renderMonsters(bs.monsters || []);
     renderFeed(bs.feed || []);
     renderLoadout(bs);
+    renderActionMenu(bs);
 
     attachLiveButtons(runId);
 

@@ -159,8 +159,21 @@ function showInspectPopup(itemName, targetEl) {
   if (weaponsMap[itemName]) {
     const w = weaponsMap[itemName];
     html += `<div class="type">WEAPON</div>`;
-    html += `<div class="stat-line">DMG ${w.damage || '??'} / ACC ??</div>`;
-    if (w.attacks && w.attacks.length) html += `<div class="attacks">Attacks: ${w.attacks.map(a=>a.name).join(', ')}</div>`;
+    html += `<div class="stat-line">DMG ${w.damage ?? '??'} · SPD ${w.speed ?? '??'} · ACC ${w.accuracy ?? '??'}</div>`;
+    if (w.attacks && w.attacks.length) {
+      const rows = w.attacks.map(a => {
+        const bits = [];
+        if (a.base_damage_multiplier != null) bits.push(`×${a.base_damage_multiplier} dmg`);
+        if (a.prepare_time != null) bits.push(`cast ${a.prepare_time}`);
+        if (a.cooldown_time != null) bits.push(`cd ${a.cooldown_time}`);
+        if (a.is_multi_target) bits.push('multi-target');
+        let row = `<div class="attack-row"><strong>${a.name}</strong>`;
+        if (bits.length) row += ` <span style="color:#88aaff;">${bits.join(' · ')}</span>`;
+        if (a.description) row += `<div style="color:#7a8ca6;margin-top:2px;">${a.description}</div>`;
+        return row + '</div>';
+      }).join('');
+      html += `<div class="attacks">${rows}</div>`;
+    }
   } else if (consumablesMap[itemName]) {
     const c = consumablesMap[itemName];
     html += `<div class="type">CONSUMABLE</div>`;
@@ -255,10 +268,18 @@ function renderDiceTray() {
   const y = currentPortal.yellow_dice_count || 3;
   const r = currentPortal.red_dice_count || 2;
   const total = g + y + r;
+  // Face values come from the portal template (API payload), never invented here.
+  const facesOf = (color) => (currentPortal && Array.isArray(currentPortal[color + '_faces']) && currentPortal[color + '_faces'].length)
+    ? currentPortal[color + '_faces'].join(' · ')
+    : null;
+  const titleFor = (color) => {
+    const faces = facesOf(color);
+    return faces ? `Faces: ${faces}` : '';
+  };
   let html = '<div><div style="display:flex;gap:3px;margin-bottom:2px;">';
-  for (let i = 0; i < g; i++) html += '<div class="die green" title="Normal Die">G</div>';
-  for (let i = 0; i < y; i++) html += '<div class="die yellow" title="Crit Die">Y</div>';
-  for (let i = 0; i < r; i++) html += '<div class="die red" title="Fumble Die">R</div>';
+  for (let i = 0; i < g; i++) html += `<div class="die green" title="${titleFor('green')}">G</div>`;
+  for (let i = 0; i < y; i++) html += `<div class="die yellow" title="${titleFor('yellow')}">Y</div>`;
+  for (let i = 0; i < r; i++) html += `<div class="die red" title="${titleFor('red')}">R</div>`;
   html += `</div><div class="dice-labels"><div>REMAINING (${total})</div><div>USED (0)</div></div></div>`;
   tray.innerHTML = html;
 }

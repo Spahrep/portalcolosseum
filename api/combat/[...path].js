@@ -759,7 +759,7 @@ async function handle(request) {
       let instances;
       try {
         const res = await admin.from('weapon_instance')
-          .select('id, damage, template_id, weapon_template:template_id (name)')
+          .select('id, damage, speed, accuracy, template_id, weapon_template:template_id (name)')
           .eq('user_id', user.id)
           .order('id');
         instances = res.data;
@@ -774,7 +774,7 @@ async function handle(request) {
         let attacks = [];
         try {
           const mapRes = await admin.from('weapon_template_attack_mapping')
-            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time)')
+            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time, base_damage_multiplier, description)')
             .eq('weapon_template_id', inst.template_id);
           if (mapRes.data) {
             attacks = mapRes.data.map(m => m.attack).filter(Boolean);
@@ -786,12 +786,16 @@ async function handle(request) {
           id: inst.id,
           name: inst.weapon_template?.name || 'Unknown',
           damage: inst.damage,
+          speed: inst.speed ?? null,
+          accuracy: inst.accuracy ?? null,
           attacks: attacks.map(a => ({
             id: a.id,
             name: a.name,
             is_multi_target: !!a.is_multi_target,
             prepare_time: a.prepare_time || 3,
-            cooldown_time: a.cooldown_time || 2
+            cooldown_time: a.cooldown_time || 2,
+            base_damage_multiplier: a.base_damage_multiplier ?? null,
+            description: a.description ?? null
           }))
         });
       }
@@ -839,7 +843,7 @@ async function handle(request) {
       let portals;
       try {
         const res = await admin.from('portal_template')
-          .select('id,name,fights,green_dice_count,yellow_dice_count,red_dice_count')
+          .select('id,name,fights,green_dice_count,yellow_dice_count,red_dice_count,green_faces,yellow_faces,red_faces')
           .order('id');
         portals = res.data;
         if (res.error) throw res.error;
