@@ -25,11 +25,11 @@ const DICE_ANIM = {
   INITIAL_INTERVAL: 60,
   MIN_INTERVAL: 180,
   DECELERATION: 1.25,
-  MAX_SWEEPS: 2,
+  MAX_SWEEPS: 3,     // full passes of the highlight before the slow tail
   LAND_PAUSE: 250,
-  ROLL_TICKS: 8,     // face-value tumbles before landing on the rolled face
+  ROLL_TICKS: 12,    // face-value tumbles before landing on the rolled face
   ROLL_INITIAL: 50,  // ms between early tumbles
-  ROLL_DECEL: 1.33,  // grows the gap each tick (fast→slow)
+  ROLL_DECEL: 1.25,  // grows the gap each tick (fast→slow)
   ROLL_MIN: 200      // slowest tick gap before the final face
 };
 
@@ -148,7 +148,10 @@ function renderDice(dice) {
         const drawnEl = document.createElement('div');
         drawnEl.className = `die ${current.color}`;
         drawnEl.textContent = current.color.substring(0, 1).toUpperCase();
-        remRow.appendChild(drawnEl);
+        // Random position in the row: if the drawn die always sat at the end,
+        // the sweep would visibly always land on the right-most box.
+        const insertAt = Math.floor(Math.random() * (remRow.children.length + 1));
+        remRow.insertBefore(drawnEl, remRow.children[insertAt] || null);
         // Labels match the visible pool during the sweep (the drawn die is
         // still "in play"); the cleanup render below restores true counts.
         const remTotal = (rem.green || 0) + (rem.yellow || 0) + (rem.red || 0);
@@ -170,7 +173,7 @@ function renderDice(dice) {
           diceEls[0].classList.add('highlight');
           setTimeout(selectAndRoll, DICE_ANIM.LAND_PAUSE);
         } else {
-          performSweepAnimation(diceEls, selectAndRoll);
+          performSweepAnimation(diceEls, insertAt, selectAndRoll);
         }
       } else {
         updateCurrentDie(curEl, current);
@@ -189,11 +192,15 @@ function updateCurrentDie(curEl, current) {
   curEl.style.display = 'flex';
 }
 
-function performSweepAnimation(diceEls, onLand) {
+function performSweepAnimation(diceEls, targetIndex, onLand) {
   let idx = 0;
   let interval = DICE_ANIM.INITIAL_INTERVAL;
   let sweeps = 0;
   const total = diceEls.length;
+  // The decel phase alone always ends on the LAST box; add slow hops so the
+  // ball stops on the target box (the drawn die) — varied landing, like a
+  // real wheel. N = (target+1) mod total lands exactly on the target.
+  let extra = ((targetIndex + 1) % total + total) % total;
 
   function step() {
     diceEls.forEach(el => el.classList.remove('highlight'));
@@ -205,9 +212,12 @@ function performSweepAnimation(diceEls, onLand) {
 
     if (sweeps < DICE_ANIM.MAX_SWEEPS || interval < DICE_ANIM.MIN_INTERVAL) {
       setTimeout(step, interval);
+    } else if (extra > 0) {
+      extra--;
+      setTimeout(step, DICE_ANIM.MIN_INTERVAL); // slow dramatic hops to the target
     } else {
       setTimeout(() => {
-        // leave highlight on the landed box (last in sweep row) through reveal
+        // leave highlight on the landed box (the drawn die) through reveal
         onLand();
       }, DICE_ANIM.LAND_PAUSE);
     }
