@@ -62,11 +62,13 @@ let selectedIndex = 0;
 function panToLocation(index) {
   const loc = LOCATIONS[index];
   // Calculate pan offset: account for the fact that image width (300vh)
-  // may differ from 300vw on non-3:1 screens
+  // may differ from 300vw on non-3:1 screens.
+  // Clamp so the 100vw viewport NEVER shows black body background on either side.
   const ratio = window.innerHeight / window.innerWidth;  // vh/vw at 100x scale
-  const imageWidthInVw = 300 * ratio;  // 300vh expressed in vw units
-  const buildingPosInVw = (loc.x / 100) * imageWidthInVw;  // position in vw
-  const tx = 50 - buildingPosInVw;  // center on viewport midpoint (50vw)
+  const panoWidthVw = Math.max(300 * ratio, 100);
+  const buildingPosInVw = (loc.x / 100) * panoWidthVw;  // position in vw
+  const maxPanLeft = panoWidthVw - 100;                 // >= 0 by construction
+  const tx = Math.min(Math.max(50 - buildingPosInVw, -maxPanLeft), 0);
 
   const container = document.getElementById('game-container');
   container.style.transform = `translate(${tx}vw, 0)`;
