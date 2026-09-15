@@ -447,11 +447,11 @@
 
     .loot-window {
       position: absolute;
-      top: 8px;
-      right: 8px;
+      top: auto;
+      right: 12px;
+      bottom: 12px;
       left: auto;
-      transform: none;
-      width: 280px;
+      width: 310px;
       background: #000;
       border: 3px solid #ccc;
       padding: 8px 12px;
@@ -552,16 +552,6 @@
           <span class="hp-text">HP 142 / 164</span>
         </div>
 
-        <!-- LOOT window (centered over arena, shown via JS) -->
-        <div class="loot-window" id="loot-window">
-          <div class="header">LOOT — RUN 3 PRIZE POOL</div>
-          <div class="gold">GOLD  38</div>
-          <div class="item-line">Iron Short Sword  x1</div>
-          <div class="item-line">Buckler  x1</div>
-          <div class="item-line">Medicinal Herb  x1</div>
-          <div class="footer">Banked at run end - leaving early reduces the take; death forfeits it.</div>
-        </div>
-
         <!-- Monster sprites row -->
         <div class="monster-row">
           <!-- A: Glimmerling (DW slime style) -->
@@ -646,6 +636,16 @@
       </div>
 
       <div class="info-popup" id="info-popup"></div>
+
+      <!-- LOOT window (bottom-right slot; the command menu takes this spot on the player's turn, so loot auto-closes then) -->
+      <div class="loot-window" id="loot-window">
+        <div class="header">LOOT — RUN 3 PRIZE POOL</div>
+        <div class="gold">GOLD  38</div>
+        <div class="item-line">Iron Short Sword  x1</div>
+        <div class="item-line">Buckler  x1</div>
+        <div class="item-line">Medicinal Herb  x1</div>
+        <div class="footer">Banked at run end - leaving early reduces the take; death forfeits it.</div>
+      </div>
     </div>
   </div>
 

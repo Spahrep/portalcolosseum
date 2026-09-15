@@ -168,6 +168,9 @@ function attachRowHandlers() {
 
 function showCommandMenu(hand = 'left', showBoth = false) {
   const menu = commandMenu();
+  // the command menu takes over the bottom-right slot: close loot if open
+  const win = lootWindow();
+  if (win) win.classList.remove('visible');
   currentHand = hand;
   bothHandsReady = showBoth;
 
