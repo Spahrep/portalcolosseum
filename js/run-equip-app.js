@@ -190,14 +190,22 @@ function showInspectPopup(item, targetEl) {
   }
   popupEl.innerHTML = html;
 
-  // Position beside the clicked item, always clamped INSIDE the container so it
-  // never covers the loadout slots (the next click target) or clips off-screen.
+  // Position beside the clicked item, never covering the loadout slots (the
+  // next click target). The loadout panel's right edge is a hard left boundary;
+  // if the popup still overflows the container's right edge on narrow windows,
+  // it may stick out over the page background rather than hide the slots.
   const rect = targetEl.getBoundingClientRect();
   const contRect = document.querySelector('.container').getBoundingClientRect();
+  const loadoutRight = document.querySelector('.loadout-panel').getBoundingClientRect().right - contRect.left;
+  const minLeft = loadoutRight + 6;
   const popupW = popupEl.offsetWidth;
   const popupH = popupEl.offsetHeight;
   let left = rect.left - contRect.left + 30;
-  if (left + popupW > contRect.width - 8) left = Math.max(8, rect.left - contRect.left - popupW - 30);
+  if (left < minLeft) left = minLeft;
+  if (left + popupW > contRect.width - 8) {
+    const flipped = rect.left - contRect.left - popupW - 30;
+    if (flipped >= minLeft) left = flipped;
+  }
   let top = rect.top - contRect.top - 10;
   if (top + popupH > contRect.height - 8) top = Math.max(8, contRect.height - popupH - 8);
   popupEl.style.left = left + 'px';
