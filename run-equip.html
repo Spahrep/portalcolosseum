@@ -351,9 +351,12 @@
       <button class="enter-btn" id="enter-btn">ENTER PORTAL →</button>
       <div class="note">Loadout locks at entry — no inventory access between fights.</div>
     </div>
-  </div>
 
-  <div class="info-popup" id="info-popup"></div>
+    <!-- Info popup lives INSIDE the container so position:absolute resolves
+         against it; as a <body> child the left/top math landed it over the
+         loadout slots (blocking the next click target). -->
+    <div class="info-popup" id="info-popup"></div>
+  </div>
 
   <script type="module" src="/js/run-equip-app.js"></script>
 </body>

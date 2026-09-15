@@ -12,13 +12,18 @@ const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
 
 let supabase;
+// Backpack and loadout hold ITEM objects: { kind: 'weapon'|'consumable', id, name }.
+// Identity is the instance id, never the name — two Wristblades are two distinct
+// instances and must stay distinct (a name-keyed map collapsed them into one id,
+// so a second same-named weapon silently vanished and the run payload repeated
+// the same instance id, which the API rejects as 'Duplicate weapon id').
 let backpack = [];
 let loadout = [null, null, null, null, null];
 let selectedIndex = null;
 let popupEl;
 let currentPortal = null;
-let weaponsMap = {};
-let consumablesMap = {};
+let weaponsById = {};
+let consumablesById = {};
 
 function getAuthToken() {
   // For API calls, use supabase session token
@@ -61,37 +66,34 @@ async function loadData() {
   const consumables = cRes.consumables || [];
   const portals = pRes.portals || [];
 
-  weaponsMap = {};
-  weapons.forEach(w => { if (w && w.name) weaponsMap[w.name] = w; });
-  consumablesMap = {};
-  consumables.forEach(c => {
-    const key = c.name || c.template_name || c.consumable_template?.name || c.consumable_template?.template_name;
-    if (key) consumablesMap[key] = c;
-  });
+  weaponsById = {};
+  weapons.forEach(w => { if (w && w.id) weaponsById[w.id] = w; });
+  consumablesById = {};
+  consumables.forEach(c => { if (c && c.id) consumablesById[c.id] = c; });
 
   currentPortal = portals[0] || null;
 
-  // Default loadout prefill: first 3 weapons + first 2 consumables if owned
-  const ownedWeapons = weapons.slice(0, 3);
-  const ownedConsumables = consumables.slice(0, 2);
-  loadout[0] = ownedWeapons[0] ? ownedWeapons[0].name : null;
-  loadout[1] = ownedWeapons[1] ? ownedWeapons[1].name : null;
-  loadout[2] = ownedWeapons[2] ? ownedWeapons[2].name : null;
-  loadout[3] = ownedConsumables[0] ? (ownedConsumables[0].name || ownedConsumables[0].template_name || ownedConsumables[0].consumable_template?.name) : null;
-  loadout[4] = ownedConsumables[1] ? (ownedConsumables[1].name || ownedConsumables[1].template_name || ownedConsumables[1].consumable_template?.name) : null;
+  // One item per owned instance. Names repeat freely across instances.
+  const weaponItems = weapons.filter(w => w && w.id).map(w => ({ kind: 'weapon', id: w.id, name: w.name }));
+  const consumableItems = consumables.filter(c => c && c.id).map(c => ({ kind: 'consumable', id: c.id, name: c.template_name }));
 
-  // Backpack = remaining owned items not in loadout
+  // Default loadout prefill: first 3 weapon instances + first 2 consumables if owned
+  loadout[0] = weaponItems[0] || null;
+  loadout[1] = weaponItems[1] || null;
+  loadout[2] = weaponItems[2] || null;
+  loadout[3] = consumableItems[0] || null;
+  loadout[4] = consumableItems[1] || null;
+
+  // Backpack = remaining owned instances not in loadout (dedupe by instance id,
+  // not name; composite kind:id key in case a weapon and consumable share an id)
   backpack = [];
-  const used = new Set(loadout.filter(Boolean));
-  weapons.forEach(w => { if (w && w.name && !used.has(w.name)) backpack.push(w.name); });
-  consumables.forEach(c => {
-    const nm = c.name || c.template_name || c.consumable_template?.name || c.consumable_template?.template_name;
-    if (nm && !used.has(nm)) backpack.push(nm);
-  });
+  const usedKeys = new Set(loadout.filter(Boolean).map(item => `${item.kind}:${item.id}`));
+  weaponItems.forEach(item => { if (!usedKeys.has(`${item.kind}:${item.id}`)) backpack.push(item); });
+  consumableItems.forEach(item => { if (!usedKeys.has(`${item.kind}:${item.id}`)) backpack.push(item); });
 }
 
-function isWeapon(name) { return !!weaponsMap[name]; }
-function isConsumable(name) { return !!consumablesMap[name]; }
+function isWeapon(item) { return !!item && item.kind === 'weapon'; }
+function isConsumable(item) { return !!item && item.kind === 'consumable'; }
 
 function renderBackpack() {
   const grid = document.getElementById('backpack-grid');
@@ -101,7 +103,7 @@ function renderBackpack() {
     const slot = document.createElement('div');
     slot.className = 'inv-slot';
     if (i < backpack.length) {
-      slot.textContent = backpack[i];
+      slot.textContent = backpack[i].name;
       slot.dataset.index = i;
       slot.onclick = () => selectBackpackItem(i, slot);
     } else {
@@ -113,17 +115,24 @@ function renderBackpack() {
 }
 
 function selectBackpackItem(index, el) {
+  // Clicking the already-selected item again deselects it
+  if (selectedIndex === index) {
+    selectedIndex = null;
+    popupEl.style.display = 'none';
+    clearHighlights();
+    return;
+  }
   document.querySelectorAll('.inv-slot').forEach(s => s.classList.remove('selected'));
   el.classList.add('selected');
   selectedIndex = index;
-  const itemName = backpack[index];
-  showInspectPopup(itemName, el);
-  highlightTargets(itemName);
+  const item = backpack[index];
+  showInspectPopup(item, el);
+  highlightTargets(item);
 }
 
-function highlightTargets(itemName) {
-  const isW = isWeapon(itemName);
-  const isC = isConsumable(itemName);
+function highlightTargets(item) {
+  const isW = isWeapon(item);
+  const isC = isConsumable(item);
   document.querySelectorAll('.slot-row').forEach(row => {
     const slotNum = parseInt(row.dataset.slot);
     const content = row.querySelector('.slot-content');
@@ -147,39 +156,52 @@ function clearHighlights() {
   document.querySelectorAll('.inv-slot').forEach(s => s.classList.remove('selected', 'valid-target', 'invalid-target'));
 }
 
-function showInspectPopup(itemName, targetEl) {
+function showInspectPopup(item, targetEl) {
   popupEl.innerHTML = '';
   popupEl.style.display = 'block';
-  const rect = targetEl.getBoundingClientRect();
-  const contRect = document.querySelector('.container').getBoundingClientRect();
-  popupEl.style.left = (rect.left - contRect.left + 30) + 'px';
-  popupEl.style.top = (rect.top - contRect.top - 10) + 'px';
 
-  let html = `<div class="name">${itemName}</div>`;
-  if (weaponsMap[itemName]) {
-    const w = weaponsMap[itemName];
-    html += `<div class="type">WEAPON</div>`;
-    html += `<div class="stat-line">DMG ${w.damage ?? '??'} · SPD ${w.speed ?? '??'} · ACC ${w.accuracy ?? '??'}</div>`;
-    if (w.attacks && w.attacks.length) {
-      const rows = w.attacks.map(a => {
-        const bits = [];
-        if (a.base_damage_multiplier != null) bits.push(`×${a.base_damage_multiplier} dmg`);
-        if (a.prepare_time != null) bits.push(`cast ${a.prepare_time}`);
-        if (a.cooldown_time != null) bits.push(`cd ${a.cooldown_time}`);
-        if (a.is_multi_target) bits.push('multi-target');
-        let row = `<div class="attack-row"><strong>${a.name}</strong>`;
-        if (bits.length) row += ` <span style="color:#88aaff;">${bits.join(' · ')}</span>`;
-        if (a.description) row += `<div style="color:#7a8ca6;margin-top:2px;">${a.description}</div>`;
-        return row + '</div>';
-      }).join('');
-      html += `<div class="attacks">${rows}</div>`;
+  let html = `<div class="name">${item.name}</div>`;
+  if (item.kind === 'weapon') {
+    const w = weaponsById[item.id];
+    if (w) {
+      html += `<div class="type">WEAPON</div>`;
+      html += `<div class="stat-line">DMG ${w.damage ?? '??'} · SPD ${w.speed ?? '??'} · ACC ${w.accuracy ?? '??'}</div>`;
+      if (w.attacks && w.attacks.length) {
+        const rows = w.attacks.map(a => {
+          const bits = [];
+          if (a.base_damage_multiplier != null) bits.push(`×${a.base_damage_multiplier} dmg`);
+          if (a.prepare_time != null) bits.push(`cast ${a.prepare_time}`);
+          if (a.cooldown_time != null) bits.push(`cd ${a.cooldown_time}`);
+          if (a.is_multi_target) bits.push('multi-target');
+          let row = `<div class="attack-row"><strong>${a.name}</strong>`;
+          if (bits.length) row += ` <span style="color:#88aaff;">${bits.join(' · ')}</span>`;
+          if (a.description) row += `<div style="color:#7a8ca6;margin-top:2px;">${a.description}</div>`;
+          return row + '</div>';
+        }).join('');
+        html += `<div class="attacks">${rows}</div>`;
+      }
     }
-  } else if (consumablesMap[itemName]) {
-    const c = consumablesMap[itemName];
-    html += `<div class="type">CONSUMABLE</div>`;
-    html += `<div class="stat-line">${c.consumable_template?.description || c.description || c.template_name || 'Effect'}</div>`;
+  } else if (item.kind === 'consumable') {
+    const c = consumablesById[item.id];
+    if (c) {
+      html += `<div class="type">CONSUMABLE</div>`;
+      html += `<div class="stat-line">${c.description || c.effect_label || c.template_name || 'Effect'}</div>`;
+    }
   }
   popupEl.innerHTML = html;
+
+  // Position beside the clicked item, always clamped INSIDE the container so it
+  // never covers the loadout slots (the next click target) or clips off-screen.
+  const rect = targetEl.getBoundingClientRect();
+  const contRect = document.querySelector('.container').getBoundingClientRect();
+  const popupW = popupEl.offsetWidth;
+  const popupH = popupEl.offsetHeight;
+  let left = rect.left - contRect.left + 30;
+  if (left + popupW > contRect.width - 8) left = Math.max(8, rect.left - contRect.left - popupW - 30);
+  let top = rect.top - contRect.top - 10;
+  if (top + popupH > contRect.height - 8) top = Math.max(8, contRect.height - popupH - 8);
+  popupEl.style.left = left + 'px';
+  popupEl.style.top = top + 'px';
 
   setTimeout(() => {
     document.addEventListener('click', function handler(ev) {
@@ -194,9 +216,9 @@ function showInspectPopup(itemName, targetEl) {
 
 function assignToSlot(slotIndex) {
   if (selectedIndex === null) return;
-  const itemName = backpack[selectedIndex];
-  const isW = isWeapon(itemName);
-  const isC = isConsumable(itemName);
+  const item = backpack[selectedIndex];
+  const isW = isWeapon(item);
+  const isC = isConsumable(item);
   const isWeaponSlot = slotIndex <= 2;
   const isConsumableSlot = slotIndex >= 3;
 
@@ -214,7 +236,7 @@ function assignToSlot(slotIndex) {
   }
 
   const displaced = loadout[slotIndex];
-  loadout[slotIndex] = itemName;
+  loadout[slotIndex] = item;
   backpack.splice(selectedIndex, 1);
   if (displaced) backpack.push(displaced);
   renderAll();
@@ -224,10 +246,10 @@ function assignToSlot(slotIndex) {
 }
 
 function unequipSlot(slotIndex) {
-  const itemName = loadout[slotIndex];
-  if (!itemName) return;
+  const item = loadout[slotIndex];
+  if (!item) return;
   loadout[slotIndex] = null;
-  backpack.push(itemName);
+  backpack.push(item);
   renderAll();
 }
 
@@ -239,11 +261,16 @@ function renderLoadout() {
     const row = content.parentElement;
     row.onclick = null;
     if (loadout[i]) {
-      const name = loadout[i];
+      const item = loadout[i];
       let stats = '';
-      if (weaponsMap[name]) stats = `DMG ${weaponsMap[name].damage || '??'}`;
-      else if (consumablesMap[name]) stats = consumablesMap[name].consumable_template?.description || consumablesMap[name].description || 'Effect';
-      content.innerHTML = `<span>${name}</span><span class="stats">${stats}</span>`;
+      if (item.kind === 'weapon') {
+        const w = weaponsById[item.id];
+        if (w) stats = `DMG ${w.damage ?? '??'}`;
+      } else if (item.kind === 'consumable') {
+        const c = consumablesById[item.id];
+        if (c) stats = c.description || c.effect_label || c.template_name || 'Effect';
+      }
+      content.innerHTML = `<span>${item.name}</span><span class="stats">${stats}</span>`;
       content.classList.remove('empty');
       row.onclick = () => unequipSlot(i);
     } else {
@@ -318,16 +345,15 @@ async function enterPortal() {
     alert('No portal selected');
     return;
   }
-  // Real instance id mapping using maps (support template_name shape)
-  const getWeaponId = (name) => name && weaponsMap[name] ? weaponsMap[name].id : null;
-  const getConsumableId = (name) => name && consumablesMap[name] ? consumablesMap[name].id : null;
+  // Each loadout slot carries its own instance id — two same-named weapons send
+  // two distinct ids, which the API accepts (it only rejects one id twice).
   const payload = {
     portal_template_id: currentPortal.id,
-    hand_l_weapon_id: getWeaponId(loadout[0]),
-    hand_r_weapon_id: getWeaponId(loadout[1]),
-    belt_weapon_id: getWeaponId(loadout[2]),
-    consume_a: getConsumableId(loadout[3]),
-    consume_b: getConsumableId(loadout[4])
+    hand_l_weapon_id: isWeapon(loadout[0]) ? loadout[0].id : null,
+    hand_r_weapon_id: isWeapon(loadout[1]) ? loadout[1].id : null,
+    belt_weapon_id: isWeapon(loadout[2]) ? loadout[2].id : null,
+    consume_a: isConsumable(loadout[3]) ? loadout[3].id : null,
+    consume_b: isConsumable(loadout[4]) ? loadout[4].id : null
   };
   try {
     const result = await apiCall('/runs', 'POST', payload);
@@ -342,7 +368,13 @@ async function enterPortal() {
     errDiv.className = 'message-error';
     errDiv.style.color = '#ff6666';
     errDiv.style.marginBottom = '8px';
-    errDiv.textContent = `ENTRY FAILED: ${e.message}`;
+    // apiCall throws the raw response body; unwrap {"error":"..."} for display
+    let message = e.message;
+    try {
+      const parsed = JSON.parse(e.message);
+      if (parsed && parsed.error) message = parsed.error;
+    } catch (parseErr) { /* not JSON — show as-is */ }
+    errDiv.textContent = `ENTRY FAILED: ${message}`;
     bottom.insertBefore(errDiv, bottom.firstChild);
   }
 }
