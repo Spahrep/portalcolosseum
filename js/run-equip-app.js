@@ -51,7 +51,7 @@ async function checkAuth() {
     window.location.href = '/login.html';
     return false;
   }
-  return true;
+  return session;
 }
 
 async function loadData() {

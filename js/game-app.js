@@ -274,7 +274,9 @@ async function initGame() {
   // PC-50r: auto-resume into active run (never show town to a player with an active run)
   // Fetch failure is soft (console + continue to town) — a redirect loop is worse.
   try {
-    const res = await fetch('/api/combat/runs/active', { credentials: 'include' });
+    const res = await fetch('/api/combat/runs/active', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
     if (res.ok) {
       const { run } = await res.json();
       if (run && run.id) {
