@@ -916,6 +916,14 @@ async function init() {
   });
   if (!(await checkAuth())) return;
 
+  // PC-52: fill hud-name from session (front-end only, placeholder dock)
+  const { data: { session } } = await supabase.auth.getSession();
+  const hudName = document.getElementById('hud-name');
+  if (hudName && session && session.user) {
+    const meta = session.user.user_metadata || {};
+    hudName.textContent = meta.username || meta.full_name || (session.user.email ? session.user.email.split('@')[0] : 'PLAYER');
+  }
+
   const params = new URLSearchParams(window.location.search);
   const runId = params.get('id');
   if (!runId) {

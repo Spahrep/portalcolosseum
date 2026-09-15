@@ -271,6 +271,13 @@ async function initGame() {
     return;
   }
 
+  // PC-52: fill hud-name from session (front-end only, placeholder dock)
+  const hudName = document.getElementById('hud-name');
+  if (hudName && session && session.user) {
+    const meta = session.user.user_metadata || {};
+    hudName.textContent = meta.username || meta.full_name || (session.user.email ? session.user.email.split('@')[0] : 'PLAYER');
+  }
+
   // PC-50r: auto-resume into active run (never show town to a player with an active run)
   // Fetch failure is soft (console + continue to town) — a redirect loop is worse.
   try {

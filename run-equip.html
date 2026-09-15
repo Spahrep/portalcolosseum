@@ -9,7 +9,7 @@
   <style>
     body {
       margin: 0;
-      padding: 20px;
+      padding: 20px 20px 70px;
       background: #000 url('/public/pictures/town/town_pano.jpg') center/cover no-repeat;
       font-family: 'Pixeloid Mono', 'Courier New', monospace;
       color: #e0e0ff;
@@ -304,6 +304,14 @@
       margin: 10px auto 0 auto;
       max-width: 420px;
     }
+
+    /* AP & Gold bottom dock (PC-52) — placeholder values, backend hookup later */
+    .status-dock { position:fixed; bottom:0; left:0; right:0; height:30px; background:rgba(10,26,46,0.7); border-top:2px solid #4a90d9; display:flex; align-items:center; justify-content:space-between; padding:0 16px; font-size:11px; z-index:100; font-family:'Pixeloid Mono','Courier New',monospace; }
+    .dock-left { color:#ffcc66; }
+    .dock-center { color:#66ccff; display:flex; align-items:center; gap:6px; }
+    .dock-right { color:#ffcc66; }
+    .ap-meter-small { width:80px; height:3px; background:rgba(0,0,0,0.5); border:1px solid #334466; position:relative; display:inline-block; }
+    .ap-fill-small { position:absolute; left:0; top:0; bottom:0; width:80%; background:#66ccff; }
   </style>
 </head>
 <body>
@@ -374,5 +382,15 @@
   </div>
 
   <script type="module" src="/js/run-equip-app.js"></script>
+
+<div id="status-dock" class="status-dock" title="AP: +10/day · cap 30 · spent on runs &amp; shop rerolls&#10;Gold: earned from runs · spent at shops, entry fees &amp; rerolls">
+  <div class="dock-left" id="hud-name">PLAYER</div>
+  <div class="dock-center">
+    AP
+    <span class="ap-meter-small"><span class="ap-fill-small"></span></span>
+    24/30
+  </div>
+  <div class="dock-right">◉ 1,240gc</div>
+</div>
 </body>
 </html>

@@ -138,7 +138,7 @@ body.game-page {
 /* Minimal logout button */
 #logout-corner {
   position: fixed;
-  bottom: 20px;
+  bottom: 46px;
   right: 20px;
   z-index: 1000;
 }
@@ -251,3 +251,11 @@ body.game-page {
     0 -2px 0 #000;
   pointer-events: none;
 }
+
+/* AP & Gold bottom dock (PC-52) — placeholder values, backend hookup later */
+.status-dock { position:fixed; bottom:0; left:0; right:0; height:30px; background:rgba(10,26,46,0.7); border-top:2px solid #4a90d9; display:flex; align-items:center; justify-content:space-between; padding:0 16px; font-size:11px; z-index:100; font-family:'Pixeloid Mono','Courier New',monospace; }
+.dock-left { color:#ffcc66; }
+.dock-center { color:#66ccff; display:flex; align-items:center; gap:6px; }
+.dock-right { color:#ffcc66; }
+.ap-meter-small { width:80px; height:3px; background:rgba(0,0,0,0.5); border:1px solid #334466; position:relative; display:inline-block; }
+.ap-fill-small { position:absolute; left:0; top:0; bottom:0; width:80%; background:#66ccff; }

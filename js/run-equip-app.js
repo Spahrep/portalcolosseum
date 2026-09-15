@@ -464,6 +464,14 @@ async function init() {
   }
   const session = await checkAuth();
   if (!session) return;
+
+  // PC-52: fill hud-name from session (front-end only, placeholder dock)
+  const hudName = document.getElementById('hud-name');
+  if (hudName && session && session.user) {
+    const meta = session.user.user_metadata || {};
+    hudName.textContent = meta.username || meta.full_name || (session.user.email ? session.user.email.split('@')[0] : 'PLAYER');
+  }
+
   // PC-50r: active-run bounce on load (equip screen only for brand-new runs)
   try {
     const res = await fetch('/api/combat/runs/active', {
