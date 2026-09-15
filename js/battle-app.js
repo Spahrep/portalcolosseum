@@ -208,11 +208,12 @@ async function loadBattle(runId) {
       battleLabel.textContent = `BATTLE ${cb} OF ${tb}`;
     }
 
-    // player hp
+    // player hp (numeric — the API exposes player_hp only; design shows numbers)
     const playerHp = document.getElementById('player-hp');
     if (playerHp) {
-      const hpw = run.player_hp_word || run.hp_word || 'Healthy';
-      playerHp.innerHTML = `HP: <span style="color:#66ff99;">${hpw}</span>`;
+      const hpVal = typeof run.player_hp === 'number' ? run.player_hp : null;
+      const hpColor = hpVal === null ? '#66ff99' : (hpVal > 300 ? '#66ff99' : (hpVal > 100 ? '#ffcc66' : '#ff6666'));
+      playerHp.innerHTML = `HP: <span style="color:${hpColor};">${hpVal === null ? '—' : hpVal}</span>`;
     }
 
     // dice
@@ -225,11 +226,12 @@ async function loadBattle(runId) {
     // feed
     renderFeed(bs.feed || []);
 
-    // weapons loadout display (read-only this pass)
+    // weapons loadout display (read-only this pass) — names from battle_state.weapons
+    const wl = bs.weapons || {};
     const lh = document.getElementById('loadout-lh');
     const rh = document.getElementById('loadout-rh');
-    if (lh) lh.textContent = run.hand_l_weapon_id || '—';
-    if (rh) rh.textContent = run.hand_r_weapon_id || '—';
+    if (lh) lh.textContent = (wl.hand_l && wl.hand_l.name) || '—';
+    if (rh) rh.textContent = (wl.hand_r && wl.hand_r.name) || '—';
 
     attachInertButtons();
 
@@ -254,10 +256,13 @@ async function init() {
   }
   supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     auth: {
-      storageKey: 'pc-auth',
-      storage: localStorage,
-      persistSession: true,
-      autoRefreshToken: true
+      flowType: 'pkce',
+      detectSessionInUrl: true,
+      storage: {
+        getItem: (key) => localStorage.getItem(key),
+        setItem: (key, value) => localStorage.setItem(key, value),
+        removeItem: (key) => localStorage.removeItem(key)
+      }
     }
   });
   if (!(await checkAuth())) return;
