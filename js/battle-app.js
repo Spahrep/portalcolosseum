@@ -20,17 +20,20 @@ let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
 let shouldAnimateDice = false;
 
 // Tuning constants for PC-51 casino roulette dice reveal (two stages:
-// selection sweep, then the die roll). Both use the same fast→slow decel.
+// selection sweep, then the die roll). The sweep spins MANY fast passes
+// (roulette-ball whir), then one decelerating pass, then slow hops to
+// land; the roll is deliberately slower and weightier.
 const DICE_ANIM = {
-  INITIAL_INTERVAL: 60,
-  MIN_INTERVAL: 180,
-  DECELERATION: 1.25,
-  MAX_SWEEPS: 3,     // full passes of the highlight before the slow tail
-  LAND_PAUSE: 250,
-  ROLL_TICKS: 12,    // face-value tumbles before landing on the rolled face
-  ROLL_INITIAL: 50,  // ms between early tumbles
-  ROLL_DECEL: 1.25,  // grows the gap each tick (fast→slow)
-  ROLL_MIN: 200      // slowest tick gap before the final face
+  FAST_INTERVAL: 55,   // ms per step during the fast spins
+  FAST_PASSES: 5,      // full passes of the highlight at high speed
+  INITIAL_INTERVAL: 55,// first step of the decelerating pass
+  MIN_INTERVAL: 180,   // slowest step (also the landing-hop speed)
+  DECELERATION: 1.25,  // grows the gap each step (fast→slow)
+  LAND_PAUSE: 250,     // beat on the landed box before the roll starts
+  ROLL_TICKS: 12,      // face-value tumbles before landing on the rolled face
+  ROLL_INITIAL: 85,    // ms between early tumbles
+  ROLL_DECEL: 1.16,    // grows the gap each tick (fast→slow)
+  ROLL_MIN: 380        // slowest tick gap before the final face
 };
 
 function getAuthToken() {
@@ -161,17 +164,21 @@ function renderDice(dice) {
           <div>USED (${usedTotal - 1})</div>
         `;
         const diceEls = Array.from(remRow.children); // >= 1 (drawn die appended)
-        // After the roll lands, re-render the tray so the phantom drawn-die
-        // box and its highlight are cleared — final state = true post-draw.
-        const selectAndRoll = () => {
-          rollDiceAnimation(curEl, current, () => {
+        // Stage 2 (roll) plays out IN the box the sweep landed on — the
+        // current-die slot stays hidden until the reveal, so the chosen
+        // die is never shown sitting at the row's right edge mid-roll.
+        // After it lands, re-render the tray so the phantom drawn-die box
+        // and its highlight are cleared — final state = true post-draw.
+        const selectAndRoll = (landedBox) => {
+          rollDiceAnimation(landedBox, current, dice.faces, () => {
+            updateCurrentDie(curEl, current); // persistent slot lights up
             setTimeout(() => renderDice(dice), 350);
           });
         };
         if (diceEls.length === 1) {
           // Only the drawn die in the tray: brief highlight, then roll.
           diceEls[0].classList.add('highlight');
-          setTimeout(selectAndRoll, DICE_ANIM.LAND_PAUSE);
+          setTimeout(() => selectAndRoll(diceEls[0]), DICE_ANIM.LAND_PAUSE);
         } else {
           performSweepAnimation(diceEls, insertAt, selectAndRoll);
         }
@@ -195,11 +202,13 @@ function updateCurrentDie(curEl, current) {
 function performSweepAnimation(diceEls, targetIndex, onLand) {
   let idx = 0;
   let interval = DICE_ANIM.INITIAL_INTERVAL;
-  let sweeps = 0;
   const total = diceEls.length;
-  // The decel phase alone always ends on the LAST box; add slow hops so the
-  // ball stops on the target box (the drawn die) — varied landing, like a
-  // real wheel. N = (target+1) mod total lands exactly on the target.
+  // Phase 1: MANY full-speed passes (roulette-ball whir). Phase 2: one
+  // decelerating pass. The decel phase alone always ends on the LAST box,
+  // so add slow hops to stop on the target box (the drawn die) — varied
+  // landing, like a real wheel. N = (target+1) mod total lands exactly.
+  const fastSteps = DICE_ANIM.FAST_PASSES * total;
+  const decelEnd = fastSteps + total;
   let extra = ((targetIndex + 1) % total + total) % total;
 
   function step() {
@@ -207,10 +216,10 @@ function performSweepAnimation(diceEls, targetIndex, onLand) {
     diceEls[idx % total].classList.add('highlight');
     idx++;
 
-    interval = Math.min(DICE_ANIM.MIN_INTERVAL, Math.floor(interval * DICE_ANIM.DECELERATION));
-    if (idx % total === 0) sweeps++;
-
-    if (sweeps < DICE_ANIM.MAX_SWEEPS || interval < DICE_ANIM.MIN_INTERVAL) {
+    if (idx < fastSteps) {
+      setTimeout(step, DICE_ANIM.FAST_INTERVAL); // high-speed spins
+    } else if (idx < decelEnd) {
+      interval = Math.min(DICE_ANIM.MIN_INTERVAL, Math.floor(interval * DICE_ANIM.DECELERATION));
       setTimeout(step, interval);
     } else if (extra > 0) {
       extra--;
@@ -218,7 +227,7 @@ function performSweepAnimation(diceEls, targetIndex, onLand) {
     } else {
       setTimeout(() => {
         // leave highlight on the landed box (the drawn die) through reveal
-        onLand();
+        onLand(diceEls[targetIndex]);
       }, DICE_ANIM.LAND_PAUSE);
     }
   }
@@ -226,29 +235,27 @@ function performSweepAnimation(diceEls, targetIndex, onLand) {
   step();
 }
 
-// Stage 2 (roll): tumble face values in the current-die box (fast→slow),
-// landing on the rolled face with a small pop. The selection sweep already
-// revealed which die; this stage reveals what it rolled.
-function rollDiceAnimation(curEl, current, onDone) {
-  const box = document.createElement('div');
-  box.className = `die ${current.color}`;
-  box.style.cssText = 'width:32px;height:32px;font-size:14px;';
-  curEl.innerHTML = '';
-  curEl.appendChild(box);
-  curEl.style.display = 'flex';
+// Stage 2 (roll): the box the sweep landed on tumbles through the die's
+// REAL face pool (fast→slow), landing on the drawn face with a small pop.
+// Tumble values come from the template's faces for this color — never
+// invented numbers (dice roll 10/20/30, not fake 1-6).
+function rollDiceAnimation(box, current, faces, onDone) {
+  const pool = (faces && faces[current.color] && faces[current.color].length > 0)
+    ? faces[current.color]
+    : [current.face]; // defensive: unknown pool → die just settles
 
   let tick = 0;
   let interval = DICE_ANIM.ROLL_INITIAL;
   function step() {
     if (tick >= DICE_ANIM.ROLL_TICKS) {
-      // Canonical final layout (same as updateCurrentDie), then pop the die.
-      updateCurrentDie(curEl, current);
-      const landed = curEl.querySelector('.die');
-      if (landed) landed.classList.add('rolled');
+      box.textContent = current.face;
+      box.classList.remove('rolled');
+      void box.offsetWidth; // force reflow so the pop animation restarts
+      box.classList.add('rolled');
       onDone();
       return;
     }
-    box.textContent = 1 + Math.floor(Math.random() * 6); // d6 tumble
+    box.textContent = pool[Math.floor(Math.random() * pool.length)];
     tick++;
     interval = Math.min(DICE_ANIM.ROLL_MIN, Math.floor(interval * DICE_ANIM.ROLL_DECEL));
     setTimeout(step, interval);

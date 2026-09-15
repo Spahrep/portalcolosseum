@@ -288,6 +288,9 @@ async function handle(request) {
         .eq('portal_run_id', id);
       let dice = null;
       if (diceRows && diceRows.length > 0) {
+        const { data: tmplRow } = await admin.from('portal_template')
+          .select('green_faces, yellow_faces, red_faces')
+          .eq('id', run.portal_template_id).single();
         const remaining = { green: 0, yellow: 0, red: 0 };
         const used = { green: 0, yellow: 0, red: 0 };
         let current = null;
@@ -302,7 +305,16 @@ async function handle(request) {
             }
           }
         }
-        dice = { remaining, used, current };
+        dice = {
+          remaining, used, current,
+          // Template face pools so the roll reveal can tumble ONLY real
+          // faces (e.g. 10/20/30) — never invented values like 1-6.
+          faces: {
+            green: (tmplRow && tmplRow.green_faces) || [],
+            yellow: (tmplRow && tmplRow.yellow_faces) || [],
+            red: (tmplRow && tmplRow.red_faces) || []
+          }
+        };
       }
 
       // --- monsters: battle_state already carries stats + granted attacks (slot_*_attack
