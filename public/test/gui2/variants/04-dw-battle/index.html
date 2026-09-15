@@ -290,6 +290,7 @@
       display: flex;
       border-top: 4px solid #4a90d9;
       background: #000;
+      position: relative;
     }
 
     .message-box {
@@ -304,13 +305,13 @@
     }
 
     .command-menu {
-      width: 210px;
+      width: 340px;
       background: #000;
       border: 3px solid #ccc;
       padding: 8px 10px;
       font-size: 11px;
       color: #fff;
-      display: none; /* hidden until player's turn */
+      display: none;
       flex-shrink: 0;
     }
 
@@ -322,15 +323,31 @@
       color: #88aaff;
       font-size: 10px;
       letter-spacing: 1px;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       border-bottom: 1px solid #334466;
       padding-bottom: 2px;
+    }
+
+    .hand-line {
+      font-size: 11px;
+      margin-bottom: 6px;
+      padding-bottom: 3px;
+      border-bottom: 1px solid #334466;
+    }
+
+    .hand-label {
+      color: #ffcc66;
+    }
+
+    .weapon-name {
+      color: #88ccff;
     }
 
     .command-row {
       padding: 2px 4px 2px 18px;
       cursor: pointer;
       position: relative;
+      font-size: 11px;
     }
 
     .command-row.active::before {
@@ -342,6 +359,30 @@
 
     .command-row:hover {
       background: #1a2a44;
+    }
+
+    .section-header {
+      color: #6688aa;
+      font-size: 10px;
+      padding: 5px 4px 1px 4px;
+      pointer-events: none;
+      user-select: none;
+    }
+
+    .info-popup {
+      position: absolute;
+      bottom: 95px;
+      right: 12px;
+      max-width: 270px;
+      background: #000;
+      border: 2px solid #ccc;
+      padding: 6px 10px;
+      font-size: 11px;
+      color: #fff;
+      display: none;
+      z-index: 100;
+      line-height: 1.35;
+      box-shadow: 0 0 0 1px #000;
     }
   </style>
 </head>
@@ -485,13 +526,11 @@
 
       <div class="command-menu" id="command-menu">
         <div class="title">COMMAND</div>
-        <div class="command-row" data-cmd="fight-lh1">FIGHT: LH — Quick Slash</div>
-        <div class="command-row" data-cmd="fight-lh2">FIGHT: LH — Slash</div>
-        <div class="command-row" data-cmd="fight-rh1">FIGHT: RH — Fireball 1</div>
-        <div class="command-row" data-cmd="fight-rh2">FIGHT: RH — Ice Bolt 2</div>
-        <div class="command-row" data-cmd="item-herb">ITEM: Herb</div>
-        <div class="command-row" data-cmd="item-bomb">ITEM: Bomb</div>
+        <div class="hand-line" id="hand-line"></div>
+        <!-- rows populated by JS -->
       </div>
+
+      <div class="info-popup" id="info-popup"></div>
     </div>
   </div>
 

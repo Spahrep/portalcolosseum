@@ -1,9 +1,9 @@
 /**
  * Portal Colosseum — GUI2 Variant 04 (Dragon Warrior NES Battle)
- * Self-contained demo script.
- * - Narration cycle in DW message box
- * - Menu appears only on player's turn
- * - Keyboard + mouse targeting
+ * Per-hand turn-gated command menu with info popup.
+ * - LH or RH menu on ready hand
+ * - Arrow keys + mouse, section headers skipped
+ * - Both-hands demo with L/R switch
  * No inline scripts. No console spam.
  */
 
@@ -26,10 +26,31 @@ let menuVisible = false;
 let targetMode = false;
 let currentMenuIndex = 0;
 let currentTargetIndex = 0;
+let currentHand = 'left'; // 'left' | 'right'
+let bothHandsReady = false;
 
 const messageBox = () => document.getElementById('message-box');
 const commandMenu = () => document.getElementById('command-menu');
 const arena = () => document.getElementById('arena');
+const infoPopup = () => document.getElementById('info-popup');
+const handLine = () => document.getElementById('hand-line');
+
+const ATTACKS = {
+  left: [
+    { name: 'Quick Slash', info: 'Cast: 3-4 | CD: 1 | Phys/Slash | Dmg 12-22' },
+    { name: 'Slash', info: 'Cast: 5-6 | CD: 2 | Phys/Slash | Dmg 18-30' }
+  ],
+  right: [
+    { name: 'Fireball 1', info: 'Cast: 8-10 | CD: 4 | Magic/Fire | Dmg 22-38' },
+    { name: 'Ice Bolt 2', info: 'Cast: 10-12 | CD: 3-5 | Magic/Ice | Dmg 20-35' }
+  ]
+};
+
+const BELT = { name: 'Bronze Axe', info: '2h, replace both weapons, 30-40 tic equip time' };
+const CONSUMABLES = [
+  { name: 'Herb', info: 'Use: Restores a small amount of HP' },
+  { name: 'Bomb', info: 'Use: Deals damage to all enemies' }
+];
 
 function showMessage(lines) {
   const box = messageBox();
@@ -52,7 +73,6 @@ function startNarrationCycle() {
       appendNarration(narrationLines[narrationIndex]);
       narrationIndex++;
     } else {
-      // loop demo
       narrationIndex = 3;
       appendNarration(narrationLines[narrationIndex]);
       narrationIndex++;
@@ -67,13 +87,97 @@ function pauseNarration() {
   }
 }
 
-function showCommandMenu() {
+function buildMenuRows(hand) {
   const menu = commandMenu();
+  // clear previous rows except title and hand-line
+  const existingRows = menu.querySelectorAll('.command-row, .section-header');
+  existingRows.forEach(el => el.remove());
+
+  const attacks = ATTACKS[hand];
+  const weapon = hand === 'left' ? 'Iron Sword' : 'Arcane Wand';
+  const handLabel = hand === 'left' ? 'L.HAND' : 'R.HAND';
+
+  handLine().innerHTML = `<span class="hand-label">${handLabel}</span> — <span class="weapon-name">${weapon}</span>`;
+
+  // attacks (selectable)
+  attacks.forEach((atk, i) => {
+    const row = document.createElement('div');
+    row.className = 'command-row';
+    row.dataset.name = atk.name;
+    row.dataset.info = atk.info;
+    row.textContent = atk.name;
+    menu.appendChild(row);
+  });
+
+  // BELT LOOP header (non-selectable)
+  const beltHeader = document.createElement('div');
+  beltHeader.className = 'section-header';
+  beltHeader.textContent = 'BELT LOOP';
+  menu.appendChild(beltHeader);
+
+  // belt row
+  const beltRow = document.createElement('div');
+  beltRow.className = 'command-row';
+  beltRow.dataset.name = BELT.name;
+  beltRow.dataset.info = BELT.info;
+  beltRow.textContent = BELT.name;
+  menu.appendChild(beltRow);
+
+  // CONSUMABLES header
+  const consHeader = document.createElement('div');
+  consHeader.className = 'section-header';
+  consHeader.textContent = 'CONSUMABLES';
+  menu.appendChild(consHeader);
+
+  // consumables
+  CONSUMABLES.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'command-row';
+    row.dataset.name = item.name;
+    row.dataset.info = item.info;
+    row.textContent = item.name;
+    menu.appendChild(row);
+  });
+
+  // re-attach mouse handlers to new rows
+  attachRowHandlers();
+}
+
+function attachRowHandlers() {
+  const rows = commandMenu().querySelectorAll('.command-row');
+  rows.forEach((row, idx) => {
+    // remove old listeners if any by cloning? but for simplicity rebind
+    row.onclick = null;
+    row.onmouseenter = null;
+    row.onclick = () => {
+      if (!menuVisible || targetMode) return;
+      currentMenuIndex = idx;
+      highlightMenuRow(idx);
+      selectMenuCommand();
+    };
+    row.onmouseenter = () => {
+      if (menuVisible && !targetMode) {
+        highlightMenuRow(idx);
+      }
+    };
+  });
+}
+
+function showCommandMenu(hand = 'left', showBoth = false) {
+  const menu = commandMenu();
+  currentHand = hand;
+  bothHandsReady = showBoth;
+
+  buildMenuRows(hand);
   menu.classList.add('visible');
   menuVisible = true;
   currentMenuIndex = 0;
   highlightMenuRow(0);
-  showMessage(['Command?']);
+  updateInfoPopup();
+
+  const prefix = showBoth ? 'Command? (L/R to switch) ' : 'Command? ';
+  const handName = hand === 'left' ? 'L.HAND' : 'R.HAND';
+  showMessage([prefix + handName]);
   pauseNarration();
 }
 
@@ -81,35 +185,71 @@ function hideCommandMenu() {
   const menu = commandMenu();
   menu.classList.remove('visible');
   menuVisible = false;
+  bothHandsReady = false;
   clearMenuHighlight();
+  hideInfoPopup();
 }
 
 function highlightMenuRow(index) {
   const rows = commandMenu().querySelectorAll('.command-row');
+  // only selectable rows (no section headers)
   rows.forEach((r, i) => {
     r.classList.toggle('active', i === index);
   });
   currentMenuIndex = index;
+  updateInfoPopup();
 }
 
 function clearMenuHighlight() {
   const rows = commandMenu().querySelectorAll('.command-row');
   rows.forEach(r => r.classList.remove('active'));
+  hideInfoPopup();
+}
+
+function updateInfoPopup() {
+  const popup = infoPopup();
+  const rows = commandMenu().querySelectorAll('.command-row');
+  const active = rows[currentMenuIndex];
+  if (!active || !menuVisible) {
+    popup.style.display = 'none';
+    return;
+  }
+  const name = active.dataset.name;
+  const info = active.dataset.info;
+  popup.innerHTML = `${name} — ${info}`;
+  popup.style.display = 'block';
+}
+
+function hideInfoPopup() {
+  const popup = infoPopup();
+  if (popup) popup.style.display = 'none';
 }
 
 function selectMenuCommand() {
   const rows = commandMenu().querySelectorAll('.command-row');
   const row = rows[currentMenuIndex];
-  const cmd = row.dataset.cmd;
+  if (!row) return;
+  const name = row.dataset.name;
 
   hideCommandMenu();
 
-  if (cmd.startsWith('fight-')) {
+  if (name === 'Quick Slash' || name === 'Slash' || name === 'Fireball 1' || name === 'Ice Bolt 2') {
     enterTargetMode();
-  } else if (cmd === 'item-herb' || cmd === 'item-bomb') {
-    appendNarration(cmd === 'item-herb' ? 'You use Herb.' : 'You throw Bomb!');
+  } else if (name === 'Bronze Axe') {
+    appendNarration('Equipping the Bronze Axe takes 30-40 tics.');
     setTimeout(() => {
-      showCommandMenu();
+      // return menu (demo keeps same hand)
+      showCommandMenu(currentHand, bothHandsReady);
+    }, 1400);
+  } else if (name === 'Herb') {
+    appendNarration('You use the Herb — some HP restored.');
+    setTimeout(() => {
+      showCommandMenu(currentHand, bothHandsReady);
+    }, 1400);
+  } else if (name === 'Bomb') {
+    appendNarration('You throw the Bomb — every monster takes damage!');
+    setTimeout(() => {
+      showCommandMenu(currentHand, bothHandsReady);
     }, 1400);
   }
 }
@@ -119,6 +259,7 @@ function enterTargetMode() {
   currentTargetIndex = 0;
   highlightTarget(0);
   appendNarration('Select target...');
+  hideInfoPopup();
 }
 
 function exitTargetMode(cancel = false) {
@@ -126,10 +267,10 @@ function exitTargetMode(cancel = false) {
   clearTargetHighlights();
   if (!cancel) {
     setTimeout(() => {
-      showCommandMenu();
+      showCommandMenu(currentHand, bothHandsReady);
     }, 800);
   } else {
-    showCommandMenu();
+    showCommandMenu(currentHand, bothHandsReady);
   }
 }
 
@@ -137,11 +278,9 @@ function highlightTarget(idx) {
   clearTargetHighlights();
   currentTargetIndex = idx;
 
-  // Highlight sprite wrapper
   const wrappers = document.querySelectorAll('.monster-wrapper');
   if (wrappers[idx]) wrappers[idx].classList.add('selected');
 
-  // Highlight monster list row
   const targets = document.querySelectorAll('.monster-target');
   if (targets[idx]) targets[idx].classList.add('selected');
 }
@@ -156,7 +295,6 @@ function confirmTarget() {
   const target = letters[currentTargetIndex];
   const targets = document.querySelectorAll('.monster-target');
   const full = targets[currentTargetIndex].textContent.trim();
-  // e.g. "A - Glimmerling Healthy" → extract name after " - "
   const nameMatch = full.match(/-\s*(.+?)\s+(Healthy|Injured|Battered)/);
   const monsterName = nameMatch ? nameMatch[1] : 'Monster';
 
@@ -167,12 +305,68 @@ function confirmTarget() {
   setTimeout(() => {
     appendNarration(`${monsterName} takes 16 damage.`);
     setTimeout(() => {
-      showCommandMenu();
+      // after attack, progress demo hands
+      advanceDemoHand();
     }, 1200);
   }, 900);
 }
 
-// Keyboard handling
+function advanceDemoHand() {
+  // Demo sequence: LH -> RH -> both (switchable) -> loop
+  if (currentHand === 'left' && !bothHandsReady) {
+    // first attack done -> show RH
+    setTimeout(() => {
+      showCommandMenu('right');
+    }, 600);
+  } else if (currentHand === 'right' && !bothHandsReady) {
+    // second attack -> demonstrate BOTH hands ready
+    setTimeout(() => {
+      bothHandsReady = true;
+      showCommandMenu('left', true);
+    }, 600);
+  } else {
+    // after both demo, loop back to LH
+    setTimeout(() => {
+      bothHandsReady = false;
+      showCommandMenu('left');
+    }, 600);
+  }
+}
+
+function switchHand(newHand) {
+  if (!bothHandsReady || !menuVisible || targetMode) return;
+  currentHand = newHand;
+  const menu = commandMenu();
+  // rebuild only the attack rows + update hand line (belt/cons stay)
+  const existingAttackRows = menu.querySelectorAll('.command-row');
+  // remove first 2 (attacks)
+  for (let i = 0; i < 2; i++) {
+    if (existingAttackRows[i]) existingAttackRows[i].remove();
+  }
+
+  const attacks = ATTACKS[newHand];
+  const weapon = newHand === 'left' ? 'Iron Sword' : 'Arcane Wand';
+  const handLabel = newHand === 'left' ? 'L.HAND' : 'R.HAND';
+  handLine().innerHTML = `<span class="hand-label">${handLabel}</span> — <span class="weapon-name">${weapon}</span>`;
+
+  const title = menu.querySelector('.title');
+  attacks.forEach((atk, i) => {
+    const row = document.createElement('div');
+    row.className = 'command-row';
+    row.dataset.name = atk.name;
+    row.dataset.info = atk.info;
+    row.textContent = atk.name;
+    title.after(row); // insert after title, before hand? wait order
+  });
+
+  // re-attach
+  attachRowHandlers();
+  currentMenuIndex = 0;
+  highlightMenuRow(0);
+  const handName = newHand === 'left' ? 'L.HAND' : 'R.HAND';
+  showMessage(['Command? (L/R to switch) ' + handName]);
+}
+
 function setupKeyboard() {
   document.addEventListener('keydown', (e) => {
     if (targetMode) {
@@ -191,13 +385,25 @@ function setupKeyboard() {
     } else if (menuVisible) {
       const rows = commandMenu().querySelectorAll('.command-row');
       if (e.key === 'ArrowUp') {
-        currentMenuIndex = (currentMenuIndex - 1 + rows.length) % rows.length;
+        // skip section headers: find previous selectable
+        let newIdx = currentMenuIndex - 1;
+        while (newIdx >= 0 && !rows[newIdx]) newIdx--; // safety
+        if (newIdx < 0) newIdx = rows.length - 1;
+        currentMenuIndex = newIdx;
         highlightMenuRow(currentMenuIndex);
         e.preventDefault();
       } else if (e.key === 'ArrowDown') {
-        currentMenuIndex = (currentMenuIndex + 1) % rows.length;
+        let newIdx = currentMenuIndex + 1;
+        if (newIdx >= rows.length) newIdx = 0;
+        currentMenuIndex = newIdx;
         highlightMenuRow(currentMenuIndex);
         e.preventDefault();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        if (bothHandsReady) {
+          const newHand = currentHand === 'left' ? 'right' : 'left';
+          switchHand(newHand);
+          e.preventDefault();
+        }
       } else if (e.key === 'Enter') {
         selectMenuCommand();
         e.preventDefault();
@@ -207,31 +413,16 @@ function setupKeyboard() {
         e.preventDefault();
       }
     } else {
-      // any key resumes / shows menu demo
       if (e.key === 'Enter' || e.key === ' ') {
-        showCommandMenu();
+        showCommandMenu('left');
         e.preventDefault();
       }
     }
   });
 }
 
-// Mouse / click handling
 function setupMouse() {
-  // Menu rows
-  const rows = commandMenu().querySelectorAll('.command-row');
-  rows.forEach((row, idx) => {
-    row.addEventListener('click', () => {
-      currentMenuIndex = idx;
-      highlightMenuRow(idx);
-      selectMenuCommand();
-    });
-    row.addEventListener('mouseenter', () => {
-      if (menuVisible) highlightMenuRow(idx);
-    });
-  });
-
-  // Monster targets (list)
+  // Monster targets
   document.querySelectorAll('.monster-target').forEach((el, idx) => {
     el.addEventListener('click', () => {
       if (targetMode) {
@@ -249,28 +440,26 @@ function setupMouse() {
         currentTargetIndex = idx;
         highlightTarget(idx);
         confirmTarget();
-      } else if (menuVisible) {
-        // quick target from menu not supported in this demo
       }
     });
   });
 
-  // Click arena to show menu (demo convenience)
+  // Click arena to show menu (demo)
   arena().addEventListener('click', () => {
     if (!menuVisible && !targetMode) {
-      showCommandMenu();
+      showCommandMenu('left');
     }
   });
 }
 
 function init() {
   // Initial encounter lines already in HTML
-  // After 2 lines, trigger player's turn (DW style)
+  // Demo: after delay show LH menu first
   setTimeout(() => {
-    showCommandMenu();
+    showCommandMenu('left');
   }, 3200);
 
-  // Start narration after first two lines
+  // Start narration cycle
   setTimeout(() => {
     startNarrationCycle();
   }, 3800);
@@ -278,7 +467,7 @@ function init() {
   setupKeyboard();
   setupMouse();
 
-  // Seed a couple extra narration lines for demo loop
+  // extra narration seed
   setTimeout(() => {
     if (!menuVisible) {
       appendNarration('The battle rages on...');
