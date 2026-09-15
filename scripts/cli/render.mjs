@@ -52,9 +52,13 @@ export function printState(run) {
 
   const bs = run.battle_state || {};
   const weapons = bs.weapons || {};
-  const fmtAttacks = (list) => (list || []).map(a =>
-    `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}/c${a.cooldown_time}`
-  ).join(' | ') || 'none';
+  const fmtAttacks = (list) => (list || []).map(a => {
+    const pVar = a.prepare_time_range || 0;
+    const cVar = a.cooldown_time_range || 0;
+    const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+    const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+    return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
+  }).join(' | ') || 'none';
   const letterOf = (label) => (label && /[A-Z]$/.test(label)) ? label.slice(-1) : '';
 
   console.log(`RUN #${run.id} status=${run.status} battle ${run.current_battle}/${run.total_battles}`);
