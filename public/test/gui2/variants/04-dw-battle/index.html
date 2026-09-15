@@ -63,7 +63,7 @@
     .run-info {
       text-align: right;
       font-size: 10px;
-      color: #6688aa;
+      color: #a8c8ea;
       line-height: 1.3;
     }
 
@@ -109,10 +109,11 @@
 
     .die.used {
       background: #1a2a44;
-      color: #6688aa;
+      color: #a8c8ea;
       border-color: #334466;
       box-shadow: none;
       text-decoration: line-through;
+      font-size: 11px;
     }
 
     .die.used .rolled {
@@ -123,7 +124,7 @@
     .dice-legend {
       margin-top: 4px;
       font-size: 8px;
-      color: #5577aa;
+      color: #a8c8ea;
       line-height: 1.4;
     }
 
@@ -133,6 +134,8 @@
 
     .middle-section {
       display: flex;
+      flex: 1;
+      min-height: 0;
     }
 
     .arena {
@@ -141,8 +144,9 @@
       padding: 0;
       text-align: center;
       position: relative;
-      min-height: 280px;
-      border-right: 4px solid #4a90d9;
+      min-height: 0;
+      flex-shrink: 1;
+      border-right: none;
       overflow: hidden;
     }
 
@@ -150,32 +154,26 @@
     .dw-arena-backdrop {
       position: absolute;
       inset: 0;
-      background: #6eb3e0; /* bright NES sky */
+      background: #7fb6e3; /* NES sky */
+      overflow: hidden;
     }
 
     .dw-cloud {
       position: absolute;
       background: #fff;
-      border-radius: 50%;
-      opacity: 0.85;
-      box-shadow: 0 0 0 3px #fff;
+      opacity: 0.9;
+      box-shadow: 3px 0 0 #fff, 6px 0 0 #fff, 0 3px 0 #fff, 3px 3px 0 #fff, 6px 3px 0 #fff, 9px 0 0 #fff;
+      /* chunky pixel cloud, no rounded */
     }
 
-    .dw-mountain {
+    .dw-horizon {
       position: absolute;
-      bottom: 38px;
-      width: 0;
-      height: 0;
-      border-left: 120px solid transparent;
-      border-right: 120px solid transparent;
-      border-bottom: 95px solid #4a6b4a;
+      bottom: 70px;
+      background: #5a7a55;
+      z-index: 1;
     }
-
-    .dw-mountain2 {
-      left: 180px;
-      border-left: 95px solid transparent;
-      border-right: 95px solid transparent;
-      border-bottom: 78px solid #3a5a3a;
+    .dw-horizon.gray {
+      background: #6a7a6a;
     }
 
     .dw-grass {
@@ -183,20 +181,21 @@
       bottom: 0;
       left: 0;
       right: 0;
-      height: 42px;
+      height: 78px; /* ~28% of arena for grass */
       background: #58c04a;
       border-top: 4px solid #3a8a32;
+      z-index: 2;
     }
 
     .monster-row {
       position: absolute;
-      bottom: 55px;
+      bottom: 82px;
       left: 0;
       right: 0;
       display: flex;
       justify-content: center;
       gap: 70px;
-      z-index: 2;
+      z-index: 3;
     }
 
     .monster-wrapper {
@@ -218,7 +217,7 @@
 
     .monster-marker {
       font-size: 11px;
-      color: #ccddff;
+      color: #a8c8ea;
       margin-bottom: 4px;
       letter-spacing: 1px;
     }
@@ -226,7 +225,8 @@
     .right-rail {
       width: 250px;
       background: #000;
-      border-top: 4px solid #4a90d9;
+      border-left: 4px solid #4a90d9;
+      border-top: none;
       display: flex;
       flex-direction: column;
     }
@@ -328,20 +328,16 @@
     }
 
     .command-row {
-      padding: 2px 4px;
+      padding: 2px 4px 2px 18px;
       cursor: pointer;
       position: relative;
     }
 
-    .command-row .cursor {
+    .command-row.active::before {
+      content: '►';
       position: absolute;
       left: 4px;
       color: #fff;
-      opacity: 0;
-    }
-
-    .command-row.active .cursor {
-      opacity: 1;
     }
 
     .command-row:hover {
@@ -396,15 +392,17 @@
       <!-- ARENA VIEWPORT (DW NES vivid style) -->
       <div class="arena" id="arena">
         <div class="dw-arena-backdrop">
-          <!-- Clouds -->
-          <div class="dw-cloud" style="top: 22px; left: 60px; width: 38px; height: 18px;"></div>
-          <div class="dw-cloud" style="top: 18px; left: 95px; width: 26px; height: 14px;"></div>
-          <div class="dw-cloud" style="top: 35px; left: 280px; width: 44px; height: 16px;"></div>
-          <div class="dw-cloud" style="top: 28px; left: 420px; width: 32px; height: 15px;"></div>
-          <!-- Mountains -->
-          <div class="dw-mountain" style="left: 40px;"></div>
-          <div class="dw-mountain2" style="left: 220px;"></div>
-          <div class="dw-mountain" style="left: 380px; border-bottom-color: #4a6b4a;"></div>
+          <!-- Clouds (chunky pixel, upper sky) -->
+          <div class="dw-cloud" style="top: 16px; left: 65px; width: 18px; height: 8px;"></div>
+          <div class="dw-cloud" style="top: 12px; left: 95px; width: 24px; height: 9px;"></div>
+          <div class="dw-cloud" style="top: 20px; left: 320px; width: 20px; height: 8px;"></div>
+          <!-- Horizon mountains/hills (green+gray silhouettes) -->
+          <div class="dw-horizon" style="left:0; width:140px; height:58px; bottom:72px; background:#5a7a55;"></div>
+          <div class="dw-horizon" style="left:110px; width:160px; height:72px; bottom:68px; background:#4a6a48;"></div>
+          <div class="dw-horizon" style="left:240px; width:120px; height:65px; bottom:70px; background:#6b7f5a;"></div>
+          <div class="dw-horizon" style="left:340px; width:180px; height:55px; bottom:75px; background:#4f6b4a;"></div>
+          <div class="dw-horizon gray" style="left:80px; width:90px; height:48px; bottom:78px; background:#7a8a7a; z-index:1;"></div>
+          <div class="dw-horizon gray" style="left:200px; width:110px; height:52px; bottom:76px; background:#6a7a6a; z-index:1;"></div>
         </div>
         <div class="dw-grass"></div>
 
@@ -455,7 +453,7 @@
         <div class="time-menu">
           <div class="rail-header">
             <span>TIME MENU</span>
-            <span style="color:#5577aa">+2 MORE</span>
+            <span style="color:#a8c8ea">+2 MORE</span>
           </div>
           <div class="queue-row"><span class="name">B HeavyAttack</span><span class="tic">3</span></div>
           <div class="queue-row"><span class="name">RH Slash</span><span class="tic">4</span></div>
@@ -487,12 +485,12 @@
 
       <div class="command-menu" id="command-menu">
         <div class="title">COMMAND</div>
-        <div class="command-row" data-cmd="fight-lh1"><span class="cursor">►</span> FIGHT: LH — Quick Slash</div>
-        <div class="command-row" data-cmd="fight-lh2"><span class="cursor">►</span> FIGHT: LH — Slash</div>
-        <div class="command-row" data-cmd="fight-rh1"><span class="cursor">►</span> FIGHT: RH — Fireball 1</div>
-        <div class="command-row" data-cmd="fight-rh2"><span class="cursor">►</span> FIGHT: RH — Ice Bolt 2</div>
-        <div class="command-row" data-cmd="item-herb"><span class="cursor">►</span> ITEM: Herb</div>
-        <div class="command-row" data-cmd="item-bomb"><span class="cursor">►</span> ITEM: Bomb</div>
+        <div class="command-row" data-cmd="fight-lh1">FIGHT: LH — Quick Slash</div>
+        <div class="command-row" data-cmd="fight-lh2">FIGHT: LH — Slash</div>
+        <div class="command-row" data-cmd="fight-rh1">FIGHT: RH — Fireball 1</div>
+        <div class="command-row" data-cmd="fight-rh2">FIGHT: RH — Ice Bolt 2</div>
+        <div class="command-row" data-cmd="item-herb">ITEM: Herb</div>
+        <div class="command-row" data-cmd="item-bomb">ITEM: Bomb</div>
       </div>
     </div>
   </div>

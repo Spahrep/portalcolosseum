@@ -154,15 +154,18 @@ function clearTargetHighlights() {
 function confirmTarget() {
   const letters = ['A', 'B', 'C'];
   const target = letters[currentTargetIndex];
-  const wrappers = document.querySelectorAll('.monster-wrapper');
-  const name = wrappers[currentTargetIndex].querySelector('.monster-marker').textContent.replace(/[\[\]]/g, '');
+  const targets = document.querySelectorAll('.monster-target');
+  const full = targets[currentTargetIndex].textContent.trim();
+  // e.g. "A - Glimmerling Healthy" → extract name after " - "
+  const nameMatch = full.match(/-\s*(.+?)\s+(Healthy|Injured|Battered)/);
+  const monsterName = nameMatch ? nameMatch[1] : 'Monster';
 
   clearTargetHighlights();
   targetMode = false;
 
-  appendNarration(`You slash Glimmerling ${target} for 16!`);
+  appendNarration(`You slash ${monsterName} ${target} for 16!`);
   setTimeout(() => {
-    appendNarration(`${name} takes 16 damage.`);
+    appendNarration(`${monsterName} takes 16 damage.`);
     setTimeout(() => {
       showCommandMenu();
     }, 1200);
