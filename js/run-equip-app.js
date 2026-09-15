@@ -25,6 +25,16 @@ let currentPortal = null;
 let weaponsById = {};
 let consumablesById = {};
 
+const GRADE_COLORS = {
+  F: '#9d9d9d',
+  E: '#ffffff',
+  D: '#1eff00',
+  C: '#0070dd',
+  B: '#a335ee',
+  A: '#ff8000',
+  S: '#ffd700'
+};
+
 function getAuthToken() {
   // For API calls, use supabase session token
   return supabase?.auth?.getSession?.().then(({data}) => data?.session?.access_token);
@@ -74,8 +84,8 @@ async function loadData() {
   currentPortal = portals[0] || null;
 
   // One item per owned instance. Names repeat freely across instances.
-  const weaponItems = weapons.filter(w => w && w.id).map(w => ({ kind: 'weapon', id: w.id, name: w.name }));
-  const consumableItems = consumables.filter(c => c && c.id).map(c => ({ kind: 'consumable', id: c.id, name: c.template_name }));
+  const weaponItems = weapons.filter(w => w && w.id).map(w => ({ kind: 'weapon', id: w.id, name: w.name, grade: w.grade || null }));
+  const consumableItems = consumables.filter(c => c && c.id).map(c => ({ kind: 'consumable', id: c.id, name: c.template_name, grade: c.grade || null }));
 
   // Default loadout prefill: first 3 weapon instances + first 2 consumables if owned
   loadout[0] = weaponItems[0] || null;
@@ -103,7 +113,18 @@ function renderBackpack() {
     const slot = document.createElement('div');
     slot.className = 'inv-slot';
     if (i < backpack.length) {
-      slot.textContent = backpack[i].name;
+      const item = backpack[i];
+      slot.innerHTML = '';
+      const nameSpan = document.createElement('span');
+      nameSpan.textContent = item.name;
+      if (item.grade && GRADE_COLORS[item.grade]) {
+        nameSpan.style.color = GRADE_COLORS[item.grade];
+        const badge = document.createElement('span');
+        badge.textContent = item.grade;
+        badge.style.cssText = `background:${GRADE_COLORS[item.grade]};color:#000;font-size:9px;padding:0 3px;margin-right:4px;border-radius:2px;`;
+        slot.appendChild(badge);
+      }
+      slot.appendChild(nameSpan);
       slot.dataset.index = i;
       slot.onclick = () => selectBackpackItem(i, slot);
     } else {
@@ -160,7 +181,11 @@ function showInspectPopup(item, targetEl) {
   popupEl.innerHTML = '';
   popupEl.style.display = 'block';
 
-  let html = `<div class="name">${item.name}</div>`;
+  let nameHtml = item.name;
+  if (item.grade && GRADE_COLORS[item.grade]) {
+    nameHtml = `<span style='background:${GRADE_COLORS[item.grade]};color:#000;font-size:9px;padding:0 3px;margin-right:4px;border-radius:2px;'>${item.grade}</span><span style='color:${GRADE_COLORS[item.grade]}'>${item.name}</span>`;
+  }
+  let html = `<div class="name">${nameHtml}</div>`;
   if (item.kind === 'weapon') {
     const w = weaponsById[item.id];
     if (w) {
@@ -278,7 +303,11 @@ function renderLoadout() {
         const c = consumablesById[item.id];
         if (c) stats = c.description || c.effect_label || c.template_name || 'Effect';
       }
-      content.innerHTML = `<span>${item.name}</span><span class="stats">${stats}</span>`;
+      let nameHtml = item.name;
+      if (item.grade && GRADE_COLORS[item.grade]) {
+        nameHtml = `<span style='background:${GRADE_COLORS[item.grade]};color:#000;font-size:9px;padding:0 3px;margin-right:4px;border-radius:2px;'>${item.grade}</span><span style='color:${GRADE_COLORS[item.grade]}'>${item.name}</span>`;
+      }
+      content.innerHTML = `<span>${nameHtml}</span><span class="stats">${stats}</span>`;
       content.classList.remove('empty');
       row.onclick = () => unequipSlot(i);
     } else {
@@ -410,6 +439,13 @@ function setupEnterButton() {
   };
 }
 
+function setupCancelButton() {
+  const btn = document.getElementById('cancel-btn');
+  if (btn) {
+    btn.onclick = () => { window.location.href = '/game.html'; };
+  }
+}
+
 async function init() {
   popupEl = document.getElementById('info-popup');
   // createClient FIRST matching game-app.js exactly (auth order fix)
@@ -452,6 +488,7 @@ async function init() {
   renderAll();
   setupKeyboard();
   setupEnterButton();
+  setupCancelButton();
   if (popupEl) popupEl.style.display = 'none';
   // Update run info if portal known
   const runInfo = document.querySelector('.run-info h1');
