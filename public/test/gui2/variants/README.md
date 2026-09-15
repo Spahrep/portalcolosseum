@@ -12,3 +12,6 @@ Live URLs:
 - https://portalcolosseum.com/test/gui2/variants/03-intel-rail/index.html
 
 All variants share `/test/gui2/gui2-app.js` (no inline scripts). Throwaway comparisons only — winner to be folded into real GUI.
+
+- **04-dw-battle**: Dragon Warrior NES battle screen: dark panels over a vivid sprite arena, message-box narration, action menu appears only on your turn. Has its own `dw-app.js` (narration cycle + turn-gated menu demo).
+  Live URL: https://portalcolosseum.com/test/gui2/variants/04-dw-battle/index.html

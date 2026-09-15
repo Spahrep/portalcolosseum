@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Colosseum • Battle Test GUI2 - Variant 04 (DW Battle)</title>
+  <link rel="stylesheet" href="/public/fonts/pixeloid-mono/pixeloid-mono.css">
+  <style>
+    body {
+      margin: 0;
+      padding: 30px 20px;
+      background: #000;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      color: #e0e0ff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      image-rendering: pixelated;
+    }
+
+    .dw4-window {
+      width: 960px;
+      background: #000;
+      border: 6px solid #4a90d9;
+      box-shadow: 0 0 0 3px #000, inset 0 0 0 3px #1a3a6e;
+    }
+
+    .top-status {
+      background: #0a1a2e;
+      border-bottom: 4px solid #4a90d9;
+      padding: 10px 16px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      align-items: center;
+    }
+
+    .player-block {
+      display: flex;
+      gap: 30px;
+      align-items: center;
+    }
+
+    .stat-block {
+      min-width: 150px;
+      background: #000;
+      border: 2px solid #ccc;
+      padding: 4px 8px;
+    }
+
+    .name {
+      color: #ffcc66;
+      margin-bottom: 3px;
+      font-size: 12px;
+    }
+
+    .hp-mp {
+      font-size: 11px;
+      line-height: 1.35;
+    }
+
+    .run-info {
+      text-align: right;
+      font-size: 10px;
+      color: #6688aa;
+      line-height: 1.3;
+    }
+
+    .run-info .battle {
+      color: #ffcc66;
+      font-size: 12px;
+    }
+
+    .dice-tray-compact {
+      margin-top: 6px;
+      text-align: left;
+    }
+
+    .dice-group-label {
+      color: #88aaff;
+      font-size: 9px;
+      letter-spacing: 1px;
+      margin: 4px 0 2px;
+    }
+
+    .dice-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+
+    .die {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      color: #000;
+      border: 2px solid #000;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
+    }
+
+    .die.green  { background: #66ff99; }
+    .die.yellow { background: #ffcc66; }
+    .die.red    { background: #ff6666; }
+
+    .die.used {
+      background: #1a2a44;
+      color: #6688aa;
+      border-color: #334466;
+      box-shadow: none;
+      text-decoration: line-through;
+    }
+
+    .die.used .rolled {
+      color: #ffcc66;
+      text-decoration: none;
+    }
+
+    .dice-legend {
+      margin-top: 4px;
+      font-size: 8px;
+      color: #5577aa;
+      line-height: 1.4;
+    }
+
+    .dice-legend .g { color: #66ff99; }
+    .dice-legend .y { color: #ffcc66; }
+    .dice-legend .r { color: #ff6666; }
+
+    .middle-section {
+      display: flex;
+    }
+
+    .arena {
+      flex: 1;
+      background: #0a1a2e;
+      padding: 0;
+      text-align: center;
+      position: relative;
+      min-height: 280px;
+      border-right: 4px solid #4a90d9;
+      overflow: hidden;
+    }
+
+    /* DW NES-style vivid arena backdrop */
+    .dw-arena-backdrop {
+      position: absolute;
+      inset: 0;
+      background: #6eb3e0; /* bright NES sky */
+    }
+
+    .dw-cloud {
+      position: absolute;
+      background: #fff;
+      border-radius: 50%;
+      opacity: 0.85;
+      box-shadow: 0 0 0 3px #fff;
+    }
+
+    .dw-mountain {
+      position: absolute;
+      bottom: 38px;
+      width: 0;
+      height: 0;
+      border-left: 120px solid transparent;
+      border-right: 120px solid transparent;
+      border-bottom: 95px solid #4a6b4a;
+    }
+
+    .dw-mountain2 {
+      left: 180px;
+      border-left: 95px solid transparent;
+      border-right: 95px solid transparent;
+      border-bottom: 78px solid #3a5a3a;
+    }
+
+    .dw-grass {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 42px;
+      background: #58c04a;
+      border-top: 4px solid #3a8a32;
+    }
+
+    .monster-row {
+      position: absolute;
+      bottom: 55px;
+      left: 0;
+      right: 0;
+      display: flex;
+      justify-content: center;
+      gap: 70px;
+      z-index: 2;
+    }
+
+    .monster-wrapper {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      transition: filter 0.1s;
+    }
+
+    .monster-wrapper.selected {
+      filter: brightness(1.35) saturate(1.2);
+    }
+
+    .monster-wrapper.selected .monster-marker {
+      color: #ffcc66;
+      text-shadow: 0 0 3px #ffcc66;
+    }
+
+    .monster-marker {
+      font-size: 11px;
+      color: #ccddff;
+      margin-bottom: 4px;
+      letter-spacing: 1px;
+    }
+
+    .right-rail {
+      width: 250px;
+      background: #000;
+      border-top: 4px solid #4a90d9;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .time-menu {
+      padding: 8px 10px 10px;
+      flex-shrink: 0;
+      background: #000;
+      border-bottom: 2px solid #334466;
+    }
+
+    .rail-header {
+      color: #88aaff;
+      font-size: 9px;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid #334466;
+      padding-bottom: 3px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .queue-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      padding: 1px 0;
+      color: #aaccff;
+    }
+
+    .queue-row .name { color: #ccddff; }
+    .queue-row .tic { color: #6688aa; font-size: 9px; }
+
+    .monsters-panel {
+      padding: 8px 10px;
+      flex-shrink: 0;
+      background: #000;
+    }
+
+    .monster-target {
+      display: flex;
+      justify-content: space-between;
+      font-size: 10px;
+      padding: 3px 4px;
+      margin: 2px 0;
+      cursor: pointer;
+      border: 1px solid transparent;
+    }
+
+    .monster-target:hover,
+    .monster-target.selected {
+      background: #1a2a44;
+      border-color: #4a90d9;
+    }
+
+    .monster-target .status.green { color: #66ff99; }
+    .monster-target .status.yellow { color: #ffcc66; }
+    .monster-target .status.red { color: #ff6666; }
+
+    .bottom-section {
+      display: flex;
+      border-top: 4px solid #4a90d9;
+      background: #000;
+    }
+
+    .message-box {
+      flex: 1;
+      background: #000;
+      border: 3px solid #ccc;
+      padding: 10px 14px;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #fff;
+      min-height: 78px;
+    }
+
+    .command-menu {
+      width: 210px;
+      background: #000;
+      border: 3px solid #ccc;
+      padding: 8px 10px;
+      font-size: 11px;
+      color: #fff;
+      display: none; /* hidden until player's turn */
+      flex-shrink: 0;
+    }
+
+    .command-menu.visible {
+      display: block;
+    }
+
+    .command-menu .title {
+      color: #88aaff;
+      font-size: 10px;
+      letter-spacing: 1px;
+      margin-bottom: 6px;
+      border-bottom: 1px solid #334466;
+      padding-bottom: 2px;
+    }
+
+    .command-row {
+      padding: 2px 4px;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .command-row .cursor {
+      position: absolute;
+      left: 4px;
+      color: #fff;
+      opacity: 0;
+    }
+
+    .command-row.active .cursor {
+      opacity: 1;
+    }
+
+    .command-row:hover {
+      background: #1a2a44;
+    }
+  </style>
+</head>
+<body>
+  <div class="dw4-window">
+    <!-- TOP BAR -->
+    <div class="top-status">
+      <div class="player-block">
+        <div class="stat-block">
+          <div class="name">SPAHREP</div>
+          <div class="hp-mp">HP 142 / 164</div>
+        </div>
+      </div>
+
+      <!-- RUN INFO (from 01-tight-dock) -->
+      <div class="run-info">
+        <div>PORTAL COLOSSEUM</div>
+        <div>PORTAL 1 · RUN 3</div>
+        <div class="battle">BATTLE 2 OF 5</div>
+        <div class="dice-tray-compact">
+          <div class="dice-group-label">DICE: REMAINING (8)</div>
+          <div class="dice-row">
+            <div class="die green">G</div>
+            <div class="die green">G</div>
+            <div class="die green">G</div>
+            <div class="die green">G</div>
+            <div class="die yellow">Y</div>
+            <div class="die yellow">Y</div>
+            <div class="die red">R</div>
+            <div class="die red">R</div>
+          </div>
+          <div class="dice-group-label">USED (2)</div>
+          <div class="dice-row">
+            <div class="die used"><span class="rolled">G</span> 15</div>
+            <div class="die used"><span class="rolled">Y</span> 20</div>
+          </div>
+          <div class="dice-legend">
+            <span class="g">GREEN</span> = normal &nbsp;
+            <span class="y">YELLOW</span> = crit &nbsp;
+            <span class="r">RED</span> = fumble
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MIDDLE SECTION -->
+    <div class="middle-section">
+      <!-- ARENA VIEWPORT (DW NES vivid style) -->
+      <div class="arena" id="arena">
+        <div class="dw-arena-backdrop">
+          <!-- Clouds -->
+          <div class="dw-cloud" style="top: 22px; left: 60px; width: 38px; height: 18px;"></div>
+          <div class="dw-cloud" style="top: 18px; left: 95px; width: 26px; height: 14px;"></div>
+          <div class="dw-cloud" style="top: 35px; left: 280px; width: 44px; height: 16px;"></div>
+          <div class="dw-cloud" style="top: 28px; left: 420px; width: 32px; height: 15px;"></div>
+          <!-- Mountains -->
+          <div class="dw-mountain" style="left: 40px;"></div>
+          <div class="dw-mountain2" style="left: 220px;"></div>
+          <div class="dw-mountain" style="left: 380px; border-bottom-color: #4a6b4a;"></div>
+        </div>
+        <div class="dw-grass"></div>
+
+        <!-- Monster sprites row -->
+        <div class="monster-row">
+          <!-- A: Glimmerling (DW slime style) -->
+          <span class="monster-wrapper" data-target="0">
+            <span class="monster-marker" data-target="0">[A]</span>
+            <svg width="82" height="78" viewBox="0 0 82 78" xmlns="http://www.w3.org/2000/svg">
+              <rect x="12" y="18" width="58" height="48" rx="29" fill="#8a8a9a"/>
+              <rect x="16" y="22" width="50" height="40" rx="25" fill="#6f6f7f"/>
+              <circle cx="32" cy="38" r="5" fill="#1a1a22"/>
+              <circle cx="52" cy="38" r="5" fill="#1a1a22"/>
+              <rect x="28" y="48" width="26" height="4" fill="#1a1a22"/>
+            </svg>
+          </span>
+
+          <!-- B: Giant Rat -->
+          <span class="monster-wrapper" data-target="1">
+            <span class="monster-marker" data-target="1">[B]</span>
+            <svg width="86" height="72" viewBox="0 0 86 72" xmlns="http://www.w3.org/2000/svg">
+              <rect x="10" y="24" width="66" height="32" rx="8" fill="#6b5a4a"/>
+              <rect x="18" y="18" width="22" height="18" rx="4" fill="#5a4a3a"/>
+              <circle cx="26" cy="26" r="3" fill="#1a1a22"/>
+              <circle cx="38" cy="26" r="3" fill="#1a1a22"/>
+              <rect x="72" y="28" width="12" height="8" fill="#5a4a3a"/>
+              <rect x="4" y="32" width="10" height="6" fill="#5a4a3a"/>
+            </svg>
+          </span>
+
+          <!-- C: Glimmerling -->
+          <span class="monster-wrapper" data-target="2">
+            <span class="monster-marker" data-target="2">[C]</span>
+            <svg width="82" height="78" viewBox="0 0 82 78" xmlns="http://www.w3.org/2000/svg">
+              <rect x="12" y="18" width="58" height="48" rx="29" fill="#8a8a9a"/>
+              <rect x="16" y="22" width="50" height="40" rx="25" fill="#6f6f7f"/>
+              <circle cx="32" cy="38" r="5" fill="#1a1a22"/>
+              <circle cx="52" cy="38" r="5" fill="#1a1a22"/>
+              <rect x="28" y="48" width="26" height="4" fill="#1a1a22"/>
+            </svg>
+          </span>
+        </div>
+      </div>
+
+      <!-- RIGHT RAIL -->
+      <div class="right-rail">
+        <!-- TIME MENU -->
+        <div class="time-menu">
+          <div class="rail-header">
+            <span>TIME MENU</span>
+            <span style="color:#5577aa">+2 MORE</span>
+          </div>
+          <div class="queue-row"><span class="name">B HeavyAttack</span><span class="tic">3</span></div>
+          <div class="queue-row"><span class="name">RH Slash</span><span class="tic">4</span></div>
+          <div class="queue-row"><span class="name">A Bite</span><span class="tic">5</span></div>
+          <div class="queue-row"><span class="name">C AcidShot</span><span class="tic">9</span></div>
+          <div class="queue-row"><span class="name">LH Ready</span><span class="tic">12</span></div>
+          <div class="queue-row"><span class="name">A Bite</span><span class="tic">18</span></div>
+          <div class="queue-row"><span class="name">B HeavyAttack</span><span class="tic">23</span></div>
+          <div class="queue-row"><span class="name">RH Ready</span><span class="tic">27</span></div>
+        </div>
+
+        <!-- MONSTERS panel -->
+        <div class="monsters-panel">
+          <div class="rail-header"><span>MONSTERS</span></div>
+          <div class="monster-target" data-target="0"><span>A - Glimmerling</span> <span class="status green">Healthy</span></div>
+          <div class="monster-target" data-target="1"><span>B - Giant Rat</span> <span class="status yellow">Injured</span></div>
+          <div class="monster-target" data-target="2"><span>C - Glimmerling</span> <span class="status red">Battered</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- BOTTOM SECTION: Message Box + Command Menu -->
+    <div class="bottom-section">
+      <div class="message-box" id="message-box">
+        A Glimmerling draws near.<br>
+        B Giant Rat joins the fray.<br>
+        C Glimmerling slinks in.
+      </div>
+
+      <div class="command-menu" id="command-menu">
+        <div class="title">COMMAND</div>
+        <div class="command-row" data-cmd="fight-lh1"><span class="cursor">►</span> FIGHT: LH — Quick Slash</div>
+        <div class="command-row" data-cmd="fight-lh2"><span class="cursor">►</span> FIGHT: LH — Slash</div>
+        <div class="command-row" data-cmd="fight-rh1"><span class="cursor">►</span> FIGHT: RH — Fireball 1</div>
+        <div class="command-row" data-cmd="fight-rh2"><span class="cursor">►</span> FIGHT: RH — Ice Bolt 2</div>
+        <div class="command-row" data-cmd="item-herb"><span class="cursor">►</span> ITEM: Herb</div>
+        <div class="command-row" data-cmd="item-bomb"><span class="cursor">►</span> ITEM: Bomb</div>
+      </div>
+    </div>
+  </div>
+
+  <script src="dw-app.js"></script>
+</body>
+</html>
