@@ -1,9 +1,6 @@
 /**
  * Portal Colosseum — GUI2 Variant 04 (Dragon Warrior NES Battle)
- * Per-hand turn-gated command menu with info popup.
- * - LH or RH menu on ready hand
- * - Arrow keys + mouse, section headers skipped
- * - Both-hands demo with L/R switch
+ * Flat menu, attack target confirm flow, item confirm prompts, timing rail markers, L->R sequencing only.
  * No inline scripts. No console spam.
  */
 
@@ -26,9 +23,9 @@ let menuVisible = false;
 let targetMode = false;
 let currentMenuIndex = 0;
 let currentTargetIndex = 0;
-let currentHand = 'left'; // 'left' | 'right'
-let bothHandsReady = false;
+let currentHand = 'left';
 let selectedAttackName = null;
+let pendingConfirmAction = null; // for item confirms
 
 const messageBox = () => document.getElementById('message-box');
 const commandMenu = () => document.getElementById('command-menu');
@@ -49,11 +46,13 @@ const ATTACKS = {
   ]
 };
 
-const BELT = { name: 'Bronze Axe', info: '2h, replace both weapons, 30-40 tic equip time' };
-const CONSUMABLES = [
-  { name: 'Herb', info: 'Use: Restores a small amount of HP' },
-  { name: 'Bomb', info: 'Use: Deals damage to all enemies' }
-];
+const QUEUE_TICS = [3,4,5,9,12,18,23,27];
+const ATTACK_WINDOWS = {
+  'Quick Slash': [3,4],
+  'Slash': [5,6],
+  'Fireball 1': [8,10],
+  'Ice Bolt 2': [10,12]
+};
 
 function showMessage(lines) {
   const box = messageBox();
@@ -92,7 +91,6 @@ function pauseNarration() {
 
 function buildMenuRows(hand) {
   const menu = commandMenu();
-  // clear previous rows except title and hand-line
   const existingRows = menu.querySelectorAll('.command-row, .section-header');
   existingRows.forEach(el => el.remove());
 
@@ -102,8 +100,8 @@ function buildMenuRows(hand) {
 
   handLine().innerHTML = `<span class="hand-label">${handLabel}</span> — <span class="weapon-name">${weapon}</span>`;
 
-  // attacks (selectable)
-  attacks.forEach((atk, i) => {
+  // flat attacks
+  attacks.forEach((atk) => {
     const row = document.createElement('div');
     row.className = 'command-row';
     row.dataset.name = atk.name;
@@ -112,44 +110,28 @@ function buildMenuRows(hand) {
     menu.appendChild(row);
   });
 
-  // BELT LOOP header (non-selectable)
-  const beltHeader = document.createElement('div');
-  beltHeader.className = 'section-header';
-  beltHeader.textContent = 'BELT LOOP';
-  menu.appendChild(beltHeader);
-
-  // belt row
-  const beltRow = document.createElement('div');
-  beltRow.className = 'command-row';
-  beltRow.dataset.name = BELT.name;
-  beltRow.dataset.info = BELT.info;
-  beltRow.textContent = BELT.name;
-  menu.appendChild(beltRow);
-
-  // CONSUMABLES header
-  const consHeader = document.createElement('div');
-  consHeader.className = 'section-header';
-  consHeader.textContent = 'CONSUMABLES';
-  menu.appendChild(consHeader);
-
-  // consumables
-  CONSUMABLES.forEach(item => {
+  // flat C1/C2/BL rows
+  const itemDefs = [
+    { name: 'Herb', label: 'C1: Herb', info: 'Use: Restores a small amount of HP' },
+    { name: 'Bomb', label: 'C2: Bomb', info: 'Use: Deals damage to all enemies' },
+    { name: 'Bronze Axe', label: 'BL: Bronze Axe', info: '2h, replace both weapons, 30-40 tic equip time' }
+  ];
+  itemDefs.forEach(item => {
     const row = document.createElement('div');
     row.className = 'command-row';
     row.dataset.name = item.name;
     row.dataset.info = item.info;
-    row.textContent = item.name;
+    row.textContent = item.label;
     menu.appendChild(row);
   });
 
-  // re-attach mouse handlers to new rows
   attachRowHandlers();
+  clearTimingMarkers();
 }
 
 function attachRowHandlers() {
   const rows = commandMenu().querySelectorAll('.command-row');
   rows.forEach((row, idx) => {
-    // remove old listeners if any by cloning? but for simplicity rebind
     row.onclick = null;
     row.onmouseenter = null;
     row.onclick = () => {
@@ -166,13 +148,11 @@ function attachRowHandlers() {
   });
 }
 
-function showCommandMenu(hand = 'left', showBoth = false) {
+function showCommandMenu(hand = 'left') {
   const menu = commandMenu();
-  // the command menu takes over the bottom-right slot: close loot if open
   const win = lootWindow();
   if (win) win.classList.remove('visible');
   currentHand = hand;
-  bothHandsReady = showBoth;
 
   buildMenuRows(hand);
   menu.classList.add('visible');
@@ -181,9 +161,8 @@ function showCommandMenu(hand = 'left', showBoth = false) {
   highlightMenuRow(0);
   updateInfoPopup();
 
-  const prefix = showBoth ? 'Command? (L/R to switch) ' : 'Command? ';
   const handName = hand === 'left' ? 'L.HAND' : 'R.HAND';
-  showMessage([prefix + handName]);
+  showMessage(['Command? ' + handName]);
   pauseNarration();
 }
 
@@ -191,25 +170,32 @@ function hideCommandMenu() {
   const menu = commandMenu();
   menu.classList.remove('visible');
   menuVisible = false;
-  bothHandsReady = false;
   clearMenuHighlight();
   hideInfoPopup();
+  clearTimingMarkers();
 }
 
 function highlightMenuRow(index) {
   const rows = commandMenu().querySelectorAll('.command-row');
-  // only selectable rows (no section headers)
   rows.forEach((r, i) => {
     r.classList.toggle('active', i === index);
   });
   currentMenuIndex = index;
   updateInfoPopup();
+  // timing markers for attacks only
+  const row = rows[index];
+  if (row && ATTACK_WINDOWS[row.dataset.name]) {
+    updateTimingMarkers(row.dataset.name);
+  } else {
+    clearTimingMarkers();
+  }
 }
 
 function clearMenuHighlight() {
   const rows = commandMenu().querySelectorAll('.command-row');
   rows.forEach(r => r.classList.remove('active'));
   hideInfoPopup();
+  clearTimingMarkers();
 }
 
 function updateInfoPopup() {
@@ -231,17 +217,51 @@ function hideInfoPopup() {
   if (popup) popup.style.display = 'none';
 }
 
-function toggleLootWindow() {
-  const win = lootWindow();
+function updateTimingMarkers(attackName) {
+  clearTimingMarkers();
+  const win = ATTACK_WINDOWS[attackName];
   if (!win) return;
-  const isOpen = win.classList.contains('visible');
-  if (isOpen) {
-    win.classList.remove('visible');
-  } else {
-    // only open in idle/narration (no menu, no target)
-    if (menuVisible || targetMode) return;
-    win.classList.add('visible');
+  const [minT, maxT] = win;
+  const queueRows = document.querySelectorAll('.right-rail .queue-row');
+  const markers = [];
+
+  let inside = false;
+  for (let i = 0; i < QUEUE_TICS.length; i++) {
+    const t = QUEUE_TICS[i];
+    if (t > minT && t < maxT) {
+      inside = true;
+      break;
+    }
   }
+
+  if (!inside) {
+    // single > on first queue row at or after max
+    for (let i = 0; i < QUEUE_TICS.length; i++) {
+      if (QUEUE_TICS[i] >= maxT) {
+        markers.push(i);
+        break;
+      }
+    }
+  } else {
+    // pair: last before min, first after max
+    let before = -1;
+    let after = -1;
+    for (let i = 0; i < QUEUE_TICS.length; i++) {
+      if (QUEUE_TICS[i] < minT) before = i;
+      if (QUEUE_TICS[i] > maxT && after === -1) after = i;
+    }
+    if (before !== -1) markers.push(before);
+    if (after !== -1) markers.push(after);
+  }
+
+  markers.forEach(idx => {
+    const m = queueRows[idx] ? queueRows[idx].querySelector('.marker') : null;
+    if (m) m.textContent = '>';
+  });
+}
+
+function clearTimingMarkers() {
+  document.querySelectorAll('.right-rail .queue-row .marker').forEach(m => m.textContent = '');
 }
 
 function selectMenuCommand() {
@@ -254,23 +274,59 @@ function selectMenuCommand() {
 
   if (name === 'Quick Slash' || name === 'Slash' || name === 'Fireball 1' || name === 'Ice Bolt 2') {
     enterTargetMode(name);
-  } else if (name === 'Bronze Axe') {
-    appendNarration('Equipping the Bronze Axe takes 30-40 tics.');
-    setTimeout(() => {
-      // return menu (demo keeps same hand)
-      showCommandMenu(currentHand, bothHandsReady);
-    }, 1400);
   } else if (name === 'Herb') {
-    appendNarration('You use the Herb — some HP restored.');
-    setTimeout(() => {
-      showCommandMenu(currentHand, bothHandsReady);
-    }, 1400);
+    showItemConfirm('C1: Herb', 'Drink the Herb for 10 HP +(1-20) HP?', 'You drink the Herb — some HP restored.');
   } else if (name === 'Bomb') {
-    appendNarration('You throw the Bomb — every monster takes damage!');
-    setTimeout(() => {
-      showCommandMenu(currentHand, bothHandsReady);
-    }, 1400);
+    showItemConfirm('C2: Bomb', 'Throw the Bomb — damage all monsters?', 'You throw the Bomb — every monster takes damage!');
+  } else if (name === 'Bronze Axe') {
+    showItemConfirm('BL: Bronze Axe', 'Equip the Bronze Axe? 2h, replaces both weapons, 30-40 tic equip time', 'Equipping the Bronze Axe takes 30-40 tics.');
   }
+}
+
+function showItemConfirm(label, promptText, narrationText) {
+  const menu = commandMenu();
+  menu.innerHTML = '';
+  menu.classList.add('visible');
+  menuVisible = true;
+
+  const p = document.createElement('div');
+  p.style.padding = '4px';
+  p.style.fontSize = '10px';
+  p.textContent = promptText;
+  menu.appendChild(p);
+
+  const btns = document.createElement('div');
+  btns.style.marginTop = '4px';
+
+  const confirmBtn = document.createElement('button');
+  confirmBtn.className = 'confirm-btn';
+  confirmBtn.textContent = 'CONFIRM';
+  confirmBtn.onclick = () => {
+    pendingConfirmAction = null;
+    appendNarration(narrationText);
+    menu.classList.remove('visible');
+    menuVisible = false;
+    setTimeout(() => {
+      showCommandMenu(currentHand);
+    }, 1400);
+  };
+
+  const cancelBtn = document.createElement('button');
+  cancelBtn.className = 'confirm-btn';
+  cancelBtn.textContent = 'CANCEL';
+  cancelBtn.onclick = () => {
+    pendingConfirmAction = null;
+    menu.classList.remove('visible');
+    menuVisible = false;
+    showCommandMenu(currentHand);
+  };
+
+  btns.appendChild(confirmBtn);
+  btns.appendChild(cancelBtn);
+  menu.appendChild(btns);
+
+  // keyboard support for confirm/cancel
+  pendingConfirmAction = { confirm: confirmBtn.onclick, cancel: cancelBtn.onclick };
 }
 
 function enterTargetMode(attackName = null) {
@@ -278,29 +334,58 @@ function enterTargetMode(attackName = null) {
   targetMode = true;
   currentTargetIndex = 0;
   highlightTarget(0);
-  appendNarration('Select target...');
+  const q = `Who do you attack with the ${attackName}?`;
+  showMessage([q]);
   hideInfoPopup();
+  // add confirm button to message area or body for target
+  addTargetConfirmUI();
+}
+
+function addTargetConfirmUI() {
+  // create or show a confirm bar
+  let bar = document.getElementById('target-confirm-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'target-confirm-bar';
+    bar.style.position = 'absolute';
+    bar.style.bottom = '80px';
+    bar.style.left = '50%';
+    bar.style.transform = 'translateX(-50%)';
+    bar.style.zIndex = '100';
+    document.body.appendChild(bar);
+  }
+  bar.innerHTML = '';
+  const confirmBtn = document.createElement('button');
+  confirmBtn.className = 'confirm-btn';
+  confirmBtn.textContent = 'CONFIRM';
+  confirmBtn.onclick = () => confirmTarget();
+  bar.appendChild(confirmBtn);
+  bar.style.display = 'block';
+}
+
+function removeTargetConfirmUI() {
+  const bar = document.getElementById('target-confirm-bar');
+  if (bar) bar.style.display = 'none';
 }
 
 function exitTargetMode(cancel = false) {
   targetMode = false;
   clearTargetHighlights();
-  if (!cancel) {
-    setTimeout(() => {
-      showCommandMenu(currentHand, bothHandsReady);
-    }, 800);
+  removeTargetConfirmUI();
+  if (cancel) {
+    showCommandMenu(currentHand);
   } else {
-    showCommandMenu(currentHand, bothHandsReady);
+    setTimeout(() => {
+      showCommandMenu(currentHand);
+    }, 800);
   }
 }
 
 function highlightTarget(idx) {
   clearTargetHighlights();
   currentTargetIndex = idx;
-
   const wrappers = document.querySelectorAll('.monster-wrapper');
   if (wrappers[idx]) wrappers[idx].classList.add('selected');
-
   const targets = document.querySelectorAll('.monster-target');
   if (targets[idx]) targets[idx].classList.add('selected');
 }
@@ -320,6 +405,7 @@ function confirmTarget() {
 
   clearTargetHighlights();
   targetMode = false;
+  removeTargetConfirmUI();
 
   const ACTION_LINES = {
     'Quick Slash': (m, t) => `You slash ${m} ${t} for 16!`,
@@ -327,74 +413,27 @@ function confirmTarget() {
     'Fireball 1': (m, t) => `You cast Fireball 1 at ${m} ${t} for 16!`,
     'Ice Bolt 2': (m, t) => `You hurl Ice Bolt 2 at ${m} ${t} for 16!`,
   };
-  const actionLine = ACTION_LINES[selectedAttackName]
-    || ((m, t) => `You use ${selectedAttackName} on ${m} ${t} for 16!`);
+  const actionLine = ACTION_LINES[selectedAttackName] || ((m, t) => `You use ${selectedAttackName} on ${m} ${t} for 16!`);
   appendNarration(actionLine(monsterName, target));
   setTimeout(() => {
     appendNarration(`${monsterName} takes 16 damage.`);
     setTimeout(() => {
-      // after attack, progress demo hands
       advanceDemoHand();
     }, 1200);
   }, 900);
 }
 
 function advanceDemoHand() {
-  // Demo sequence: LH -> RH -> both (switchable) -> loop
-  if (currentHand === 'left' && !bothHandsReady) {
-    // first attack done -> show RH
+  // L.HAND -> R.HAND -> L.HAND loop (no hand switch)
+  if (currentHand === 'left') {
     setTimeout(() => {
       showCommandMenu('right');
     }, 600);
-  } else if (currentHand === 'right' && !bothHandsReady) {
-    // second attack -> demonstrate BOTH hands ready
-    setTimeout(() => {
-      bothHandsReady = true;
-      showCommandMenu('left', true);
-    }, 600);
   } else {
-    // after both demo, loop back to LH
     setTimeout(() => {
-      bothHandsReady = false;
       showCommandMenu('left');
     }, 600);
   }
-}
-
-function switchHand(newHand) {
-  if (!bothHandsReady || !menuVisible || targetMode) return;
-  currentHand = newHand;
-  const menu = commandMenu();
-  // rebuild only the attack rows + update hand line (belt/cons stay)
-  const existingAttackRows = menu.querySelectorAll('.command-row');
-  // remove first 2 (attacks)
-  for (let i = 0; i < 2; i++) {
-    if (existingAttackRows[i]) existingAttackRows[i].remove();
-  }
-
-  const attacks = ATTACKS[newHand];
-  const weapon = newHand === 'left' ? 'Iron Sword' : 'Arcane Wand';
-  const handLabel = newHand === 'left' ? 'L.HAND' : 'R.HAND';
-  handLine().innerHTML = `<span class="hand-label">${handLabel}</span> — <span class="weapon-name">${weapon}</span>`;
-
-  // insert the new attack rows after the hand line, preserving their order
-  const frag = document.createDocumentFragment();
-  attacks.forEach((atk) => {
-    const row = document.createElement('div');
-    row.className = 'command-row';
-    row.dataset.name = atk.name;
-    row.dataset.info = atk.info;
-    row.textContent = atk.name;
-    frag.appendChild(row);
-  });
-  handLine().after(frag);
-
-  // re-attach
-  attachRowHandlers();
-  currentMenuIndex = 0;
-  highlightMenuRow(0);
-  const handName = newHand === 'left' ? 'L.HAND' : 'R.HAND';
-  showMessage(['Command? (L/R to switch) ' + handName]);
 }
 
 function setupKeyboard() {
@@ -415,9 +454,7 @@ function setupKeyboard() {
     } else if (menuVisible) {
       const rows = commandMenu().querySelectorAll('.command-row');
       if (e.key === 'ArrowUp') {
-        // skip section headers: find previous selectable
         let newIdx = currentMenuIndex - 1;
-        while (newIdx >= 0 && !rows[newIdx]) newIdx--; // safety
         if (newIdx < 0) newIdx = rows.length - 1;
         currentMenuIndex = newIdx;
         highlightMenuRow(currentMenuIndex);
@@ -428,20 +465,26 @@ function setupKeyboard() {
         currentMenuIndex = newIdx;
         highlightMenuRow(currentMenuIndex);
         e.preventDefault();
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-        if (bothHandsReady) {
-          const newHand = currentHand === 'left' ? 'right' : 'left';
-          switchHand(newHand);
-          e.preventDefault();
-        }
       } else if (e.key === 'Enter') {
-        selectMenuCommand();
+        // handle pending item confirm or normal select
+        if (pendingConfirmAction) {
+          pendingConfirmAction.confirm();
+          pendingConfirmAction = null;
+        } else {
+          selectMenuCommand();
+        }
         e.preventDefault();
       } else if (e.key === 'Escape') {
-        hideCommandMenu();
-        startNarrationCycle();
+        if (pendingConfirmAction) {
+          pendingConfirmAction.cancel();
+          pendingConfirmAction = null;
+        } else {
+          hideCommandMenu();
+          startNarrationCycle();
+        }
         e.preventDefault();
       }
+      // NO ArrowLeft/Right hand switch
     } else {
       if (e.key === 'Enter' || e.key === ' ') {
         showCommandMenu('left');
@@ -451,7 +494,6 @@ function setupKeyboard() {
         e.preventDefault();
       }
     }
-    // global close for loot on Esc (only if open and idle)
     if (e.key === 'Escape') {
       const win = lootWindow();
       if (win && win.classList.contains('visible')) {
@@ -463,36 +505,31 @@ function setupKeyboard() {
 }
 
 function setupMouse() {
-  // Monster targets
   document.querySelectorAll('.monster-target').forEach((el, idx) => {
     el.addEventListener('click', () => {
       if (targetMode) {
         currentTargetIndex = idx;
         highlightTarget(idx);
-        confirmTarget();
+        // click selects but does not auto confirm per spec; use CONFIRM button
       }
     });
   });
 
-  // Sprite wrappers
   document.querySelectorAll('.monster-wrapper').forEach((el, idx) => {
     el.addEventListener('click', () => {
       if (targetMode) {
         currentTargetIndex = idx;
         highlightTarget(idx);
-        confirmTarget();
       }
     });
   });
 
-  // Click arena to show menu (demo)
   arena().addEventListener('click', () => {
     if (!menuVisible && !targetMode) {
       showCommandMenu('left');
     }
   });
 
-  // LOOT chip
   const chip = lootChip();
   if (chip) {
     chip.addEventListener('click', () => {
@@ -501,14 +538,23 @@ function setupMouse() {
   }
 }
 
+function toggleLootWindow() {
+  const win = lootWindow();
+  if (!win) return;
+  const isOpen = win.classList.contains('visible');
+  if (isOpen) {
+    win.classList.remove('visible');
+  } else {
+    if (menuVisible || targetMode) return;
+    win.classList.add('visible');
+  }
+}
+
 function init() {
-  // Initial encounter lines already in HTML
-  // Demo: after delay show LH menu first
   setTimeout(() => {
     showCommandMenu('left');
   }, 3200);
 
-  // Start narration cycle
   setTimeout(() => {
     startNarrationCycle();
   }, 3800);
@@ -516,7 +562,6 @@ function init() {
   setupKeyboard();
   setupMouse();
 
-  // extra narration seed
   setTimeout(() => {
     if (!menuVisible) {
       appendNarration('The battle rages on...');

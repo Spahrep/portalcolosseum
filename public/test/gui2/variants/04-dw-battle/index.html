@@ -266,6 +266,19 @@
 
     .queue-row .name { color: #ccddff; }
     .queue-row .tic { color: #6688aa; font-size: 9px; }
+    .queue-row .marker { width: 14px; display: inline-block; color: #ffcc66; font-weight: bold; text-align: center; }
+
+    .confirm-btn {
+      background: #ffcc66;
+      color: #000;
+      border: 2px solid #cc9900;
+      padding: 2px 8px;
+      font-size: 10px;
+      margin: 2px;
+      cursor: pointer;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+    }
+    .confirm-btn:hover { background: #ffdd88; }
 
     .monsters-panel {
       padding: 8px 10px;
@@ -601,14 +614,14 @@
             <span>TIME MENU</span>
             <span style="color:#a8c8ea">+2 MORE</span>
           </div>
-          <div class="queue-row"><span class="name">B HeavyAttack</span><span class="tic">3</span></div>
-          <div class="queue-row"><span class="name">RH Slash</span><span class="tic">4</span></div>
-          <div class="queue-row"><span class="name">A Bite</span><span class="tic">5</span></div>
-          <div class="queue-row"><span class="name">C AcidShot</span><span class="tic">9</span></div>
-          <div class="queue-row"><span class="name">LH Ready</span><span class="tic">12</span></div>
-          <div class="queue-row"><span class="name">A Bite</span><span class="tic">18</span></div>
-          <div class="queue-row"><span class="name">B HeavyAttack</span><span class="tic">23</span></div>
-          <div class="queue-row"><span class="name">RH Ready</span><span class="tic">27</span></div>
+          <div class="queue-row"><span class="marker"></span><span class="name">B HeavyAttack</span><span class="tic">3</span></div>
+          <div class="queue-row"><span class="marker"></span><span class="name">RH Slash</span><span class="tic">4</span></div>
+          <div class="queue-row"><span class="marker"></span><span class="name">A Bite</span><span class="tic">5</span></div>
+          <div class="queue-row"><span class="marker"></span><span class="name">C AcidShot</span><span class="tic">9</span></div>
+          <div class="queue-row"><span class="marker"></span><span class="name">LH Ready</span><span class="tic">12</span></div>
+          <div class="queue-row"><span class="marker"></span><span class="name">A Bite</span><span class="tic">18</span></div>
+          <div class="queue-row"><span class="marker"></span><span class="name">B HeavyAttack</span><span class="tic">23</span></div>
+          <div class="queue-row"><span class="marker"></span><span class="name">RH Ready</span><span class="tic">27</span></div>
         </div>
 
         <!-- MONSTERS panel -->
