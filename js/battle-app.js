@@ -14,6 +14,7 @@ const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
 
 let supabase;
 let currentRunId = null;
+let lastBs = null; // last loaded battle_state (safeState) — source for attack/potion lookups
 let busy = false;
 
 function getAuthToken() {
@@ -129,8 +130,8 @@ function renderDice(dice) {
   if (curEl) {
     if (current && current.color && current.face != null) {
       curEl.innerHTML = `
-        <div class=\"die ${current.color}\" style=\"width:32px;height:32px;font-size:14px;\">${current.face}</div>
-        <div style=\"font-size:9px;color:#88aaff;margin-top:2px;\">${current.rolled_value != null ? current.rolled_value : ''}</div>
+        <div class="die ${current.color}" style="width:32px;height:32px;font-size:14px;">${current.face}</div>
+        <div style="font-size:9px;color:#88aaff;margin-top:2px;">${current.rolled_value != null ? current.rolled_value : ''}</div>
       `;
       curEl.style.display = 'flex';
     } else {
@@ -162,7 +163,7 @@ function renderMonsters(monsters) {
     const hp = document.createElement('div');
     hp.style.cssText = 'margin-top:4px;text-align:center;';
     const hpWord = m.hp_word || m.hpWord || 'Healthy';
-    hp.innerHTML = `<span style=\"color:#66ff99;font-size:10px;\">HP: ${hpWord}</span>`;
+    hp.innerHTML = `<span style="color:#66ff99;font-size:10px;">HP: ${hpWord}</span>`;
     card.appendChild(sprite);
     card.appendChild(name);
     card.appendChild(hp);
@@ -193,18 +194,10 @@ function renderFeed(feed) {
 function renderPlayerHP(runOrState) {
   const el = document.getElementById('player-hp');
   if (!el) return;
-  let hpWord = 'Healthy';
-  if (runOrState.battle_state && runOrState.battle_state.player && runOrState.battle_state.player.hp_word) {
-    hpWord = runOrState.battle_state.player.hp_word;
-  } else if (runOrState.player && runOrState.player.hp_word) {
-    hpWord = runOrState.player.hp_word;
-  } else if (runOrState.participants && runOrState.participants.player && runOrState.participants.player.hp_word) {
-    hpWord = runOrState.participants.player.hp_word;
-  } else if (typeof runOrState.player_hp === 'number') {
-    // fallback only if no word (should not happen)
-    hpWord = runOrState.player_hp > 300 ? 'Healthy' : (runOrState.player_hp > 100 ? 'Injured' : 'Critical');
-  }
-  el.innerHTML = `HP: <span style=\"color:#66ff99;\">${hpWord}</span>`;
+  // API exposes player_hp (numeric) only — no player hp_word. Design shows numbers.
+  const hpVal = (runOrState && typeof runOrState.player_hp === 'number') ? runOrState.player_hp : null;
+  const hpColor = hpVal === null ? '#66ff99' : (hpVal > 300 ? '#66ff99' : (hpVal > 100 ? '#ffcc66' : '#ff6666'));
+  el.innerHTML = `HP: <span style="color:${hpColor};">${hpVal === null ? '—' : hpVal}</span>`;
 }
 
 function renderLoadout(bs) {
@@ -215,27 +208,14 @@ function renderLoadout(bs) {
   if (rh) rh.textContent = (wl.hand_r && wl.hand_r.name) || '—';
 }
 
-function updateFromActionResponse(data, runId) {
-  const state = data.state || data;
-  const bs = state.battle_state || state;
-  renderDice(bs.dice || state.dice || {});
-  renderMonsters(bs.monsters || state.monsters || []);
-  renderFeed(bs.feed || state.feed || []);
-  renderPlayerHP(state || bs);
-  renderLoadout(bs);
-  // check for battle over / advance
-  if (state.battle_over || bs.battle_over) {
-    showAdvanceUI(runId, state);
-  }
-}
-
 function showAdvanceUI(runId, state) {
   const box = document.getElementById('message-box');
   if (!box) return;
   box.innerHTML = '';
   const adv = document.createElement('div');
   adv.className = 'msg-line';
-  adv.innerHTML = `<strong>Battle complete.</strong> ${state.monsters_dead ? 'Monsters defeated.' : ''}`;
+  const monstersDead = state.monsters_dead ?? (Array.isArray(state.monsters) && state.monsters.length > 0 && state.monsters.every(m => m.dead));
+  adv.innerHTML = `<strong>Battle complete.</strong> ${monstersDead ? 'Monsters defeated.' : ''}`;
   const contBtn = document.createElement('button');
   contBtn.textContent = 'Continue to next battle';
   contBtn.className = 'action-btn';
@@ -274,11 +254,24 @@ async function doAttack(runId) {
   if (busy) return;
   setBusy(true);
   try {
-    // CLI exact payload; attack_id=1 is placeholder (requires valid mapped attack for weapon)
-    const payload = { hand: 'LH', attack_id: 1, target_ids: [] };
+    // Real mapped attack from the equipped LH weapon (server validates the mapping).
+    // CLI parity: ALWAYS target_ids: [] — engine auto-targets.
+    const lhAttacks = (lastBs && lastBs.weapons && lastBs.weapons.hand_l && lastBs.weapons.hand_l.attacks) || [];
+    if (lhAttacks.length === 0) {
+      showMessage('No attack available for the LH weapon.', true);
+      setBusy(false);
+      return;
+    }
+    const attack = lhAttacks[0];
+    const payload = { hand: 'LH', attack_id: attack.id, target_ids: [] };
     const data = await apiCall(`/runs/${runId}/commit`, 'POST', payload);
-    showMessage('Attack committed (LH #1)');
-    updateFromActionResponse(data, runId);
+    showMessage(`Attack committed (${attack.name})`);
+    // Commit response is a minimal engine snapshot — re-render from the well-shaped GET.
+    if (data.state && data.state.battle_over) {
+      showAdvanceUI(runId, data.state);
+    } else {
+      await loadBattle(runId);
+    }
   } catch (e) {
     const msg = String(e.message || e);
     if (msg.includes('Hand not ready')) {
@@ -294,9 +287,15 @@ async function doItem(runId) {
   if (busy) return;
   setBusy(true);
   try {
-    // confirm slot A/B per CLI
-    const slot = prompt('Potion slot? (A or B)', 'A');
-    if (!slot || !['A','B'].includes(slot.toUpperCase())) {
+    const potions = (lastBs && lastBs.potions) || {};
+    const available = ['A', 'B'].filter(s => potions[s] && !potions[s].used);
+    if (available.length === 0) {
+      showMessage('No unused potions equipped.', true);
+      setBusy(false);
+      return;
+    }
+    const slot = prompt(`Potion slot? (${available.join(' or ')})`, available[0]);
+    if (!slot || !['A', 'B'].includes(slot.toUpperCase())) {
       showMessage('Item cancelled');
       setBusy(false);
       return;
@@ -304,7 +303,7 @@ async function doItem(runId) {
     const payload = { slot: slot.toUpperCase() };
     const data = await apiCall(`/runs/${runId}/use-potion`, 'POST', payload);
     showMessage(`Potion ${slot.toUpperCase()} used`);
-    updateFromActionResponse(data, runId);
+    await loadBattle(runId);
   } catch (e) {
     showMessage(e.message, true);
   }
@@ -350,6 +349,7 @@ async function loadBattle(runId) {
 
     renderPlayerHP(run);
     const bs = run.battle_state || {};
+    lastBs = bs;
     renderDice(bs.dice || {});
     renderMonsters(bs.monsters || []);
     renderFeed(bs.feed || []);
@@ -357,8 +357,11 @@ async function loadBattle(runId) {
 
     attachLiveButtons(runId);
 
-    // initial battle_over check
-    if (bs.battle_over) {
+    // battle-over detection on reload: safeState has no battle_over flag —
+    // all monsters dead means the battle is winnable/over.
+    const monsterList = bs.monsters || [];
+    const allMonstersDead = monsterList.length > 0 && monsterList.every(m => m.dead);
+    if (allMonstersDead) {
       showAdvanceUI(runId, bs);
     }
 
