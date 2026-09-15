@@ -17,6 +17,16 @@ let currentRunId = null;
 let lastBs = null; // last loaded battle_state (safeState) — source for attack/potion lookups
 let busy = false;
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
+let shouldAnimateDice = false;
+
+// Tuning constants for PC-51 roulette dice sweep (fast→slow easing)
+const DICE_ANIM = {
+  INITIAL_INTERVAL: 60,
+  MIN_INTERVAL: 180,
+  DECELERATION: 1.25,
+  MAX_SWEEPS: 2,
+  LAND_PAUSE: 250
+};
 
 function getAuthToken() {
   return supabase?.auth?.getSession?.().then(({ data }) => data?.session?.access_token);
@@ -124,15 +134,72 @@ function renderDice(dice) {
   const curEl = document.getElementById('current-die');
   if (curEl) {
     if (current && current.color && current.face != null) {
-      curEl.innerHTML = `
-        <div class="die ${current.color}" style="width:32px;height:32px;font-size:14px;">${current.face}</div>
-        <div style="font-size:9px;color:#88aaff;margin-top:2px;">${current.rolled_value != null ? current.rolled_value : ''}</div>
-      `;
-      curEl.style.display = 'flex';
+      if (shouldAnimateDice) {
+        shouldAnimateDice = false;
+        curEl.style.display = 'none';
+        // append drawn die (as LAST) to sweep row so animation lands on it
+        const drawnEl = document.createElement('div');
+        drawnEl.className = `die ${current.color}`;
+        drawnEl.textContent = current.face;
+        remRow.appendChild(drawnEl);
+        const diceEls = Array.from(remRow.children);
+        // after reveal, re-render the tray so the phantom drawn-die box and its
+        // highlight are cleared — final state = true post-draw remaining only
+        const landAndCleanup = () => {
+          updateCurrentDie(curEl, current);
+          setTimeout(() => renderDice(dice), 400);
+        };
+        if (diceEls.length === 0) {
+          updateCurrentDie(curEl, current);
+        } else if (diceEls.length === 1) {
+          // 0/1 edge: highlight the (drawn) box, keep highlight through reveal
+          diceEls[0].classList.add('highlight');
+          setTimeout(landAndCleanup, DICE_ANIM.LAND_PAUSE);
+        } else {
+          performSweepAnimation(diceEls, landAndCleanup);
+        }
+      } else {
+        updateCurrentDie(curEl, current);
+      }
     } else {
       curEl.style.display = 'none';
     }
   }
+}
+
+function updateCurrentDie(curEl, current) {
+  curEl.innerHTML = `
+    <div class="die ${current.color}" style="width:32px;height:32px;font-size:14px;">${current.face}</div>
+    <div style="font-size:9px;color:#88aaff;margin-top:2px;">${current.rolled_value != null ? current.rolled_value : ''}</div>
+  `;
+  curEl.style.display = 'flex';
+}
+
+function performSweepAnimation(diceEls, onLand) {
+  let idx = 0;
+  let interval = DICE_ANIM.INITIAL_INTERVAL;
+  let sweeps = 0;
+  const total = diceEls.length;
+
+  function step() {
+    diceEls.forEach(el => el.classList.remove('highlight'));
+    diceEls[idx % total].classList.add('highlight');
+    idx++;
+
+    interval = Math.min(DICE_ANIM.MIN_INTERVAL, Math.floor(interval * DICE_ANIM.DECELERATION));
+    if (idx % total === 0) sweeps++;
+
+    if (sweeps < DICE_ANIM.MAX_SWEEPS || interval < DICE_ANIM.MIN_INTERVAL) {
+      setTimeout(step, interval);
+    } else {
+      setTimeout(() => {
+        // leave highlight on the landed box (last in sweep row) through reveal
+        onLand();
+      }, DICE_ANIM.LAND_PAUSE);
+    }
+  }
+
+  step();
 }
 
 function renderMonsters(monsters) {
@@ -274,6 +341,7 @@ function showAdvanceUI(runId, state) {
     try {
       const res = await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'continue' });
       showMessage('Advancing to next battle...');
+      shouldAnimateDice = true; // post-continue battle-start transition
       await loadBattle(runId);
     } catch (e) {
       showMessage(e.message, true);
@@ -775,6 +843,7 @@ async function init() {
     return;
   }
 
+  shouldAnimateDice = true; // run start transition
   await loadBattle(runId);
   setupEndRunButton(runId);
 }
