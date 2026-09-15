@@ -202,6 +202,57 @@ function renderLoadout(bs) {
   if (rh) rh.textContent = (wl.hand_r && wl.hand_r.name) || '—';
 }
 
+/**
+ * TIME MENU (next-up events column), per the design mockups: one row per
+ * queued event, `Label EventName | tics-until-change`, next event on top.
+ * Rows are countdowns to a state change: an attack landing, a hand freeing
+ * ("Ready"), a monster striking, a potion taking effect.
+ */
+function renderQueue(bs) {
+  const el = document.getElementById('queue');
+  if (!el) return;
+  el.innerHTML = '';
+  const queue = bs.queue || [];
+  if (queue.length === 0) return;
+  const monsters = bs.monsters || [];
+  const sorted = [...queue].sort((a, b) => (a.tics ?? 0) - (b.tics ?? 0));
+  for (const row of sorted) {
+    const div = document.createElement('div');
+    div.className = 'queue-row';
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'name';
+    nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+    const ticSpan = document.createElement('span');
+    ticSpan.className = 'tic';
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+    div.appendChild(nameSpan);
+    div.appendChild(ticSpan);
+    el.appendChild(div);
+  }
+}
+
+function queueLabel(row) {
+  if (row.label === 'LH' || row.label === 'RH') return row.label;
+  // Monsters show as single-letter arena markers (A/B/C), like the mockups.
+  return String(row.label || '?').replace(/^Monster\s*/i, '');
+}
+
+function queueEventName(row, monsters, bs) {
+  // A hand freeing is a state change — the queue counts down to "Ready".
+  if (row.event === 'cooldown' || row.event === 'recovery') return 'Ready';
+  if (row.event === 'drinking') {
+    const p = (bs.potions || {})[row.potionSlot];
+    return (p && p.template_name) ? p.template_name : 'Potion';
+  }
+  if (row.attackName) return row.attackName;
+  // Monster attack rows carry no name — use the monster's primary attack.
+  const mon = monsters.find(m => m.label === row.label);
+  if (mon && Array.isArray(mon.attacks) && mon.attacks.length && mon.attacks[0].name) {
+    return mon.attacks[0].name;
+  }
+  return 'Attack';
+}
+
 function showAdvanceUI(runId, state) {
   const box = document.getElementById('message-box');
   if (!box) return;
@@ -430,6 +481,7 @@ async function loadBattle(runId) {
     renderFeed(bs.feed || []);
     renderLoadout(bs);
     renderActionMenu(bs);
+    renderQueue(bs);
 
     attachLiveButtons(runId);
 

@@ -121,6 +121,22 @@
       background: rgba(0,0,0,0.45);
       min-height: 220px;
     }
+    .queue-panel {
+      width: 220px;
+      padding: 14px;
+      background: rgba(0,0,0,0.45);
+      border-left: 2px solid #334466;
+    }
+    .queue-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 10px;
+      padding: 1px 0;
+      color: #aaccff;
+    }
+    .queue-row .name { color: #ccddff; }
+    .queue-row .tic { color: #6688aa; font-size: 9px; }
     .panel-title {
       color: #88aaff;
       font-size: 11px;
@@ -307,6 +323,12 @@
       <div class="monsters-panel">
         <div class="panel-title">MONSTERS</div>
         <div id="monsters"></div>
+      </div>
+
+      <!-- TIME MENU (next-up events queue, per design mockups) -->
+      <div class="queue-panel">
+        <div class="panel-title">TIME MENU</div>
+        <div id="queue"></div>
       </div>
     </div>
 
