@@ -21,9 +21,8 @@ let shouldAnimateDice = false;
 
 // Tuning constants for PC-51 casino roulette dice reveal (two stages:
 // selection sweep, then the die roll). Sweep = Spahrep's spec: walk
-// left→right exactly k = rand % n boxes and stop; the random COUNT is
-// the only variation (no pattern, no correlation, no tell). The roll is
-// deliberately slower and weightier.
+// left→right from box 0 and stop on the drawn die's color box — the
+// landed box IS the die, nothing morphs. The roll is slower and weightier.
 const DICE_ANIM = {
   SWEEP_STEP: 200,     // ms per box during the left→right walk (uniform)
   LAND_PAUSE: 250,     // beat on the landed box before the roll starts
@@ -150,7 +149,8 @@ function renderDice(dice) {
         drawnEl.textContent = current.color.substring(0, 1).toUpperCase();
         // Keep the row in NORMAL order (G block, Y block, R block): the
         // drawn die sits with its own color's dice, so no odd box out of
-        // place ever gives the pick away. The landing is random instead.
+        // place ever gives the pick away. The sweep lands on one of the
+        // drawn color's boxes — that landing IS the selection.
         const insertAt = (rem.green || 0) + (rem.yellow || 0)
           + (current.color === 'red' ? (rem.red || 0) : 0);
         remRow.insertBefore(drawnEl, remRow.children[insertAt] || null);
@@ -179,10 +179,17 @@ function renderDice(dice) {
           diceEls[0].classList.add('highlight');
           setTimeout(() => selectAndRoll(diceEls[0]), DICE_ANIM.LAND_PAUSE);
         } else {
-          // Spahrep's spec: k = random 0..(n-1); the sweep walks the
-          // ordered boxes from 0 exactly k steps and stops on box k.
-          // See performSweepAnimation — the count is the only variation.
-          const targetIndex = Math.floor(Math.random() * diceEls.length);
+          // Spahrep's spec: the landed box IS the drawn die — no morph,
+          // ever. Land on a random box OF THE DRAWN COLOR (existing
+          // same-color boxes + the phantom), then walk from 0 to it.
+          const candidates = [];
+          diceEls.forEach((el, i) => {
+            if (el.classList.contains(current.color)) candidates.push(i);
+          });
+          // Phantom guarantees >= 1 same-color box; fall back defensively.
+          const targetIndex = candidates.length > 0
+            ? candidates[Math.floor(Math.random() * candidates.length)]
+            : Math.floor(Math.random() * diceEls.length);
           performSweepAnimation(diceEls, targetIndex, selectAndRoll);
         }
       } else {
@@ -204,10 +211,11 @@ function updateCurrentDie(curEl, current) {
 
 function performSweepAnimation(diceEls, targetIndex, onLand) {
   const total = diceEls.length;
-  // Spahrep's spec: land = rand % n (0..n-1), then the sweep walks
-  // left→right exactly that many boxes from box 0 and stops on it. The
-  // random COUNT is the only source of variation — nothing about the row,
-  // the pace, or the motion correlates with the drawn die.
+  // Spahrep's spec: the sweep walks left→right from box 0 and stops on
+  // the target box; the walk length is the target's index (k = target,
+  // since box 0 is the first stop). The caller picks the target from the
+  // drawn die's color boxes, so the landing IS the selection — the box
+  // never morphs, its color is already the draw's color.
   let idx = 0;
   function step() {
     diceEls.forEach(el => el.classList.remove('highlight'));
@@ -223,18 +231,13 @@ function performSweepAnimation(diceEls, targetIndex, onLand) {
   step();
 }
 
-// Stage 2 (roll): the box the sweep landed on MORPHS into the drawn die —
-// color swap + letter → real-face tumble (fast→slow), landing on the drawn
-// face with a small pop. Tumble values come from the template's faces for
-// this color — never invented numbers (dice roll 10/20/30, not fake 1-6).
+// Stage 2 (roll): the landed box IS the drawn die — the sweep was forced
+// to land on a box of the draw's color, so nothing morphs. The box tumbles
+// its REAL face values (fast→slow) and settles on the drawn face with a
+// small pop. Tumble values come from the template's faces for this color —
+// never invented numbers (dice roll 10/20/30, not fake 1-6).
 function rollDiceAnimation(box, current, faces, onDone) {
-  // The landed box is now the drawn die (keep its highlight class): swap
-  // color AND letter in one beat, so a red landing that becomes a yellow
-  // draw never shows a mismatched letter even for one frame.
-  box.classList.remove('green', 'yellow', 'red');
-  box.classList.add(current.color);
-  box.textContent = current.color.substring(0, 1).toUpperCase();
-
+  // The box keeps its color and highlight — it is already the draw's die.
   const pool = (faces && faces[current.color] && faces[current.color].length > 0)
     ? faces[current.color]
     : [current.face]; // defensive: unknown pool → die just settles
