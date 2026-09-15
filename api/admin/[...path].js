@@ -108,8 +108,6 @@ async function checkAttackDeleteBlockers(admin, id) {
   for (let s = 0; s <= 4; s++) {
     const { data: wi } = await admin.from('weapon_instance').select('id').eq(`slot_${s}_attack_id`, id);
     if (wi?.length) blockers.push(`weapon_instance.slot_${s}: ${wi.length} row(s)`);
-    const { data: mi } = await admin.from('monster_instance').select('id').eq(`slot_${s}_attack_id`, id);
-    if (mi?.length) blockers.push(`monster_instance.slot_${s}: ${mi.length} row(s)`);
   }
   return blockers;
 }
@@ -125,8 +123,6 @@ async function checkWeaponTemplateDeleteBlockers(admin, id) {
 
 async function checkMonsterTemplateDeleteBlockers(admin, id) {
   const blockers = [];
-  const { data: mi } = await admin.from('monster_instance').select('id').eq('template_id', id);
-  if (mi?.length) blockers.push(`monster_instance: ${mi.length} row(s)`);
   const { data: mtm } = await admin.from('monster_template_attack_mapping').select('id').eq('monster_template_id', id);
   if (mtm?.length) blockers.push(`monster_template_attack_mapping: ${mtm.length} row(s)`);
   const { data: mlm } = await admin.from('monster_loot_mapping').select('id').eq('monster_template_id', id);
