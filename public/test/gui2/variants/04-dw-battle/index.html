@@ -302,6 +302,8 @@
       line-height: 1.45;
       color: #fff;
       min-height: 78px;
+      max-height: 108px;
+      overflow-y: auto;
     }
 
     .command-menu {
@@ -313,6 +315,7 @@
       color: #fff;
       display: none;
       flex-shrink: 0;
+      position: relative;
     }
 
     .command-menu.visible {
@@ -371,8 +374,8 @@
 
     .info-popup {
       position: absolute;
-      bottom: 95px;
-      right: 12px;
+      bottom: calc(100% + 6px);
+      left: 10px;
       max-width: 270px;
       background: #000;
       border: 2px solid #ccc;
@@ -528,9 +531,8 @@
         <div class="title">COMMAND</div>
         <div class="hand-line" id="hand-line"></div>
         <!-- rows populated by JS -->
+        <div class="info-popup" id="info-popup"></div>
       </div>
-
-      <div class="info-popup" id="info-popup"></div>
     </div>
   </div>
 

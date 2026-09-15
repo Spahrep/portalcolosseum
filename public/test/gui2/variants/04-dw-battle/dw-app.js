@@ -28,6 +28,7 @@ let currentMenuIndex = 0;
 let currentTargetIndex = 0;
 let currentHand = 'left'; // 'left' | 'right'
 let bothHandsReady = false;
+let selectedAttackName = null;
 
 const messageBox = () => document.getElementById('message-box');
 const commandMenu = () => document.getElementById('command-menu');
@@ -234,7 +235,7 @@ function selectMenuCommand() {
   hideCommandMenu();
 
   if (name === 'Quick Slash' || name === 'Slash' || name === 'Fireball 1' || name === 'Ice Bolt 2') {
-    enterTargetMode();
+    enterTargetMode(name);
   } else if (name === 'Bronze Axe') {
     appendNarration('Equipping the Bronze Axe takes 30-40 tics.');
     setTimeout(() => {
@@ -254,7 +255,8 @@ function selectMenuCommand() {
   }
 }
 
-function enterTargetMode() {
+function enterTargetMode(attackName = null) {
+  selectedAttackName = attackName;
   targetMode = true;
   currentTargetIndex = 0;
   highlightTarget(0);
@@ -301,7 +303,15 @@ function confirmTarget() {
   clearTargetHighlights();
   targetMode = false;
 
-  appendNarration(`You slash ${monsterName} ${target} for 16!`);
+  const ACTION_LINES = {
+    'Quick Slash': (m, t) => `You slash ${m} ${t} for 16!`,
+    'Slash': (m, t) => `You slash ${m} ${t} for 16!`,
+    'Fireball 1': (m, t) => `You cast Fireball 1 at ${m} ${t} for 16!`,
+    'Ice Bolt 2': (m, t) => `You hurl Ice Bolt 2 at ${m} ${t} for 16!`,
+  };
+  const actionLine = ACTION_LINES[selectedAttackName]
+    || ((m, t) => `You use ${selectedAttackName} on ${m} ${t} for 16!`);
+  appendNarration(actionLine(monsterName, target));
   setTimeout(() => {
     appendNarration(`${monsterName} takes 16 damage.`);
     setTimeout(() => {
@@ -349,15 +359,17 @@ function switchHand(newHand) {
   const handLabel = newHand === 'left' ? 'L.HAND' : 'R.HAND';
   handLine().innerHTML = `<span class="hand-label">${handLabel}</span> — <span class="weapon-name">${weapon}</span>`;
 
-  const title = menu.querySelector('.title');
-  attacks.forEach((atk, i) => {
+  // insert the new attack rows after the hand line, preserving their order
+  const frag = document.createDocumentFragment();
+  attacks.forEach((atk) => {
     const row = document.createElement('div');
     row.className = 'command-row';
     row.dataset.name = atk.name;
     row.dataset.info = atk.info;
     row.textContent = atk.name;
-    title.after(row); // insert after title, before hand? wait order
+    frag.appendChild(row);
   });
+  handLine().after(frag);
 
   // re-attach
   attachRowHandlers();
