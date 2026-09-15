@@ -16,6 +16,7 @@ let supabase;
 let currentRunId = null;
 let lastBs = null; // last loaded battle_state (safeState) — source for attack/potion lookups
 let busy = false;
+let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
 
 function getAuthToken() {
   return supabase?.auth?.getSession?.().then(({ data }) => data?.session?.access_token);
@@ -309,6 +310,7 @@ async function doAttack(runId, hand, attackId) {
     const w = (lastBs && lastBs.weapons && lastBs.weapons[hand === 'LH' ? 'hand_l' : 'hand_r']) || {};
     const attack = (w.attacks || []).find(a => a.id === attackId) || {};
     showMessage(`Attack committed (${hand} ${attack.name || '#' + attackId})`);
+    pendingAttack = null;
     // Commit response is a minimal engine snapshot — re-render from the well-shaped GET.
     if (data.state && data.state.battle_over) {
       showAdvanceUI(runId, data.state);
@@ -344,6 +346,7 @@ function renderActionMenu(bs) {
   const wrap = document.getElementById('action-choices');
   if (!wrap) return;
   wrap.innerHTML = '';
+  pendingAttack = null;
   wrap.style.display = 'flex';
   wrap.style.gap = '0';
   const hands = (bs.player && bs.player.hands) || {};
@@ -357,21 +360,33 @@ function renderActionMenu(bs) {
   }
 
   function clearSelection() {
-    wrap.querySelectorAll('.command').forEach(c => c.classList.remove('selected'));
+    wrap.querySelectorAll('.command').forEach(c => {
+      c.classList.remove('selected');
+      if (c.innerHTML.startsWith('[x] ')) {
+        c.innerHTML = c.innerHTML.replace('[x] ', '[ ] ');
+      }
+    });
     showInfo('');
     selectedCmd = null;
+    pendingAttack = null;
   }
 
   function selectCommand(cmdEl, hand, attack, weapon) {
     clearSelection();
     cmdEl.classList.add('selected');
+    pendingAttack = { hand, attackId: attack.id };
     selectedCmd = { hand, attack, weapon };
+    // toggle marker to [x]
+    const nameEsc = escHtml(attack.name);
+    cmdEl.innerHTML = `[x] ${nameEsc}`;
     const base = weapon.base_damage != null ? weapon.base_damage : (weapon.damage || 0);
     const range = weapon.damage_range != null ? weapon.damage_range : 0;
     const dmgText = `DMG ${base}±${range}`;
     const multi = attack.is_multi_target ? ' <span style="color:#ffaa66">[MULTI]</span>' : '';
     const desc = attack.description ? ` — ${attack.description}` : '';
-    showInfo(`<strong>${attack.name}</strong> ${dmgText} | Windup: ${attack.prepare_time}t | CD: ${attack.cooldown_time}t${multi}${desc}`);
+    const descEsc = attack.description ? ` — ${escHtml(attack.description)}` : '';
+    const nameForInfo = escHtml(attack.name);
+    showInfo(`<strong>${nameForInfo}</strong> ${dmgText} | Windup: ${attack.prepare_time}t | CD: ${attack.cooldown_time}t${multi}${descEsc}`);
   }
 
   ['LH', 'RH'].forEach(hand => {
@@ -401,6 +416,8 @@ function renderActionMenu(bs) {
         attacks.forEach(a => {
           const cmd = document.createElement('div');
           cmd.className = 'command';
+          cmd.dataset.hand = hand;
+          cmd.dataset.attackId = a.id;
           cmd.innerHTML = `[ ] ${escHtml(a.name)}`;
           // hover shows without selecting
           cmd.onmouseenter = () => {
@@ -410,14 +427,22 @@ function renderActionMenu(bs) {
               const dmgText = `DMG ${base}±${range}`;
               const multi = a.is_multi_target ? ' <span style="color:#ffaa66">[MULTI]</span>' : '';
               const desc = a.description ? ` — ${a.description}` : '';
-              showInfo(`<strong>${a.name}</strong> ${dmgText} | Windup: ${a.prepare_time}t | CD: ${a.cooldown_time}t${multi}${desc}`);
+              const descEscH = a.description ? ` — ${escHtml(a.description)}` : '';
+              const nameForInfoH = escHtml(a.name);
+              showInfo(`<strong>${nameForInfoH}</strong> ${dmgText} | Windup: ${a.prepare_time}t | CD: ${a.cooldown_time}t${multi}${descEscH}`);
             }
           };
           cmd.onmouseleave = () => {
             if (!cmd.classList.contains('selected')) showInfo('');
           };
           cmd.onclick = () => {
-            selectCommand(cmd, hand, a, w);
+            if (cmd.classList.contains('selected')) {
+              if (pendingAttack && currentRunId) {
+                doAttack(currentRunId, pendingAttack.hand, pendingAttack.attackId);
+              }
+            } else {
+              selectCommand(cmd, hand, a, w);
+            }
           };
           list.appendChild(cmd);
         });
@@ -485,38 +510,65 @@ function attachSlotButtons(bs, showInfo) {
     if (!cmds.length) return;
     let idx = cmds.findIndex(c => c.classList.contains('selected'));
     if (e.key === 'Escape') {
-      cmds.forEach(c => c.classList.remove('selected'));
-      showInfo('');
+      clearSelection();
       e.preventDefault();
       return;
     }
     if (e.key === 'Enter') {
-      const sel = cmds.find(c => c.classList.contains('selected'));
-      if (sel) {
-        // trigger the stored selection to commit
-        // find the hand/attack from data or re-click logic — for simplicity call existing if possible
-        // since selection stores in closure, we simulate by clicking the confirm affordance (none added, use Enter to commit last selected)
-        // NOTE: full commit requires storing the selectedCmd globally; simplified here
-        showInfo('Confirm with click or re-select to attack');
+      if (pendingAttack && currentRunId) {
+        (async () => {
+          await doAttack(currentRunId, pendingAttack.hand, pendingAttack.attackId);
+          pendingAttack = null;
+          clearSelection();
+          showMessage('Attack committed...');
+        })();
       }
       e.preventDefault();
       return;
     }
     if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
       idx = (idx + 1) % cmds.length;
-      cmds.forEach(c => c.classList.remove('selected'));
-      cmds[idx].classList.add('selected');
+      selectCommandFromEl(cmds[idx]);
       cmds[idx].scrollIntoView({block:'nearest'});
       e.preventDefault();
     }
     if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
       idx = (idx - 1 + cmds.length) % cmds.length;
-      cmds.forEach(c => c.classList.remove('selected'));
-      cmds[idx].classList.add('selected');
+      selectCommandFromEl(cmds[idx]);
       cmds[idx].scrollIntoView({block:'nearest'});
       e.preventDefault();
     }
   };
+
+  function selectCommandFromEl(cmdEl) {
+    if (!cmdEl) return;
+    const allCmds = Array.from(document.querySelectorAll('#action-choices .command'));
+    // find matching attack data from lastBs using dataset
+    const hand = cmdEl.dataset.hand;
+    const attackId = parseInt(cmdEl.dataset.attackId, 10);
+    if (!hand || !attackId || !lastBs) return;
+    const wKey = hand === 'LH' ? 'hand_l' : 'hand_r';
+    const w = (lastBs.weapons || {})[wKey];
+    if (!w) return;
+    const attack = (w.attacks || []).find(a => a.id === attackId);
+    if (!attack) return;
+    // clear other selections and markers
+    allCmds.forEach(c => {
+      c.classList.remove('selected');
+      if (c.innerHTML.startsWith('[x] ')) c.innerHTML = c.innerHTML.replace('[x] ', '[ ] ');
+    });
+    cmdEl.classList.add('selected');
+    pendingAttack = { hand, attackId };
+    const nameEsc = escHtml(attack.name);
+    cmdEl.innerHTML = `[x] ${nameEsc}`;
+    const base = w.base_damage != null ? w.base_damage : (w.damage || 0);
+    const range = w.damage_range != null ? w.damage_range : 0;
+    const dmgText = `DMG ${base}±${range}`;
+    const multi = attack.is_multi_target ? ' <span style=\"color:#ffaa66\">[MULTI]</span>' : '';
+    const descEsc = attack.description ? ` — ${escHtml(attack.description)}` : '';
+    const nameForInfo = escHtml(attack.name);
+    showInfo(`<strong>${nameForInfo}</strong> ${dmgText} | Windup: ${attack.prepare_time}t | CD: ${attack.cooldown_time}t${multi}${descEsc}`);
+  }
 }
 
 function openItemMenu(runId) {
