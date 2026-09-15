@@ -286,6 +286,8 @@ async function initGame() {
 
   // Click anywhere on the "not ready" modal dismisses it
   document.getElementById('not-ready-modal')?.addEventListener('click', hideNotReadyModal);
+  // Explicit close (×) button
+  document.getElementById('not-ready-close')?.addEventListener('click', hideNotReadyModal);
 }
 
 /**
