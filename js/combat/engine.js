@@ -54,6 +54,8 @@ export function createEngine(rng = Math.random) {
               if (tgtMon && isMonsterDead(tgtMon)) {
                 log(`${r.target} is defeated`);
               }
+            } else {
+              log(`${row.label} ${row.attackName || 'attack'} misses`);
             }
           });
         }
@@ -154,7 +156,7 @@ export function createEngine(rng = Math.random) {
     row.isMultiTarget = isMultiTarget;
     row.cooldownTicks = cooldownTicks;
     row.attackName = attackName;
-    row.accuracy = 100 + accBuff;
+    row.accuracy = (params.playerAccuracy ?? 100) + accBuff;
     state.player.hands[hand].state = 'winding';
     state.player.hands[hand].attackId = attackId;
     log(`${hand} commits ${attackName ? attackName : `attack ${attackId}`} (cast ${castTicks})`);

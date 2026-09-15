@@ -286,6 +286,52 @@ describe('F16 end-to-end attack lifecycle + security', () => {
   });
 });
 
+describe('Player attack accuracy (weapon_instance.accuracy wiring)', () => {
+  it('miss: playerAccuracy 70 with rng()=>0.9 results in 0 damage and miss log', () => {
+    const rng = () => 0.9;
+    const eng = createEngine(rng);
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
+    });
+    const initialHp = eng.state.monsters[0].current_hp;
+    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, playerAccuracy: 70, isMultiTarget: false });
+    for (let i = 0; i < 5; i++) eng.advanceToNextDecision();
+    assert.equal(eng.state.monsters[0].current_hp, initialHp, 'miss: no damage');
+    const hasMiss = eng.state.feed.some(l => l.includes('misses'));
+    assert.ok(hasMiss, 'miss log present');
+    assert.equal(eng.state.player.hands.LH.state, 'Ready');
+  });
+
+  it('hit: playerAccuracy 70 with rng()=>0.3 applies damage', () => {
+    const rng = () => 0.3;
+    const eng = createEngine(rng);
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
+    });
+    const initialHp = eng.state.monsters[0].current_hp;
+    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, playerAccuracy: 70, isMultiTarget: false });
+    for (let i = 0; i < 5; i++) eng.advanceToNextDecision();
+    assert.ok(eng.state.monsters[0].current_hp < initialHp, 'hit: damage applied');
+    const hasHit = eng.state.feed.some(l => l.includes('hits') && l.includes('25'));
+    assert.ok(hasHit, 'hit log with damage');
+  });
+
+  it('backward compat: no playerAccuracy param still hits (defaults to 100)', () => {
+    const rng = () => 0.999;
+    const eng = createEngine(rng);
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
+    });
+    const initialHp = eng.state.monsters[0].current_hp;
+    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, isMultiTarget: false });
+    for (let i = 0; i < 5; i++) eng.advanceToNextDecision();
+    assert.ok(eng.state.monsters[0].current_hp < initialHp, 'default 100: still hits');
+  });
+});
+
 // Contract tests for rollStat (range behavior, range=0 must be deterministic base)
 describe('rollStat contract (range 0 unchanged, range N within bounds)', () => {
   // Inline the exact implementation for test isolation (matches api/combat/[...path].js)

@@ -580,7 +580,7 @@ async function handle(request) {
       const cooldownTicks = rollStat(attackRow?.cooldown_time, attackRow?.cooldown_time_range);
       const multiplier = attackRow?.base_damage_multiplier || 0;
 
-      const { data: weapon } = await admin.from('weapon_instance').select('damage').eq('id', weaponId).single();
+      const { data: weapon } = await admin.from('weapon_instance').select('damage, accuracy').eq('id', weaponId).single();
       const playerDamage = Math.round((weapon?.damage || 10) * (1 + multiplier));
 
       let engine;
@@ -593,7 +593,7 @@ async function handle(request) {
       // F11: advance-when-busy instead of 500 on unready hand
       let advanced = false;
       try {
-        engine.commitAttack(hand, attackIdNum, effectiveTargetIds.map(Number), { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName: attackRow?.name || null });
+        engine.commitAttack(hand, attackIdNum, effectiveTargetIds.map(Number), { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName: attackRow?.name || null, playerAccuracy: weapon?.accuracy });
       } catch (e) {
         if (e.message === 'Hand not ready' && engine.state && engine.state.queue && engine.state.queue.length > 0) {
           engine.advanceToNextDecision();
