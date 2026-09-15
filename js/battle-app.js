@@ -20,15 +20,12 @@ let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
 let shouldAnimateDice = false;
 
 // Tuning constants for PC-51 casino roulette dice reveal (two stages:
-// selection sweep, then the die roll). The sweep spins MANY fast passes
-// (roulette-ball whir), then one decelerating pass, then slow hops to
-// land; the roll is deliberately slower and weightier.
+// selection sweep, then the die roll). Sweep = Spahrep's spec: walk
+// left→right exactly k = rand % n boxes and stop; the random COUNT is
+// the only variation (no pattern, no correlation, no tell). The roll is
+// deliberately slower and weightier.
 const DICE_ANIM = {
-  FAST_INTERVAL: 55,   // ms per step during the fast spins
-  FAST_PASSES: 5,      // full passes of the highlight at high speed
-  INITIAL_INTERVAL: 55,// first step of the decelerating pass
-  MIN_INTERVAL: 180,   // slowest step (also the landing-hop speed)
-  DECELERATION: 1.25,  // grows the gap each step (fast→slow)
+  SWEEP_STEP: 200,     // ms per box during the left→right walk (uniform)
   LAND_PAUSE: 250,     // beat on the landed box before the roll starts
   ROLL_TICKS: 12,      // face-value tumbles before landing on the rolled face
   ROLL_INITIAL: 85,    // ms between early tumbles
@@ -182,9 +179,9 @@ function renderDice(dice) {
           diceEls[0].classList.add('highlight');
           setTimeout(() => selectAndRoll(diceEls[0]), DICE_ANIM.LAND_PAUSE);
         } else {
-          // Landing is pure theater: stop on a RANDOM box each run, fully
-          // uncorrelated with where the drawn die sits. The landed box
-          // morphs into the drawn die when the roll starts.
+          // Spahrep's spec: k = random 0..(n-1); the sweep walks the
+          // ordered boxes from 0 exactly k steps and stops on box k.
+          // See performSweepAnimation — the count is the only variation.
           const targetIndex = Math.floor(Math.random() * diceEls.length);
           performSweepAnimation(diceEls, targetIndex, selectAndRoll);
         }
@@ -206,38 +203,23 @@ function updateCurrentDie(curEl, current) {
 }
 
 function performSweepAnimation(diceEls, targetIndex, onLand) {
-  let idx = 0;
-  let interval = DICE_ANIM.INITIAL_INTERVAL;
   const total = diceEls.length;
-  // Phase 1: MANY full-speed passes (roulette-ball whir). Phase 2: one
-  // decelerating pass. The decel phase alone always ends on the LAST box,
-  // so add slow hops to stop on the target box (the drawn die) — varied
-  // landing, like a real wheel. N = (target+1) mod total lands exactly.
-  const fastSteps = DICE_ANIM.FAST_PASSES * total;
-  const decelEnd = fastSteps + total;
-  let extra = ((targetIndex + 1) % total + total) % total;
-
+  // Spahrep's spec: land = rand % n (0..n-1), then the sweep walks
+  // left→right exactly that many boxes from box 0 and stops on it. The
+  // random COUNT is the only source of variation — nothing about the row,
+  // the pace, or the motion correlates with the drawn die.
+  let idx = 0;
   function step() {
     diceEls.forEach(el => el.classList.remove('highlight'));
-    diceEls[idx % total].classList.add('highlight');
-    idx++;
-
-    if (idx < fastSteps) {
-      setTimeout(step, DICE_ANIM.FAST_INTERVAL); // high-speed spins
-    } else if (idx < decelEnd) {
-      interval = Math.min(DICE_ANIM.MIN_INTERVAL, Math.floor(interval * DICE_ANIM.DECELERATION));
-      setTimeout(step, interval);
-    } else if (extra > 0) {
-      extra--;
-      setTimeout(step, DICE_ANIM.MIN_INTERVAL); // slow dramatic hops to the target
-    } else {
-      setTimeout(() => {
-        // leave highlight on the landed box (the drawn die) through reveal
-        onLand(diceEls[targetIndex]);
-      }, DICE_ANIM.LAND_PAUSE);
+    diceEls[idx].classList.add('highlight');
+    if (idx === targetIndex) {
+      // leave highlight on the landed box through the reveal
+      setTimeout(() => onLand(diceEls[targetIndex]), DICE_ANIM.LAND_PAUSE);
+      return;
     }
+    idx++;
+    setTimeout(step, DICE_ANIM.SWEEP_STEP);
   }
-
   step();
 }
 
