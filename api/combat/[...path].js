@@ -556,7 +556,7 @@ async function handle(request) {
 
       const newState = engine.getState();
       await admin.from('portal_run')
-        .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp })
+        .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp, ...potionUsedFlags(engine.state) })
         .eq('id', id).eq('user_id', user.id);
       return json({
         state: {
@@ -1024,6 +1024,18 @@ async function handle(request) {
       return {
         A: run.consume_a_id ? (map[run.consume_a_id] || null) : null,
         B: run.consume_b_id ? (map[run.consume_b_id] || null) : null
+      };
+    }
+
+    // PC-39 review fix: DB used-flags must mirror engine potion state whenever a
+    // battle_state that may have fired an effect is persisted. Without this, an
+    // in-battle drink flips used=true inside engine.state but the DB flag stays
+    // false, so the state route would show the potion as still drinkable.
+    function potionUsedFlags(state) {
+      const pots = state && state.potions;
+      return {
+        consume_a_used: !!(pots && pots.A && pots.A.used),
+        consume_b_used: !!(pots && pots.B && pots.B.used)
       };
     }
 
