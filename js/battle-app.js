@@ -21,11 +21,11 @@ let shouldAnimateDice = false;
 
 // Tuning constants for PC-51 roulette dice sweep (fast→slow easing)
 const DICE_ANIM = {
-  INITIAL_INTERVAL: 55,
-  MIN_INTERVAL: 260,
-  DECELERATION: 1.22,
-  MAX_SWEEPS: 4,
-  LAND_PAUSE: 220
+  INITIAL_INTERVAL: 60,
+  MIN_INTERVAL: 180,
+  DECELERATION: 1.25,
+  MAX_SWEEPS: 2,
+  LAND_PAUSE: 250
 };
 
 function getAuthToken() {
@@ -137,17 +137,26 @@ function renderDice(dice) {
       if (shouldAnimateDice) {
         shouldAnimateDice = false;
         curEl.style.display = 'none';
+        // append drawn die (as LAST) to sweep row so animation lands on it
+        const drawnEl = document.createElement('div');
+        drawnEl.className = `die ${current.color}`;
+        drawnEl.textContent = current.face;
+        remRow.appendChild(drawnEl);
         const diceEls = Array.from(remRow.children);
+        // after reveal, re-render the tray so the phantom drawn-die box and its
+        // highlight are cleared — final state = true post-draw remaining only
+        const landAndCleanup = () => {
+          updateCurrentDie(curEl, current);
+          setTimeout(() => renderDice(dice), 400);
+        };
         if (diceEls.length === 0) {
           updateCurrentDie(curEl, current);
         } else if (diceEls.length === 1) {
+          // 0/1 edge: highlight the (drawn) box, keep highlight through reveal
           diceEls[0].classList.add('highlight');
-          setTimeout(() => {
-            diceEls[0].classList.remove('highlight');
-            updateCurrentDie(curEl, current);
-          }, DICE_ANIM.LAND_PAUSE);
+          setTimeout(landAndCleanup, DICE_ANIM.LAND_PAUSE);
         } else {
-          performSweepAnimation(diceEls, () => updateCurrentDie(curEl, current));
+          performSweepAnimation(diceEls, landAndCleanup);
         }
       } else {
         updateCurrentDie(curEl, current);
@@ -184,7 +193,7 @@ function performSweepAnimation(diceEls, onLand) {
       setTimeout(step, interval);
     } else {
       setTimeout(() => {
-        diceEls.forEach(el => el.classList.remove('highlight'));
+        // leave highlight on the landed box (last in sweep row) through reveal
         onLand();
       }, DICE_ANIM.LAND_PAUSE);
     }
