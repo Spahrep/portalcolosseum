@@ -18,6 +18,12 @@ let lastBs = null; // last loaded battle_state (safeState) — source for attack
 let busy = false;
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
 let shouldAnimateDice = false;
+// PC-51: monsters stay hidden while the dice roll ceremony plays, then
+// fade in one at a time. Set in the battle render when a roll will run;
+// revealMonsters() clears it when the roll completes.
+let monstersPendingReveal = false;
+const MONSTER_FADE_STAGGER = 250; // ms between monster reveals
+const MONSTER_FADE_MS = 450;      // per-monster fade duration
 
 // Tuning constants for dice-selection roulette (client theater only).
 // Sweep: uniform left→right walk, stops on random same-color box (incl phantom).
@@ -177,6 +183,7 @@ function renderDice(dice) {
         const selectAndRoll = (landedBox) => {
           rollDiceAnimation(landedBox, current, dice.faces, () => {
             updateCurrentDie(curEl, current); // persistent slot lights up
+            revealMonsters(); // roll done → monsters fade in one at a time
             setTimeout(() => renderDice(dice), 350);
           });
         };
@@ -290,6 +297,7 @@ function renderMonsters(monsters) {
     const empty = document.createElement('div');
     empty.style.cssText = 'color:#556677;font-size:11px;padding:12px;';
     empty.textContent = 'No monsters present.';
+    if (monstersPendingReveal) hideForReveal(empty);
     container.appendChild(empty);
     return;
   }
@@ -309,7 +317,25 @@ function renderMonsters(monsters) {
     card.appendChild(sprite);
     card.appendChild(name);
     card.appendChild(hp);
+    if (monstersPendingReveal) hideForReveal(card);
     container.appendChild(card);
+  });
+}
+
+// While the roll plays, monster cards render invisible (laid out, opacity 0)
+// and materialize one at a time once the roll completes.
+function hideForReveal(el) {
+  el.style.transition = `opacity ${MONSTER_FADE_MS}ms ease`;
+  el.style.opacity = '0';
+}
+
+function revealMonsters() {
+  if (!monstersPendingReveal) return;
+  monstersPendingReveal = false;
+  const container = document.getElementById('monsters');
+  if (!container) return;
+  Array.from(container.children).forEach((card, i) => {
+    setTimeout(() => { card.style.opacity = '1'; }, i * MONSTER_FADE_STAGGER);
   });
 }
 
@@ -840,6 +866,8 @@ async function loadBattle(runId) {
     renderPlayerHP(run);
     const bs = run.battle_state || {};
     lastBs = bs;
+    // Capture BEFORE renderDice — the animation path clears the flag.
+    monstersPendingReveal = shouldAnimateDice;
     renderDice(bs.dice || {});
     renderMonsters(bs.monsters || []);
     renderFeed(bs.feed || []);
