@@ -394,6 +394,100 @@
       line-height: 1.35;
       box-shadow: 0 0 0 1px #000;
     }
+
+    .player-hp-panel {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      background: #000;
+      border: 2px solid #ccc;
+      padding: 5px 8px;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 10px;
+      color: #e0e0ff;
+      z-index: 10;
+      line-height: 1.15;
+      box-shadow: 0 0 0 1px #000;
+    }
+    .player-hp-panel .name { color: #ffcc66; font-size: 10px; display: block; margin-bottom: 2px; }
+    .player-hp-panel .hp-bar {
+      width: 120px;
+      height: 8px;
+      background: #1a2a44;
+      border: 1px solid #ccc;
+      margin: 3px 0 4px;
+      position: relative;
+    }
+    .player-hp-panel .hp-fill {
+      height: 100%;
+      background: #66ff99;
+      width: 86.6%; /* 142/164 ≈ 87% */
+    }
+    .player-hp-panel .hp-text {
+      font-size: 17px;
+      color: #fff;
+      font-weight: bold;
+      letter-spacing: 0.5px;
+    }
+
+    .loot-chip {
+      background: #000;
+      border: 1px solid #ccc;
+      color: #66ffff;
+      font-size: 9px;
+      padding: 1px 6px;
+      cursor: pointer;
+      margin-left: 8px;
+      user-select: none;
+    }
+    .loot-chip:hover {
+      background: #1a2a44;
+      border-color: #66ffff;
+    }
+
+    .loot-window {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 360px;
+      background: #000;
+      border: 3px solid #ccc;
+      padding: 12px 16px;
+      font-size: 11px;
+      color: #e0e0ff;
+      z-index: 50;
+      display: none;
+      box-shadow: 0 0 0 1px #000;
+      line-height: 1.4;
+    }
+    .loot-window.visible {
+      display: block;
+    }
+    .loot-window .header {
+      color: #88aaff;
+      font-size: 10px;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      border-bottom: 1px solid #334466;
+      padding-bottom: 4px;
+    }
+    .loot-window .gold {
+      color: #ffcc66;
+      font-size: 13px;
+      margin: 6px 0;
+    }
+    .loot-window .item-line {
+      padding: 1px 0;
+      color: #a8c8ea;
+    }
+    .loot-window .footer {
+      margin-top: 10px;
+      font-size: 9px;
+      color: #6688aa;
+      border-top: 1px solid #334466;
+      padding-top: 6px;
+    }
   </style>
 </head>
 <body>
@@ -403,7 +497,7 @@
       <div class="top-row">
         <div class="player-block">
           <div class="stat-block">
-            <span class="name">SPAHREP</span><span class="sep">—</span><span class="hp-mp">HP 142 / 164</span>
+            <span class="name">SPAHREP</span>
           </div>
         </div>
         <div class="run-info">
@@ -427,6 +521,7 @@
           <div class="die used"><span class="rolled">G</span> 15</div>
           <div class="die used"><span class="rolled">Y</span> 20</div>
         </div>
+        <div class="loot-chip" id="loot-chip" title="View run prize pool">LOOT</div>
       </div>
     </div>
 
@@ -448,6 +543,23 @@
           <div class="dw-horizon gray" style="left:200px; width:110px; height:52px; bottom:76px; background:#6a7a6a; z-index:1;"></div>
         </div>
         <div class="dw-grass"></div>
+
+        <!-- Prominent HP panel (top-left over sky) -->
+        <div class="player-hp-panel" id="player-hp-panel">
+          <span class="name">SPAHREP</span>
+          <div class="hp-bar"><div class="hp-fill"></div></div>
+          <span class="hp-text">HP 142 / 164</span>
+        </div>
+
+        <!-- LOOT window (centered over arena, shown via JS) -->
+        <div class="loot-window" id="loot-window">
+          <div class="header">LOOT — RUN 3 PRIZE POOL</div>
+          <div class="gold">GOLD  38</div>
+          <div class="item-line">Iron Short Sword  x1</div>
+          <div class="item-line">Buckler  x1</div>
+          <div class="item-line">Medicinal Herb  x1</div>
+          <div class="footer">Banked at run end - leaving early reduces the take; death forfeits it.</div>
+        </div>
 
         <!-- Monster sprites row -->
         <div class="monster-row">

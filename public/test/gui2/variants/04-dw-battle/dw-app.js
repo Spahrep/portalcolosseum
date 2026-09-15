@@ -35,6 +35,8 @@ const commandMenu = () => document.getElementById('command-menu');
 const arena = () => document.getElementById('arena');
 const infoPopup = () => document.getElementById('info-popup');
 const handLine = () => document.getElementById('hand-line');
+const lootWindow = () => document.getElementById('loot-window');
+const lootChip = () => document.getElementById('loot-chip');
 
 const ATTACKS = {
   left: [
@@ -224,6 +226,19 @@ function updateInfoPopup() {
 function hideInfoPopup() {
   const popup = infoPopup();
   if (popup) popup.style.display = 'none';
+}
+
+function toggleLootWindow() {
+  const win = lootWindow();
+  if (!win) return;
+  const isOpen = win.classList.contains('visible');
+  if (isOpen) {
+    win.classList.remove('visible');
+  } else {
+    // only open in idle/narration (no menu, no target)
+    if (menuVisible || targetMode) return;
+    win.classList.add('visible');
+  }
 }
 
 function selectMenuCommand() {
@@ -428,6 +443,17 @@ function setupKeyboard() {
       if (e.key === 'Enter' || e.key === ' ') {
         showCommandMenu('left');
         e.preventDefault();
+      } else if (e.key.toLowerCase() === 'l') {
+        toggleLootWindow();
+        e.preventDefault();
+      }
+    }
+    // global close for loot on Esc (only if open and idle)
+    if (e.key === 'Escape') {
+      const win = lootWindow();
+      if (win && win.classList.contains('visible')) {
+        win.classList.remove('visible');
+        e.preventDefault();
       }
     }
   });
@@ -462,6 +488,14 @@ function setupMouse() {
       showCommandMenu('left');
     }
   });
+
+  // LOOT chip
+  const chip = lootChip();
+  if (chip) {
+    chip.addEventListener('click', () => {
+      toggleLootWindow();
+    });
+  }
 }
 
 function init() {
