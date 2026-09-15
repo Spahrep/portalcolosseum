@@ -24,12 +24,14 @@ let shouldAnimateDice = false;
 // Landed box IS selection (no morph). Roll: real faces from payload, weighty decel.
 const DICE_ANIM = {
   COUNTDOWN_WHIR: 12,   // Spahrep's countdown: steps = 12*(n-1) + r, r in 1..n solved so the countdown ends on a drawn-color box
-  SWEEP_FAST: 45,       // ms per die during the countdown whir (high speed)
+  SWEEP_FAST: 35,       // ms per die at full whir (sweep start)
+  SWEEP_TAIL: 16,       // final sweep steps that decelerate into the landing
+  SWEEP_SLOW: 240,      // ms on the very last step (weighty arrival, no instant stop)
   LAND_PAUSE: 350,      // beat on the landed box before the roll starts
-  ROLL_TICKS: 12,       // tumbles before settle
-  ROLL_INITIAL: 100,    // ms start for weighty roll
-  ROLL_DECEL: 1.15,     // decel factor
-  ROLL_MIN: 380         // final dwell (~2.75s total roll)
+  ROLL_TICKS: 16,       // tumbles before settle (longer, weightier roll)
+  ROLL_INITIAL: 80,     // ms start for the roll (quick transitions)
+  ROLL_DECEL: 1.16,     // per-tick decel factor
+  ROLL_MIN: 400         // final dwell cap (~4.4s total roll)
 };
 
 function getAuthToken() {
@@ -237,8 +239,19 @@ function performSweepAnimation(diceEls, targetIndex, onLand) {
     }
     idx++;
     count--;
-    setTimeout(step, DICE_ANIM.SWEEP_FAST);
+    setTimeout(step, stepDelay(count));
   }
+
+  function stepDelay(count) {
+    // Pacing only — the countdown math above is untouched. Full-speed whir
+    // for most of the spin, then the final SWEEP_TAIL steps interpolate
+    // down to SWEEP_SLOW, so the highlight decelerates into the landing
+    // instead of stopping dead.
+    if (count > DICE_ANIM.SWEEP_TAIL) return DICE_ANIM.SWEEP_FAST;
+    const t = (count - 1) / Math.max(1, DICE_ANIM.SWEEP_TAIL - 1);
+    return DICE_ANIM.SWEEP_SLOW - (DICE_ANIM.SWEEP_SLOW - DICE_ANIM.SWEEP_FAST) * t;
+  }
+
   step();
 }
 
