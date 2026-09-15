@@ -330,7 +330,7 @@ async function handle(request) {
       let weaponRows = [];
       if (weaponIds.length) {
         const res = await admin.from('weapon_instance')
-          .select('id, damage, speed, accuracy, template_id, weapon_template:template_id (name)')
+          .select('id, damage, speed, accuracy, template_id, weapon_template:template_id (name, base_damage, damage_range)')
           .in('id', weaponIds);
         weaponRows = res.data || [];
       }
@@ -341,7 +341,7 @@ async function handle(request) {
         let attacks = [];
         try {
           const mapRes = await admin.from('weapon_template_attack_mapping')
-            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time)')
+            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time, description, base_damage_multiplier)')
             .eq('weapon_template_id', w.template_id);
           if (mapRes.data) attacks = mapRes.data.map(m => m.attack).filter(Boolean);
         } catch (e) {
@@ -353,12 +353,16 @@ async function handle(request) {
           damage: w.damage,
           speed: w.speed,
           accuracy: w.accuracy,
+          base_damage: w.weapon_template?.base_damage ?? null,
+          damage_range: w.weapon_template?.damage_range ?? null,
           attacks: attacks.map(a => ({
             id: a.id,
             name: a.name,
             is_multi_target: !!a.is_multi_target,
             prepare_time: a.prepare_time || 3,
-            cooldown_time: a.cooldown_time || 2
+            cooldown_time: a.cooldown_time || 2,
+            description: a.description || '',
+            base_damage_multiplier: a.base_damage_multiplier ?? 1
           }))
         };
       }

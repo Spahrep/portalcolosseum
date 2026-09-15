@@ -216,6 +216,84 @@
     .action-dmg {
       color: #88aaff;
     }
+    /* gui1-style per-hand command lists (scoped to action area) */
+    .command-box {
+      flex: 1;
+      background: #0a1a2e;
+      padding: 8px 10px;
+      border-right: 2px solid #334466;
+      min-width: 0;
+    }
+    .command-box:last-child {
+      border-right: none;
+    }
+    .hand-header {
+      color: #ffaa66;
+      font-size: 10px;
+      margin-bottom: 2px;
+      letter-spacing: 0.5px;
+    }
+    .weapon-name {
+      color: #88ccff;
+      font-size: 10px;
+      margin-bottom: 6px;
+      padding-bottom: 3px;
+      border-bottom: 1px solid #334466;
+    }
+    .command-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      font-size: 12px;
+    }
+    .command {
+      padding: 2px 6px;
+      cursor: pointer;
+      position: relative;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .command:hover {
+      background: #1a3a6e;
+      color: #ffcc66;
+    }
+    .command.selected {
+      color: #ffcc66;
+      background: #1a3a6e;
+    }
+    .slot-btn {
+      flex: 0 0 110px;
+      width: 110px;
+      background: #1a3a1a;
+      color: #66ff99;
+      border: 3px solid #66ff99;
+      padding: 10px 0;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 13px;
+      cursor: pointer;
+      letter-spacing: 1px;
+      text-align: center;
+    }
+    .slot-btn:hover:not(:disabled) {
+      background: #2a5a2a;
+    }
+    .slot-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      color: #668866;
+      border-color: #446644;
+    }
+    .footer-info {
+      background: rgba(10,26,46,0.92);
+      border-top: 2px solid #334466;
+      padding: 6px 14px;
+      font-size: 11px;
+      color: #88aaff;
+      min-height: 22px;
+      display: flex;
+      align-items: center;
+    }
     .action-status {
       flex: 1;
       text-align: center;
@@ -344,8 +422,12 @@
     <!-- ACTION MENU -->
     <div class="action-menu">
       <div id="action-choices" class="action-choices"></div>
-      <button id="btn-item" class="action-btn">ITEM</button>
+      <button id="btn-slot-bl" class="slot-btn">BL</button>
+      <button id="btn-slot-c1" class="slot-btn">C1</button>
+      <button id="btn-slot-c2" class="slot-btn">C2</button>
     </div>
+    <!-- FOOTER INFO BAR (hover/selection readout) -->
+    <div id="footer-info" class="footer-info">Select an attack to see details</div>
 
     <!-- ITEM MENU (potion slots; hidden until ITEM clicked) -->
     <div id="item-menu" class="item-menu" hidden>
