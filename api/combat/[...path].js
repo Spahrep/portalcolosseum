@@ -102,10 +102,10 @@ async function handle(request) {
       const portalTemplateIdNum = parseInt(portal_template_id, 10);
       if (isNaN(portalTemplateIdNum) || portalTemplateIdNum <= 0) return json({ error: 'Invalid portal_template_id' }, 400);
 
-      // F13: TOCTOU race on 3-active cap accepted for MVP; future fix: partial unique index or RPC atomic check
+      // PC-50r: cap is now 1 (hard guarantee is the partial unique index on status='active')
       const { count } = await admin.from('portal_run').select('*', { count: 'exact', head: true })
         .eq('user_id', user.id).eq('status', 'active');
-      if ((count || 0) >= 3) return json({ error: 'Max 3 active runs' }, 400);
+      if ((count || 0) >= 1) return json({ error: 'You already have an active run. End it before starting a new one.' }, 400);
 
       // F7: fail-closed weapon ownership (positive int + exact length + every owner match + error -> 500)
       // R7: parse each weapon id once; 400 on NaN/<=0; dedupe parsed ids; use parsed values for ownership check AND INSERT
@@ -163,23 +163,30 @@ async function handle(request) {
       const { data: tmpl } = await admin.from('portal_template').select('fights, green_dice_count, yellow_dice_count, red_dice_count, green_faces, yellow_faces, red_faces').eq('id', portalTemplateIdNum).single();
       if (!tmpl) return json({ error: 'Portal template not found' }, 404);
 
-      const { data: run, error } = await admin.from('portal_run').insert({
-        user_id: user.id,
-        portal_template_id: portalTemplateIdNum,
-        hand_l_weapon_id: handL,
-        hand_r_weapon_id: handR,
-        belt_weapon_id: beltW,
-        consume_a_id: consumeA,
-        consume_b_id: consumeB,
-        status: 'active',
-        current_battle: 1,
-        total_battles: tmpl.fights || 5,
-        player_hp: 1000,
-        battle_state: {}
-      }).select().single();
-      // R6: generic error, log real
-      if (error) {
-        console.error('run insert error', error);
+      let run;
+      try {
+        const { data: inserted, error: insErr } = await admin.from('portal_run').insert({
+          user_id: user.id,
+          portal_template_id: portalTemplateIdNum,
+          hand_l_weapon_id: handL,
+          hand_r_weapon_id: handR,
+          belt_weapon_id: beltW,
+          consume_a_id: consumeA,
+          consume_b_id: consumeB,
+          status: 'active',
+          current_battle: 1,
+          total_battles: tmpl.fights || 5,
+          player_hp: 1000,
+          battle_state: {}
+        }).select().single();
+        if (insErr) throw insErr;
+        run = inserted;
+      } catch (e) {
+        // PC-50r: unique violation from the partial index (concurrent double-submit or race) → friendly 400
+        if (e && (e.code === '23505' || e.message?.includes('23505') || e.details?.includes('idx_portal_run_one_active_per_user'))) {
+          return json({ error: 'You already have an active run. End it before starting a new one.' }, 400);
+        }
+        console.error('run insert error', e);
         return json({ error: 'Internal server error' }, 500);
       }
 
@@ -243,6 +250,13 @@ async function handle(request) {
       }
 
       return json({ run: { ...run, battle_state: battleStateForRun1 } });
+    }
+
+    // PC-50r: GET /api/combat/runs/active — returns the caller's single active run (or null)
+    // MUST be before the generic /runs/:id catch-all, else 'active' parses as NaN id.
+    if (path === '/runs/active' && method === 'GET') {
+      const run = await findActiveRun(user.id);
+      return json({ run: run || null });
     }
 
     // GET /api/combat/runs/:id  (state route updated for dice visibility)
