@@ -111,7 +111,31 @@ function enterLocation() {
   if (loc.name === 'portal') {
     // Enter The Portal — redirect to the GUI battle test
     window.location.href = '/run-equip.html';
+  } else {
+    // Store, Wizard Hut and Leaderboards are not built yet —
+    // show the default "not yet ready" placeholder (DrunkJester image).
+    showNotReadyModal();
   }
+}
+
+// === NOT-READY MODAL ===
+// Default placeholder for unbuilt town locations (store, wizard, leaderboard).
+// Shows the DrunkJester image in a bordered frame with overlay text.
+// This is the project default image for "feature not yet ready" placeholders.
+
+function isNotReadyModalOpen() {
+  const modal = document.getElementById('not-ready-modal');
+  return modal ? !modal.hidden : false;
+}
+
+function showNotReadyModal() {
+  const modal = document.getElementById('not-ready-modal');
+  if (modal) modal.hidden = false;
+}
+
+function hideNotReadyModal() {
+  const modal = document.getElementById('not-ready-modal');
+  if (modal) modal.hidden = true;
 }
 
 /**
@@ -259,6 +283,9 @@ async function initGame() {
 
   // Event listener bindings (no inline onclick handlers)
   document.getElementById('logout-btn')?.addEventListener('click', logout);
+
+  // Click anywhere on the "not ready" modal dismisses it
+  document.getElementById('not-ready-modal')?.addEventListener('click', hideNotReadyModal);
 }
 
 /**
@@ -381,6 +408,9 @@ document.addEventListener('DOMContentLoaded', () => {
   // The selected marker shows [x] via CSS ::before
   // Enter triggers the location action (pan + enter)
   document.addEventListener('keydown', (e) => {
+    // While the "not ready" modal is open, only Escape is handled —
+    // arrows/Enter must not navigate or re-trigger behind the modal.
+    if (isNotReadyModalOpen() && e.key !== 'Escape') return;
     switch (e.key) {
       case 'ArrowLeft':
         e.preventDefault();
@@ -407,12 +437,18 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         resetBackground();
         break;
+      case 'Escape':
+        // Dismiss the "not ready" modal if open
+        hideNotReadyModal();
+        break;
     }
   });
 
   // Mouse scroll navigation: scroll up moves to next location,
   // scroll down moves to previous location
   document.addEventListener('wheel', (e) => {
+    // Don't navigate behind an open "not ready" modal
+    if (isNotReadyModalOpen()) return;
     // Only handle vertical scroll, ignore horizontal
     if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
     e.preventDefault();
