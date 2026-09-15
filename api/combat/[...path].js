@@ -346,7 +346,7 @@ async function handle(request) {
       let weaponRows = [];
       if (weaponIds.length) {
         const res = await admin.from('weapon_instance')
-          .select('id, damage, speed, accuracy, template_id, weapon_template:template_id (name, base_damage, damage_range)')
+          .select('id, damage, speed, accuracy, grade, template_id, weapon_template:template_id (name, base_damage, damage_range)')
           .in('id', weaponIds);
         weaponRows = res.data || [];
       }
@@ -369,6 +369,7 @@ async function handle(request) {
           damage: w.damage,
           speed: w.speed,
           accuracy: w.accuracy,
+          grade: w.grade ?? null,
           base_damage: w.weapon_template?.base_damage ?? null,
           damage_range: w.weapon_template?.damage_range ?? null,
           attacks: attacks.map(a => ({
@@ -795,7 +796,7 @@ async function handle(request) {
       let instances;
       try {
         const res = await admin.from('weapon_instance')
-          .select('id, damage, speed, accuracy, template_id, weapon_template:template_id (name)')
+          .select('id, damage, speed, accuracy, grade, template_id, weapon_template:template_id (name)')
           .eq('user_id', user.id)
           .order('id');
         instances = res.data;
@@ -824,6 +825,7 @@ async function handle(request) {
           damage: inst.damage,
           speed: inst.speed ?? null,
           accuracy: inst.accuracy ?? null,
+          grade: inst.grade ?? null,
           attacks: attacks.map(a => ({
             id: a.id,
             name: a.name,
@@ -1005,7 +1007,7 @@ async function handle(request) {
       // template lookup
       let tmpl;
       try {
-        const tRes = await adminClient.from('weapon_template').select('id, name, slot_0_attack_id').eq('id', templateId).single();
+        const tRes = await adminClient.from('weapon_template').select('id, name, slot_0_attack_id, base_damage, damage_range, base_speed, speed_variance, base_accuracy, accuracy_range').eq('id', templateId).single();
         tmpl = tRes.data;
         if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
       } catch (e) {
@@ -1014,14 +1016,23 @@ async function handle(request) {
       // insert weapon_instance — byte-for-byte grant pattern (slot_0_attack_id NOT NULL)
       let inst;
       try {
+        const d = rollStat(tmpl.base_damage, tmpl.damage_range);
+        const s = rollStat(tmpl.base_speed, tmpl.speed_variance);
+        const a = rollStat(tmpl.base_accuracy, tmpl.accuracy_range);
+        const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
+        const zs = tmpl.speed_variance ? (tmpl.base_speed - s) / tmpl.speed_variance : 0;
+        const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
+        const z = (zd + zs + za) / 3;
+        const g = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
         const iRes = await adminClient.from('weapon_instance').insert({
           user_id: userId,
           template_id: tmpl.id,
           slot_0_attack_id: tmpl.slot_0_attack_id,
-          damage: 15,
-          speed: 6,
-          accuracy: 70
-        }).select('id').single();
+          damage: d,
+          speed: s,
+          accuracy: a,
+          grade: g
+        }).select('id, damage, speed, accuracy, grade').single();
         inst = iRes.data;
         if (iRes.error) throw iRes.error;
       } catch (e) {
@@ -1048,7 +1059,7 @@ async function handle(request) {
       }
       return {
         slot,
-        weapon: { instance_id: inst.id, template_name: tmpl.name, damage: 15 },
+        weapon: { instance_id: inst.id, template_name: tmpl.name, damage: inst.damage, speed: inst.speed, accuracy: inst.accuracy, grade: inst.grade },
         displaced
       };
     }
