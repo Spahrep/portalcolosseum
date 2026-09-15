@@ -426,10 +426,13 @@ async function init() {
       }
     });
   }
-  if (!await checkAuth()) return;
+  const session = await checkAuth();
+  if (!session) return;
   // PC-50r: active-run bounce on load (equip screen only for brand-new runs)
   try {
-    const res = await fetch('/api/combat/runs/active', { credentials: 'include' });
+    const res = await fetch('/api/combat/runs/active', {
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
     if (res.ok) {
       const { run } = await res.json();
       if (run && run.id) {
