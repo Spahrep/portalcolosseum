@@ -22,8 +22,8 @@ let shouldAnimateDice = false;
 // fade in one at a time. Set in the battle render when a roll will run;
 // revealMonsters() clears it when the roll completes.
 let monstersPendingReveal = false;
-const MONSTER_FADE_STAGGER = 250; // ms between monster reveals
-const MONSTER_FADE_MS = 450;      // per-monster fade duration
+const MONSTER_FADE_STAGGER = 450; // ms between monster reveals
+const MONSTER_FADE_MS = 650;      // per-monster fade duration
 
 // Tuning constants for dice-selection roulette (client theater only).
 // Sweep: uniform left→right walk, stops on random same-color box (incl phantom).
