@@ -42,6 +42,15 @@ const DICE_ANIM = {
   ROLL_MIN: 400         // final dwell cap (~4.4s total roll)
 };
 
+// PC-52r/PC-63: monster condition words color by severity everywhere they render.
+const BAND_CLASS = {
+  healthy: 'st-green', injured: 'st-amber', battered: 'st-orange', critical: 'st-red'
+};
+function bandClass(m) {
+  const word = String(m.hp_word || m.hpWord || 'Healthy').toLowerCase();
+  return BAND_CLASS[word] || 'st-green';
+}
+
 function getAuthToken() {
   return supabase?.auth?.getSession?.().then(({ data }) => data?.session?.access_token);
 }
@@ -316,7 +325,7 @@ function renderMonsters(monsters) {
     const hp = document.createElement('div');
     hp.style.cssText = 'margin-top:4px;text-align:center;';
     const hpWord = m.hp_word || m.hpWord || 'Healthy';
-    hp.innerHTML = `<span style="color:#66ff99;font-size:10px;">HP: ${hpWord}</span>`;
+    hp.innerHTML = `<span class="${bandClass(m)}" style="font-size:10px;">HP: ${hpWord}</span>`;
     card.appendChild(sprite);
     card.appendChild(name);
     card.appendChild(hp);
@@ -630,14 +639,6 @@ function renderActionMenu(bs) {
   function clearMarkers() {
     queueMarkers = null;
     renderQueue(lastBs);
-  }
-
-  const BAND_CLASS = {
-    healthy: 'st-green', injured: 'st-amber', battered: 'st-orange', critical: 'st-red'
-  };
-  function bandClass(m) {
-    const word = String(m.hp_word || m.hpWord || 'Healthy').toLowerCase();
-    return BAND_CLASS[word] || 'st-green';
   }
 
   // ---- cascade stack: levels { kind: action|target|confirm, rows, activeIdx } ----
