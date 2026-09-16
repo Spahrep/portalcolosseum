@@ -456,11 +456,12 @@ function turnPromptFromState(stateObj) {
   const parts = s.participants || {};
   const player = parts.player || {};
   const hands = player.hands || {};
-  // defect 2: empty hands print NOTHING
+  // PC-52r: empty hands still act — Fist (unarmed) attack is always available
   const lhEmpty = !hands.LH || hands.LH.weaponId == null;
   const rhEmpty = !hands.RH || hands.RH.weaponId == null;
   if (lhEmpty && rhEmpty) {
-    return; // empty hands: print nothing
+    printAmber('Fist (unarmed) ready — PC-52r'); // commit via: attack LH 1 (backend applies Fist profile on empty hand)
+    return;
   }
   const ready = [];
   if (hands.LH && hands.LH.state === 'Ready' && hands.LH.weaponId != null) ready.push('left');

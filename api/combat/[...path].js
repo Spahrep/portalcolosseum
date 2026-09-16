@@ -132,6 +132,8 @@ async function handle(request) {
       const raw = [handL, handR, beltW].filter(n => n != null);
       const weaponIds = [...new Set(raw)];
       if (weaponIds.length !== raw.length) return json({ error: 'Duplicate weapon id' }, 400);
+      // PC-52r: a run needs at least one hand weapon — belt does not count (Fist is mid-run only)
+      if (handL == null && handR == null) return json({ error: 'At least one hand weapon required (belt does not count)' }, 400);
       if (weaponIds.length) {
         let owns;
         try {
@@ -566,22 +568,32 @@ async function handle(request) {
       }
 
       const weaponId = hand === 'LH' ? run.hand_l_weapon_id : run.hand_r_weapon_id;
-      if (!weaponId) return json({ error: 'No weapon equipped for hand' }, 400);
+      let castTicks, cooldownTicks, playerDamage, playerAccuracy, attackName;
+      if (!weaponId) {
+        // PC-52r: Fist unarmed attack from empty hand (fixed stats; not a weapon — no grade/variance)
+        castTicks = 6;
+        cooldownTicks = 6;
+        playerDamage = 5;
+        playerAccuracy = 90;
+        attackName = 'Fist';
+      } else {
+        const { data: wInst } = await admin.from('weapon_instance').select('template_id').eq('id', weaponId).single();
+        if (!wInst) return json({ error: 'Weapon instance not found' }, 404);
+        const { count: mapCount } = await admin.from('weapon_template_attack_mapping')
+          .select('*', { count: 'exact', head: true })
+          .eq('weapon_template_id', wInst.template_id).eq('attack_id', attackIdNum);
+        if (!mapCount) return json({ error: 'Attack not on equipped weapon' }, 403);
 
-      const { data: wInst } = await admin.from('weapon_instance').select('template_id').eq('id', weaponId).single();
-      if (!wInst) return json({ error: 'Weapon instance not found' }, 404);
-      const { count: mapCount } = await admin.from('weapon_template_attack_mapping')
-        .select('*', { count: 'exact', head: true })
-        .eq('weapon_template_id', wInst.template_id).eq('attack_id', attackIdNum);
-      if (!mapCount) return json({ error: 'Attack not on equipped weapon' }, 403);
+        // F14: clamp prepare/cooldown to >=1 (rollStat already clamps; range 0 returns base exactly)
+        castTicks = rollStat(attackRow?.prepare_time, attackRow?.prepare_time_range);
+        cooldownTicks = rollStat(attackRow?.cooldown_time, attackRow?.cooldown_time_range);
+        const multiplier = attackRow?.base_damage_multiplier || 0;
 
-      // F14: clamp prepare/cooldown to >=1 (rollStat already clamps; range 0 returns base exactly)
-      const castTicks = rollStat(attackRow?.prepare_time, attackRow?.prepare_time_range);
-      const cooldownTicks = rollStat(attackRow?.cooldown_time, attackRow?.cooldown_time_range);
-      const multiplier = attackRow?.base_damage_multiplier || 0;
-
-      const { data: weapon } = await admin.from('weapon_instance').select('damage, accuracy').eq('id', weaponId).single();
-      const playerDamage = Math.round((weapon?.damage || 10) * (1 + multiplier));
+        const { data: weapon } = await admin.from('weapon_instance').select('damage, accuracy').eq('id', weaponId).single();
+        playerDamage = Math.round((weapon?.damage || 10) * (1 + multiplier));
+        playerAccuracy = weapon?.accuracy;
+        attackName = attackRow?.name || null;
+      }
 
       let engine;
       if (persisted && Array.isArray(persisted.queue) && (persisted.queue.length > 0 || (persisted.monsters && persisted.monsters.length > 0))) {
@@ -593,7 +605,7 @@ async function handle(request) {
       // F11: advance-when-busy instead of 500 on unready hand
       let advanced = false;
       try {
-        engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName: attackRow?.name || null, playerAccuracy: weapon?.accuracy });
+        engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName, playerAccuracy });
       } catch (e) {
         if (e.message === 'Hand not ready' && engine.state && engine.state.queue && engine.state.queue.length > 0) {
           engine.advanceToNextDecision();

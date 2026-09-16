@@ -569,14 +569,16 @@ function renderActionMenu(bs) {
   const belt = weapons.belt || null;
   const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
+  // PC-52r: an empty hand is a Ready hand — it always has legal actions
+  // (potion, Fist unarmed attack), so the queue never waits on an impossible action.
   const readyHands = ['LH', 'RH'].filter(h => {
     const w = weapons[h === 'LH' ? 'hand_l' : 'hand_r'];
-    return hands[h] && hands[h].state === 'Ready' && w && w.id;
+    return hands[h] && hands[h].state === 'Ready' && (!w || w.id);
   }).sort((a, b) => {
     // PC-DEC-028: both ready → faster base attack (lower weapon speed) opens first; tie → LH.
-    // Missing speed (anomalous data) sorts last — never a surprise first-mover.
-    const sa = weapons[a === 'LH' ? 'hand_l' : 'hand_r'].speed ?? Number.MAX_SAFE_INTEGER;
-    const sb = weapons[b === 'LH' ? 'hand_l' : 'hand_r'].speed ?? Number.MAX_SAFE_INTEGER;
+    // Missing speed (empty hand / anomalous data) sorts last — never a surprise first-mover.
+    const sa = weapons[a === 'LH' ? 'hand_l' : 'hand_r']?.speed ?? Number.MAX_SAFE_INTEGER;
+    const sb = weapons[b === 'LH' ? 'hand_l' : 'hand_r']?.speed ?? Number.MAX_SAFE_INTEGER;
     return sa !== sb ? sa - sb : (a === 'LH' ? -1 : 1);
   });
   if (!readyHands.length) {
@@ -596,6 +598,8 @@ function renderActionMenu(bs) {
   const hand = readyHands[0];
   const w = weapons[hand === 'LH' ? 'hand_l' : 'hand_r'];
   const handLineText = hand === 'LH' ? 'L.HAND' : 'R.HAND';
+  // PC-52r: display stats for the empty-hand Fist (fixed; matches the backend Fist profile)
+  const FIST_WEAPON = { base_damage: 5, damage_range: 0 };
 
   function potionFor(slot) {
     return potions[slot === 'A' ? 'potion_a' : 'potion_b'] || potions[slot] || null;
@@ -606,9 +610,10 @@ function renderActionMenu(bs) {
     if (fi) fi.innerHTML = text || 'Select a command to see details';
   }
 
-  function attackInfo(a) {
-    const base = w.base_damage != null ? w.base_damage : (w.damage || 0);
-    const range = w.damage_range != null ? w.damage_range : 0;
+  function attackInfo(a, weapon) {
+    const src = weapon || w || {};
+    const base = src.base_damage != null ? src.base_damage : (src.damage || 0);
+    const range = src.damage_range != null ? src.damage_range : 0;
     const multi = a.is_multi_target ? ' <span style="color:#ffaa66">[MULTI]</span>' : '';
     const desc = a.description ? ` — ${escHtml(a.description)}` : '';
     const pVar = a.prepare_time_range || 0;
@@ -662,13 +667,15 @@ function renderActionMenu(bs) {
       doAttack(currentRunId, hand, a.id, []);
       return;
     }
+    const weapon = (w && w.id) ? w : FIST_WEAPON;
     if (a.is_multi_target) {
       // multi-target hits ALL live monsters — a single row, no pick (CLI parity: ids)
-      stack.push({ kind: 'target', attack: a, rows: [{ html: 'ALL MONSTERS' }] });
+      stack.push({ kind: 'target', attack: a, weapon, rows: [{ html: 'ALL MONSTERS' }] });
     } else {
       stack.push({
         kind: 'target',
         attack: a,
+        weapon,
         rows: monsters.map((m, i) => ({
           html: `<span class="dw-letter">${LETTERS[i]}</span>: ${escHtml(m.name)} - <span class="${bandClass(m)}">${escHtml(m.hp_word || m.hpWord || 'Healthy')}</span>`,
           monster: m,
@@ -791,7 +798,7 @@ function renderActionMenu(bs) {
       return;
     }
     if (top.kind === 'target') {
-      if (top.attack) { showInfo(attackInfo(top.attack)); return; } // markers persist from the action pick
+      if (top.attack) { showInfo(attackInfo(top.attack, top.weapon)); return; } // markers persist from the action pick
       if (top.info) { showInfo(top.info); return; }
     }
     // confirm level: readout stays as the pending action until it executes
@@ -799,14 +806,34 @@ function renderActionMenu(bs) {
 
   // ---- root command window rows (real per-weapon attacks via template mapping) ----
   const rootRows = [];
-  (w.attacks || []).forEach(a => {
-    rootRows.push({
-      html: escHtml(a.name),
-      info: attackInfo(a),
-      attack: a,
-      enter() { pickTarget(a); }
+  if (w && w.id) {
+    (w.attacks || []).forEach(a => {
+      rootRows.push({
+        html: escHtml(a.name),
+        info: attackInfo(a),
+        attack: a,
+        enter() { pickTarget(a); }
+      });
     });
-  });
+  } else {
+    // PC-52r: empty hand → Fist unarmed attack (fixed stats, no grade/variance; not a weapon).
+    // attack_id 1 matches the CLI path; the backend applies the Fist profile when the hand is empty.
+    const fist = {
+      id: 1,
+      name: 'Fist (unarmed)',
+      prepare_time: 6, cooldown_time: 6,
+      prepare_time_range: 0, cooldown_time_range: 0,
+      is_multi_target: false,
+      description: ''
+    };
+    const fistWeapon = { base_damage: 5, damage_range: 0 };
+    rootRows.push({
+      html: 'Fist (unarmed)',
+      info: attackInfo(fist, fistWeapon),
+      attack: fist,
+      enter() { pickTarget(fist); }
+    });
+  }
   rootRows.push({ blank: true });
   ['A', 'B'].forEach(slot => {
     const p = potionFor(slot);
