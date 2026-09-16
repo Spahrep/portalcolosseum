@@ -29,21 +29,26 @@ surface; these stay PENDING until pinned.
 - **C5 / PC-56 — Combat menu** (PC-DEC-010): "DW style combat menu is in fact the
   goal." → the Dragon-Warrior per-hand menu IS the mechanism. Card flipped done.
 
-### Still open (remaining conflicts to settle — flagged to Spahrep + DarkJester)
+### Still open (remaining conflicts — status after Spahrep's second ruling pass, 2026-09-16)
 
-1. **Empty-hand (Fist) base speed + damage** — Spahrep: "We do need to figure out the
-   base speed/damage of empty hand." DarkJester's rule (sweep candidate 7): DMG "very,
-   very bad", out-DPS'd by the worst weapon. Speed direction is ambiguous: DJ said
-   "higher than average", but in this codebase lower speed = faster and the shipped
-   Fist is prep/cooldown 6 (~fast). Boarded as PC-62.
-2. **Belt content** — DJ: "The belt can hold a weapon or consumable." vs
-   inventory-slots.md L17 "second weapon (not a utility item)". Spahrep's ruling
-   separates BL from C1/C2 but doesn't settle belt content → still needs the ruling.
-3. **PC-57** — consumable pre/post formula + hand-free vs potion-speed-only MVP.
-4. **PC-58** — multi-enemy per-target reduction + 5th-monster absorption numbers.
-5. **PC-59** — AP-refund-on-completion: kill vs proportional.
-6. **PC-60** — Player Journey section in core-philosophy.md: approve?
-7. **PC-61 remainder** — colors-only vs full numbers; who plays the live validation.
+1. **Empty-hand (Fist) base speed + damage** — RULED (PC-DEC-011): "We want a weapon in
+   hand to be universally better than an empty had, except for weapon swaps and drinking
+   potions. So yes, jester is right" — DarkJester's Fist rule confirmed. PC-62 flipped
+   done; concrete base speed/damage values = build-time tuning constants, must satisfy
+   out-DPS'd-by-worst-weapon.
+2. **Belt content** — RULED (PC-DEC-012): "Jester was confused. we have 2x Hands, and
+   BL/C1/C2" — loadout is 2 hands + BL + C1/C2; belt-as-third-consumable framing
+   corrected. Belt = BL swap/reserve slot per shipped code.
+3. **PC-57** — formula RULED (PC-DEC-013): consumable use time = weapon-in-hand speed +
+   consumable speed. Still open: pre/post split (one-sample rule at the post window?)
+   and whether BL is drinkable.
+4. **PC-58** — explained in thread 2026-09-16; per-target reduction + 5th-monster
+   absorption numbers still need the ruling.
+5. **PC-59** — ON HOLD (Spahrep: "This isnt a conflict, this is a design decision that
+   is on hold and needs to be made later"). Card stays parked.
+6. **PC-60** — explained in thread 2026-09-16; approve the Player Journey section?
+7. **PC-61 remainder** — explained in thread 2026-09-16; colors-only vs full numbers;
+   who plays the live validation.
 
 ---
 

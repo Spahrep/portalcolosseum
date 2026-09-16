@@ -125,6 +125,43 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   promote only when the mechanism is actually chosen — this is the choice statement;
   pin to flip. "\">\" markers vs preview band" + web-vs-CLI surface-first stay open.
 
+- ID: PC-DEC-011
+  Date: 2026-09-16
+  Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
+  Speaker: Spahrep
+  Verbatim: "We want a weapon in hand to be universally better than an empty had, except for weapon swaps and drinking potions. So yes, jester is right"
+  Status: PENDING
+  Notes: Rules PC-62 + sweep candidate 7 (DarkJester's Fist rule): a weapon in hand
+  beats an empty hand in every case except weapon swaps and drinking potions; Fist DMG
+  confirmed "very, very bad", out-DPS'd by the worst weapon. Concrete Fist base
+  speed/damage values remain a build-time tuning choice constrained by that ranking
+  (sweep's speed-direction ambiguity: DJ said "higher then average" while the shipped
+  Fist is fast at prep/cooldown 6 — the binding rule is the DPS ranking, not a stated
+  number). PC-62 flipped done.
+
+- ID: PC-DEC-012
+  Date: 2026-09-16
+  Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
+  Speaker: Spahrep
+  Verbatim: "Jester was confused. we have 2x Hands, and BL/C1/C2"
+  Status: PENDING
+  Notes: Rules the belt-content remainder of sweep conflict C1: the loadout is 2 hands
+  + belt loop (BL) + 2 consumable slots (C1, C2). Corrects DarkJester's
+  belt-as-third-consumable framing as confusion. Belt = BL swap/reserve slot per
+  shipped code; inventory-slots.md L17 "second weapon" direction stands, L87 "utility
+  slot" contradiction to fix at pin.
+
+- ID: PC-DEC-013
+  Date: 2026-09-16
+  Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
+  Speaker: Spahrep
+  Verbatim: "using a consumeable take sthe speed of the weapon in the hand + the speed of the consumeable"
+  Status: PENDING
+  Notes: Rules PC-57's core formula: consumable use time = weapon-in-hand speed +
+  consumable speed — the hand-tied model is confirmed (not potion-speed-only MVP).
+  Still open: pre/post split (one-sample rule at the post window?) and whether the
+  belt slot is drinkable.
+
 ## Approved & Promoted
 
 - ID: PC-DEC-001 — Monster instances live in JSON (battle_state), not a table. Promoted to current-design-status.md (§ Monster Stats), combat-engine-plan.md, admin-gui-brief.md. Decided by Spahrep, 2026-09-15.
