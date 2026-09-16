@@ -34,8 +34,23 @@ export function printDim(msg) {
 }
 
 export function printJson(obj) {
-  if (jsonMode) {
-    console.log(JSON.stringify(obj, null, quiet ? 0 : 2));
+  if (!jsonMode) return;
+  console.log(JSON.stringify(obj, null, quiet ? 0 : 2));
+}
+
+// PC-56: render the action queue with '>' timing markers (DW mockup rail).
+// markers: [{id, marker}] as returned by computeTimingMarkers.
+export function printQueueWithMarkers(queue, markers = []) {
+  if (jsonMode || quiet) return;
+  if (!queue || queue.length === 0) {
+    printDim('queue: (empty)');
+    return;
+  }
+  const marked = new Set(markers.map(m => m.id));
+  const sorted = [...queue].sort((a, b) => (a.tics ?? 0) - (b.tics ?? 0));
+  for (const row of sorted) {
+    const arrow = marked.has(row.id) ? ' >' : '';
+    printDim(`  ${row.tics ?? 0} — ${row.label || '?'}: ${row.event || '?'}${arrow}`);
   }
 }
 
@@ -129,6 +144,8 @@ export function cmdHelp(devMode = false) {
     '  login                — sign in with Supabase (stores session)',
     '  logout               — clear local session',
     '  wait                 — explicit commit to advance busy hand / clock',
+    '  menu [LH|RH]         — Dragon-Warrior combat menu: attack→target→confirm, \'>\' timing markers, potions, belt swap',
+    '  swap <LH|RH>         — mid-battle belt swap (alias: bl)',
     '  use A|B              — drink potion in slot A or B (alias: drink)',
     '  grant                — admin dev: unlock dev tools (403 if not admin)',
     '  inspect [id]         — monster template info (bare lists ids)',

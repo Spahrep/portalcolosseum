@@ -2,9 +2,11 @@
  * cli-app.js — CLI dev/test harness for live combat API
  * Terminal UI matching gui2 aesthetics (near-black, Pixeloid Mono, green/amber, thin amber border)
  * Auth: /api/env.js + Supabase PKCE localStorage pattern from game.html
- * Commands: help/state/run new/run/battle start/attack/battle end/inventory/grant/clear
+ * Commands: help/state/run new/run/battle start/attack/menu/swap/battle end/inventory/grant/clear
  * Always prints compact current state after state-changing commands
  */
+
+import { computeTimingMarkers } from '../../js/combat/tic-queue.js';
 
 const outputEl = document.getElementById('output');
 const inputEl = document.getElementById('input');
@@ -29,6 +31,8 @@ let pendingPicks = null; // {lh, rh, belt, ca, cb} captured at the ready step
 let selectMode = false; // UX select mode for player stats slots
 let selectIndex = 0; // 0=LH,1=RH,2=BL,3=C1,4=C2
 let offeredBattleNum = null; // last battle the after-battle offer was shown for
+// PC-56: DW menu selection state — active attack shows '>' markers on the queue panel
+let menuAttack = null; // {attack, queue} while a menu attack pick is pending
 
 // --- PC-36 pure text builders (tested in isolation) ---
 
@@ -537,6 +541,8 @@ async function cmdHelp() {
     '  run                  — show current run summary',
     '  battle start         — start next battle on current run',
     '  attack <LH|RH> <attack_id> [target_id ...]  — commit attack (targets default to first live monster)',
+    '  menu [LH|RH]         — Dragon-Warrior combat menu: attack→target→confirm, \'>\' timing markers, potions, belt swap',
+    '  swap <LH|RH>         — mid-battle belt swap (alias: bl)',
     '  battle end <continue|stop> — end current battle',
     '  use A|B              — drink potion in slot A or B (alias: drink)',
     '  inventory            — everything assigned to you (weapons; consumables when they exist)',
@@ -742,6 +748,145 @@ async function cmdAttack(args) {
   }
 }
 
+// PC-56: Dragon-Warrior-style interactive combat menu (per-hand rows, letter
+// labels, '>' timing markers, attack→target→confirm, potion + BL rows).
+// Mirrors the native CLI commands.mjs cmdMenu exactly (parity port).
+async function cmdMenu(args = []) {
+  if (!currentRunId) { printError('no run'); return; }
+  let hand = String(args[0] || 'LH').toUpperCase();
+  if (hand !== 'LH' && hand !== 'RH') { printError('usage: menu [LH|RH]'); return; }
+
+  const data = await apiCall('GET', `/runs/${currentRunId}`);
+  const run = data.run || data;
+  const bs = run.battle_state || {};
+  const weapons = bs.weapons || {};
+  const monsters = (bs.monsters || []).filter(m => !m.dead && (m.current_hp || m.hp || 0) > 0);
+
+  appendLine(`RUN #${run.id} battle ${run.current_battle}/${run.total_battles}  tic ${bs.tic || 0}`, 'dim');
+  appendLine(`player_hp: ${run.player_hp}`, 'dim');
+
+  const buildRows = (h) => {
+    const wKey = h === 'LH' ? 'hand_l' : 'hand_r';
+    const w = weapons[wKey];
+    const rows = [];
+    let letter = 97;
+    for (const a of (w && w.attacks) || []) rows.push({ kind: 'attack', attack: a, letter: String.fromCharCode(letter++) });
+    rows.push({ kind: 'bl', letter: String.fromCharCode(letter++) });
+    rows.push({ kind: 'c1', letter: String.fromCharCode(letter++) });
+    rows.push({ kind: 'c2', letter: String.fromCharCode(letter++) });
+    return rows;
+  };
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const wKey = hand === 'LH' ? 'hand_l' : 'hand_r';
+    const w = weapons[wKey];
+    appendLine('');
+    appendLine(`${hand} — ${w ? `${w.name} (spd ${w.speed})` : 'no weapon'}`, 'green');
+    for (const r of buildRows(hand)) {
+      if (r.kind === 'attack') {
+        const p = `${r.attack.prepare_time}${r.attack.prepare_time_range ? '-' + (r.attack.prepare_time + r.attack.prepare_time_range) : ''}`;
+        const c = `${r.attack.cooldown_time}${r.attack.cooldown_time_range ? '-' + (r.attack.cooldown_time + r.attack.cooldown_time_range) : ''}`;
+        appendLine(`  ${r.letter}) ${r.attack.name} (p${p}/c${c})`);
+      } else if (r.kind === 'bl') {
+        const belt = weapons.belt;
+        appendLine(`  ${r.letter}) BL: ${belt ? `${belt.name} (spd ${belt.speed})` : 'no belt weapon'}`);
+      } else if (r.kind === 'c1') {
+        const p = bs.potions && (bs.potions.potion_a || bs.potions.A);
+        appendLine(`  ${r.letter}) C1: ${p ? (p.template_name || 'Potion') : 'no potion'}`);
+      } else {
+        const p = bs.potions && (bs.potions.potion_b || bs.potions.B);
+        appendLine(`  ${r.letter}) C2: ${p ? (p.template_name || 'Potion') : 'no potion'}`);
+      }
+    }
+    appendLine(`  ${hand === 'LH' ? 'r' : 'l'}) switch hand   q) quit`, 'dim');
+
+    const pick = (await promptUser(`menu ${hand}> `)).toLowerCase();
+    if (pick === 'q') { appendLine('menu closed', 'amber'); return; }
+    if (pick === 'l') { hand = 'LH'; continue; }
+    if (pick === 'r') { hand = 'RH'; continue; }
+
+    const row = buildRows(hand).find(r => r.letter === pick);
+    if (!row) { appendLine(`unknown pick: ${pick}`, 'amber'); continue; }
+
+    if (row.kind === 'attack') {
+      // '>' timing markers on the queue panel for this attack (approved mockup semantics)
+      menuAttack = { attack: row.attack, queue: bs.queue || [] };
+      try { await refreshRunPanels(); } catch (_) {}
+      let targets = [];
+      if (monsters.length > 0) {
+        const pickT = (await promptUser(`target ${hand} ${row.attack.name} (${monsters.map((m, i) => String.fromCharCode(97 + i)).join('')} or auto)> `)).toLowerCase();
+        if (pickT === 'auto' || pickT === '') {
+          targets = [];
+        } else {
+          const m = monsters[pickT.charCodeAt(0) - 97];
+          if (!m) { appendLine('unknown target', 'amber'); continue; }
+          targets = [m.id];
+        }
+      }
+      const ok = (await promptUser(`commit ${hand} ${row.attack.name}${targets.length ? '' : ' (auto)'}? y/n> `)).toLowerCase();
+      if (ok !== 'y') { appendLine('cancelled', 'amber'); continue; }
+      menuAttack = null;
+      try { await refreshRunPanels(); } catch (_) {}
+      return runCommit(run, hand, row.attack, targets);
+    }
+
+    if (row.kind === 'bl') {
+      const ok = (await promptUser(`swap ${hand} with belt? y/n> `)).toLowerCase();
+      if (ok !== 'y') { appendLine('cancelled', 'amber'); continue; }
+      return cmdSwap([hand]);
+    }
+
+    const slot = row.kind === 'c1' ? 'A' : 'B';
+    const potion = bs.potions && (row.kind === 'c1' ? (bs.potions.potion_a || bs.potions.A) : (bs.potions.potion_b || bs.potions.B));
+    if (!potion) { appendLine('no potion in slot ' + slot, 'amber'); continue; }
+    const ok = (await promptUser(`use potion ${slot}? y/n> `)).toLowerCase();
+    if (ok !== 'y') { appendLine('cancelled', 'amber'); continue; }
+    try {
+      const res = await apiCall('POST', `/runs/${currentRunId}/use-potion`, { slot });
+      const feedSrc = res.state && res.state.feed ? res.state : res;
+      if (feedSrc.feed) narrateFeed(feedSrc.feed, feedSrc.participants);
+      if (res.potion_used) {
+        const hp = res.state && res.state.participants && res.state.participants.player ? res.state.participants.player.hp : null;
+        appendLine(hp ? `Potion ${slot} used — HP ${hp}` : `Potion ${slot} used`, 'green');
+      }
+      turnPromptFromState(res.state || res);
+    } catch (e) {
+      printError('use: ' + e.message);
+    }
+    return;
+  }
+}
+
+async function runCommit(run, hand, attack, targets) {
+  try {
+    const payload = { hand, attack_id: attack.id, target_ids: targets };
+    const data = await apiCall('POST', `/runs/${currentRunId}/commit`, payload);
+    printGreen(`Attack ${hand} #${attack.id} → ${targets.length ? targets.join(',') : 'auto'}`);
+    const feedSrc = data.state && data.state.feed ? data.state : data;
+    if (feedSrc.feed) narrateFeed(feedSrc.feed, feedSrc.participants);
+    turnPromptFromState(data.state || data);
+  } catch (e) {
+    printError('attack: ' + e.message);
+  }
+}
+
+// PC-54: mid-battle belt swap. 'swap LH|RH' or 'bl LH|RH' (parity with native CLI).
+async function cmdSwap(args = []) {
+  if (!currentRunId) { printError('no run'); return; }
+  const hand = String(args[0] || '').toUpperCase();
+  if (hand !== 'LH' && hand !== 'RH') { printError('usage: swap LH|RH'); return; }
+  try {
+    const data = await apiCall('POST', `/runs/${currentRunId}/swap`, { hand });
+    printGreen(`Belt swap (${hand}) — ${data.delay ?? '?'} tics cooldown`);
+    const feedSrc = data.state && data.state.feed ? data.state : data;
+    if (feedSrc.feed) narrateFeed(feedSrc.feed, feedSrc.participants);
+    turnPromptFromState(data.state || data);
+  } catch (e) {
+    printError('swap: ' + e.message);
+  }
+}
+
 async function cmdUsePotion(args) {
   if (!currentRunId) { printError('no run'); return; }
   let slot = String(args[0] || '').trim();
@@ -891,6 +1036,9 @@ function handleCommand(line) {
       else printError('unknown battle subcommand');
       break;
     case 'attack': cmdAttack(args); break;
+    case 'menu': cmdMenu(args); break;
+    case 'swap':
+    case 'bl': cmdSwap(args); break;
     case 'use':
     case 'drink': cmdUsePotion(args); break;
     case 'inventory':
@@ -1361,7 +1509,13 @@ function updateSidePanelsFromRun(run) {
         const label = q.label || '?';
         const tics = q.tics ?? 0;
         const ev = QUEUE_ACTION_LABELS[q.event] || (q.event ? q.event[0].toUpperCase() + q.event.slice(1) : '?');
-        html += `<div>${tics} - ${label}: ${ev}</div>`;
+        // PC-56: '>' timing marker on rows inside the selected attack's window
+        let marker = '';
+        if (menuAttack && menuAttack.queue === queue) {
+          const marked = computeTimingMarkers(menuAttack.queue, menuAttack.attack);
+          if (marked.some(m => m.id === q.id)) marker = ' >';
+        }
+        html += `<div>${tics} - ${label}: ${ev}${marker}</div>`;
       });
       actionQueueContent.innerHTML = html;
     }

@@ -8,6 +8,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { computeTimingMarkers } from './combat/tic-queue.js';
 
 const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
@@ -17,6 +18,7 @@ let currentRunId = null;
 let lastBs = null; // last loaded battle_state (safeState) — source for attack/potion lookups
 let busy = false;
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
+let queueMarkers = null;   // Map<rowId, '>'> — PC-56 timing markers for the selected attack
 let shouldAnimateDice = false;
 // PC-51: monsters stay hidden while the dice roll ceremony plays, then
 // fade in one at a time. Set in the battle render when a roll will run;
@@ -401,6 +403,14 @@ function renderQueue(bs) {
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
     div.appendChild(nameSpan);
     div.appendChild(ticSpan);
+    // PC-56: '>' timing markers on the right rail, mirroring the DW mockup —
+    // one marker per affected row, keyed by row id, cleared on selection change.
+    if (queueMarkers && queueMarkers.has(row.id)) {
+      const markerSpan = document.createElement('span');
+      markerSpan.className = 'queue-marker';
+      markerSpan.textContent = queueMarkers.get(row.id);
+      div.appendChild(markerSpan);
+    }
     el.appendChild(div);
   }
 }
@@ -502,6 +512,24 @@ async function doAttack(runId, hand, attackId) {
   setBusy(false);
 }
 
+async function doSwap(runId, hand) {
+  if (busy) return;
+  setBusy(true);
+  try {
+    const data = await apiCall(`/runs/${runId}/swap`, 'POST', { hand });
+    showMessage(`Belt swap (${hand}) — cooldown ${data.delay != null ? data.delay : ''} tics`);
+    pendingAttack = null;
+    if (data.state && data.state.battle_over) {
+      showAdvanceUI(runId, data.state);
+    } else {
+      await loadBattle(runId);
+    }
+  } catch (e) {
+    showMessage(String(e.message || e), true);
+  }
+  setBusy(false);
+}
+
 function escHtml(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;')
@@ -545,6 +573,8 @@ function renderActionMenu(bs) {
     showInfo('');
     selectedCmd = null;
     pendingAttack = null;
+    queueMarkers = null; // PC-56: markers follow the selection — clear on change/confirm
+    renderQueue(lastBs);
     if (confirmBtn) confirmBtn.disabled = true;
   }
 
@@ -554,6 +584,12 @@ function renderActionMenu(bs) {
     pendingAttack = { hand, attackId: attack.id };
     selectedCmd = { hand, attack, weapon };
     if (confirmBtn) confirmBtn.disabled = false;
+    // PC-56: '>' timing markers — where the selected attack's window sits in
+    // the upcoming-events queue (approved mockup semantics, dw-app.js:220-261).
+    queueMarkers = new Map(
+      computeTimingMarkers(queue, attack).map(m => [m.id, m.marker])
+    );
+    renderQueue(lastBs);
     // toggle marker to [x]
     const nameEsc = escHtml(attack.name);
     cmdEl.innerHTML = `[x] ${nameEsc}`;
@@ -659,9 +695,14 @@ function attachSlotButtons(bs, showInfo) {
       blBtn.textContent = `BL: ${belt.name || 'Belt'}`;
       blBtn.disabled = false;
       blBtn.onclick = () => {
-        const base = belt.base_damage != null ? belt.base_damage : (belt.damage || 0);
-        const range = belt.damage_range != null ? belt.damage_range : 0;
-        showInfo(`<strong>${belt.name}</strong> DMG ${base}±${range} (belt weapon — no mid-battle swap)`);
+        // PC-54: mid-battle belt swap — swap the currently selected hand with
+        // the belt weapon (costs max(speeds) tics as a hand cooldown).
+        const hand = pendingAttack && pendingAttack.hand;
+        if (!hand) {
+          showInfo('Select an attack on the hand you want to swap, then press BL.');
+          return;
+        }
+        doSwap(currentRunId, hand);
       };
     } else {
       blBtn.textContent = 'BL';
@@ -866,6 +907,7 @@ async function loadBattle(runId) {
     renderPlayerHP(run);
     const bs = run.battle_state || {};
     lastBs = bs;
+    queueMarkers = null; // PC-56: fresh battle state — no selection, no markers
     // Capture BEFORE renderDice — the animation path clears the flag.
     monstersPendingReveal = shouldAnimateDice;
     renderDice(bs.dice || {});
