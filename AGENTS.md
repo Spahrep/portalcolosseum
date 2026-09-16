@@ -34,3 +34,16 @@ Working rules for AI agents in this repo (Hermes, Grok workers, Claude Code, and
 - Code lives in this repo. Run it. Post preview/live URLs when humans need to see.
 - Production stays on Vercel + Supabase; no secrets in git.
 - Follow the portal-colosseum-agent-team skill for the full workflow.
+
+## Verification & scope (Spahrep 2026-09-16)
+- Vercel preview/branch deployment URLs are SSO-walled: they 302 to
+  vercel.com/sso-api. NEVER verify, curl, or browse against them, and never try
+  to work around the SSO gate. It is platform auth, not app code, and not the
+  task.
+- Verify UI work on the live domain (https://portalcolosseum.com) or locally
+  against the worktree (plain static server). Hitting an auth wall during
+  verification is a STOP signal: switch to the known-good path or ask — don't
+  chase the wall.
+- A UI/feature task does not include Vercel, deployment, SSO, or auth work.
+  If you don't know the verification path, ask Spahrep instead of improvising
+  one.
