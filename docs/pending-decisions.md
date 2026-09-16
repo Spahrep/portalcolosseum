@@ -47,6 +47,14 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Status: APPROVED (pinned 2026-09-15 — "update it to what it actualy is now please")
   Notes: Refines PC-DEC-001-era roulette spec. Shipped behavior (bcbf3e4): row stays G→Y→R, sweep lands on a random box uncorrelated with the drawn die; reveal happens at the roll (landed box morphs into drawn die).
 
+- ID: PC-DEC-003
+  Date: 2026-09-15
+  Source: CLI session (C3 triage of docs/reviews/2026-09-15.md)
+  Speaker: Spahrep
+  Verbatim: "We aren't sure quite yet how we are going to do it, but I think the menu system is the front runner. Maybe this can be an undecided thing in the douments."
+  Status: PENDING
+  Notes: Direction, not a decision — recorded in battle-status-ui.md as FRONT-RUNNER with the ">"-vs-preview-band question marked UNDECIDED. Promote only when the mechanism is actually chosen.
+
 ## Approved & Promoted
 
 - ID: PC-DEC-001 — Monster instances live in JSON (battle_state), not a table. Promoted to current-design-status.md (§ Monster Stats), combat-engine-plan.md, admin-gui-brief.md. Decided by Spahrep, 2026-09-15.

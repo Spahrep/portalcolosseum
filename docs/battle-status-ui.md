@@ -28,6 +28,12 @@ C  | AcidShot     | 6
 Timing information is shown as a **range exactly once — during browse** — then as
 **permanent numbers after commit**. The HUD never shows a range twice.
 
+> **STATUS 2026-09-15: under revision — Dragon-Warrior menu is the front-runner.**
+> Spahrep specified a per-hand menu direction (see "Dragon-Warrior Menu" below) and the
+> preview-band mechanics in this section are NOT locked anymore. Whether the ">"
+> timing markers replace the band or coexist is UNDECIDED (Spahrep 2026-09-15). This
+> section stays as the band design-of-record until that call is made.
+
 ### Phase 1 — Browse (free, instant)
 
 Arrow-keying across commands (never inside the confirm flow) shows a **preview band** in a
@@ -62,6 +68,27 @@ commitment window, with uncertainty built in:
 
 Confirming the attack **rolls the cast and cooldown values**. The row enters the queue as
 permanent, fixed numbers — never a range on a committed row. The band lane clears.
+
+## Dragon-Warrior Menu (FRONT-RUNNER — mechanism UNDECIDED)
+
+Specified by Spahrep 2026-09-15 (19:49 / 20:00), currently the front-runner direction for
+combat command UI. Not yet locked; see the UNDECIDED questions at the end.
+
+- Per-hand turn menu: when it is your turn ("LH" or "RH"), you get a menu with the
+  attacks for **that hand only**. Both hands available on the same tick = resolve one
+  hand, then the next — always one hand at a time.
+- Menu options: `Attack1...Attackn:C1:C2:BL` — **no numbered rows**.
+- Flow: pick an attack type → pick the monster (target) → confirm.
+- Consumable use: confirm prompt, e.g. "Drink the healing potion for 10hp +(1-20) hp".
+- When you select an attack, it should show on the timing menu of upcoming events where
+  it will slot in: a **simple pair of ">"** to show a range, or if it is fully contained
+  between 2 other timings, **just one ">"**.
+
+### UNDECIDED (Spahrep 2026-09-15: "We aren't sure quite yet how we are going to do it,
+but I think the menu system is the front runner")
+
+- Do the `>` timing markers **replace** the preview band (Phase 1 above), or coexist?
+- Exact visual of the per-hand menu, target pick, and confirm flow (to be designed).
 
 ## Row Morph (Player Hands)
 
