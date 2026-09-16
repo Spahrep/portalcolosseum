@@ -84,7 +84,10 @@ image `shared/CommandSelection.png`) — see the Cascading Window Spec below.
 
 - Per-hand turn menu: when it is your turn ("LH" or "RH"), you get a menu with the
   attacks for **that hand only**. Both hands available on the same tick = resolve one
-  hand, then the next — always one hand at a time.
+  hand, then the next — always one hand at a time. **Order (PC-DEC-028): the hand with
+  the faster base attack (lowest equipped-weapon speed) goes first; equal speed →
+  left hand first.** The hand-switch chip remains as an explicit player override (not
+  addressed by the ruling).
 - Menu options: `Attack1...Attackn:C1:C2:BL` — **no numbered rows**.
 - Flow: pick an attack type → pick the monster (target) → confirm.
 - When you select an attack, it should show on the timing menu of upcoming events where
@@ -124,12 +127,16 @@ it (same as Enter). Palette not locked; per-player window theming = PMVP (PC-DEC
 Both hands ready = resolve one hand then the next (rule above); the ready-hand switch
 (chip / prefHand) is retained until ruled otherwise.
 
-### Initiative (PC-DEC-021 — effect OPEN)
+### Initiative (PC-DEC-021 + 029 — purpose ruled, mechanics OPEN)
 
 At the start of combat, each hand is assigned an **initiative** value from 1 to the
-equipped weapon's speed. What initiative governs (hand order when both hands are
-ready? whose menu opens first?) has NOT been stated — logged OPEN on effect; the
-cascade menu itself does not depend on it.
+equipped weapon's speed. Purpose (PC-DEC-029): ordering the player against monsters
+within a tic — the player does NOT always act first; a monster may go first. The
+both-hands-ready hand order is a separate rule (PC-DEC-028, above).
+
+OPEN (mechanics, not ruled): when the roll happens, what the monster side rolls, and
+the tie-break vs a monster. Not implemented until ruled; the cascade menu itself does
+not depend on it.
 
 ### UNDECIDED (mechanism + visuals locked; band open — PC-56 carry-over, parked)
 

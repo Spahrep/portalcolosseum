@@ -68,7 +68,8 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Pre/cooldown profiles can be any mix (short pre + long cd, etc.) — sorting handles all of them
 - **Ties resolve player-first**, always (no same-tic mutual kills); death-cancels-in-flight = PMVP
 - **DW cascading command selection is the combat command mechanism** (PC-DEC-010; full visual spec 2026-09-16 — PC-DEC-021..027, image `shared/CommandSelection.png`): three cascading windows (action → target → confirm), hand-name tab on the window border, Esc backs one level, root window NOT closable (Delay/Defend PMVP), potions follow the same flow, keyboard-first + mouse, palette not locked (theming PMVP). Detailed spec in battle-status-ui.md
-- **Initiative (PC-DEC-021, effect OPEN)**: at combat start each hand rolls an initiative value 1..speed (equipped weapon); what it governs not yet ruled
+- **Initiative (PC-DEC-021 + 029, mechanics OPEN)**: at combat start each hand rolls an initiative value 1..speed (equipped weapon); purpose: the player does NOT always act first — a monster may go first. Roll/compare details not yet ruled
+- **Both-hands-ready order (PC-DEC-028)**: faster base attack (lowest equipped-weapon speed) opens first; equal speed → left hand first
 - **Timing preview**: ">" timing markers shipped (PC-56); the full preview band (cast range + hand-free range) is PMVP — committed rows are permanent numbers, never ranges
 - **Monster HP = words only** (Healthy/Injured/Battered/Critical, 25% bands of rolled max) — never exact numbers; kill timing stays a genuine gamble
 - Row cap ~10 with `+3 more`; top 3 rows visually dominant

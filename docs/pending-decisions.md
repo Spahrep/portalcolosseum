@@ -189,7 +189,7 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Speaker: Spahrep
   Verbatim: "At the start of combat, each hand gets assigned an 'initiative' value. This is from 1 to their speed value (the equiped weapon)."
   Status: DECIDED
-  Notes: Stated in answer to the "which hand opens?" design-review question. What initiative GOVERNS (hand order when both hands are ready? whose menu opens first?) was not stated — logged OPEN per Rule 3; battle-status-ui.md records it as OPEN on effect.
+  Notes: Stated in answer to the "which hand opens?" design-review question. Purpose ruled later the same day (PC-DEC-029): player-vs-monster ordering within a tic — the player is not guaranteed to act first. Hand-order tie-break when both hands are ready = PC-DEC-028. Roll/compare mechanics remain OPEN (battle-status-ui.md).
 
 - ID: PC-DEC-022
   Date: 2026-09-16
@@ -238,6 +238,22 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Verbatim: "The orange blue colour scheem is not locked in. PMVP people can change their window options."
   Status: DECIDED
   Notes: Window palette (orange/blue) is not a locked design; per-player window theming = PMVP.
+
+- ID: PC-DEC-028
+  Date: 2026-09-16
+  Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
+  Speaker: Spahrep
+  Verbatim: "When 2 hands are ready at the same time, the hand with the faster base attack (lowest speed) goes first. if they are the same, then LH goes first."
+  Status: DECIDED
+  Notes: Both-hands-ready order in the DW cascade: the hand whose equipped weapon has the LOWEST speed acts first; equal speed → left hand first. The shipped hand-switch chip (lets the player pick which hand's menu opens) was not addressed by the ruling — kept as an explicit player override until ruled otherwise.
+
+- ID: PC-DEC-029
+  Date: 2026-09-16
+  Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
+  Speaker: Spahrep
+  Verbatim: "The initiative is so the player doesnt always go first, it may be a monster that goes first."
+  Status: DECIDED
+  Notes: Clarifies the PURPOSE of PC-DEC-021's per-hand initiative (1..equipped-weapon speed): ordering the player against monsters within a tic — the player is NOT guaranteed to act first; a monster may. Roll/compare mechanics (when the roll happens, what the monster side rolls, tie-break vs a monster) are NOT stated — OPEN; recorded in battle-status-ui.md.
 
 ## Open
 
