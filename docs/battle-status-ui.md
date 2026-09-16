@@ -90,10 +90,14 @@ the ">"-markers-vs-band question and the exact visuals — see UNDECIDED below.
 - When you select an attack, it should show on the timing menu of upcoming events where
   it will slot in: a **simple pair of ">"** to show a range, or if it is fully contained
   between 2 other timings, **just one ">"**.
+- **TIMING MARKERS RULED (Spahrep 2026-09-16): simple ">" markers NOW, full preview
+  band later** — "For now lets do the simple markers, we can add in full band preview
+  later." Shipped with PC-56 (CLI + web GUI, `computeTimingMarkers`); the band is PMVP.
 
 ### UNDECIDED (mechanism locked; presentation open — PC-56 carry-over, parked)
 
-- Do the `>` timing markers **replace** the preview band (Phase 1 above), or coexist?
+- The full **preview band** (Phase 1 above) is deferred to PMVP; its eventual
+  coexistence with the ">" markers is not yet designed.
 - Exact visual of the per-hand menu, target pick, and confirm flow (to be designed).
 
 ## Row Morph (Player Hands)

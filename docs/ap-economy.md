@@ -4,6 +4,7 @@
 
 ## The Resource
 
+- **Starting AP = 10** (Spahrep 2026-09-16: "Starting AP=10"; stored in game_config).
 - Action Points regenerate **X per 24-hour period** (exact X TBD).
 - **Max holdable = 3X.** The cap exists so players don't have to log in daily worrying about falling behind. Log in every 3 days, drain to zero, and you're on equal footing with a daily player. No FOMO pressure.
 - **Bottom dock HUD** — AP + gold live in a transparent bar at the bottom of every real screen (AP meter like `24/30`, gold counter, player name). Shipped (PC-52); confirmed: "we do wean [want] the ap/gold transparent bar at the bottom" (Spahrep 2026-09-16).

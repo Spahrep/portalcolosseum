@@ -91,6 +91,8 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - **MaxHP delta = EVEN (uniform) distribution, not bell curve** (Spahrep 2026-09-08) — every value equally likely, so the secret max stays unpredictable with play
 - Other monster stat rolls: **damage, speed, accuracy = Box-Muller `normal_int()` bell curve**; HP = uniform (above)
 - **SCHEMA (2026-09-15):** `monster_template.base_hp` + `monster_template.max_hp_delta`. Monster instances are NOT a table — `generate_monster()` returns a jsonb document (UUID id, rolled damage/speed/accuracy via `normal_int()`, max_hp via `uniform_int()`, resolved attack slots) and the instance lives inside `portal_run.battle_state` jsonb. `monster_instance` table purged 2026-09-15 (Spahrep: JSON for the portal instance — faster/lighter than a DB-heavy table; Decided by Spahrep, 2026-09-15).
+- **SCHEMA (2026-09-16):** `game_config` single-row table = global game variables (Spahrep: "we will make a config table. It will basicaly be global variables."). Carries starting values — gold 0, AP 10 (Decided by Spahrep, 2026-09-16) — and the starter-template reference (SSS). Supersedes the JSON-config-file idea and the per-row `is_starter` flag on weapon_template (which would have added a useless column to 99% of rows).
+- **SCHEMA (2026-09-16):** `player_inventory` table + `player_backpack` view PURGED (Spahrep: "let's purge the player_inventory table."; PC-55). Player items live as `weapon_instance` rows with a player FK; no separate backpack table (Decided by Spahrep, 2026-09-16).
 
 ## Portal Runs (documented in portal-runs.md) — UPDATED 2026-09-10
 

@@ -143,6 +143,46 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Rules PC-61 remainder (who plays): validation path = testing harness runs many full runs first, then invites to friends via the invite system when ready.
 
+- ID: PC-DEC-016
+  Date: 2026-09-16
+  Source: Discord thread "Ensure players keep one weapon" (1549499851736350781)
+  Speaker: Spahrep
+  Verbatim: "OK  please create a weapon template. It's name is \"SSS\", damage 5, delta zero. Speed 20, delta zero. Accuracy 70, delta zero. Tell me the unique ID generated for this template ID"
+  Status: DECIDED
+  Notes: Fixes the SSS blocker raised by DarkJester (06:58: "I don't see anything in the database for the SSS"). Concrete SSS template: flat stats, zero deltas (5/0 dmg, 20/0 speed, 70/0 accuracy) — seeded 6a219a9, granted on account creation per PC-DEC-007/SSS rule. Also confirms the template is the delivery mechanism (template → weapon_instance at account creation).
+
+- ID: PC-DEC-017
+  Date: 2026-09-16
+  Source: Discord thread "Ensure players keep one weapon" (1549499851736350781)
+  Speaker: Spahrep
+  Verbatim: "ok, we will make a config table. It will basicaly be global variables."
+  Status: DECIDED
+  Notes: Replaces the JSON-config-file option (Spahrep 07:34: "if we had a json .config file, wouldn't we be able to do the same thing wthout adding a useless row to 99% of entries in teh templat etable?") — starter-template marker must NOT become a near-empty column on every template row. Implemented as game_config single-row table (e3b2a82, 06987e3).
+
+- ID: PC-DEC-018
+  Date: 2026-09-16
+  Source: Discord thread "Ensure players keep one weapon" (1549499851736350781)
+  Speaker: Spahrep
+  Verbatim: "Starting gold = 0, Starting AP=10"
+  Status: DECIDED
+  Notes: First values in the new game_config table (shipped e593b7e, verified live). Max AP and Daily AP Gain remain open (docs have max = 3× daily gain).
+
+- ID: PC-DEC-019
+  Date: 2026-09-16
+  Source: Discord thread "Audit unused database tables and columns" (1549497584375038003)
+  Speaker: Spahrep
+  Verbatim: "ok, let's purge the player_inventory table."
+  Status: DECIDED
+  Notes: Resolves the audit's orphan-table question (Spahrep 08:10: "how are inventory item associated with the player?"). player_inventory + player_backpack view dropped 09fabfb (PC-55). Player items live as weapon_instance rows with player_id FK; no separate backpack table.
+
+- ID: PC-DEC-020
+  Date: 2026-09-16
+  Source: Discord thread "Work on PC56" (1549763814285648016) — OOB ruling during build handoff
+  Speaker: Spahrep
+  Verbatim: "I'm not sure what is being asked. For now lets do the simple markers, we can add in full band preview later"
+  Status: DECIDED
+  Notes: Ruling on PC-DEC-010's open "'>'-markers vs preview band" fork (battle-status-ui.md timing display): '>' markers for the DW menu NOW, full band preview deferred (PMVP). Shipped c864a4d/241c29a; battle-status-ui.md updated.
+
 ## Open
 
 - ID: PC-DEC-004

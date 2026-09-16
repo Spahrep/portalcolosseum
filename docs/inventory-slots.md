@@ -55,6 +55,8 @@ Limited slots interact directly with the tic-based combat system — choosing th
 
 When a portal run is started, the run records which items from the player's inventory are used in each position. The inventory itself is just a backpack — it holds items, it does not track assignments.
 
+**PURGED (2026-09-16):** the `player_inventory` table and `player_backpack` view below were dropped per Spahrep ("let's purge the player_inventory table." — Decided by Spahrep, 2026-09-16, PC-DEC-019). Player items live as `weapon_instance` rows with a player FK. The sections below are retained as the pre-purge design of record.
+
 **Rule (Decided 2026-09-11): inventory should only ever be assigned to a player.** A run records its own loadout; it never takes ownership of inventory rows.
 
 ### Structure

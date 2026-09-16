@@ -60,5 +60,5 @@ id bigint primary key generated always as identity,
 - `weapon_instance` — instantiated weapons with rolled stats
 - `element` — elemental damage types
 - `weapon_type` — sword, dagger, axe, etc.
-- `player_inventory` — the 20-slot backpack
+- ~~`player_inventory` — the 20-slot backpack~~ **PURGED 2026-09-16** (Spahrep: "let's purge the player_inventory table." — Decided by Spahrep, 2026-09-16; PC-55). Player items are `weapon_instance` rows with a player FK.
 - `portal_run` — player's portal run progress
