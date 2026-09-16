@@ -150,100 +150,73 @@
     .queue-row .name { color: #ccddff; }
     .queue-row .tic { color: #6688aa; font-size: 9px; }
     .queue-row .queue-marker { color: #ffcc66; font-weight: bold; font-size: 11px; }
-    /* DW per-hand command menu (PC-56) — single COMMAND panel, flat rows */
-    .command-menu {
-      width: 340px;
-      background: #000;
-      border: 3px solid #ccc;
-      padding: 8px 10px;
-      font-size: 11px;
-      color: #fff;
-      flex-shrink: 0;
-    }
-    .command-menu .title {
-      color: #88aaff;
-      font-size: 10px;
-      letter-spacing: 1px;
-      margin-bottom: 4px;
-      border-bottom: 1px solid #334466;
-      padding-bottom: 2px;
-    }
-    .hand-line {
-      font-size: 11px;
-      margin-bottom: 6px;
-      padding-bottom: 3px;
-      border-bottom: 1px solid #334466;
-      display: flex;
-      align-items: baseline;
-      gap: 6px;
-    }
-    .hand-label { color: #ffcc66; }
-    .weapon-name { color: #88ccff; }
-    /* hand-switch chip removed per PC-63r DW cascade spec */
-    .command-row {
-      padding: 2px 4px 2px 18px;
-      cursor: pointer;
+    /* PC-63 DW cascading command menu — three-window modal cascade per the
+       locked spec (docs/battle-status-ui.md Cascading Window Spec;
+       shared/CommandSelection.png). Orange frames/text, blue hand tab, green
+       hand cursor. PC-DEC-027: palette provisional (PMVP window options). */
+    .dw-root {
       position: relative;
-      font-size: 11px;
-    }
-    .command-row.active::before {
-      content: '►';
-      position: absolute;
-      left: 4px;
-      color: #fff;
-    }
-    .command-row:hover { background: #1a2a44; }
-    .command-row.disabled { color: #556677; cursor: default; }
-    .command-row.disabled:hover { background: transparent; }
-    .item-confirm {
-      margin-top: 6px;
-      padding: 6px 8px;
-      border: 1px solid #ffcc66;
-      background: #1a1a00;
-      font-size: 10px;
-    }
-    .item-confirm .confirm-msg { color: #ffe9a8; margin-bottom: 4px; }
-    .item-confirm .confirm-btns { display: flex; gap: 6px; }
-    .item-confirm .confirm-btns button {
       flex: 1;
-      background: #000;
-      border: 2px solid #ccc;
-      color: #fff;
-      font-family: inherit;
-      font-size: 10px;
-      padding: 3px 0;
-      cursor: pointer;
+      min-height: 236px;
+      overflow: visible;
     }
-    .item-confirm .confirm-btns button:hover { background: #1a2a44; }
-    #target-confirm-bar {
-      position: fixed;
-      bottom: 14px;
+    .dw-window {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 290px;
+      background: #000;
+      border: 4px solid #ff8c1a;
+      box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.55);
+      padding: 10px 8px 8px;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #ff9a3c;
+    }
+    .dw-tab {
+      position: absolute;
+      top: -12px;
       left: 50%;
       transform: translateX(-50%);
       background: #000;
-      border: 3px solid #ffcc66;
-      padding: 8px 14px;
-      font-size: 11px;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      z-index: 200;
-    }
-    #target-confirm-bar button {
-      background: #000;
-      border: 2px solid #ccc;
-      color: #fff;
-      font-family: inherit;
+      border: 2px solid #3a3a8c;
+      color: #8a8aff;
+      padding: 1px 14px;
       font-size: 10px;
-      padding: 3px 10px;
-      cursor: pointer;
+      letter-spacing: 1px;
+      white-space: nowrap;
+      z-index: 2;
     }
-    #target-confirm-bar button:hover { background: #1a2a44; }
-    .monster-card.targetable { cursor: pointer; }
-    .monster-card.targetable:hover { box-shadow: 0 0 8px #ffcc66; }
-    .monster-card.selected { border-color: #ffcc66 !important; box-shadow: 0 0 8px #ffcc66; }
-    .monster-letter { color: #ffcc66; font-weight: bold; margin-right: 4px; }
+    .dw-text {
+      margin-bottom: 8px;
+      color: #ff9a3c;
+      white-space: nowrap;
+    }
+    .dw-row {
+      position: relative;
+      padding: 1px 2px 1px 16px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .dw-row.active::before {
+      content: '\261e';
+      position: absolute;
+      left: 0;
+      top: 0;
+      color: #33cc66;
+      text-shadow: 0 0 1px #fff, 0 0 1px #fff;
+    }
+    .dw-row:hover { background: rgba(255, 140, 26, 0.12); }
+    .dw-row.disabled { color: #556677; cursor: default; }
+    .dw-row.disabled:hover { background: transparent; }
+    .dw-gap { height: 8px; }
+    .dw-letter { color: #ff9a3c; font-weight: bold; }
+    .dw-weapon { color: #8a8aff; }
+    .dw-dim { color: #556677; }
+    .st-green { color: #33cc66; }
+    .st-amber { color: #ffcc66; }
+    .st-orange { color: #ff9a3c; }
+    .st-red { color: #ff4444; }
     .panel-title {
       color: #88aaff;
       font-size: 11px;
@@ -289,85 +262,6 @@
       padding: 12px;
       background: rgba(10,26,46,0.78);
       border-top: 2px solid #334466;
-    }
-    /* DW per-hand command menu (PC-56) — single panel, flat rows, hand-line */
-    .command-menu {
-      width: 100%;
-      background: #000;
-      border: 3px solid #ccc;
-      padding: 8px 10px;
-      font-size: 11px;
-      color: #fff;
-    }
-    .command-menu .title {
-      color: #88aaff;
-      font-size: 10px;
-      letter-spacing: 1px;
-      margin-bottom: 4px;
-      border-bottom: 1px solid #334466;
-      padding-bottom: 2px;
-    }
-    .hand-line {
-      font-size: 11px;
-      margin-bottom: 6px;
-      padding-bottom: 3px;
-      border-bottom: 1px solid #334466;
-    }
-    .hand-line .hand-label { color: #ffcc66; }
-    .hand-line .weapon-name { color: #88ccff; }
-    /* hand-switch removed - cascade uses blue tab instead */
-    .command-row {
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      padding: 3px 6px;
-      cursor: pointer;
-    }
-    .command-row:hover,
-    .command-row.active {
-      background: #1a2a44;
-    }
-    .command-row .row-name { color: #fff; }
-    .command-row .row-info { color: #6688aa; font-size: 9px; }
-    .command-row.winding {
-      color: #556677;
-      cursor: default;
-    }
-    .command-row.winding:hover { background: transparent; }
-    .command-row.disabled {
-      color: #556677;
-      cursor: default;
-    }
-    .command-row.disabled:hover { background: transparent; }
-    .item-confirm {
-      padding: 4px;
-      font-size: 10px;
-    }
-    .target-confirm-bar {
-      position: fixed;
-      bottom: 120px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 100;
-    }
-    /* DW-style monster targets: letter label + hover/selected highlight */
-    .monster-target {
-      display: flex;
-      justify-content: space-between;
-      font-size: 10px;
-      padding: 3px 4px;
-      margin: 2px 0;
-      cursor: pointer;
-      border: 1px solid transparent;
-    }
-    .monster-target:hover,
-    .monster-target.selected {
-      background: #1a2a44;
-      border-color: #4a90d9;
-    }
-    .monster-card-dw.selected {
-      border-color: #ffcc66 !important;
-      background: rgba(26,42,68,0.6) !important;
     }
     .action-btn {
       flex: 1;
