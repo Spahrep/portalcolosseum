@@ -756,7 +756,12 @@ function renderActionMenu(bs) {
       <button id="target-confirm-btn">CONFIRM</button>
       <button id="target-cancel-btn">CANCEL</button>`;
     bar.querySelector('#target-confirm-btn').onclick = () => {
-      if (all) { doAttack(currentRunId, hand, row.attack.id, []); return; }
+      if (all) {
+        // multi-target: pass every live monster id — engine splits damage across them
+        const live = monsters.filter(m => (m.current_hp ?? 1) > 0).map(m => m.id);
+        doAttack(currentRunId, hand, row.attack.id, live);
+        return;
+      }
       const t = monsters[targetIdx];
       doAttack(currentRunId, hand, row.attack.id, t && t.id != null ? [t.id] : []);
     };

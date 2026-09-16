@@ -816,7 +816,10 @@ async function cmdMenu(args = []) {
       menuAttack = { attack: row.attack, queue: bs.queue || [] };
       try { await refreshRunPanels(); } catch (_) {}
       let targets = [];
-      if (monsters.length > 0) {
+      if (row.attack && row.attack.is_multi_target) {
+        // multi-target attacks hit ALL live monsters (engine: pass every live id, damage splits)
+        targets = monsters.filter(m => (m.current_hp ?? 1) > 0).map(m => m.id);
+      } else if (monsters.length > 0) {
         const pickT = (await promptUser(`target ${hand} ${row.attack.name} (${monsters.map((m, i) => String.fromCharCode(97 + i)).join('')} or auto)> `)).toLowerCase();
         if (pickT === 'auto' || pickT === '') {
           targets = [];
