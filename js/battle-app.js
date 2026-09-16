@@ -572,6 +572,12 @@ function renderActionMenu(bs) {
   const readyHands = ['LH', 'RH'].filter(h => {
     const w = weapons[h === 'LH' ? 'hand_l' : 'hand_r'];
     return hands[h] && hands[h].state === 'Ready' && w && w.id;
+  }).sort((a, b) => {
+    // PC-DEC-028: both ready → faster base attack (lower weapon speed) opens first; tie → LH.
+    // Missing speed (anomalous data) sorts last — never a surprise first-mover.
+    const sa = weapons[a === 'LH' ? 'hand_l' : 'hand_r'].speed ?? Number.MAX_SAFE_INTEGER;
+    const sb = weapons[b === 'LH' ? 'hand_l' : 'hand_r'].speed ?? Number.MAX_SAFE_INTEGER;
+    return sa !== sb ? sa - sb : (a === 'LH' ? -1 : 1);
   });
   if (!readyHands.length) {
     // no ready hand — show winding status
