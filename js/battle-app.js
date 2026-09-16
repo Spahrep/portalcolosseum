@@ -717,11 +717,10 @@ function renderActionMenu(bs) {
       } else {
         const live = monsters.filter(m => (m.current_hp ?? 1) > 0).map(m => m.id);
         const ids = row.monster ? [row.monster.id] : live;
-        const letter = row.monster ? row.letter : 'ALL MONSTERS';
-        const name = row.monster ? row.monster.name : 'ALL MONSTERS';
+        const label = row.monster ? `${row.letter} ${row.monster.name}` : 'ALL MONSTERS';
         stack.push({
           kind: 'confirm',
-          text: `Confirm ${escHtml(lvl.attack.name)}: ${letter} ${escHtml(name)}`,
+          text: `Confirm ${escHtml(lvl.attack.name)}: ${escHtml(label)}`,
           rows: yesNoRows(() => doAttack(currentRunId, hand, lvl.attack.id, ids))
         });
       }
@@ -740,6 +739,7 @@ function renderActionMenu(bs) {
     wrap.appendChild(root);
     const topIdx = stack.length - 1;
     stack.forEach((lvl, i) => {
+      if (lvl.activeIdx == null) lvl.activeIdx = 0; // every window opens with row 0 selected
       const win = document.createElement('div');
       win.className = 'dw-window' + (i === topIdx ? ' top' : '');
       win.style.left = (i * 140) + 'px';
