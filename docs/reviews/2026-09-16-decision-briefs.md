@@ -14,8 +14,8 @@ yours.
 ## Rulings received 2026-09-16 (Spahrep) — thread 1549746327032963083
 
 Verbatim rulings answering the sweep conflicts (docs/reviews/2026-09-16.md C1–C5) and
-PC-56. Captured as PC-DEC-006..010 (PENDING) — pending-decisions.md is the capture
-surface; these stay PENDING until pinned.
+PC-56. Captured as PC-DEC-006..010 (DECIDED) — pending-decisions.md is the
+capture surface; these applied to the docs in the same pass.
 
 - **C1 — Slot layout** (PC-DEC-006): "C1) You have a Belt loop (BL) and 2 consumeable
   slots (C1 & C2)." → loadout row is BL + C1 + C2. Belt-content (weapon-only vs
@@ -65,8 +65,8 @@ fixes directly ("GET RID OF CONFLICTS IN DOCUMENTS"). All edits applied and comm
 - **core-philosophy.md, portal-runs.md, consumables.md, potion-contract.md** — stale
   "Potion A/B" loadout labels → BL/C1/C2.
 
-PC-DEC-003 + 006..015 flipped APPROVED in pending-decisions.md with promotion notes.
-PC-DEC-004 stays PENDING (implementation-reality note, nothing to promote).
+PC-DEC-003 + 006..015 recorded as DECIDED in pending-decisions.md with apply notes.
+PC-DEC-004 stays OPEN (implementation-reality note, nothing to decide yet).
 
 ---
 
@@ -171,7 +171,7 @@ Open questions:
 
 ## PC-60 — Player Journey section in core-philosophy.md
 
-Card: PC-60 (t_48015d18) · Hermes's doc task once approved
+Card: PC-60 (t_48015d18) · Hermes's doc task (approval = Spahrep asked for it)
 
 What's being decided:
 Whether to add a short "Player Journey" section to core-philosophy.md mapping the
