@@ -5,7 +5,8 @@ Working rules for AI agents in this repo (Hermes, Grok workers, Claude Code, and
 ## Model allocation — hand off to Grok
 - All non-trivial coding and implementation work runs through Grok via
   `delegate_task` (delegation is pinned to xai-oauth / grok-4.3 — the
-  SuperGrok subscription is already paid, so this costs $0 marginal).
+  SuperGrok subscription is PAID with a WEEKLY RESET quota; it is NOT free,
+  every delegation burns that weekly budget, so batch Grok work deliberately).
 - Do NOT implement multi-file, logic-heavy, or debugging tasks directly.
   Delegate them.
 - Hermes edits directly ONLY for mechanical patches (small insertions,
