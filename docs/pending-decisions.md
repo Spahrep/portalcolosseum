@@ -245,7 +245,7 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Speaker: Spahrep
   Verbatim: "When 2 hands are ready at the same time, the hand with the faster base attack (lowest speed) goes first. if they are the same, then LH goes first."
   Status: DECIDED
-  Notes: Both-hands-ready order in the DW cascade: the hand whose equipped weapon has the LOWEST speed acts first; equal speed → left hand first. The shipped hand-switch chip (lets the player pick which hand's menu opens) was not addressed by the ruling — kept as an explicit player override until ruled otherwise.
+  Notes: Both-hands-ready order in the DW cascade: the hand whose equipped weapon has the LOWEST speed acts first; equal speed → left hand first. The web GUI's hand-switch chip (prefHand) was never asked for — Spahrep 2026-09-16: "I dont think i've ever asked for a hand-switch chip"; removed in PC-63. Order is deterministic; no override UI.
 
 - ID: PC-DEC-029
   Date: 2026-09-16
@@ -253,7 +253,15 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Speaker: Spahrep
   Verbatim: "The initiative is so the player doesnt always go first, it may be a monster that goes first."
   Status: DECIDED
-  Notes: Clarifies the PURPOSE of PC-DEC-021's per-hand initiative (1..equipped-weapon speed): ordering the player against monsters within a tic — the player is NOT guaranteed to act first; a monster may. Roll/compare mechanics (when the roll happens, what the monster side rolls, tie-break vs a monster) are NOT stated — OPEN; recorded in battle-status-ui.md.
+  Notes: Clarifies the PURPOSE of PC-DEC-021's per-hand initiative (1..equipped-weapon speed): ordering the player against monsters within a tic — the player is NOT guaranteed to act first; a monster may. Compare side ruled the same day (PC-DEC-030): monsters use their instance speed, ties → player first. Roll timing (combat start, per PC-DEC-021) stated; integration with the timing rail still OPEN.
+
+- ID: PC-DEC-030
+  Date: 2026-09-16
+  Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
+  Speaker: Spahrep
+  Verbatim: "Monsters have a speed value for thier instance, they start with that. Ties mean players go first."
+  Status: DECIDED
+  Notes: Monster side of the initiative compare: NO roll — each monster's initiative IS its instance speed value from combat start. Tie → player acts first. Assumption (not stated): HIGHER initiative acts first within a tic — consistent with a hand rolling max vs a monster's static speed producing a tie (player first); flagged for confirmation when the engine ticket is built (PC-64). How initiative ordering composes with the existing windup/timing rail is NOT ruled — engine design, Spahrep + DarkJester decide together.
 
 ## Open
 

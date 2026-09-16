@@ -86,8 +86,8 @@ image `shared/CommandSelection.png`) — see the Cascading Window Spec below.
   attacks for **that hand only**. Both hands available on the same tick = resolve one
   hand, then the next — always one hand at a time. **Order (PC-DEC-028): the hand with
   the faster base attack (lowest equipped-weapon speed) goes first; equal speed →
-  left hand first.** The hand-switch chip remains as an explicit player override (not
-  addressed by the ruling).
+  left hand first.** Deterministic — the web GUI's hand-switch chip was never asked for
+  and is removed in PC-63 (Spahrep 2026-09-16); there is no override UI.
 - Menu options: `Attack1...Attackn:C1:C2:BL` — **no numbered rows**.
 - Flow: pick an attack type → pick the monster (target) → confirm.
 - When you select an attack, it should show on the timing menu of upcoming events where
@@ -124,19 +124,24 @@ Input (PC-DEC-026): ↑/↓ move the green hand cursor, Enter advances, **Esc ba
 level** (confirm → target → action). Mouse works throughout — clicking a row selects
 it (same as Enter). Palette not locked; per-player window theming = PMVP (PC-DEC-027).
 
-Both hands ready = resolve one hand then the next (rule above); the ready-hand switch
-(chip / prefHand) is retained until ruled otherwise.
+Both hands ready = resolve one hand then the next (rule above). No hand-switch chip —
+prefHand removed in PC-63; the order is deterministic per PC-DEC-028.
 
-### Initiative (PC-DEC-021 + 029 — purpose ruled, mechanics OPEN)
+### Initiative (PC-DEC-021 + 029 + 030 — compare ruled, integration OPEN)
 
 At the start of combat, each hand is assigned an **initiative** value from 1 to the
-equipped weapon's speed. Purpose (PC-DEC-029): ordering the player against monsters
-within a tic — the player does NOT always act first; a monster may go first. The
-both-hands-ready hand order is a separate rule (PC-DEC-028, above).
+equipped weapon's speed (PC-DEC-021). Purpose (PC-DEC-029): ordering the player
+against monsters within a tic — the player does NOT always act first; a monster may
+go first. The both-hands-ready hand order is a separate rule (PC-DEC-028, above).
 
-OPEN (mechanics, not ruled): when the roll happens, what the monster side rolls, and
-the tie-break vs a monster. Not implemented until ruled; the cascade menu itself does
-not depend on it.
+Compare (PC-DEC-030): monsters do NOT roll — each monster's initiative is its instance
+speed value from combat start. Ties → the player goes first. Assumption, not stated:
+higher initiative acts first within the tic (consistent with a hand rolling max vs a
+monster's static speed = tie → player first).
+
+OPEN (not ruled): how initiative ordering composes with the existing windup/timing
+rail (engine design — Spahrep + DarkJester decide together, tracked as PC-64). Not
+implemented; the cascade menu does not depend on it.
 
 ### UNDECIDED (mechanism + visuals locked; band open — PC-56 carry-over, parked)
 
