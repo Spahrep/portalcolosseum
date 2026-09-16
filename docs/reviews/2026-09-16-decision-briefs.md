@@ -11,6 +11,42 @@ yours.
 
 ---
 
+## Rulings received 2026-09-16 (Spahrep) — thread 1549746327032963083
+
+Verbatim rulings answering the sweep conflicts (docs/reviews/2026-09-16.md C1–C5) and
+PC-56. Captured as PC-DEC-006..010 (PENDING) — pending-decisions.md is the capture
+surface; these stay PENDING until pinned.
+
+- **C1 — Slot layout** (PC-DEC-006): "C1) You have a Belt loop (BL) and 2 consumeable
+  slots (C1 & C2)." → loadout row is BL + C1 + C2. Belt-content (weapon-only vs
+  weapon-or-consumable) and BL-as-third-drinkable-hand remain open.
+- **C2 — Anti-softlock** (PC-DEC-007): "With 'You cant sell your last weapon'
+  'Everyone gets the start weapon on account creation' then you can never get stuck
+  w/o a weapon." → confirms the shipped PC-52 chain (no-sell-last + starter grant).
+- **C3 — Accuracy** (PC-DEC-008): "Players use accuracy." → confirms shipped 7ef335d.
+- **C4 — AP/gold HUD** (PC-DEC-009): "we do wean the ap/gold transparent bar at the
+  bottom" ("wean" read as "want") → confirms shipped 5c6286e bottom dock HUD.
+- **C5 / PC-56 — Combat menu** (PC-DEC-010): "DW style combat menu is in fact the
+  goal." → the Dragon-Warrior per-hand menu IS the mechanism. Card flipped done.
+
+### Still open (remaining conflicts to settle — flagged to Spahrep + DarkJester)
+
+1. **Empty-hand (Fist) base speed + damage** — Spahrep: "We do need to figure out the
+   base speed/damage of empty hand." DarkJester's rule (sweep candidate 7): DMG "very,
+   very bad", out-DPS'd by the worst weapon. Speed direction is ambiguous: DJ said
+   "higher than average", but in this codebase lower speed = faster and the shipped
+   Fist is prep/cooldown 6 (~fast). Boarded as PC-62.
+2. **Belt content** — DJ: "The belt can hold a weapon or consumable." vs
+   inventory-slots.md L17 "second weapon (not a utility item)". Spahrep's ruling
+   separates BL from C1/C2 but doesn't settle belt content → still needs the ruling.
+3. **PC-57** — consumable pre/post formula + hand-free vs potion-speed-only MVP.
+4. **PC-58** — multi-enemy per-target reduction + 5th-monster absorption numbers.
+5. **PC-59** — AP-refund-on-completion: kill vs proportional.
+6. **PC-60** — Player Journey section in core-philosophy.md: approve?
+7. **PC-61 remainder** — colors-only vs full numbers; who plays the live validation.
+
+---
+
 ## PC-56 — Lock the combat command menu mechanism (keystone)
 
 Card: PC-56 (t_aafb1a55) · Resolves: PC-DEC-003, PC-DEC-004 · Priority: #1

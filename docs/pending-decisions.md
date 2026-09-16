@@ -73,6 +73,58 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Stop/continue + face-value visibility validation happens in the live game instead.
   Recorded on PC-61 (t_7fcf0c1d) and in docs/reviews/2026-09-16-decision-briefs.md.
 
+- ID: PC-DEC-006
+  Date: 2026-09-16
+  Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
+  Speaker: Spahrep
+  Verbatim: "C1) You have a Belt loop (BL) and 2 consumeable slots (C1 & C2)."
+  Status: PENDING
+  Notes: Human ruling on sweep conflict C1 (inventory-slots.md "second weapon, not a
+  utility item" vs DarkJester "weapon or consumable"): the loadout row is BL + C1 + C2.
+  Does NOT settle what the belt may hold or whether BL is a third drinkable hand —
+  those remain open (PC-57 q3).
+
+- ID: PC-DEC-007
+  Date: 2026-09-16
+  Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
+  Speaker: Spahrep
+  Verbatim: "With \"You cant sell your last weapon\" \"Everyone gets the start weapon on account creation\" then you can never get stuck w/o a weapon."
+  Status: PENDING
+  Notes: Human ruling on sweep conflict C2 + confirms anti-softlock chain (sweep
+  candidates 1/3/7, shipped PC-52): no-sell-last-weapon + starter weapon granted on
+  account creation = never weaponless. Start weapon = DarkJester's SSS.
+
+- ID: PC-DEC-008
+  Date: 2026-09-16
+  Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
+  Speaker: Spahrep
+  Verbatim: "Players use accuracy."
+  Status: PENDING
+  Notes: Human ruling on sweep conflict C3 (carried from 09-15): player attacks roll
+  accuracy, miss = 0 damage. Already shipped 7ef335d; combat-system.md still silent on
+  the rule (needs capture + pin before the doc edit).
+
+- ID: PC-DEC-009
+  Date: 2026-09-16
+  Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
+  Speaker: Spahrep
+  Verbatim: "we do wean the ap/gold transparent bar at the bottom"
+  Status: PENDING
+  Notes: "wean" read as "want" (typo). Human ruling on sweep conflict C4 (carried from
+  09-15 — Spahrep 09-15: "I like the one that has the transparent bar on the bottom"):
+  AP+gold bottom dock HUD. Already shipped 5c6286e; ap-economy.md still silent on the HUD.
+
+- ID: PC-DEC-010
+  Date: 2026-09-16
+  Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
+  Speaker: Spahrep
+  Verbatim: "DW style combat menu is in fact the goal."
+  Status: PENDING
+  Notes: Human ruling on sweep conflict C5 / PC-DEC-003 FRONT-RUNNER / PC-56: the
+  Dragon-Warrior per-hand menu is the combat command mechanism. PC-DEC-003's note said
+  promote only when the mechanism is actually chosen — this is the choice statement;
+  pin to flip. "\">\" markers vs preview band" + web-vs-CLI surface-first stay open.
+
 ## Approved & Promoted
 
 - ID: PC-DEC-001 — Monster instances live in JSON (battle_state), not a table. Promoted to current-design-status.md (§ Monster Stats), combat-engine-plan.md, admin-gui-brief.md. Decided by Spahrep, 2026-09-15.
