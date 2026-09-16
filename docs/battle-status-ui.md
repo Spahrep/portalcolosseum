@@ -78,15 +78,15 @@ permanent, fixed numbers — never a range on a committed row. The band lane cle
 ## Dragon-Warrior Menu (CONFIRMED — 2026-09-16)
 
 Specified by Spahrep 2026-09-15 (19:49 / 20:00); confirmed as the combat command
-mechanism 2026-09-16 ("DW style combat menu is in fact the goal."). The open items are
-the ">"-markers-vs-band question and the exact visuals — see UNDECIDED below.
+mechanism 2026-09-16 ("DW style combat menu is in fact the goal."). The ">"-markers-vs-band
+fork is ruled (PC-DEC-020); the exact visuals are ruled 2026-09-16 (PC-DEC-021..027,
+image `shared/CommandSelection.png`) — see the Cascading Window Spec below.
 
 - Per-hand turn menu: when it is your turn ("LH" or "RH"), you get a menu with the
   attacks for **that hand only**. Both hands available on the same tick = resolve one
   hand, then the next — always one hand at a time.
 - Menu options: `Attack1...Attackn:C1:C2:BL` — **no numbered rows**.
 - Flow: pick an attack type → pick the monster (target) → confirm.
-- Consumable use: confirm prompt, e.g. "Drink the healing potion for 10hp +(1-20) hp".
 - When you select an attack, it should show on the timing menu of upcoming events where
   it will slot in: a **simple pair of ">"** to show a range, or if it is fully contained
   between 2 other timings, **just one ">"**.
@@ -94,11 +94,47 @@ the ">"-markers-vs-band question and the exact visuals — see UNDECIDED below.
   band later** — "For now lets do the simple markers, we can add in full band preview
   later." Shipped with PC-56 (CLI + web GUI, `computeTimingMarkers`); the band is PMVP.
 
-### UNDECIDED (mechanism locked; presentation open — PC-56 carry-over, parked)
+### Cascading Window Spec (decided 2026-09-16 — PC-DEC-022..027)
+
+Three cascading windows, one command at a time, all in one screen area (PC-DEC-026).
+Each new window overlaps the previous down-right; it always fully covers its own
+content and may clip the parent (authentic DW) — the ACTIVE window's text never clips.
+
+1. **Action window (root)** — black window, orange border, orange pixel-mono text;
+   a blue tab straddling the top border shows the owner hand ("Left Hand" / "Right
+   Hand"). Rows top to bottom: the hand weapon's attacks (real rows: Attack, Power
+   Attack, Quick Strike …), blank, C1 potion, C2 potion, blank, `Belt Loop: <belt
+   weapon>` (PC-DEC-023 — wording not locked). **The root window cannot be closed**
+   (PC-DEC-022): Esc at root is a no-op; the hand stays in the menu until a command
+   resolves. Delay / Defend commands = PMVP.
+2. **Target window** — cascades over the action window. Attack: enemy list
+   `A: Glimmerling – Healthy` / `B: Giant Rat – Critical` — letters match the arena
+   markers, HP word color-coded (green Healthy → red Critical). Multi-target attacks:
+   a single ALL MONSTERS line, no pick. Potions (PC-DEC-024): hand-target list
+   (LH / RH). Offensive consumables (PMVP): enemy-selection window instead.
+3. **Confirm window** — line = `Confirm <AttackName>: <letter> <monster name>`
+   (PC-DEC-025; "Confirm Quick Strike: B Giant Rat"; basic attack "Confirm Attack: B
+   Giant Rat"), then **Yes / No**. Potion confirm: `Use <potion> on <hand>?` —
+   Yes / No.
+
+Input (PC-DEC-026): ↑/↓ move the green hand cursor, Enter advances, **Esc backs one
+level** (confirm → target → action). Mouse works throughout — clicking a row selects
+it (same as Enter). Palette not locked; per-player window theming = PMVP (PC-DEC-027).
+
+Both hands ready = resolve one hand then the next (rule above); the ready-hand switch
+(chip / prefHand) is retained until ruled otherwise.
+
+### Initiative (PC-DEC-021 — effect OPEN)
+
+At the start of combat, each hand is assigned an **initiative** value from 1 to the
+equipped weapon's speed. What initiative governs (hand order when both hands are
+ready? whose menu opens first?) has NOT been stated — logged OPEN on effect; the
+cascade menu itself does not depend on it.
+
+### UNDECIDED (mechanism + visuals locked; band open — PC-56 carry-over, parked)
 
 - The full **preview band** (Phase 1 above) is deferred to PMVP; its eventual
   coexistence with the ">" markers is not yet designed.
-- Exact visual of the per-hand menu, target pick, and confirm flow (to be designed).
 
 ## Row Morph (Player Hands)
 

@@ -183,6 +183,62 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Ruling on PC-DEC-010's open "'>'-markers vs preview band" fork (battle-status-ui.md timing display): '>' markers for the DW menu NOW, full band preview deferred (PMVP). Shipped c864a4d/241c29a; battle-status-ui.md updated.
 
+- ID: PC-DEC-021
+  Date: 2026-09-16
+  Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
+  Speaker: Spahrep
+  Verbatim: "At the start of combat, each hand gets assigned an 'initiative' value. This is from 1 to their speed value (the equiped weapon)."
+  Status: DECIDED
+  Notes: Stated in answer to the "which hand opens?" design-review question. What initiative GOVERNS (hand order when both hands are ready? whose menu opens first?) was not stated — logged OPEN per Rule 3; battle-status-ui.md records it as OPEN on effect.
+
+- ID: PC-DEC-022
+  Date: 2026-09-16
+  Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
+  Speaker: Spahrep
+  Verbatim: "you cant close the root window. Maybe we add in a 'Delay' or 'defend' but that's PMVP"
+  Status: DECIDED
+  Notes: Esc at the root action window = no-op; the hand stays in the menu until a command resolves. Delay / Defend commands = PMVP. Rules out the design-review lean that Esc at root closes the menu.
+
+- ID: PC-DEC-023
+  Date: 2026-09-16
+  Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
+  Speaker: Spahrep
+  Verbatim: "The equip is the BL, i wasn't sure how to phrase it, the wording is not locked in stone. Maybe it says 'Belt Loop: Dagger'"
+  Status: DECIDED
+  Notes: The root menu's bottom row is the belt loop (BL swap surface, per the DarkJester swap ask). Preferred label "Belt Loop: <weapon name>"; wording not locked. BL swap timing formula remains open (pending-decisions.md #4).
+
+- ID: PC-DEC-024
+  Date: 2026-09-16
+  Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
+  Speaker: Spahrep
+  Verbatim: "yes, potions follow the same flow. For offensive items (PMVP) they will also have the enemy selectoin."
+  Status: DECIDED
+  Notes: Potions cascade a hand-target window (LH/RH) then confirm. Offensive consumables (PMVP) cascade the enemy-selection window instead.
+
+- ID: PC-DEC-025
+  Date: 2026-09-16
+  Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
+  Speaker: Spahrep
+  Verbatim: "There was a basic attack selected. If we had of selected Quick Strike, it would have said 'Confirm Quickstrike: B <<monster name>>'."
+  Status: DECIDED
+  Notes: Confirm-window line format = "Confirm <AttackName>: <letter> <monster name>" (e.g. "Confirm Quick Strike: B Giant Rat"; basic attack = "Confirm Attack: B Giant Rat").
+
+- ID: PC-DEC-026
+  Date: 2026-09-16
+  Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
+  Speaker: Spahrep
+  Verbatim: "Yes, all the flow is nicely wrapped into one area of the screen, with easy to navigate keyboard commands, but they could use mouse if they wanted to."
+  Status: DECIDED
+  Notes: Keyboard-first (arrows + Enter + Esc) AND mouse click support; the whole cascade lives in one screen area.
+
+- ID: PC-DEC-027
+  Date: 2026-09-16
+  Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
+  Speaker: Spahrep
+  Verbatim: "The orange blue colour scheem is not locked in. PMVP people can change their window options."
+  Status: DECIDED
+  Notes: Window palette (orange/blue) is not a locked design; per-player window theming = PMVP.
+
 ## Open
 
 - ID: PC-DEC-004

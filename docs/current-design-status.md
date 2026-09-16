@@ -67,7 +67,9 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Monster rows don't morph: damage applies, next attack in cycle spawns as a new row (repetition visible)
 - Pre/cooldown profiles can be any mix (short pre + long cd, etc.) — sorting handles all of them
 - **Ties resolve player-first**, always (no same-tic mutual kills); death-cancels-in-flight = PMVP
-- **Browse → Commit flow**: browsing an attack shows a preview band in a lane left of the queue (cast range + hand-free range, real rows inside tint gold); committing ROLLS the values — committed rows are permanent numbers, never ranges
+- **DW cascading command selection is the combat command mechanism** (PC-DEC-010; full visual spec 2026-09-16 — PC-DEC-021..027, image `shared/CommandSelection.png`): three cascading windows (action → target → confirm), hand-name tab on the window border, Esc backs one level, root window NOT closable (Delay/Defend PMVP), potions follow the same flow, keyboard-first + mouse, palette not locked (theming PMVP). Detailed spec in battle-status-ui.md
+- **Initiative (PC-DEC-021, effect OPEN)**: at combat start each hand rolls an initiative value 1..speed (equipped weapon); what it governs not yet ruled
+- **Timing preview**: ">" timing markers shipped (PC-56); the full preview band (cast range + hand-free range) is PMVP — committed rows are permanent numbers, never ranges
 - **Monster HP = words only** (Healthy/Injured/Battered/Critical, 25% bands of rolled max) — never exact numbers; kill timing stays a genuine gamble
 - Row cap ~10 with `+3 more`; top 3 rows visually dominant
 - **PMVP kill telegraph** ("glowing sword of death", far-future idea — not in planning): blue pulse = can kill on max roll, steady blue = guaranteed kill; client-side only
