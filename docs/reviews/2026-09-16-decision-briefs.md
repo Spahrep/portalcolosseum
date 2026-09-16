@@ -130,25 +130,26 @@ Open questions:
 
 ---
 
-## PC-61 — Paper prototype the stop/continue decision
+## PC-61 — Validate stop/continue digitally (NO paper prototype)
 
-Card: PC-61 (t_7fcf0c1d)
+Card: PC-61 (t_7fcf0c1d) · DECIDED 2026-09-16 by Spahrep: "i dont want paper, we will
+be doing this fully digital" — the 10-player paper prototype is declined.
 
-What's being decided:
-Running a small paper prototype (designer says ~10 players) of the stop/continue choice
-with visible remaining dice, to validate push-your-luck tension and face-value
-visibility (colors-only vs full numbers) before more code.
+What's being decided (remaining):
+Validating the stop/continue choice + face-value visibility (colors-only vs full
+numbers) in the LIVE game instead of paper — via the existing /roll /nuke harness or a
+real run. The engine already lets you fake-run a battle chain, so the live GUI is the
+prototype.
 
-Designer's lean (verbatim, sections 1 + Final):
+Designer's lean (verbatim, sections 1 + Final — the part Spahrep declined):
 "Lock face-value visibility decision via rapid paper prototype (colors-only vs full
 numbers) before any more code."
 "Run a 10-player paper prototype on the stop/continue decision with visible remaining dice."
 
 Open questions:
-- Worth doing at 10 players, or is a 2-player (you + Jester) sanity check enough for
-  now? The engine already lets you /roll and /nuke your way through a fake run — the
-  live game may be a better prototype than paper at this stage.
 - Colors-only vs full numbers: which reads better in the web GUI you're already seeing?
+- Who plays: you + Jester, or a wider invite list (Discord #the-forge) once a run is
+  actually playable end-to-end?
 
 ---
 

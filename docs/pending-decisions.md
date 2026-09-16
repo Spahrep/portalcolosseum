@@ -63,6 +63,16 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Status: PENDING
   Notes: Implementation-reality statement, not a design decision. Confirmed against code: no preview/marker system in js/battle-app.js (grep preview = 0); only renderQueue() exists. Recorded in battle-status-ui.md status banner. Whole timing/preview area is an open revisit — no ticket yet.
 
+- ID: PC-DEC-005
+  Date: 2026-09-16
+  Source: CLI session (designer-review follow-up, PC-61 triage)
+  Speaker: Spahrep
+  Verbatim: "yea, i dont want paper, we will be doing this fully digital"
+  Status: APPROVED (stated as direction by Spahrep, 2026-09-16)
+  Notes: Declines the game-designer review's 10-player paper prototype recommendation.
+  Stop/continue + face-value visibility validation happens in the live game instead.
+  Recorded on PC-61 (t_7fcf0c1d) and in docs/reviews/2026-09-16-decision-briefs.md.
+
 ## Approved & Promoted
 
 - ID: PC-DEC-001 — Monster instances live in JSON (battle_state), not a table. Promoted to current-design-status.md (§ Monster Stats), combat-engine-plan.md, admin-gui-brief.md. Decided by Spahrep, 2026-09-15.
