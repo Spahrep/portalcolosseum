@@ -6,7 +6,7 @@
 // F10: startBattle accepts optional initialPlayerHp for cross-battle HP carry.
 
 import { createQueue, commitNewRow, tick, sortQueue, morphHandRow } from './tic-queue.js';
-import { createPlayer, createMonster, isPlayerDead, isMonsterDead, applyDamage } from './participants.js';
+import { createPlayer, createMonster, isPlayerDead, isMonsterDead, applyDamage, swapHandWithBelt as swapHandWithBeltPure } from './participants.js';
 import { getHpWord } from './hp-words.js';
 import { rollDamage, checkHit, resolveAttack, multiTargetReduction } from './damage.js';
 import { POTION_SLOTS, ALL_EFFECT_TYPES, HAND_LABELS, POTION_PHASES, potionPrePostTicks } from './potion-contract.js';
@@ -294,7 +294,31 @@ export function createEngine(rng = Math.random) {
     return advanceToNextDecision();
   }
 
-  return { startBattle, commitAttack, commitPotion, advanceToNextDecision, getState, state, loadState };
+  function swapHandWithBelt(hand, weapons) {
+    if (!state.player || !state.player.hands || !state.player.hands[hand]) {
+      return { error: 'hand not Ready' };
+    }
+    if (state.player.hands[hand].state !== 'Ready') {
+      return { error: 'hand not Ready' };
+    }
+    const result = swapHandWithBeltPure(hand, state.player, weapons);
+    if (!result.success) {
+      return { error: result.error };
+    }
+    // PC-54: the swap costs max(speeds) tics as a cooldown. A Ready hand has NO
+    // queue row (cooldown rows are removed on fire) — morphing would silently
+    // no-op, making the swap free. Commit a fresh cooldown row; morph only if
+    // some row for the hand somehow exists (defensive).
+    const existing = state.queue.find(r => r.label === hand);
+    if (existing) {
+      morphHandRow(state.queue, hand, 'cooldown', result.delay);
+    } else {
+      commitNewRow(state.queue, hand, 'cooldown', result.delay);
+    }
+    return { success: true, delay: result.delay, newWeaponId: result.newWeaponId, oldWeaponId: result.oldWeaponId };
+  }
+
+  return { startBattle, commitAttack, commitPotion, swapHandWithBelt, advanceToNextDecision, getState, state, loadState };
 }
 
 export function resumeEngine(persistedState, rng = Math.random) {

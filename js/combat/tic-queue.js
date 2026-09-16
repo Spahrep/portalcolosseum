@@ -63,3 +63,47 @@ export function morphHandRow(queue, handLabel, newEvent, newTics) {
   }
   return row;
 }
+
+// PC-56: computeTimingMarkers for '>' timing markers (MVP)
+// Matches dw-app.js updateTimingMarkers algorithm EXACTLY.
+// input: queue (array of {id, tics, ...}), attack {prepare_time, prepare_time_range}
+// if no tics strictly inside (minT < t < maxT) -> SINGLE '>' on first row with tics >= maxT (or none)
+// if some inside -> PAIR: last with tics < minT and first with tics > maxT
+// empty queue -> []
+// returns {id, marker: '>' }[] (order of appearance in sorted tics order, caller matches by id)
+export function computeTimingMarkers(queue, attack) {
+  if (!queue || queue.length === 0 || !attack) return [];
+  const minT = Number(attack.prepare_time || attack.prepareTime || 0);
+  const range = Number(attack.prepare_time_range || attack.prepareTimeRange || 0);
+  const maxT = minT + range;
+  const sorted = [...queue].sort((a, b) => a.tics - b.tics);
+  // check for any strictly inside
+  let hasInside = false;
+  for (const row of sorted) {
+    if (row.tics > minT && row.tics < maxT) {
+      hasInside = true;
+      break;
+    }
+  }
+  const markers = [];
+  if (!hasInside) {
+    // SINGLE '>' on the first row with tics >= maxT (or no marker if none)
+    for (const row of sorted) {
+      if (row.tics >= maxT) {
+        markers.push({ id: row.id, marker: '>' });
+        break;
+      }
+    }
+  } else {
+    // PAIR: last row with tics < minT AND first row with tics > maxT
+    let before = null;
+    let after = null;
+    for (const row of sorted) {
+      if (row.tics < minT) before = row;
+      if (row.tics > maxT && !after) after = row;
+    }
+    if (before) markers.push({ id: before.id, marker: '>' });
+    if (after) markers.push({ id: after.id, marker: '>' });
+  }
+  return markers;
+}

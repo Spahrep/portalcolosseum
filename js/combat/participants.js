@@ -52,3 +52,41 @@ export function applyDamage(target, amount) {
     target.current_hp = Math.max(0, target.current_hp - amount);
   }
 }
+
+// PC-56 / PC-54: mid-battle belt swap
+// Swaps hand weapon with belt weapon when hand Ready.
+// Uses weapon `speed` field (NOT base_speed) for delay = max(speed old, speed belt).
+// Drops unused queue param. Returns {success:true, delay, newWeaponId, oldWeaponId} or {success:false, error}
+export function swapHandWithBelt(hand, player, weapons) {
+  if (!player || !player.hands || !player.hands[hand]) {
+    return { success: false, error: 'invalid hand' };
+  }
+  if (player.hands[hand].state !== 'Ready') {
+    return { success: false, error: 'hand not Ready' };
+  }
+  if (!weapons || !weapons.belt) {
+    return { success: false, error: 'no belt weapon' };
+  }
+  const beltWeapon = weapons.belt;
+  const handId = player.hands[hand].weaponId;
+  let handWeapon = null;
+  if (hand === 'LH' && weapons.hand_l) handWeapon = weapons.hand_l;
+  else if (hand === 'RH' && weapons.hand_r) handWeapon = weapons.hand_r;
+  else handWeapon = { id: handId, speed: 2, name: 'unknown' };
+
+  // perform swap
+  player.hands[hand].weaponId = beltWeapon.id;
+  if (hand === 'LH') {
+    weapons.hand_l = beltWeapon;
+  } else if (hand === 'RH') {
+    weapons.hand_r = beltWeapon;
+  }
+  weapons.belt = handWeapon;
+
+  const delay = Math.max(
+    (handWeapon && handWeapon.speed) || 2,
+    (beltWeapon && beltWeapon.speed) || 2
+  );
+
+  return { success: true, delay, newWeaponId: beltWeapon.id, oldWeaponId: handId };
+}

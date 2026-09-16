@@ -1,8 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getHpWord, HP_BANDS } from '../js/combat/hp-words.js';
-import { createQueue, commitNewRow, tick, sortQueue } from '../js/combat/tic-queue.js';
+import { createQueue, commitNewRow, tick, sortQueue, computeTimingMarkers } from '../js/combat/tic-queue.js';
 import createEngine, { resumeEngine } from '../js/combat/engine.js';
+import { swapHandWithBelt } from '../js/combat/participants.js';
 
 function seededRNG(seed = 42) {
   let s = seed;
@@ -364,5 +365,124 @@ describe('rollStat contract (range 0 unchanged, range N within bounds)', () => {
     }
     // Should hit multiple values (not always same)
     assert.ok(seen.size > 1, 'should produce range in samples');
+  });
+});
+
+describe('PC-56 timing markers (computeTimingMarkers)', () => {
+  // Mockup semantics (dw-app.js:220-261): single '>' on first row tics >= maxT
+  // when nothing strictly inside (minT < tics < maxT); bounding pair (last
+  // before minT + first after maxT) when something IS strictly inside.
+  const mk = (tics) => tics.map((t, i) => ({ id: `r${i}`, tics: t }));
+
+  it('empty queue returns []', () => {
+    assert.deepEqual(computeTimingMarkers([], { prepare_time: 3, prepare_time_range: 2 }), []);
+  });
+
+  it('nothing strictly inside -> single marker on first row at/after maxT', () => {
+    const q = mk([1, 2, 5, 6]); // minT=3, maxT=5; nothing strictly inside (3<t<5)
+    const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
+    assert.deepEqual(res, [{ id: 'r2', marker: '>' }]);
+  });
+
+  it('row strictly inside -> bounding pair (last before minT, first after maxT)', () => {
+    const q = mk([1, 2, 4, 6]); // tics=4 strictly inside (3<4<5)
+    const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
+    assert.deepEqual(res, [{ id: 'r1', marker: '>' }, { id: 'r3', marker: '>' }]);
+  });
+
+  it('boundary tics exactly at minT/maxT are NOT strictly inside -> single marker', () => {
+    const q = mk([3, 5]); // tics==3 (minT) and tics==5 (maxT) are boundaries, not inside
+    const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
+    assert.deepEqual(res, [{ id: 'r1', marker: '>' }]);
+  });
+
+  it('all rows strictly inside -> pair brackets them (last before, first after)', () => {
+    const q = mk([0, 3.5, 4, 9]);
+    const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
+    assert.deepEqual(res, [{ id: 'r0', marker: '>' }, { id: 'r3', marker: '>' }]);
+  });
+
+  it('no row at/after maxT and nothing inside -> []', () => {
+    const q = mk([1, 2]); // maxT=5, nothing >= 5
+    const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
+    assert.deepEqual(res, []);
+  });
+});
+
+describe('PC-54 belt swap (swapHandWithBelt + engine wiring)', () => {
+  function player(handState = 'Ready') {
+    return {
+      hp: 100,
+      hands: {
+        LH: { state: handState, weaponId: 1, attackId: null },
+        RH: { state: 'Ready', weaponId: 2, attackId: null }
+      }
+    };
+  }
+  function weapons(handL = { id: 1, speed: 4 }, handR = { id: 2, speed: 3 }, belt = { id: 99, speed: 7 }) {
+    return { hand_l: handL, hand_r: handR, belt };
+  }
+
+  it('ready hand happy path: weapons exchanged, delay = max(speeds)', () => {
+    const p = player();
+    const w = weapons();
+    const res = swapHandWithBelt('LH', p, w);
+    assert.equal(res.success, true);
+    assert.equal(res.delay, 7); // max(4, 7)
+    assert.equal(res.newWeaponId, 99);
+    assert.equal(res.oldWeaponId, 1);
+    assert.equal(p.hands.LH.weaponId, 99);
+    assert.equal(w.hand_l.id, 99);
+    assert.equal(w.belt.id, 1);
+  });
+
+  it('hand not Ready -> error, no mutation', () => {
+    const p = player('cooldown');
+    const w = weapons();
+    const res = swapHandWithBelt('LH', p, w);
+    assert.equal(res.success, false);
+    assert.match(res.error, /not Ready/i);
+    assert.equal(p.hands.LH.weaponId, 1);
+  });
+
+  it('no belt weapon -> error', () => {
+    const p = player();
+    const w = weapons(null, null, null);
+    const res = swapHandWithBelt('LH', p, w);
+    assert.equal(res.success, false);
+    assert.match(res.error, /belt/i);
+  });
+
+  it('invalid hand -> error', () => {
+    const p = player();
+    const res = swapHandWithBelt('XX', p, weapons());
+    assert.equal(res.success, false);
+    assert.match(res.error, /invalid hand/i);
+  });
+
+  it('engine wiring: swapHandWithBelt creates a cooldown row for the hand with delay tics', () => {
+    const eng = createEngine(seededRNG(7));
+    eng.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [] });
+    // A Ready hand has NO queue row after startBattle (rows exist only for
+    // committed actions) — the swap must CREATE the cooldown row itself.
+    assert.equal(eng.state.queue.find(r => r.label === 'LH'), undefined, 'no LH row before swap');
+    const w = weapons({ id: 1, speed: 4 }, { id: 2, speed: 3 }, { id: 99, speed: 7 });
+    const res = eng.swapHandWithBelt('LH', w);
+    assert.equal(res.success, true);
+    assert.equal(res.delay, 7);
+    const after = eng.state.queue.find(r => r.label === 'LH');
+    assert.ok(after, 'LH cooldown row created');
+    assert.equal(after.event, 'cooldown');
+    assert.equal(after.tics, 7);
+    assert.equal(eng.state.player.hands.LH.weaponId, 99);
+  });
+
+  it('engine wiring: non-Ready hand returns error without queue morph', () => {
+    const eng = createEngine(seededRNG(8));
+    eng.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [] });
+    eng.state.player.hands.LH.state = 'winding';
+    const res = eng.swapHandWithBelt('LH', weapons());
+    assert.equal(res.success, undefined); // engine contract: {error} on failure
+    assert.match(res.error, /not Ready/i);
   });
 });

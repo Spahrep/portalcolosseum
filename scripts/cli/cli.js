@@ -8,7 +8,8 @@ import { cmdHelp, setFlags, printError, isJson, isQuiet } from './render.mjs';
 import {
   cmdLogin, cmdLogout, cmdRunNew, cmdRun, cmdState, cmdBattleStart,
   cmdAttack, cmdBattleEnd, cmdUsePotion, cmdInventory, cmdWait, cmdClear, cmdGrant, handleSlashCommand, getCurrentRun, setCurrentRun, getDevMode, setDevMode,
-  cmdReady, cmdConfirm, cmdInspect, cmdEquip, cmdCancel, isInFlowGate, buildPreambleDenied
+  cmdReady, cmdConfirm, cmdInspect, cmdEquip, cmdCancel, isInFlowGate, buildPreambleDenied,
+  cmdMenu, cmdSwap, resolvePromptLine
 } from './commands.mjs';
 import { loadSession, getAccessToken } from './auth.mjs';
 
@@ -44,6 +45,9 @@ async function dispatch(cmd, subArgs) {
       else printError('unknown battle subcommand');
       break;
     case 'attack': await cmdAttack(subArgs); break;
+    case 'menu': await cmdMenu(subArgs); break;
+    case 'swap':
+    case 'bl': await cmdSwap(subArgs); break;
     case 'use':
     case 'drink': await cmdUsePotion(subArgs); break;
     case 'inventory':
@@ -117,6 +121,14 @@ async function main() {
   };
   rl.on('line', (line) => {
     const trimmed = line.trim();
+    // PC-56 interactive menu: a pending promptUser consumes the line first
+    // (mirrors cli-app.js's pendingInputResolver behavior).
+    if (resolvePromptLine(trimmed)) {
+      enqueue(() => {
+        if (!rl.closed) rl.prompt();
+      });
+      return;
+    }
     if (!trimmed) {
       enqueue(() => {
         if (!rl.closed) rl.prompt();

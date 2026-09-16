@@ -803,6 +803,98 @@ async function handle(request) {
       });
     }
 
+    // POST /api/combat/runs/:id/swap {hand: 'LH'|'RH'}  (PC-54: mid-battle belt swap)
+    // Exchanges the hand weapon with the belt weapon when the hand is Ready.
+    // Delay = max(speed hand, speed belt) applied as a cooldown row on the hand.
+    // NOTE: battle_state (engine.state) carries no weapons object — the GET
+    // /runs/:id response rebuilds weapons from the run's weapon-pointer columns,
+    // so a durable swap MUST update those columns here too.
+    if (path.includes('/swap') && method === 'POST') {
+      const idStr = path.split('/')[2];
+      const id = parseInt(idStr, 10);
+      if (isNaN(id)) return json({ error: 'Invalid run id' }, 400);
+      const body = await request.json().catch(() => ({}));
+      const hand = String(body.hand || '').toUpperCase();
+      if (hand !== 'LH' && hand !== 'RH') return json({ error: 'Invalid hand' }, 400);
+
+      const { data: run } = await admin.from('portal_run').select('*').eq('id', id).eq('user_id', user.id).single();
+      if (!run) return json({ error: 'Run not found' }, 404);
+      if (run.status !== 'active') return json({ error: 'Run not active' }, 400);
+      if (run.player_hp <= 0) return json({ error: 'Run over — player dead' }, 400);
+      if (!run.belt_weapon_id) return json({ error: 'no belt weapon' }, 400);
+      const handCol = hand === 'LH' ? run.hand_l_weapon_id : run.hand_r_weapon_id;
+      if (!handCol) return json({ error: 'No weapon in that hand' }, 400);
+
+      // Build the weapons object the pure swap reads speeds from (same shape as
+      // battle_state.weapons in GET /runs/:id, which is rebuilt from these columns).
+      const weaponIds = [run.hand_l_weapon_id, run.hand_r_weapon_id, run.belt_weapon_id].filter(Boolean);
+      let wRes;
+      try {
+        wRes = await admin.from('weapon_instance')
+          .select('id, speed, weapon_template:template_id (name)')
+          .in('id', weaponIds);
+      } catch (e) {
+        console.error('weapon fetch error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      const wMap = {};
+      for (const w of (wRes.data || [])) wMap[w.id] = { id: w.id, speed: w.speed, name: w.weapon_template?.name || 'Unknown' };
+      const weapons = {
+        hand_l: wMap[run.hand_l_weapon_id] || null,
+        hand_r: wMap[run.hand_r_weapon_id] || null,
+        belt: wMap[run.belt_weapon_id] || null
+      };
+      if (!weapons.belt) return json({ error: 'no belt weapon' }, 400);
+
+      // Resume the engine (or build it) so the swap lands in battle_state too.
+      const persisted = run.battle_state || {};
+      let engine = null;
+      if (persisted && persisted.player) {
+        engine = resumeEngine(persisted, Math.random);
+      } else {
+        engine = createEngine();
+        engine.startBattle({
+          loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, consume_a: null, consume_b: null },
+          monsters: []
+        }, null, run.player_hp > 0 ? run.player_hp : null);
+      }
+
+      const result = engine.swapHandWithBelt(hand, weapons);
+      if (result.error) return json({ error: result.error }, 400);
+
+      // Persist engine state AND the weapon-pointer columns (source of truth for
+      // the GET weapons rebuild — without this the swap reverts on reload).
+      await admin.from('portal_run')
+        .update({
+          battle_state: engine.state,
+          player_hp: engine.state.player ? engine.state.player.hp : run.player_hp,
+          hand_l_weapon_id: weapons.hand_l ? weapons.hand_l.id : null,
+          hand_r_weapon_id: weapons.hand_r ? weapons.hand_r.id : null,
+          belt_weapon_id: weapons.belt ? weapons.belt.id : null
+        })
+        .eq('id', id).eq('user_id', user.id);
+
+      const out = engine.getState();
+      return json({
+        hand,
+        delay: result.delay,
+        new_weapon_id: result.newWeaponId,
+        old_weapon_id: result.oldWeaponId,
+        player_hp: out.participants?.player?.hp ?? run.player_hp,
+        state: {
+          queue: out.queue,
+          participants: out.participants,
+          feed: out.feed,
+          tic: out.tic,
+          battle_over: out.battle_over,
+          player_dead: out.player_dead,
+          monsters_dead: out.monsters_dead,
+          potions: out.potions,
+          buffs: out.buffs
+        }
+      });
+    }
+
     // GET /api/combat/weapons — caller's owned weapons + template attacks (for gear command)
     if (path === '/weapons' && method === 'GET') {
       let instances;
