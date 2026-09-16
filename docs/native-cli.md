@@ -7,6 +7,16 @@ A native Node.js CLI (runs on Ubuntu `node`) that drives the exact same live RES
 
 The CLI is a thin client only — zero game logic, zero local simulation, fully server-authoritative.
 
+## Maintenance status (2026-09-16)
+The web CLI (`public/test/cli/cli-app.js`) is the **canonical, fully-maintained
+test harness** — keep it in parity with engine/API behavior. This native CLI is
+**fix-on-break only**: it is a thin client over the same REST API, so it only
+breaks when the API changes — and API changes break the web client and the game
+too, surfacing in the test baseline and browser verification. Do not port new
+features here; do not treat "mirrors web CLI exactly" below as a binding
+contract. Update it only when something is actually broken and someone is
+using it (agent scripting, terminal play).
+
 ## Architecture
 - **Thin client over live REST API**: Every action is a direct `fetch` (or `node-fetch`/`undici`) to `https://portalcolosseum.com/api/combat/...` (or configurable base URL) using a Bearer JWT obtained via Supabase.
 - **Auth**: Uses `@supabase/supabase-js` (already in `package.json`) with `signInWithPassword`. Session persisted to `~/.config/portalcolosseum/session.json` (0600 perms, never in repo). Supports `PORTALCOLOSSEUM_BASE_URL` and `PORTALCOLOSSEUM_SUPABASE_*` env vars for flexibility.
@@ -17,7 +27,7 @@ The CLI is a thin client only — zero game logic, zero local simulation, fully 
 - **No XP/levels**: None exist anywhere in the backend.
 - **Interactive vs scriptable**: Supports both REPL-style interactive (readline + history) and one-shot `node cli.js run new --lh 12 ...`.
 
-## Full Command Surface (Mirrors web CLI exactly)
+## Command Surface (historical mirror — see Maintenance status above)
 All commands from `cli-app.js` (help text + implementation) + proven patterns from `playthrough.mjs`:
 
 **Core player commands**

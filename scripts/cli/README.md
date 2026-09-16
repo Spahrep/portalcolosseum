@@ -49,7 +49,7 @@ node scripts/cli/cli.js wait --json
 - `--json` : machine-readable output
 - `--quiet` : suppress human output (for agents)
 
-## Command Reference (matches cli-app.js exactly)
+## Command Reference (fix-on-break — web CLI at /test/cli is canonical)
 - `help`, `state`/`status`, `run new` (interactive + flags), `run`, `battle start|end <continue|stop>`, `attack <LH|RH> <attack_id>`, `inventory`/`gear`, `login`/`logout`, `wait`, `clear`, `grant`
 - After `grant`: `/equip`, `/roll weapon|monster`, `/nuke`, `/abandon`, `/inspect`, `/list templates`, `/set hp ...`
 
