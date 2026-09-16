@@ -722,6 +722,15 @@ function renderActionMenu(bs) {
       doAttack(currentRunId, hand, row.attack.id, []);
       return;
     }
+    if (row.attack && row.attack.is_multi_target) {
+      // multi-target attacks hit ALL live monsters — no pick needed (CLI parity: target_ids [])
+      targetMode = true;
+      dwOnPickTarget = null;
+      renderMonsters(monsters, false);
+      showTargetBar(row, true);
+      showInfo('Multi-target attack — hits all monsters. Enter to confirm, Esc to cancel');
+      return;
+    }
     targetMode = true;
     targetIdx = 0;
     dwOnPickTarget = (i) => {
@@ -734,18 +743,20 @@ function renderActionMenu(bs) {
     showInfo('Pick a target — click a monster or use ←/→, Enter to confirm, Esc to cancel');
   }
 
-  function showTargetBar(row) {
+  function showTargetBar(row, all) {
     let bar = document.getElementById('target-confirm-bar');
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'target-confirm-bar';
       document.body.appendChild(bar);
     }
-    const target = monsters[targetIdx] || null;
-    bar.innerHTML = `ATTACK <strong>${escHtml(row.attack.name)}</strong> → ${target ? '<strong class="tgt">' + escHtml(target.name) + '</strong>' : '<span class="tgt">auto</span>'}
+    const target = all ? null : (monsters[targetIdx] || null);
+    const targetText = all ? 'ALL MONSTERS' : (target ? target.name : 'auto');
+    bar.innerHTML = `ATTACK <strong>${escHtml(row.attack.name)}</strong> → <strong class="tgt">${escHtml(targetText)}</strong>
       <button id="target-confirm-btn">CONFIRM</button>
       <button id="target-cancel-btn">CANCEL</button>`;
     bar.querySelector('#target-confirm-btn').onclick = () => {
+      if (all) { doAttack(currentRunId, hand, row.attack.id, []); return; }
       const t = monsters[targetIdx];
       doAttack(currentRunId, hand, row.attack.id, t && t.id != null ? [t.id] : []);
     };
@@ -799,7 +810,7 @@ function renderActionMenu(bs) {
       if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         const dir = e.key === 'ArrowRight' ? 1 : -1;
         targetIdx = (targetIdx + dir + monsters.length) % monsters.length;
-        dwOnPickTarget(targetIdx);
+        if (dwOnPickTarget) dwOnPickTarget(targetIdx);
         e.preventDefault();
       } else if (e.key === 'Enter') {
         const btn = document.getElementById('target-confirm-btn');
