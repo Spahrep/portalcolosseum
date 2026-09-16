@@ -19,6 +19,8 @@ let lastBs = null; // last loaded battle_state (safeState) — source for attack
 let busy = false;
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
 let queueMarkers = null;   // Map<rowId, '>'> — PC-56 timing markers for the selected attack
+let dwMenuState = null;   // { prefHand } — DW menu hand switch
+let dwOnPickTarget = null; // DW target-pick callback (set while targeting)
 let shouldAnimateDice = false;
 // PC-51: monsters stay hidden while the dice roll ceremony plays, then
 // fade in one at a time. Set in the battle render when a roll will run;
@@ -291,7 +293,7 @@ function rollDiceAnimation(box, current, faces, onDone) {
   step();
 }
 
-function renderMonsters(monsters) {
+function renderMonsters(monsters, targetMode, targetIdx) {
   const container = document.getElementById('monsters');
   if (!container) return;
   container.innerHTML = '';
@@ -303,15 +305,22 @@ function renderMonsters(monsters) {
     container.appendChild(empty);
     return;
   }
-  monsters.forEach(m => {
+  const letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  monsters.forEach((m, i) => {
     const card = document.createElement('div');
+    card.className = 'monster-card' + (targetMode ? ' targetable' : '');
+    if (targetMode && i === targetIdx) card.classList.add('selected');
     card.style.cssText = 'background:rgba(0,0,0,0.4);border:2px solid #4a90d9;padding:8px 10px;margin-bottom:6px;';
+    if (targetMode) {
+      card.onclick = () => { if (dwOnPickTarget) dwOnPickTarget(i); };
+    }
     const sprite = document.createElement('div');
     sprite.style.cssText = 'width:64px;height:48px;background:#112233;border:1px solid #335577;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#66ccff;';
     sprite.textContent = m.name ? m.name.substring(0,3).toUpperCase() : 'MON';
     const name = document.createElement('div');
     name.style.cssText = 'color:#ffcc66;font-size:11px;text-align:center;';
     name.textContent = m.name || 'Monster';
+    if (targetMode) name.textContent = letters[i] + ' - ' + (m.name || 'Monster');
     const hp = document.createElement('div');
     hp.style.cssText = 'margin-top:4px;text-align:center;';
     const hpWord = m.hp_word || m.hpWord || 'Healthy';
@@ -483,13 +492,13 @@ function showAdvanceUI(runId, state) {
   box.appendChild(adv);
 }
 
-async function doAttack(runId, hand, attackId) {
+async function doAttack(runId, hand, attackId, targetIds) {
   if (busy) return;
   setBusy(true);
   try {
     // Real mapped attack for the clicked hand (server validates the mapping).
     // CLI parity: ALWAYS target_ids: [] — engine auto-targets.
-    const payload = { hand, attack_id: attackId, target_ids: [] };
+    const payload = { hand, attack_id: attackId, target_ids: targetIds || [] };
     const data = await apiCall(`/runs/${runId}/commit`, 'POST', payload);
     const w = (lastBs && lastBs.weapons && lastBs.weapons[hand === 'LH' ? 'hand_l' : 'hand_r']) || {};
     const attack = (w.attacks || []).find(a => a.id === attackId) || {};
@@ -544,298 +553,306 @@ function escHtml(s) {
  * (attack name + damage only — pure choices). One button per READY hand per
  * attack; a winding hand shows its remaining cast tics (live queue countdown).
  */
+/**
+ * PC-56 DW per-hand command menu: single COMMAND panel, hand-line, flat rows
+ * (attacks + C1/C2/BL), attack → target → confirm, item-confirm prompts, and
+ * '>' timing markers on the queue rail (approved mockup 04-dw-battle).
+ */
 function renderActionMenu(bs) {
   const wrap = document.getElementById('action-choices');
   if (!wrap) return;
   wrap.innerHTML = '';
   pendingAttack = null;
-  const confirmBtn = document.getElementById('btn-confirm');
-  if (confirmBtn) confirmBtn.disabled = true;
-  wrap.style.display = 'flex';
-  wrap.style.gap = '0';
+  wrap.style.display = 'block';
+
   const hands = (bs.player && bs.player.hands) || {};
   const weapons = bs.weapons || {};
   const queue = bs.queue || [];
-  let selectedCmd = null; // per-render selection state
+  const monsters = (bs.monsters || []).filter(m => !m.dead);
+  const potions = bs.potions || {};
+  const belt = weapons.belt || null;
+
+  // Per-hand turn menu: LH if Ready, else RH. Both ready same tick = resolve
+  // one hand, then the next; a chip in the hand-line switches when both Ready.
+  const readyHands = ['LH', 'RH'].filter(h => {
+    const w = weapons[h === 'LH' ? 'hand_l' : 'hand_r'];
+    return hands[h] && hands[h].state === 'Ready' && w && w.id;
+  });
+  const pref = (dwMenuState && dwMenuState.prefHand) || 'LH';
+  let hand = readyHands.includes(pref) ? pref : (readyHands[0] || null);
+  if (!hand) {
+    // no ready hand — show winding status
+    const status = document.createElement('div');
+    status.className = 'action-status';
+    status.textContent = ['LH', 'RH'].map(h => {
+      const w = weapons[h === 'LH' ? 'hand_l' : 'hand_r'];
+      if (!w || !w.id) return null;
+      const windingRow = queue.find(q => q.event === 'winding' && q.label === h);
+      return `${h} — winding${windingRow && windingRow.tics != null ? ' ' + windingRow.tics + ' tics' : ''}`;
+    }).filter(Boolean).join('  ·  ') || 'No hand ready';
+    wrap.appendChild(status);
+    return;
+  }
+
+  const w = weapons[hand === 'LH' ? 'hand_l' : 'hand_r'];
+  const handLineText = hand === 'LH' ? 'L.HAND' : 'R.HAND';
+  const otherReady = readyHands.find(h => h !== hand) || null;
+
+  const menu = document.createElement('div');
+  menu.className = 'command-menu';
+
+  const title = document.createElement('div');
+  title.className = 'title';
+  title.textContent = 'COMMAND';
+  menu.appendChild(title);
+
+  const handLine = document.createElement('div');
+  handLine.className = 'hand-line';
+  handLine.innerHTML = `<span class="hand-label">${handLineText}</span> — <span class="weapon-name">${escHtml(w.name || 'Unknown')}</span>`;
+  if (otherReady) {
+    const chip = document.createElement('span');
+    chip.className = 'hand-switch';
+    chip.textContent = `[${otherReady === 'LH' ? 'L.HAND' : 'R.HAND'}]`;
+    chip.title = `switch to ${otherReady}`;
+    chip.onclick = () => {
+      dwMenuState = dwMenuState || {};
+      dwMenuState.prefHand = otherReady;
+      renderActionMenu(bs);
+    };
+    handLine.appendChild(chip);
+  }
+  menu.appendChild(handLine);
+
+  // flat rows: attacks (no numbered rows) + C1/C2/BL
+  const rows = [];
+  (w.attacks || []).forEach(a => rows.push({ kind: 'attack', label: a.name, attack: a }));
+  rows.push({ kind: 'c1', label: 'C1', slot: 'A' });
+  rows.push({ kind: 'c2', label: 'C2', slot: 'B' });
+  rows.push({ kind: 'bl', label: 'BL' });
+
+  let activeIdx = 0;
+  let targetMode = false;
+  let targetIdx = 0;
+  let itemConfirm = null; // { onOk }
 
   function showInfo(text) {
     const fi = document.getElementById('footer-info');
-    if (fi) fi.innerHTML = text || 'Select an attack to see details';
+    if (fi) fi.innerHTML = text || 'Select a command to see details';
   }
 
-  function clearSelection() {
-    wrap.querySelectorAll('.command').forEach(c => {
-      c.classList.remove('selected');
-      if (c.innerHTML.startsWith('[x] ')) {
-        c.innerHTML = c.innerHTML.replace('[x] ', '[ ] ');
-      }
+  function attackInfo(a) {
+    const base = w.base_damage != null ? w.base_damage : (w.damage || 0);
+    const range = w.damage_range != null ? w.damage_range : 0;
+    const multi = a.is_multi_target ? ' <span style="color:#ffaa66">[MULTI]</span>' : '';
+    const desc = a.description ? ` — ${escHtml(a.description)}` : '';
+    const pVar = a.prepare_time_range || 0;
+    const cVar = a.cooldown_time_range || 0;
+    const pText = pVar > 0 ? `${a.prepare_time}-${a.prepare_time + pVar}` : `${a.prepare_time}`;
+    const cText = cVar > 0 ? `${a.cooldown_time}-${a.cooldown_time + cVar}` : `${a.cooldown_time}`;
+    return `<strong>${escHtml(a.name)}</strong> DMG ${base}±${range} | Windup: ${pText}t | CD: ${cText}t${multi}${desc}`;
+  }
+
+  function setMarkers(attack) {
+    queueMarkers = new Map(computeTimingMarkers(queue, attack).map(m => [m.id, m.marker]));
+    renderQueue(lastBs);
+  }
+  function clearMarkers() {
+    queueMarkers = null;
+    renderQueue(lastBs);
+  }
+
+  function clearRowHighlight() {
+    menu.querySelectorAll('.command-row').forEach(el => el.classList.remove('active'));
+  }
+  function paintRows() {
+    menu.querySelectorAll('.command-row').forEach((el, idx) => {
+      el.classList.toggle('active', idx === activeIdx);
     });
-    showInfo('');
-    selectedCmd = null;
-    pendingAttack = null;
-    queueMarkers = null; // PC-56: markers follow the selection — clear on change/confirm
-    renderQueue(lastBs);
-    if (confirmBtn) confirmBtn.disabled = true;
   }
 
-  function selectCommand(cmdEl, hand, attack, weapon) {
-    clearSelection();
-    cmdEl.classList.add('selected');
-    pendingAttack = { hand, attackId: attack.id };
-    selectedCmd = { hand, attack, weapon };
-    if (confirmBtn) confirmBtn.disabled = false;
-    // PC-56: '>' timing markers — where the selected attack's window sits in
-    // the upcoming-events queue (approved mockup semantics, dw-app.js:220-261).
-    queueMarkers = new Map(
-      computeTimingMarkers(queue, attack).map(m => [m.id, m.marker])
-    );
-    renderQueue(lastBs);
-    // toggle marker to [x]
-    const nameEsc = escHtml(attack.name);
-    cmdEl.innerHTML = `[x] ${nameEsc}`;
-    const base = weapon.base_damage != null ? weapon.base_damage : (weapon.damage || 0);
-    const range = weapon.damage_range != null ? weapon.damage_range : 0;
-    const dmgText = `DMG ${base}±${range}`;
-    const multi = attack.is_multi_target ? ' <span style="color:#ffaa66">[MULTI]</span>' : '';
-    const desc = attack.description ? ` — ${attack.description}` : '';
-    const descEsc = attack.description ? ` — ${escHtml(attack.description)}` : '';
-    const nameForInfo = escHtml(attack.name);
-    const pVar = attack.prepare_time_range || 0;
-    const cVar = attack.cooldown_time_range || 0;
-    const pText = pVar > 0 ? `${attack.prepare_time}-${attack.prepare_time + pVar}` : `${attack.prepare_time}`;
-    const cText = cVar > 0 ? `${attack.cooldown_time}-${attack.cooldown_time + cVar}` : `${attack.cooldown_time}`;
-    showInfo(`<strong>${nameForInfo}</strong> ${dmgText} | Windup: ${pText}t | CD: ${cText}t${multi}${descEsc}`);
-  }
-
-  ['LH', 'RH'].forEach(hand => {
-    const w = weapons[hand === 'LH' ? 'hand_l' : 'hand_r'];
-    const hState = hands[hand];
-    if (!w || !w.id) return;
-    if (hState && hState.state === 'Ready') {
-      const attacks = w.attacks || [];
-      const box = document.createElement('div');
-      box.className = 'command-box';
-      const header = document.createElement('div');
-      header.className = 'hand-header';
-      header.textContent = hand === 'LH' ? 'L.HAND' : 'R.HAND';
-      box.appendChild(header);
-      const wname = document.createElement('div');
-      wname.className = 'weapon-name';
-      wname.textContent = w.name || 'Unknown';
-      box.appendChild(wname);
-      if (attacks.length === 0) {
-        const empty = document.createElement('div');
-        empty.className = 'command';
-        empty.textContent = '[ ] no attacks';
-        box.appendChild(empty);
+  function renderRows() {
+    menu.querySelectorAll('.command-row').forEach(el => el.remove());
+    menu.querySelectorAll('.item-confirm').forEach(el => el.remove());
+    rows.forEach((row, idx) => {
+      const el = document.createElement('div');
+      el.className = 'command-row';
+      if (row.kind === 'attack') {
+        el.textContent = row.label;
+        el.onmouseenter = () => { if (!targetMode && !itemConfirm) { showInfo(attackInfo(row.attack)); setMarkers(row.attack); } };
+        el.onmouseleave = () => { if (!targetMode && !itemConfirm) { showInfo(''); clearMarkers(); } };
+        el.onclick = () => {
+          if (busy || targetMode || itemConfirm) return;
+          activeIdx = idx; paintRows();
+          enterTargetMode(row);
+        };
+      } else if (row.kind === 'bl') {
+        const beltName = belt && belt.id ? belt.name : 'none';
+        el.innerHTML = `BL: <span style="color:${belt && belt.id ? '#a8c8ea' : '#556677'}">${escHtml(beltName)}</span>`;
+        el.onmouseenter = () => { if (!targetMode && !itemConfirm) showInfo(belt && belt.id ? `Belt: ${escHtml(belt.name)}` : 'No belt weapon equipped'); };
+        el.onmouseleave = () => { if (!targetMode && !itemConfirm) showInfo(''); };
+        el.onclick = () => {
+          if (busy || targetMode || itemConfirm) return;
+          if (!belt || !belt.id) { showInfo('No belt weapon equipped'); return; }
+          activeIdx = idx; paintRows();
+          showItemConfirm(`Swap ${handLineText} with belt weapon <strong>${escHtml(belt.name)}</strong>?`, () => doSwap(currentRunId, hand));
+        };
       } else {
-        const list = document.createElement('div');
-        list.className = 'command-list';
-        attacks.forEach(a => {
-          const cmd = document.createElement('div');
-          cmd.className = 'command';
-          cmd.dataset.hand = hand;
-          cmd.dataset.attackId = a.id;
-          cmd.innerHTML = `[ ] ${escHtml(a.name)}`;
-          // hover shows without selecting
-          cmd.onmouseenter = () => {
-            if (!cmd.classList.contains('selected')) {
-              const base = w.base_damage != null ? w.base_damage : (w.damage || 0);
-              const range = w.damage_range != null ? w.damage_range : 0;
-              const dmgText = `DMG ${base}±${range}`;
-              const multi = a.is_multi_target ? ' <span style="color:#ffaa66">[MULTI]</span>' : '';
-              const desc = a.description ? ` — ${a.description}` : '';
-              const descEscH = a.description ? ` — ${escHtml(a.description)}` : '';
-              const nameForInfoH = escHtml(a.name);
-              const pVarH = a.prepare_time_range || 0;
-              const cVarH = a.cooldown_time_range || 0;
-              const pTextH = pVarH > 0 ? `${a.prepare_time}-${a.prepare_time + pVarH}` : `${a.prepare_time}`;
-              const cTextH = cVarH > 0 ? `${a.cooldown_time}-${a.cooldown_time + cVarH}` : `${a.cooldown_time}`;
-              showInfo(`<strong>${nameForInfoH}</strong> ${dmgText} | Windup: ${pTextH}t | CD: ${cTextH}t${multi}${descEscH}`);
-            }
-          };
-          cmd.onmouseleave = () => {
-            if (!cmd.classList.contains('selected')) showInfo('');
-          };
-          cmd.onclick = () => {
-            if (cmd.classList.contains('selected')) {
-              if (pendingAttack && currentRunId) {
-                doAttack(currentRunId, pendingAttack.hand, pendingAttack.attackId);
-              }
-            } else {
-              selectCommand(cmd, hand, a, w);
-            }
-          };
-          list.appendChild(cmd);
-        });
-        box.appendChild(list);
+        const key = row.slot === 'A' ? 'potion_a' : 'potion_b';
+        const p = potions[key] || potions[row.slot] || null;
+        const used = p && p.used;
+        const label = p && !used ? p.template_name : (p && used ? `${p.template_name} (USED)` : 'empty');
+        el.innerHTML = `${row.label}: <span style="color:${p && !used ? '#a8c8ea' : '#556677'}">${escHtml(label)}</span>`;
+        el.onmouseenter = () => { if (!targetMode && !itemConfirm) showInfo(p && !used ? `${row.label}: ${escHtml(p.template_name)} · ${escHtml(p.effect_label || '')}` : `${row.label}: ${used ? 'already used' : 'empty'}`); };
+        el.onmouseleave = () => { if (!targetMode && !itemConfirm) showInfo(''); };
+        el.onclick = () => {
+          if (busy || targetMode || itemConfirm) return;
+          if (!p || used) { showInfo(p && used ? 'This potion was already used' : 'No potion in this slot'); return; }
+          activeIdx = idx; paintRows();
+          showItemConfirm(`Use <strong>${escHtml(p.template_name)}</strong> (${escHtml(p.effect_label || '')})?`, () => usePotion(currentRunId, row.slot));
+        };
       }
-      wrap.appendChild(box);
-    } else if (hState) {
-      const windingRow = queue.find(q => q.event === 'winding' && q.label === hand);
-      const status = document.createElement('div');
-      status.className = 'action-status';
-      status.textContent = `${hand} — winding${windingRow && windingRow.tics != null ? ` ${windingRow.tics} tics` : ''}`;
-      wrap.appendChild(status);
-    }
-  });
-
-  // attach slot buttons (BL / C1 / C2)
-  attachSlotButtons(bs, showInfo);
-}
-
-function attachSlotButtons(bs, showInfo) {
-  const weapons = bs.weapons || {};
-  const potions = bs.potions || {};
-
-  const blBtn = document.getElementById('btn-slot-bl');
-  if (blBtn) {
-    const belt = weapons.belt;
-    if (belt && belt.id) {
-      blBtn.textContent = `BL: ${belt.name || 'Belt'}`;
-      blBtn.disabled = false;
-      blBtn.onclick = () => {
-        // PC-54: mid-battle belt swap — swap the currently selected hand with
-        // the belt weapon (costs max(speeds) tics as a hand cooldown).
-        const hand = pendingAttack && pendingAttack.hand;
-        if (!hand) {
-          showInfo('Select an attack on the hand you want to swap, then press BL.');
-          return;
-        }
-        doSwap(currentRunId, hand);
-      };
-    } else {
-      blBtn.textContent = 'BL';
-      blBtn.disabled = true;
-    }
+      menu.appendChild(el);
+    });
+    paintRows();
   }
 
-  const c1Btn = document.getElementById('btn-slot-c1');
-  const c2Btn = document.getElementById('btn-slot-c2');
-  const setupSlot = (btn, key, label) => {
-    if (!btn) return;
-    const p = potions[key];
-    if (p && !p.used) {
-      btn.textContent = `${label}: ${p.template_name}`;
-      btn.disabled = false;
-      btn.onclick = () => openItemMenu(currentRunId);
-    } else {
-      btn.textContent = label;
-      btn.disabled = true;
-    }
-  };
-  setupSlot(c1Btn, 'potion_a', 'C1');
-  setupSlot(c2Btn, 'potion_b', 'C2');
-
-  // keyboard navigation (gui1 pattern) — guarded
-  document.onkeydown = (e) => {
-    if (busy) return;
-    const menu = document.getElementById('item-menu');
-    if (menu && !menu.hidden) return;
-    if (document.activeElement && ['INPUT','TEXTAREA'].includes(document.activeElement.tagName)) return;
-    const cmds = Array.from(document.querySelectorAll('#action-choices .command'));
-    if (!cmds.length) return;
-    let idx = cmds.findIndex(c => c.classList.contains('selected'));
-    if (e.key === 'Escape') {
-      clearSelection();
-      e.preventDefault();
+  function enterTargetMode(row) {
+    if (monsters.length === 0) {
+      // nothing to target — commit with auto-target (CLI parity)
+      doAttack(currentRunId, hand, row.attack.id, []);
       return;
     }
-    if (e.key === 'Enter') {
-      if (pendingAttack && currentRunId) {
-        (async () => {
-          await doAttack(currentRunId, pendingAttack.hand, pendingAttack.attackId);
-          pendingAttack = null;
-          clearSelection();
-          showMessage('Attack committed...');
-        })();
+    targetMode = true;
+    targetIdx = 0;
+    dwOnPickTarget = (i) => {
+      targetIdx = i;
+      renderMonsters(monsters, true, targetIdx);
+      updateTargetBar(row);
+    };
+    renderMonsters(monsters, true, targetIdx);
+    showTargetBar(row);
+    showInfo('Pick a target — click a monster or use ←/→, Enter to confirm, Esc to cancel');
+  }
+
+  function showTargetBar(row) {
+    let bar = document.getElementById('target-confirm-bar');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'target-confirm-bar';
+      document.body.appendChild(bar);
+    }
+    const target = monsters[targetIdx] || null;
+    bar.innerHTML = `ATTACK <strong>${escHtml(row.attack.name)}</strong> → ${target ? '<strong class="tgt">' + escHtml(target.name) + '</strong>' : '<span class="tgt">auto</span>'}
+      <button id="target-confirm-btn">CONFIRM</button>
+      <button id="target-cancel-btn">CANCEL</button>`;
+    bar.querySelector('#target-confirm-btn').onclick = () => {
+      const t = monsters[targetIdx];
+      doAttack(currentRunId, hand, row.attack.id, t && t.id != null ? [t.id] : []);
+    };
+    bar.querySelector('#target-cancel-btn').onclick = () => exitTargetMode(true);
+  }
+
+  function updateTargetBar(row) {
+    const bar = document.getElementById('target-confirm-bar');
+    if (!bar) return;
+    const target = monsters[targetIdx] || null;
+    const span = bar.querySelector('.tgt');
+    if (span) span.textContent = target ? target.name : 'auto';
+  }
+
+  function exitTargetMode(cancel) {
+    targetMode = false;
+    dwOnPickTarget = null;
+    const bar = document.getElementById('target-confirm-bar');
+    if (bar) bar.remove();
+    renderMonsters(monsters, false);
+    if (cancel) { showInfo(''); clearMarkers(); }
+  }
+
+  function showItemConfirm(msg, onOk) {
+    itemConfirm = { onOk };
+    const box = document.createElement('div');
+    box.className = 'item-confirm';
+    box.innerHTML = `<div class="confirm-msg">${msg}</div>
+      <div class="confirm-btns"><button>CONFIRM</button><button>CANCEL</button></div>`;
+    box.querySelectorAll('button')[0].onclick = () => {
+      const ok = itemConfirm && itemConfirm.onOk;
+      itemConfirm = null;
+      box.remove();
+      if (ok) ok();
+    };
+    box.querySelectorAll('button')[1].onclick = () => {
+      itemConfirm = null;
+      box.remove();
+    };
+    menu.appendChild(box);
+  }
+
+  renderRows();
+  wrap.appendChild(menu);
+
+  // keyboard: arrows move the active row, Enter activates, Escape backs out
+  document.onkeydown = (e) => {
+    if (busy) return;
+    if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+    if (targetMode) {
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const dir = e.key === 'ArrowRight' ? 1 : -1;
+        targetIdx = (targetIdx + dir + monsters.length) % monsters.length;
+        dwOnPickTarget(targetIdx);
+        e.preventDefault();
+      } else if (e.key === 'Enter') {
+        const btn = document.getElementById('target-confirm-btn');
+        if (btn) btn.click();
+        e.preventDefault();
+      } else if (e.key === 'Escape') {
+        exitTargetMode(true);
+        e.preventDefault();
       }
-      e.preventDefault();
+      return;
+    }
+    if (itemConfirm) {
+      if (e.key === 'Enter') {
+        const btns = menu.querySelectorAll('.item-confirm .confirm-btns button');
+        if (btns[0]) btns[0].click();
+        e.preventDefault();
+      } else if (e.key === 'Escape') {
+        const btns = menu.querySelectorAll('.item-confirm .confirm-btns button');
+        if (btns[1]) btns[1].click();
+        e.preventDefault();
+      }
       return;
     }
     if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
-      idx = (idx + 1) % cmds.length;
-      selectCommandFromEl(cmds[idx]);
-      cmds[idx].scrollIntoView({block:'nearest'});
+      activeIdx = (activeIdx + 1) % rows.length;
+      paintRows();
       e.preventDefault();
-    }
-    if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
-      idx = (idx - 1 + cmds.length) % cmds.length;
-      selectCommandFromEl(cmds[idx]);
-      cmds[idx].scrollIntoView({block:'nearest'});
+    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+      activeIdx = (activeIdx - 1 + rows.length) % rows.length;
+      paintRows();
+      e.preventDefault();
+    } else if (e.key === 'Enter') {
+      const row = rows[activeIdx];
+      if (row) {
+        if (row.kind === 'attack') enterTargetMode(row);
+        else if (row.kind === 'bl') {
+          if (!belt || !belt.id) { showInfo('No belt weapon equipped'); return; }
+          showItemConfirm(`Swap ${handLineText} with belt weapon <strong>${escHtml(belt.name)}</strong>?`, () => doSwap(currentRunId, hand));
+        } else {
+          const key = row.slot === 'A' ? 'potion_a' : 'potion_b';
+          const p = potions[key] || potions[row.slot] || null;
+          if (!p || p.used) { showInfo(p && p.used ? 'This potion was already used' : 'No potion in this slot'); return; }
+          showItemConfirm(`Use <strong>${escHtml(p.template_name)}</strong> (${escHtml(p.effect_label || '')})?`, () => usePotion(currentRunId, row.slot));
+        }
+      }
+      e.preventDefault();
+    } else if (e.key === 'Escape') {
+      showInfo(''); clearMarkers();
       e.preventDefault();
     }
   };
-
-  function selectCommandFromEl(cmdEl) {
-    if (!cmdEl) return;
-    const allCmds = Array.from(document.querySelectorAll('#action-choices .command'));
-    // find matching attack data from lastBs using dataset
-    const hand = cmdEl.dataset.hand;
-    const attackId = parseInt(cmdEl.dataset.attackId, 10);
-    if (!hand || !attackId || !lastBs) return;
-    const wKey = hand === 'LH' ? 'hand_l' : 'hand_r';
-    const w = (lastBs.weapons || {})[wKey];
-    if (!w) return;
-    const attack = (w.attacks || []).find(a => a.id === attackId);
-    if (!attack) return;
-    // clear other selections and markers
-    allCmds.forEach(c => {
-      c.classList.remove('selected');
-      if (c.innerHTML.startsWith('[x] ')) c.innerHTML = c.innerHTML.replace('[x] ', '[ ] ');
-    });
-    cmdEl.classList.add('selected');
-    pendingAttack = { hand, attackId };
-    const nameEsc = escHtml(attack.name);
-    cmdEl.innerHTML = `[x] ${nameEsc}`;
-    const base = w.base_damage != null ? w.base_damage : (w.damage || 0);
-    const range = w.damage_range != null ? w.damage_range : 0;
-    const dmgText = `DMG ${base}±${range}`;
-    const multi = attack.is_multi_target ? ' <span style=\"color:#ffaa66\">[MULTI]</span>' : '';
-    const descEsc = attack.description ? ` — ${escHtml(attack.description)}` : '';
-    const nameForInfo = escHtml(attack.name);
-    const pVar = attack.prepare_time_range || 0;
-    const cVar = attack.cooldown_time_range || 0;
-    const pText = pVar > 0 ? `${attack.prepare_time}-${attack.prepare_time + pVar}` : `${attack.prepare_time}`;
-    const cText = cVar > 0 ? `${attack.cooldown_time}-${attack.cooldown_time + cVar}` : `${attack.cooldown_time}`;
-    showInfo(`<strong>${nameForInfo}</strong> ${dmgText} | Windup: ${pText}t | CD: ${cText}t${multi}${descEsc}`);
-  }
 }
 
-function openItemMenu(runId) {
-  const menu = document.getElementById('item-menu');
-  const list = document.getElementById('item-menu-list');
-  if (!menu || !list) return;
-  list.innerHTML = '';
-  const potions = (lastBs && lastBs.potions) || {};
-  const slots = ['A', 'B'];
-  const labels = { A: 'C1', B: 'C2' };
-  for (const s of slots) {
-    const p = potions[s];
-    const row = document.createElement('button');
-    row.className = 'item-menu-item';
-    if (!p) {
-      row.innerHTML = `<span class="potion-name">${labels[s]}</span> — empty`;
-      row.disabled = true;
-    } else if (p.used) {
-      row.innerHTML = `<span class="potion-name">${p.template_name}</span> · ${p.effect_label} <span class="potion-used">(USED)</span>`;
-      row.disabled = true;
-    } else {
-      row.innerHTML = `<span class="potion-name">${p.template_name}</span> · ${p.effect_label}`;
-      row.onclick = async () => {
-        closeItemMenu();
-        await usePotion(runId, s);
-      };
-    }
-    list.appendChild(row);
-  }
-  menu.hidden = false;
-}
-
-function closeItemMenu() {
-  const menu = document.getElementById('item-menu');
-  if (menu) menu.hidden = true;
-}
 
 async function usePotion(runId, slot) {
   if (busy) return;
@@ -849,34 +866,6 @@ async function usePotion(runId, slot) {
     showMessage(e.message, true);
   }
   setBusy(false);
-}
-
-function doItem(runId) {
-  if (busy) return;
-  const potions = (lastBs && lastBs.potions) || {};
-  const available = ['A', 'B'].filter(s => potions[s] && !potions[s].used);
-  if (available.length === 0) {
-    showMessage('No unused potions equipped.', true);
-    return;
-  }
-  openItemMenu(runId);
-}
-
-function attachLiveButtons(runId) {
-  // slot buttons now wired inside renderActionMenu via attachSlotButtons
-  const itemCancel = document.getElementById('btn-item-cancel');
-  if (itemCancel) {
-    itemCancel.onclick = closeItemMenu;
-  }
-  // CONFIRM — commit the pending (selected) attack
-  const confirmBtn = document.getElementById('btn-confirm');
-  if (confirmBtn) {
-    confirmBtn.onclick = () => {
-      if (pendingAttack && currentRunId) {
-        doAttack(currentRunId, pendingAttack.hand, pendingAttack.attackId);
-      }
-    };
-  }
 }
 
 async function loadBattle(runId) {
@@ -917,7 +906,6 @@ async function loadBattle(runId) {
     renderActionMenu(bs);
     renderQueue(bs);
 
-    attachLiveButtons(runId);
 
     // battle-over detection on reload: safeState has no battle_over flag —
     // all monsters dead means the battle is winnable/over.
