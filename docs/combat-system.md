@@ -12,6 +12,9 @@ Combat operates on a **tic-based** system rather than strict turn-based alternat
   - **Prepare time**: Duration before the action resolves
   - **Cooldown time**: Duration after resolution before the player can input the next action
 - Different abilities have different prepare/cooldown profiles, creating tactical depth and timing decisions.
+- **Accuracy**: every player attack rolls to-hit — the weapon's **accuracy** is the % chance
+  to land; a miss deals 0 damage and is logged ("attacks misses"). Shipped (PC-54,
+  Spahrep 2026-09-15); confirmed: "Players use accuracy." (Spahrep 2026-09-16)
 
 ## Randomness Integration
 
@@ -30,7 +33,7 @@ All combat outcomes incorporate variance:
   with 90 HP is just as likely as one with 110 HP. This keeps the HP secret genuinely
   unpredictable: the uncertainty doesn't erode with play the way a bell curve's
   mean-clustering would.
-- Other monster stat rolls (damage, etc.) are not yet specified — distribution TBD per stat.
+- Other monster stat rolls (damage, speed, accuracy) use the Box-Muller `normal_int()` bell curve (2026-09-15 — see current-design-status.md § Monster Stats).
 - **PMVP (Spahrep 2026-09-13):** certain attacks unlock when a monster reaches a certain HP threshold.
 
 ## Encounters Are Groups (1–5 Monsters)

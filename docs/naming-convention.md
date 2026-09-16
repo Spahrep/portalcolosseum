@@ -20,7 +20,6 @@
 | `weapon_template` | `bigint` (auto-increment) | Game data table — integers are human-readable, compact, and standard in game dev |
 | `attack` | `bigint` (auto-increment) | Same as above |
 | `weapon_template_attack_mapping` | `bigint` (auto-increment) | Junction table — consistent with parent tables |
-| `match` | TBD | Future table — likely `bigint` for same game-data reasons |
 
 ### Rationale
 
@@ -61,6 +60,5 @@ id bigint primary key generated always as identity,
 - `weapon_instance` — instantiated weapons with rolled stats
 - `element` — elemental damage types
 - `weapon_type` — sword, dagger, axe, etc.
-- `match` — match records
-- `inventory_item` — player's carried items
+- `player_inventory` — the 20-slot backpack
 - `portal_run` — player's portal run progress

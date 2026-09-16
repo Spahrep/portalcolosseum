@@ -1,6 +1,6 @@
 # Inventory Slots
 
-**Updated:** 2026-09-08 — loadout confirmed (Hand L/R, Belt Loop, Potion A/B), locked at entry
+**Updated:** 2026-09-16 — loadout = Hand L/R + BL + C1/C2 (Spahrep); belt = swap/reserve slot; Fist rule added
 
 ## Initial Design
 
@@ -11,14 +11,14 @@ Players start with limited carrying capacity to enforce meaningful choices:
 
 ## Confirmed Loadout (per portal run)
 
-**Hand L, Hand R, Belt Loop, Potion A, Potion B** — five gear positions assigned when the run starts.
+**Hand L, Hand R, Belt Loop (BL), Consumable C1, Consumable C2** — five gear positions assigned when the run starts (slot labels per Spahrep 2026-09-16: "2x Hands, and BL/C1/C2").
 
 - **Hand L / Hand R** — weapons (or potion use; see consumables.md — a hand may drink even while holding a weapon)
-- **Belt Loop** — holds a **second weapon** (not a utility item). Weapon swap mechanics are TBD:
-  - Swap mid-fight is possible
-  - Swap costs time: `f(weapon in hand speed, belt weapon speed)` — possibly the same timing formula as potions
+- **Empty hand = Fist** — an empty hand can still act: drink a potion, or make an unarmed **Fist** attack (very low damage, fast speed, out-DPS'd by the worst weapon). A weapon in hand is **universally better** than an empty hand, except for weapon swaps and drinking potions (Spahrep 2026-09-16). Dual wielding is the damage ceiling; an empty hand is a consumable/recovery tool, not a soft-lock.
+- **Belt Loop (BL)** — swap/reserve slot holding a **second weapon** (not a consumable — Spahrep 2026-09-16 corrected DarkJester's belt-as-third-consumable idea as confusion). No attack path of its own; it does NOT satisfy the ≥1 hand weapon entry rule (see run-ux-flow.md).
+  - Mid-battle swap is **not implemented yet** (battle-app.js: "belt weapon — no mid-battle swap"); the swap timing formula stays open (current-design-status.md Open Q #4)
   - Hands are fully independent — UNLESS a 2H weapon exists (PMVP), in which case both hands must be free for the swap
-- **Potion A / Potion B** — consumables; usable during combat or between fights
+- **C1 / C2** — the two consumable slots (potions, etc.); usable during combat or between fights. Use time = **weapon-in-hand speed + consumable speed** (Spahrep 2026-09-16)
 
 **Loadout is locked at entry.** No inventory access between fights — the 5 assigned items are the only things usable in a run. This makes pre-run gear selection a high-stakes decision.
 
@@ -84,9 +84,9 @@ The five loadout positions assigned per run (live on `portal_run`):
 |---------------------|--------------|--------------------------------|
 | `hand_l_weapon_id`    | Hand Slot L  | Primary weapon                 |
 | `hand_r_weapon_id`    | Hand Slot R  | Secondary weapon / shield      |
-| `belt_weapon_id` | Belt Loop    | Dedicated swap / utility slot  |
-| `consume_a_id`   | Consume A | Consumables / quick items      |
-| `consume_b_id`   | Consume B | Consumables / quick items      |
+| `belt_weapon_id` | Belt Loop (BL) | Swap / reserve slot — second weapon |
+| `consume_a_id`   | C1          | Consumables / quick items      |
+| `consume_b_id`   | C2          | Consumables / quick items      |
 
 ## Starting Equipment
 

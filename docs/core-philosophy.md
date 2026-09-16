@@ -31,7 +31,7 @@
 ## Inventory Philosophy
 
 - **Limited carrying capacity forces meaningful choices.** MVP: 20-slot backpack + 5-item run loadout.
-- **Confirmed MVP loadout:** Hand L, Hand R, Belt Loop, Potion A, Potion B.
+- **Confirmed MVP loadout:** Hand L, Hand R, Belt Loop (BL), Consumable C1, Consumable C2.
 - **The loadout locks at portal entry.** No inventory access between fights — your 2 potions are the entire consumable budget for 5 fights. See `inventory-slots.md`.
 - **Space management is pressure.** 20 slots, no potion stacking; selling loot to shops is the release valve. Pouches are PMVP.
 

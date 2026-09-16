@@ -9,9 +9,9 @@ Locked structure (Spahrep 2026-09-13): starting a new run is a gated, three-phas
 1. **Preamble** (`run new`) — atmospheric threshold screen. Run is NOT created yet.
    - Live commands during preamble: `inventory`, `inspect #`, `ready`, `help` (+ `clear`). Anything else → gentle re-prompt, never a dead end.
    - `inspect #` during preamble = **item inspect** (client-side pretty-print from the `/weapons` + `/consumables` payloads). The existing monster-template `inspect` is unchanged once inside a run.
-2. **Ready → loadout pick** (`ready`) — the existing interactive pick sequence (LH / RH / Belt / Consume A / Consume B; empty = skip; `inventory` re-lists) runs, then the CLI shows the **assembled loadout recap** (first time the full loadout appears in human language): one line per slot, name, damage, attacks (prep/cd), "empty" for empty slots.
+2. **Ready → loadout pick** (`ready`) — the existing interactive pick sequence (LH / RH / BL / C1 / C2; empty = skip; `inventory` re-lists) runs, then the CLI shows the **assembled loadout recap** (first time the full loadout appears in human language): one line per slot, name, damage, attacks (prep/cd), "empty" for empty slots.
    - Lock note phrased as neutral information: "This loadout locks the moment you step through the portal. You cannot change it between fights."
-3. **Confirm** (`confirm`) — creates the run (POST /runs). Empty loadout is allowed (anti-soft-lock); no nagging. After creation: flavor beat, dice + battle-1 monsters print (existing behavior), then a clear "type battle start" prompt.
+3. **Confirm** (`confirm`) — creates the run (POST /runs). Requires **≥1 hand weapon** (LH or RH) at portal entry; a loadout with zero hand weapons is rejected with a clear message (belt does NOT count — it has no attack path, it's a swap/reserve slot). Empty HANDS are fine: an empty hand gets real actions — drink potions, or make an unarmed **Fist** attack (very low damage, fast speed, out-DPS'd by the worst weapon — dual wielding is the damage ceiling, an empty hand is a consumable/recovery tool, not a softlock). After creation: flavor beat, dice + battle-1 monsters print (existing behavior), then a clear "type battle start" prompt.
 
 Copy drafts (approved shape, wording adjustable):
 
@@ -27,9 +27,9 @@ Type "ready" when you are prepared.
 Your loadout for this run:
   Left Hand: #12 Short Sword (25 dmg) — Slash (p3/c2), Thrust (p4/c1)
   Right Hand: empty
-  Belt: empty
-  Consume A: empty
-  Consume B: empty
+  BL: empty
+  C1: empty
+  C2: empty
 
 This loadout locks the moment you step through the portal. You cannot change it between fights.
 

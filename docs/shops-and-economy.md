@@ -6,6 +6,8 @@
 
 - Shops generate **weapons and potions** for purchase with gold.
 - **Selling loot** (weapons + consumables) to the shop is confirmed — this is the release valve for the 20-slot bag.
+- **No-sell-last-weapon rule:** a player cannot sell their final weapon — a sale that would bring their owned `weapon_instance` count to 0 is rejected. Recorded here only; enforced when the store ships.
+- **The SSS : Shitty Short Sword** is granted on account creation / season start and is the only way to acquire it. It IS sellable for now (it's a basic weapon that would clog inventory space); later that might be changed.
 - Shop upgrades (boosting quality, etc.) are PMVP.
 - Player-to-player **auction houses** are PMVP (a third source of potions/weapons beyond runs and shops — mentioned in the design conversation, 2026-09-08).
 

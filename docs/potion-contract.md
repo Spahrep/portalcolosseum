@@ -37,7 +37,7 @@ The **effect amount is the instance's `rolled_floor`** — the number on the car
 - **No cap** on stacked buffs (MVP).
 - **No multiplicative** damage/HP buffs anywhere — flat and additive only.
 - Same-type and different-type buffs both stack; a damage buff and a speed buff are independent.
-- Potions themselves **do not stack in inventory** (full slot each, unique rolls) — loadout is locked at entry: Potion A + Potion B is the entire consumable budget for the run (5 fights).
+- Potions themselves **do not stack in inventory** (full slot each, unique rolls) — loadout is locked at entry: the two consumable slots C1 + C2 are the entire consumable budget for the run (5 fights).
 
 ## 5. Free-hand requirement
 

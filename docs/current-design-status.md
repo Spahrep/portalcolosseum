@@ -1,4 +1,4 @@
-# Current Design Status (as of 2026-09-08)
+# Current Design Status (as of 2026-09-16)
 
 This file captures the current state of design decisions for Portal Colosseum. It is intended as a living reference until decisions are moved into more permanent documents.
 
@@ -24,7 +24,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Consumables modify one stat (HP heal / Speed / Accuracy / Damage), template-based with base ± delta like weapons
 - Each potion rolls an **effect value** AND a **drink speed** (pill vs 4L jug)
 - Grade (D–S) assigned after generation, same standard-deviation system as weapons (20hp potion = A, 22hp = S)
-- **Use requires a hand free of cooldown** (may be holding a weapon): `pre = f(hand weapon speed, potion speed)` → effect lands → `post = f(same)` → hand free
+- **Use requires a hand free of cooldown** (may be holding a weapon): total drink time = **weapon-in-hand speed + consumable speed** (ruled PC-DEC-013, Spahrep 2026-09-16); how that total splits pre/post-effect is still TBD
 - **Cooldowns live on hands, never weapons**; the other hand keeps attacking while one drinks
 - Buffs apply to the **player** (both hands), flat values, additive stacking, separate end tics
 - Pre-time uninterruptible (disruption PMVP); no throw mechanic (PMVP FF-style idea)
@@ -98,7 +98,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Option to stop after each fight and keep a reduced % of loot (exact % TBD)
 - Full clear = keep all loot
 - **Death = kicked out, prize pool forfeited; brought items never lost**
-- **No inventory access between fights** — 5-item loadout (Hand L/R, Belt Loop, Potion A/B) locked at entry
+- **No inventory access between fights** — 5-item loadout (Hand L/R, BL, C1/C2) locked at entry
 - Entry costs: X AP + Y gold, deeper portals cost more (P2 = 4×Y example)
 - **SCHEMA (2026-09-10):** `portal_run` table created — loadout FKs (hand_l/r_weapon_id, belt_weapon_id, consume_a/b_id), current_battle, total_battles, player_hp, battle_state jsonb. Consume A/B currently FK to weapon_instance as PLACEHOLDER until consumable tables exist (consumables skipped for now).
 
@@ -145,10 +145,10 @@ This file captures the current state of design decisions for Portal Colosseum. I
 ## Open / Undocumented Points
 
 1. **Loot Rules on Stop** — exact % of prize pool kept when stopping early; how random selection works (uniform? weighted by rarity?)
-2. **Multi-Enemy Attack Balance** — how much less damage cleave/whirlwind do per target; fixed or scales with weapon quality. Higher priority since encounters are confirmed multi-monster groups.
+2. **Multi-Enemy Attack Balance** — how much less damage cleave/whirlwind do per target; fixed or scales with weapon quality. Higher priority since encounters are confirmed multi-monster groups. (Parked 2026-09-16 — future design decision, not a conflict.)
 3. **Wizard Tent Healing Model** — AP and/or gold, hourly drip, or 1×/day full heal (see ap-economy.md)
-4. **Belt Loop Swap Timing** — exact formula f(weapon in hand speed, belt weapon speed); whether swapped-in weapon can attack immediately or needs a draw tic; whether counter resets on shop refresh
-5. **Consumable Use Formula** — exact pre/post formula f(hand weapon speed, potion speed); duration numbers per template
+4. **Belt Loop Swap Timing** — exact formula f(weapon in hand speed, belt weapon speed); whether swapped-in weapon can attack immediately or needs a draw tic; whether counter resets on shop refresh. (DarkJester's working candidate 2026-09-15: delay that hand by the longer of the two weapons' base speeds — not yet shipped; mid-battle swap is currently unimplemented.)
+5. **Consumable Use Formula** — total time = weapon-in-hand speed + consumable speed (ruled PC-DEC-013, Spahrep 2026-09-16); pre/post split of that total + duration numbers per template still TBD
 6. **Shop Numbers** — refresh timer, reroll base/multiplier, price curve exact values, whether reroll counter resets on shop refresh
 7. **Encounter System Open Questions** (see encounter-system.md)
    - Does the player see exact dice face values, or just colors?
@@ -161,4 +161,4 @@ This file captures the current state of design decisions for Portal Colosseum. I
 
 ---
 
-**Next Priority**: Lock the belt-loop swap timing and consumable pre/post formula (the last timing unknowns), then the shop numbers (refresh, reroll base/multiplier). After that the item/economy design is complete enough to hand to implementation.
+**Next Priority**: Lock the belt-loop swap timing and the consumable pre/post split (the last timing unknowns — the consumable total, weapon speed + consumable speed, is already ruled), then the shop numbers (refresh, reroll base/multiplier). After that the item/economy design is complete enough to hand to implementation.

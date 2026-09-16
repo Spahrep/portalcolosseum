@@ -28,11 +28,11 @@ C  | AcidShot     | 6
 Timing information is shown as a **range exactly once — during browse** — then as
 **permanent numbers after commit**. The HUD never shows a range twice.
 
-> **STATUS 2026-09-15: under revision — Dragon-Warrior menu is the front-runner.**
-> Spahrep specified a per-hand menu direction (see "Dragon-Warrior Menu" below) and the
-> preview-band mechanics in this section are NOT locked anymore. Whether the ">"
-> timing markers replace the band or coexist is UNDECIDED (Spahrep 2026-09-15). This
-> section stays as the band design-of-record until that call is made.
+> **STATUS 2026-09-16: Dragon-Warrior per-hand menu is CONFIRMED as the combat command
+> mechanism** ("DW style combat menu is in fact the goal." — Spahrep 2026-09-16). The
+> preview-band mechanics in this section are NOT the shipped direction. Still open
+> (PC-56 carry-over, parked): whether the ">" timing markers replace the band or
+> coexist, and the exact menu visuals. This section stays as the band design-of-record.
 >
 > **IMPLEMENTATION REALITY (Spahrep 2026-09-16): the preview marker system does not
 > exist in code, and the timing column is not working as intended either — the whole
@@ -75,10 +75,11 @@ commitment window, with uncertainty built in:
 Confirming the attack **rolls the cast and cooldown values**. The row enters the queue as
 permanent, fixed numbers — never a range on a committed row. The band lane clears.
 
-## Dragon-Warrior Menu (FRONT-RUNNER — mechanism UNDECIDED)
+## Dragon-Warrior Menu (CONFIRMED — 2026-09-16)
 
-Specified by Spahrep 2026-09-15 (19:49 / 20:00), currently the front-runner direction for
-combat command UI. Not yet locked; see the UNDECIDED questions at the end.
+Specified by Spahrep 2026-09-15 (19:49 / 20:00); confirmed as the combat command
+mechanism 2026-09-16 ("DW style combat menu is in fact the goal."). The open items are
+the ">"-markers-vs-band question and the exact visuals — see UNDECIDED below.
 
 - Per-hand turn menu: when it is your turn ("LH" or "RH"), you get a menu with the
   attacks for **that hand only**. Both hands available on the same tick = resolve one
@@ -90,8 +91,7 @@ combat command UI. Not yet locked; see the UNDECIDED questions at the end.
   it will slot in: a **simple pair of ">"** to show a range, or if it is fully contained
   between 2 other timings, **just one ">"**.
 
-### UNDECIDED (Spahrep 2026-09-15: "We aren't sure quite yet how we are going to do it,
-but I think the menu system is the front runner")
+### UNDECIDED (mechanism locked; presentation open — PC-56 carry-over, parked)
 
 - Do the `>` timing markers **replace** the preview band (Phase 1 above), or coexist?
 - Exact visual of the per-hand menu, target pick, and confirm flow (to be designed).

@@ -43,25 +43,30 @@ surface; these stay PENDING until pinned.
    always, never numbers; validation = harness full runs first, then invites to
    friends when ready. PC-61 fully closed.
 
-### Remaining true doc conflicts (verified in committed docs — await pin to fix)
+### Doc conflicts — ALL FIXED (committed 2026-09-16)
 
-The five sweep conflicts are all ruled (PC-DEC-006..015); these are the still-live
-contradictions in the COMMITTED permanent docs, all waiting on the pin before edits:
+The five sweep conflicts were ruled (PC-DEC-006..015) and Spahrep ordered the doc
+fixes directly ("GET RID OF CONFLICTS IN DOCUMENTS"). All edits applied and committed:
 
-- **run-ux-flow.md L14 (HEAD)** — "Empty loadout is allowed (anti-soft-lock)" vs
-  PC-DEC-007. Corrected text (≥1 hand weapon + Fist) is already in the working tree,
-  uncommitted.
-- **inventory-slots.md L17 vs L87** — "Belt Loop holds a second weapon (not a utility
-  item)" vs "Dedicated swap / utility slot": internal contradiction. No Fist rule in
-  the doc (PC-DEC-011). L19 swap formula stale ("possibly the same timing formula as
-  potions") vs shipped cost = max(base speeds).
-- **combat-system.md** — zero mentions of accuracy vs PC-DEC-008 (grep verified).
-- **ap-economy.md** — no HUD dock mention vs PC-DEC-009 (grep verified).
-- **current-design-status.md** — header still "as of 2026-09-08"; Open Q #4 (belt
-  swap timing) still open though DJ gave the formula and PC-54 shipped it.
-- **battle-status-ui.md** — "FRONT-RUNNER" banner now stale: mechanism is chosen
-  (PC-DEC-010).
-- Minor: naming-convention.md obsolete anticipated tables (`inventory_item`, `match`).
+- **run-ux-flow.md** — "Empty loadout is allowed" → ≥1 hand weapon entry rule + Fist
+  bullet + BL/C1/C2 recap labels.
+- **inventory-slots.md** — L17-vs-L87 contradiction fixed (belt = swap/reserve slot,
+  NOT utility slot); Fist rule added (PC-DEC-011); stale swap formula corrected;
+  loadout labels → BL/C1/C2 (PC-DEC-006/012).
+- **combat-system.md** — accuracy hit-roll rule added (PC-DEC-008); monster-stat
+  distribution note corrected to match current-design-status.md.
+- **ap-economy.md** — bottom dock HUD added (PC-DEC-009).
+- **current-design-status.md** — header → 2026-09-16; consumable formula updated
+  (PC-DEC-013); Open Q #5 updated; Open Q #2 annotated parked; DJ's belt-swap formula
+  recorded as working candidate (NOT shipped — verified against code).
+- **battle-status-ui.md** — FRONT-RUNNER banner → CONFIRMED (PC-DEC-010/003).
+- **naming-convention.md** — obsolete `inventory_item`/`match` tables removed
+  (`player_inventory` added).
+- **core-philosophy.md, portal-runs.md, consumables.md, potion-contract.md** — stale
+  "Potion A/B" loadout labels → BL/C1/C2.
+
+PC-DEC-003 + 006..015 flipped APPROVED in pending-decisions.md with promotion notes.
+PC-DEC-004 stays PENDING (implementation-reality note, nothing to promote).
 
 ---
 

@@ -52,7 +52,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: CLI session (C3 triage of docs/reviews/2026-09-15.md)
   Speaker: Spahrep
   Verbatim: "We aren't sure quite yet how we are going to do it, but I think the menu system is the front runner. Maybe this can be an undecided thing in the douments."
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — mechanism chosen by PC-DEC-010)
   Notes: Direction, not a decision — recorded in battle-status-ui.md as FRONT-RUNNER with the ">"-vs-preview-band question marked UNDECIDED. Promote only when the mechanism is actually chosen.
 
 - ID: PC-DEC-004
@@ -78,7 +78,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
   Speaker: Spahrep
   Verbatim: "C1) You have a Belt loop (BL) and 2 consumeable slots (C1 & C2)."
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — direct instruction: fix the docs)
   Notes: Human ruling on sweep conflict C1 (inventory-slots.md "second weapon, not a
   utility item" vs DarkJester "weapon or consumable"): the loadout row is BL + C1 + C2.
   Does NOT settle what the belt may hold or whether BL is a third drinkable hand —
@@ -89,7 +89,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
   Speaker: Spahrep
   Verbatim: "With \"You cant sell your last weapon\" \"Everyone gets the start weapon on account creation\" then you can never get stuck w/o a weapon."
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — direct instruction: fix the docs)
   Notes: Human ruling on sweep conflict C2 + confirms anti-softlock chain (sweep
   candidates 1/3/7, shipped PC-52): no-sell-last-weapon + starter weapon granted on
   account creation = never weaponless. Start weapon = DarkJester's SSS.
@@ -99,7 +99,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
   Speaker: Spahrep
   Verbatim: "Players use accuracy."
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — direct instruction: fix the docs)
   Notes: Human ruling on sweep conflict C3 (carried from 09-15): player attacks roll
   accuracy, miss = 0 damage. Already shipped 7ef335d; combat-system.md still silent on
   the rule (needs capture + pin before the doc edit).
@@ -109,7 +109,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
   Speaker: Spahrep
   Verbatim: "we do wean the ap/gold transparent bar at the bottom"
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — direct instruction: fix the docs)
   Notes: "wean" read as "want" (typo). Human ruling on sweep conflict C4 (carried from
   09-15 — Spahrep 09-15: "I like the one that has the transparent bar on the bottom"):
   AP+gold bottom dock HUD. Already shipped 5c6286e; ap-economy.md still silent on the HUD.
@@ -119,7 +119,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
   Speaker: Spahrep
   Verbatim: "DW style combat menu is in fact the goal."
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — direct instruction: fix the docs)
   Notes: Human ruling on sweep conflict C5 / PC-DEC-003 FRONT-RUNNER / PC-56: the
   Dragon-Warrior per-hand menu is the combat command mechanism. PC-DEC-003's note said
   promote only when the mechanism is actually chosen — this is the choice statement;
@@ -130,7 +130,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
   Speaker: Spahrep
   Verbatim: "We want a weapon in hand to be universally better than an empty had, except for weapon swaps and drinking potions. So yes, jester is right"
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — direct instruction: fix the docs)
   Notes: Rules PC-62 + sweep candidate 7 (DarkJester's Fist rule): a weapon in hand
   beats an empty hand in every case except weapon swaps and drinking potions; Fist DMG
   confirmed "very, very bad", out-DPS'd by the worst weapon. Concrete Fist base
@@ -144,7 +144,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
   Speaker: Spahrep
   Verbatim: "Jester was confused. we have 2x Hands, and BL/C1/C2"
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — direct instruction: fix the docs)
   Notes: Rules the belt-content remainder of sweep conflict C1: the loadout is 2 hands
   + belt loop (BL) + 2 consumable slots (C1, C2). Corrects DarkJester's
   belt-as-third-consumable framing as confusion. Belt = BL swap/reserve slot per
@@ -156,7 +156,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
   Speaker: Spahrep
   Verbatim: "using a consumeable take sthe speed of the weapon in the hand + the speed of the consumeable"
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — direct instruction: fix the docs)
   Notes: Rules PC-57's core formula: consumable use time = weapon-in-hand speed +
   consumable speed — the hand-tied model is confirmed (not potion-speed-only MVP).
   Still open: pre/post split (one-sample rule at the post window?) and whether the
@@ -167,7 +167,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
   Speaker: Spahrep
   Verbatim: "The player will never see monster HP. It is hidden behind words always."
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — direct instruction: fix the docs)
   Notes: Rules PC-61 remainder (colors-only vs full numbers): monster HP is NEVER shown
   as numbers — words (Healthy/Injured/Battered/Critical) always. No visibility toggle.
 
@@ -176,7 +176,7 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
   Speaker: Spahrep
   Verbatim: "We have an invite system and we will send out invites to friends when we are ready. Before that I suspect our testing harness will have to do many full runs."
-  Status: PENDING
+  Status: APPROVED (promoted 2026-09-16 — direct instruction: fix the docs)
   Notes: Rules PC-61 remainder (who plays): validation path = testing harness runs many
   full runs first, then invites to friends via the invite system when ready.
 
@@ -184,6 +184,17 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
 
 - ID: PC-DEC-001 — Monster instances live in JSON (battle_state), not a table. Promoted to current-design-status.md (§ Monster Stats), combat-engine-plan.md, admin-gui-brief.md. Decided by Spahrep, 2026-09-15.
 - ID: PC-DEC-002 — Roulette sweep stays in normal G→Y→R order and lands on a random box; die reveal happens at the roll, never during the sweep. Promoted to encounter-system.md (§ Selection animation), portal-runs.md (§ Die pool). Decided by Spahrep, 2026-09-15.
+- ID: PC-DEC-003 — DW per-hand menu is the combat command mechanism (choice confirmed by PC-DEC-010). Promoted to battle-status-ui.md (§ Dragon-Warrior Menu — CONFIRMED). Promoted 2026-09-16.
+- ID: PC-DEC-006 — Loadout row = BL + C1 + C2. Promoted to inventory-slots.md, portal-runs.md, consumables.md, core-philosophy.md, run-ux-flow.md, current-design-status.md (slot labels). Promoted 2026-09-16.
+- ID: PC-DEC-007 — No-sell-last-weapon + starter weapon on account creation = never stuck. Promoted to shops-and-economy.md + run-ux-flow.md (≥1 hand weapon entry rule). Promoted 2026-09-16.
+- ID: PC-DEC-008 — "Players use accuracy." Promoted to combat-system.md (§ Accuracy hit-roll rule). Promoted 2026-09-16.
+- ID: PC-DEC-009 — AP/gold transparent bottom bar. Promoted to ap-economy.md (§ Bottom dock HUD). Promoted 2026-09-16.
+- ID: PC-DEC-010 — DW-style combat menu is the goal. Promoted to battle-status-ui.md (mechanism CONFIRMED; ">"-vs-band + visuals parked). Promoted 2026-09-16.
+- ID: PC-DEC-011 — Weapon-in-hand universally better than empty hand (except swaps/potions); Fist out-DPS'd by worst weapon. Promoted to inventory-slots.md (Fist rule) + run-ux-flow.md. Promoted 2026-09-16.
+- ID: PC-DEC-012 — Loadout = 2 hands + BL + C1/C2; belt-as-third-consumable was confusion. Promoted to inventory-slots.md (belt = swap/reserve). Promoted 2026-09-16.
+- ID: PC-DEC-013 — Consumable use time = weapon-in-hand speed + consumable speed. Promoted to current-design-status.md + inventory-slots.md + consumables.md. Promoted 2026-09-16.
+- ID: PC-DEC-014 — Monster HP words-only, never numbers. Consistent with battle-status-ui.md (§ Monster HP — Words Only); no edit needed. Promoted 2026-09-16.
+- ID: PC-DEC-015 — Validation: harness full runs first, then friend invites. Recorded in docs/reviews/2026-09-16.md. Promoted 2026-09-16.
 
 ## Rejected / Superseded
 

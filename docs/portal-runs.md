@@ -10,7 +10,7 @@
 - **Finishing the run** awards the full prize pool
 - **Stopping early** awards a reduced portion of the pool (exact % TBD)
 - **Dying** = kicked out of the portal, **prize pool forfeited**. Items you BROUGHT IN are never lost — you only lose what you hadn't banked yet.
-- **No inventory access between fights.** The 5-item loadout (Hand L, Hand R, Belt Loop, Potion A, Potion B) is locked at entry — see `inventory-slots.md` and `consumables.md`.
+- **No inventory access between fights.** The 5-item loadout (Hand L, Hand R, Belt Loop (BL), Consumable C1, Consumable C2) is locked at entry — see `inventory-slots.md` and `consumables.md`.
 
 ## Portal Tiers = Item Power Tiers
 

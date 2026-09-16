@@ -35,7 +35,7 @@
 
 - Requires a hand that is **free = not on cooldown**. The hand may be holding a weapon — "free" means available to act, **not empty**.
 - Sequence:
-  1. Hand R free → select **Drink Potion A**
+  1. Hand R free → select **C1** (drink the potion in slot C1)
   2. `pre = f(hand weapon speed, potion speed)` — hand locked during pre-time
   3. **Effect starts** (buff begins its duration / heal applies)
   4. `post = f(hand weapon speed, potion speed)` — hand still locked, buff running
@@ -64,7 +64,7 @@
 ## Where Consumables Can Be Used
 
 - **During combat** (one hand, per the sequence above)
-- **Between fights** within a run (Potion A/B slots)
+- **Between fights** within a run (C1/C2 slots)
 - **Outside the portal** (town) — confirmed. Healing with potions outside the portal works. (The broader town healing model — wizard tent — is TBD; see ap-economy.md.)
 
 ## Loot
@@ -74,7 +74,7 @@
 
 ## Loadout (per run)
 
-- **Hand L, Hand R, Belt Loop, Potion A, Potion B**
+- **Hand L, Hand R, Belt Loop (BL), Consumable C1, Consumable C2**
 - Loadout is **locked at entry** — no inventory access between fights. Your 2 potions are the entire consumable budget for all 5 fights.
 - Potions usable during or between fights; belt loop (weapon swap) also usable between fights.
 - Starting loadout: same for everyone, decided later, will likely change with each season.
