@@ -25,7 +25,7 @@ export function tick(queue, onFire) {
   // Fire in player-first order (LH/RH before monster labels)
   fired.sort((a, b) => {
     const aPlayer = a.label === 'LH' || a.label === 'RH' ? 0 : 1;
-    const bPlayer = b.label === 'LH' || a.label === 'RH' ? 0 : 1;
+    const bPlayer = b.label === 'LH' || b.label === 'RH' ? 0 : 1;
     if (aPlayer !== bPlayer) return aPlayer - bPlayer;
     return 0; // stable
   });
@@ -42,7 +42,7 @@ export function sortQueue(queue) {
   queue.sort((a, b) => {
     if (a.tics !== b.tics) return a.tics - b.tics;
     const aPlayer = a.label === 'LH' || a.label === 'RH' ? 0 : 1;
-    const bPlayer = b.label === 'LH' || a.label === 'RH' ? 0 : 1;
+    const bPlayer = b.label === 'LH' || b.label === 'RH' ? 0 : 1;
     if (aPlayer !== bPlayer) return aPlayer - bPlayer;
     return 0;
   });
@@ -65,45 +65,45 @@ export function morphHandRow(queue, handLabel, newEvent, newTics) {
 }
 
 // PC-56: computeTimingMarkers for '>' timing markers (MVP)
-// Returns array of {id, marker: '>'} for rows that should show the marker(s)
-// PAIR when range spans multiple, SINGLE when contained between two.
+// Matches dw-app.js updateTimingMarkers algorithm EXACTLY.
+// input: queue (array of {id, tics, ...}), attack {prepare_time, prepare_time_range}
+// if no tics strictly inside (minT < t < maxT) -> SINGLE '>' on first row with tics >= maxT (or none)
+// if some inside -> PAIR: last with tics < minT and first with tics > maxT
+// empty queue -> []
+// returns {id, marker: '>' }[] (order of appearance in sorted tics order, caller matches by id)
 export function computeTimingMarkers(queue, attack) {
-  if (!attack || !queue || queue.length === 0) return [];
-  const P = Number(attack.prepare_time || attack.prepareTime || 0);
-  const R = Number(attack.prepare_time_range || attack.prepareTimeRange || 0);
-  const landMin = P;
-  const landMax = P + R;
-  const markers = [];
+  if (!queue || queue.length === 0 || !attack) return [];
+  const minT = Number(attack.prepare_time || attack.prepareTime || 0);
+  const range = Number(attack.prepare_time_range || attack.prepareTimeRange || 0);
+  const maxT = minT + range;
   const sorted = [...queue].sort((a, b) => a.tics - b.tics);
-  if (R === 0 || landMin === landMax) {
-    // SINGLE '>' : find first row at or after landMin, or last if none
-    for (let i = 0; i < sorted.length; i++) {
-      if (sorted[i].tics >= landMin) {
-        markers.push({ id: sorted[i].id, marker: '>' });
+  // check for any strictly inside
+  let hasInside = false;
+  for (const row of sorted) {
+    if (row.tics > minT && row.tics < maxT) {
+      hasInside = true;
+      break;
+    }
+  }
+  const markers = [];
+  if (!hasInside) {
+    // SINGLE '>' on the first row with tics >= maxT (or no marker if none)
+    for (const row of sorted) {
+      if (row.tics >= maxT) {
+        markers.push({ id: row.id, marker: '>' });
         break;
       }
     }
-    if (markers.length === 0 && sorted.length > 0) {
-      markers.push({ id: sorted[sorted.length - 1].id, marker: '>' });
-    }
   } else {
-    // PAIR of '>' on rows whose tics fall in [landMin, landMax]
+    // PAIR: last row with tics < minT AND first row with tics > maxT
+    let before = null;
+    let after = null;
     for (const row of sorted) {
-      if (row.tics >= landMin && row.tics <= landMax) {
-        markers.push({ id: row.id, marker: '>' });
-      }
+      if (row.tics < minT) before = row;
+      if (row.tics > maxT && !after) after = row;
     }
-    if (markers.length === 0) {
-      // find bounding rows for contained case
-      let prev = null;
-      let next = null;
-      for (const row of sorted) {
-        if (row.tics < landMin) prev = row;
-        if (row.tics > landMax && !next) next = row;
-      }
-      if (prev) markers.push({ id: prev.id, marker: '>' });
-      if (next) markers.push({ id: next.id, marker: '>' });
-    }
+    if (before) markers.push({ id: before.id, marker: '>' });
+    if (after) markers.push({ id: after.id, marker: '>' });
   }
   return markers;
 }
