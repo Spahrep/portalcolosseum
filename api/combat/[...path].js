@@ -528,7 +528,7 @@ async function handle(request) {
       if (!['LH', 'RH'].includes(hand)) return json({ error: 'Invalid hand' }, 400);
 
       // F8: body validation (target_ids array of positive ints <=10, exist in live monsters; attack_id positive int)
-      if (!Array.isArray(target_ids) || target_ids.length > 10 || target_ids.some(tid => !Number.isInteger(Number(tid)) || Number(tid) <= 0)) {
+      if (!Array.isArray(target_ids) || target_ids.length > 10 || target_ids.some(tid => (typeof tid !== 'string' && typeof tid !== 'number') || String(tid).trim() === '')) {
         return json({ error: 'Invalid target_ids' }, 400);
       }
       const attackIdNum = parseInt(attack_id, 10);
@@ -555,7 +555,7 @@ async function handle(request) {
 
       // validate targets exist among current live monsters
       const liveMonsterIds = (persisted.monsters || []).filter(m => (m.current_hp || 0) > 0).map(m => m.id);
-      if (target_ids.length > 0 && !target_ids.every(tid => liveMonsterIds.includes(Number(tid)))) {
+      if (target_ids.length > 0 && !target_ids.every(tid => liveMonsterIds.some(mid => mid === tid || String(mid) === String(tid)))) {
         return json({ error: 'Invalid target monster' }, 400);
       }
 
@@ -593,7 +593,7 @@ async function handle(request) {
       // F11: advance-when-busy instead of 500 on unready hand
       let advanced = false;
       try {
-        engine.commitAttack(hand, attackIdNum, effectiveTargetIds.map(Number), { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName: attackRow?.name || null, playerAccuracy: weapon?.accuracy });
+        engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName: attackRow?.name || null, playerAccuracy: weapon?.accuracy });
       } catch (e) {
         if (e.message === 'Hand not ready' && engine.state && engine.state.queue && engine.state.queue.length > 0) {
           engine.advanceToNextDecision();
