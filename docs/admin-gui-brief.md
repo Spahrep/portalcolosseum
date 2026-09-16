@@ -103,7 +103,7 @@ async function verifyAdmin(request) {
 - `monster_template.slot_0_attack_id`
 - `monster_template_attack_mapping.attack_id`
 - `weapon_instance.slot_N_attack_id` (any slot)
-- `monster_instance.slot_N_attack_id` (any slot)
+(monster_instance was purged 2026-09-15 — no longer a delete blocker)
 Show the user which references block deletion.
 
 ### 3. Weapon Templates Manager (`/admin` → Weapon Templates tab)
@@ -182,8 +182,8 @@ Same structure as Weapon Templates but for `monster_template` + `monster_templat
 - Uses `monster_template_attack_mapping` table (columns: monster_template_id, attack_id, slot, weight)
 
 **Delete rule:** BLOCK deletion if the template is referenced by:
-- `monster_instance.template_id`
 - `monster_template_attack_mapping.monster_template_id`
+(monster_instance was purged 2026-09-15 — templates no longer have persisted instances)
 
 ## API Route Structure
 
@@ -317,7 +317,7 @@ Add this route entry BEFORE the catch-all `/(.*)` route:
 
 - No Invite Key Manager
 - No Users/admin management panel
-- No weapon_instance, monster_instance, or player_inventory management (those are generated at runtime)
+- No weapon_instance or player_inventory management (those are generated at runtime); monster_instance was purged 2026-09-15 (monsters live in battle_state jsonb)
 - No new attack types, weapon types, or game mechanics
 - No separate admin credentials system
 - No changes to existing pages (login, game, signup, etc.)

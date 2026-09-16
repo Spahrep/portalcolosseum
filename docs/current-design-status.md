@@ -89,8 +89,8 @@ This file captures the current state of design decisions for Portal Colosseum. I
 
 - Each monster has a base MaxHP **and a maxHP delta**, rolled per instance; the rolled max is **secret** (player knows species base at best, never the instance)
 - **MaxHP delta = EVEN (uniform) distribution, not bell curve** (Spahrep 2026-09-08) — every value equally likely, so the secret max stays unpredictable with play
-- Other monster stat rolls (damage, etc.): distribution TBD per stat
-- **SCHEMA (2026-09-10):** `monster_template.base_hp` + `monster_template.max_hp_delta`; `monster_instance.max_hp` (rolled). `generate_monster()` still rolls HP via Box-Muller `normal_int()` — MUST be switched to a uniform roll before the engine uses it.
+- Other monster stat rolls: **damage, speed, accuracy = Box-Muller `normal_int()` bell curve**; HP = uniform (above)
+- **SCHEMA (2026-09-15):** `monster_template.base_hp` + `monster_template.max_hp_delta`. Monster instances are NOT a table — `generate_monster()` returns a jsonb document (UUID id, rolled damage/speed/accuracy via `normal_int()`, max_hp via `uniform_int()`, resolved attack slots) and the instance lives inside `portal_run.battle_state` jsonb. `monster_instance` table purged 2026-09-15 (Spahrep: JSON for the portal instance — faster/lighter than a DB-heavy table; Decided by Spahrep, 2026-09-15).
 
 ## Portal Runs (documented in portal-runs.md) — UPDATED 2026-09-10
 

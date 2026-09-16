@@ -6,11 +6,11 @@
 
 The project is already committed to server-owned combat state:
 
-- Monster max HP is a **secret** rolled per instance (`monster_instance.max_hp`); the UI shows words only (Healthy/Injured/Battered/Critical). The client can never see the number, therefore it can never resolve damage.
-- `generate_monster()` is `SECURITY DEFINER` — authenticated users cannot insert `monster_instance` rows directly.
+- Monster max HP is a **secret** rolled per instance (stored in `portal_run.battle_state` jsonb; `monster_instance` table was purged 2026-09-15); the UI shows words only (Healthy/Injured/Battered/Critical). The client can never see the number, therefore it can never resolve damage.
+- `generate_monster()` is `SECURITY DEFINER` — monsters are generated as jsonb server-side, never inserted by clients (no `monster_instance` table exists to insert into).
 - RLS is owner-only everywhere; the admin API already runs on a service-role client from Vercel serverless.
 
-**Engine = pure ESM modules under `js/combat/`** (no I/O, deterministic given inputs + injected RNG), imported by a Vercel serverless catch-all **`api/combat/[...path].js`** (mirrors `api/admin/[...path].js`: CORS, `json()`, service-role client, JWT verification). Supabase is the state of record: `portal_run` rows + `battle_state jsonb` + `monster_instance` rows.
+**Engine = pure ESM modules under `js/combat/`** (no I/O, deterministic given inputs + injected RNG), imported by a Vercel serverless catch-all **`api/combat/[...path].js`** (mirrors `api/admin/[...path].js`: CORS, `json()`, service-role client, JWT verification). Supabase is the state of record: `portal_run` rows + `battle_state jsonb`.
 
 **Commit-driven flow:** client POSTs an action (commit attack / select target / continue / stop). Server verifies ownership (JWT uid == run.user_id, belt-and-suspenders with RLS), advances the simulation resolving everything until the next player decision point, persists, returns authoritative `{queue, participants (HP words only), feed, run state}`. Client animates the countdown between commits for feel only.
 
@@ -26,7 +26,7 @@ Sorted array of `{id, label, event, tics}`. Every tick: decrement all; fire even
 ## HP Tracking
 
 - **Player:** `portal_run.player_hp` (persisted, authoritative).
-- **Monsters:** `max_hp` on `monster_instance` (secret, uniform roll — **`generate_monster()` must be switched off Box-Muller for HP**); `current_hp` lives in `battle_state`. Server maps current/max → word: Healthy 100–76%, Injured 75–51%, Battered 50–26%, Critical 25–0%. Client receives words + damage numbers only.
+- **Monsters:** rolled stats (max_hp = secret uniform roll via `uniform_int`; damage/speed/accuracy = Box-Muller `normal_int` bell curve) live in `battle_state.participants`; `current_hp` lives in `battle_state`. Server maps current/max → word: Healthy 100–76%, Injured 75–51%, Battered 50–26%, Critical 25–0%. Client receives words + damage numbers only.
 - **Damage:** base ± delta from the instance roll; accuracy check (MVP: roll vs accuracy → hit); multi-target attacks reduced per target; buffs flat/additive with separate end tics (engine primitives; no buff data exists yet).
 - **Death:** all monsters dead → battle won; player HP ≤ 0 → run dead. In-flight events of dead participants are cancelled at fire (MVP rule; the PMVP death-cancel nuance stays parked). Ties: player resolves first — locked.
 

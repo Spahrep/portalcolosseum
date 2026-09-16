@@ -31,11 +31,17 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
 
 ## Pending
 
-(none yet)
+- ID: PC-DEC-001
+  Date: 2026-09-15
+  Source: CLI session (C1 triage of docs/reviews/2026-09-15.md)
+  Speaker: Spahrep
+  Verbatim: "We can still do the monster instnace, it's just saved in a JSON for the portal instnace. I was informed this was a faster/lighter way to do it instead of a DB heavy way to do it. Do you dissagree?"
+  Status: APPROVED (pinned 2026-09-15 — "ok, so let's fix that up")
+  Notes: Resolves sweep conflict C1. Implemented as generate_monster() returning jsonb (no row persisted); instance lives in portal_run.battle_state jsonb. Also relevant: HP roll uses uniform_int (even distribution, Spahrep 2026-09-08), not Box-Muller — docs describe both the table and the distribution wrongly.
 
 ## Approved & Promoted
 
-(none yet)
+- ID: PC-DEC-001 — Monster instances live in JSON (battle_state), not a table. Promoted to current-design-status.md (§ Monster Stats), combat-engine-plan.md, admin-gui-brief.md. Decided by Spahrep, 2026-09-15.
 
 ## Rejected / Superseded
 
