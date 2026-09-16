@@ -162,6 +162,24 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Still open: pre/post split (one-sample rule at the post window?) and whether the
   belt slot is drinkable.
 
+- ID: PC-DEC-014
+  Date: 2026-09-16
+  Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
+  Speaker: Spahrep
+  Verbatim: "The player will never see monster HP. It is hidden behind words always."
+  Status: PENDING
+  Notes: Rules PC-61 remainder (colors-only vs full numbers): monster HP is NEVER shown
+  as numbers — words (Healthy/Injured/Battered/Critical) always. No visibility toggle.
+
+- ID: PC-DEC-015
+  Date: 2026-09-16
+  Source: Discord thread "Item and combat slot design discussion" (1549746327032963083)
+  Speaker: Spahrep
+  Verbatim: "We have an invite system and we will send out invites to friends when we are ready. Before that I suspect our testing harness will have to do many full runs."
+  Status: PENDING
+  Notes: Rules PC-61 remainder (who plays): validation path = testing harness runs many
+  full runs first, then invites to friends via the invite system when ready.
+
 ## Approved & Promoted
 
 - ID: PC-DEC-001 — Monster instances live in JSON (battle_state), not a table. Promoted to current-design-status.md (§ Monster Stats), combat-engine-plan.md, admin-gui-brief.md. Decided by Spahrep, 2026-09-15.

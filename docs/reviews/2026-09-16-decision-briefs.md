@@ -29,26 +29,39 @@ surface; these stay PENDING until pinned.
 - **C5 / PC-56 — Combat menu** (PC-DEC-010): "DW style combat menu is in fact the
   goal." → the Dragon-Warrior per-hand menu IS the mechanism. Card flipped done.
 
-### Still open (remaining conflicts — status after Spahrep's second ruling pass, 2026-09-16)
+### Future design decisions (parked — NOT conflicts; Spahrep 2026-09-16: "this is a conflict in documentation sweep right, not a design decision meeting")
 
-1. **Empty-hand (Fist) base speed + damage** — RULED (PC-DEC-011): "We want a weapon in
-   hand to be universally better than an empty had, except for weapon swaps and drinking
-   potions. So yes, jester is right" — DarkJester's Fist rule confirmed. PC-62 flipped
-   done; concrete base speed/damage values = build-time tuning constants, must satisfy
-   out-DPS'd-by-worst-weapon.
-2. **Belt content** — RULED (PC-DEC-012): "Jester was confused. we have 2x Hands, and
-   BL/C1/C2" — loadout is 2 hands + BL + C1/C2; belt-as-third-consumable framing
-   corrected. Belt = BL swap/reserve slot per shipped code.
-3. **PC-57** — formula RULED (PC-DEC-013): consumable use time = weapon-in-hand speed +
-   consumable speed. Still open: pre/post split (one-sample rule at the post window?)
-   and whether BL is drinkable.
-4. **PC-58** — explained in thread 2026-09-16; per-target reduction + 5th-monster
-   absorption numbers still need the ruling.
-5. **PC-59** — ON HOLD (Spahrep: "This isnt a conflict, this is a design decision that
-   is on hold and needs to be made later"). Card stays parked.
-6. **PC-60** — explained in thread 2026-09-16; approve the Player Journey section?
-7. **PC-61 remainder** — explained in thread 2026-09-16; colors-only vs full numbers;
-   who plays the live validation.
+1. **PC-57 remainder** — pre/post split + one-sample rule at the post window; whether
+   BL is drinkable. (Core formula already ruled, PC-DEC-013.)
+2. **PC-58** — multi-enemy per-target reduction + 5th-monster absorption numbers.
+   Declared a future design decision by Spahrep, not a conflict. Card stays parked.
+3. **PC-59** — AP-refund-on-completion. On hold, not a conflict. Card stays parked.
+4. **PC-60** — Player Journey section. Spahrep: "ok great, not a conflict though" —
+   a future doc task, nothing to do now.
+5. **PC-56 carry-overs** — ">"-markers vs preview band; web-vs-CLI surface-first.
+6. **PC-61 remainder** — RULED (PC-DEC-014/015): monster HP hidden behind words
+   always, never numbers; validation = harness full runs first, then invites to
+   friends when ready. PC-61 fully closed.
+
+### Remaining true doc conflicts (verified in committed docs — await pin to fix)
+
+The five sweep conflicts are all ruled (PC-DEC-006..015); these are the still-live
+contradictions in the COMMITTED permanent docs, all waiting on the pin before edits:
+
+- **run-ux-flow.md L14 (HEAD)** — "Empty loadout is allowed (anti-soft-lock)" vs
+  PC-DEC-007. Corrected text (≥1 hand weapon + Fist) is already in the working tree,
+  uncommitted.
+- **inventory-slots.md L17 vs L87** — "Belt Loop holds a second weapon (not a utility
+  item)" vs "Dedicated swap / utility slot": internal contradiction. No Fist rule in
+  the doc (PC-DEC-011). L19 swap formula stale ("possibly the same timing formula as
+  potions") vs shipped cost = max(base speeds).
+- **combat-system.md** — zero mentions of accuracy vs PC-DEC-008 (grep verified).
+- **ap-economy.md** — no HUD dock mention vs PC-DEC-009 (grep verified).
+- **current-design-status.md** — header still "as of 2026-09-08"; Open Q #4 (belt
+  swap timing) still open though DJ gave the formula and PC-54 shipped it.
+- **battle-status-ui.md** — "FRONT-RUNNER" banner now stale: mechanism is chosen
+  (PC-DEC-010).
+- Minor: naming-convention.md obsolete anticipated tables (`inventory_item`, `match`).
 
 ---
 
