@@ -55,6 +55,14 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Status: PENDING
   Notes: Direction, not a decision — recorded in battle-status-ui.md as FRONT-RUNNER with the ">"-vs-preview-band question marked UNDECIDED. Promote only when the mechanism is actually chosen.
 
+- ID: PC-DEC-004
+  Date: 2026-09-16
+  Source: CLI session (C3 follow-up)
+  Speaker: Spahrep
+  Verbatim: "the current preview marker system doesnt exsit, and the timing column isn't exactly workign as intended either, so we need to come back to that oo"
+  Status: PENDING
+  Notes: Implementation-reality statement, not a design decision. Confirmed against code: no preview/marker system in js/battle-app.js (grep preview = 0); only renderQueue() exists. Recorded in battle-status-ui.md status banner. Whole timing/preview area is an open revisit — no ticket yet.
+
 ## Approved & Promoted
 
 - ID: PC-DEC-001 — Monster instances live in JSON (battle_state), not a table. Promoted to current-design-status.md (§ Monster Stats), combat-engine-plan.md, admin-gui-brief.md. Decided by Spahrep, 2026-09-15.

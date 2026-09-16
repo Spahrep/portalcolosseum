@@ -33,6 +33,12 @@ Timing information is shown as a **range exactly once — during browse** — th
 > preview-band mechanics in this section are NOT locked anymore. Whether the ">"
 > timing markers replace the band or coexist is UNDECIDED (Spahrep 2026-09-15). This
 > section stays as the band design-of-record until that call is made.
+>
+> **IMPLEMENTATION REALITY (Spahrep 2026-09-16): the preview marker system does not
+> exist in code, and the timing column is not working as intended either — the whole
+> area needs to be revisited.** Current code: `js/battle-app.js renderQueue()` renders
+> the next-up events column (`Label EventName | tics`, sorted ascending); there is NO
+> preview band, no ">" markers, no browse-phase range display anywhere in the client.
 
 ### Phase 1 — Browse (free, instant)
 
