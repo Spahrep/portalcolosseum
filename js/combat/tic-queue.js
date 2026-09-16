@@ -25,7 +25,7 @@ export function tick(queue, onFire) {
   // Fire in player-first order (LH/RH before monster labels)
   fired.sort((a, b) => {
     const aPlayer = a.label === 'LH' || a.label === 'RH' ? 0 : 1;
-    const bPlayer = b.label === 'LH' || b.label === 'RH' ? 0 : 1;
+    const bPlayer = b.label === 'LH' || a.label === 'RH' ? 0 : 1;
     if (aPlayer !== bPlayer) return aPlayer - bPlayer;
     return 0; // stable
   });
@@ -42,7 +42,7 @@ export function sortQueue(queue) {
   queue.sort((a, b) => {
     if (a.tics !== b.tics) return a.tics - b.tics;
     const aPlayer = a.label === 'LH' || a.label === 'RH' ? 0 : 1;
-    const bPlayer = b.label === 'LH' || b.label === 'RH' ? 0 : 1;
+    const bPlayer = b.label === 'LH' || a.label === 'RH' ? 0 : 1;
     if (aPlayer !== bPlayer) return aPlayer - bPlayer;
     return 0;
   });
@@ -62,4 +62,48 @@ export function morphHandRow(queue, handLabel, newEvent, newTics) {
     sortQueue(queue);
   }
   return row;
+}
+
+// PC-56: computeTimingMarkers for '>' timing markers (MVP)
+// Returns array of {id, marker: '>'} for rows that should show the marker(s)
+// PAIR when range spans multiple, SINGLE when contained between two.
+export function computeTimingMarkers(queue, attack) {
+  if (!attack || !queue || queue.length === 0) return [];
+  const P = Number(attack.prepare_time || attack.prepareTime || 0);
+  const R = Number(attack.prepare_time_range || attack.prepareTimeRange || 0);
+  const landMin = P;
+  const landMax = P + R;
+  const markers = [];
+  const sorted = [...queue].sort((a, b) => a.tics - b.tics);
+  if (R === 0 || landMin === landMax) {
+    // SINGLE '>' : find first row at or after landMin, or last if none
+    for (let i = 0; i < sorted.length; i++) {
+      if (sorted[i].tics >= landMin) {
+        markers.push({ id: sorted[i].id, marker: '>' });
+        break;
+      }
+    }
+    if (markers.length === 0 && sorted.length > 0) {
+      markers.push({ id: sorted[sorted.length - 1].id, marker: '>' });
+    }
+  } else {
+    // PAIR of '>' on rows whose tics fall in [landMin, landMax]
+    for (const row of sorted) {
+      if (row.tics >= landMin && row.tics <= landMax) {
+        markers.push({ id: row.id, marker: '>' });
+      }
+    }
+    if (markers.length === 0) {
+      // find bounding rows for contained case
+      let prev = null;
+      let next = null;
+      for (const row of sorted) {
+        if (row.tics < landMin) prev = row;
+        if (row.tics > landMax && !next) next = row;
+      }
+      if (prev) markers.push({ id: prev.id, marker: '>' });
+      if (next) markers.push({ id: next.id, marker: '>' });
+    }
+  }
+  return markers;
 }
