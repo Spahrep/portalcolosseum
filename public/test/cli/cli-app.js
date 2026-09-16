@@ -476,6 +476,9 @@ function turnPromptFromState(stateObj) {
   }
 }
 
+// monster labels end in a letter ('Giant Rat A'); letterOf extracts it for roster prints
+const letterOf = (label) => (label && /[A-Z]$/.test(label)) ? label.slice(-1) : '';
+
 function printStateFromRun(run) {
   if (!run) {
     appendLine('No active run.', 'amber');
@@ -486,7 +489,6 @@ function printStateFromRun(run) {
   const fmtAttacks = (list) => (list || []).map(a =>
     `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} p${a.prepare_time}${ (a.prepare_time_range||0) > 0 ? '-' + (a.prepare_time + (a.prepare_time_range||0)) : '' }/c${a.cooldown_time}${ (a.cooldown_time_range||0) > 0 ? '-' + (a.cooldown_time + (a.cooldown_time_range||0)) : '' }`
   ).join(' | ') || 'none';
-  const letterOf = (label) => (label && /[A-Z]$/.test(label)) ? label.slice(-1) : '';
 
   const lines = [
     `RUN #${run.id} status=${run.status} battle ${run.current_battle}/${run.total_battles}`,
