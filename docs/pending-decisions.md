@@ -39,9 +39,18 @@ This file is the CAPTURE SURFACE for design decisions stated by Spahrep or DarkJ
   Status: APPROVED (pinned 2026-09-15 — "ok, so let's fix that up")
   Notes: Resolves sweep conflict C1. Implemented as generate_monster() returning jsonb (no row persisted); instance lives in portal_run.battle_state jsonb. Also relevant: HP roll uses uniform_int (even distribution, Spahrep 2026-09-08), not Box-Muller — docs describe both the table and the distribution wrongly.
 
+- ID: PC-DEC-002
+  Date: 2026-09-15
+  Source: Discord thread (C2 of docs/reviews/2026-09-15.md; original statement 19:39:43)
+  Speaker: Spahrep
+  Verbatim: "Are you capapble of just having it stay in the normal order and randomly seelcting where it lands?"
+  Status: APPROVED (pinned 2026-09-15 — "update it to what it actualy is now please")
+  Notes: Refines PC-DEC-001-era roulette spec. Shipped behavior (bcbf3e4): row stays G→Y→R, sweep lands on a random box uncorrelated with the drawn die; reveal happens at the roll (landed box morphs into drawn die).
+
 ## Approved & Promoted
 
 - ID: PC-DEC-001 — Monster instances live in JSON (battle_state), not a table. Promoted to current-design-status.md (§ Monster Stats), combat-engine-plan.md, admin-gui-brief.md. Decided by Spahrep, 2026-09-15.
+- ID: PC-DEC-002 — Roulette sweep stays in normal G→Y→R order and lands on a random box; die reveal happens at the roll, never during the sweep. Promoted to encounter-system.md (§ Selection animation), portal-runs.md (§ Die pool). Decided by Spahrep, 2026-09-15.
 
 ## Rejected / Superseded
 
