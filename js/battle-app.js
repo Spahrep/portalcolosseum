@@ -992,6 +992,9 @@ function setupEndRunButton(runId) {
       confirmBtn.disabled = val !== 'end run';
     };
     input.oninput = checkInput;
+    input.onkeydown = (e) => {
+      if (e.key === 'Enter' && !confirmBtn.disabled) confirmBtn.click();
+    };
     cancelBtn.onclick = () => dialog.remove();
     confirmBtn.onclick = async () => {
       dialog.remove();
