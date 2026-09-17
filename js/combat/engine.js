@@ -67,6 +67,12 @@ export function createEngine(rng = Math.random) {
         const idx = state.queue.findIndex(r => r.id === row.id);
         if (idx !== -1) state.queue.splice(idx, 1);
         log(`${row.label} Ready`);
+      } else if (row.event === 'approach') {
+        const handState = state.player.hands[row.label];
+        if (handState) handState.state = 'Ready';
+        const idx = state.queue.findIndex(r => r.id === row.id);
+        if (idx !== -1) state.queue.splice(idx, 1);
+        log(`${row.label} Ready`);
       } else if (row.event === 'drinking') {
         const potion = state.potions?.[row.potionSlot];
         if (!potion || potion.used) {
@@ -192,6 +198,14 @@ export function createEngine(rng = Math.random) {
         commitNewRow(state.queue, mon.label, 'attack', mon.speed);
       }
     });
+    // PC-64: initial approach rows for hands at weapon instance speed (default 1 if missing)
+    const handLSpeed = Number(participants.loadout?.hand_l_speed) || 1;
+    const handRSpeed = Number(participants.loadout?.hand_r_speed) || 1;
+    state.player.hands.LH.state = 'Approach';
+    state.player.hands.RH.state = 'Approach';
+    commitNewRow(state.queue, 'LH', 'approach', handLSpeed);
+    commitNewRow(state.queue, 'RH', 'approach', handRSpeed);
+    advanceToNextDecision();
     return getState();
   }
 

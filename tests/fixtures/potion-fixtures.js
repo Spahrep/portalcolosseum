@@ -27,6 +27,8 @@ export const buffPotion = {
 };
 
 export const inBattleHealSnapshot = [
+  "tic 0 — LH Ready",
+  "tic 0 — RH Ready",
   "Your left hand drinks Heal Potion (0 tics)…",
   "Your left hand's potion restores 100 HP.",
   "Potion A used — in battle.  HP: 900/1000  buffs: none",
@@ -35,32 +37,40 @@ export const inBattleHealSnapshot = [
 ];
 
 export const betweenFightsHealSnapshot = [
+  "tic 0 — LH Ready",
+  "tic 0 — RH Ready",
   "You drink potion a — healed 100.",
   "Potion A used — between fights.  HP: 900/1000  buffs: none",
   "#1 Heal Potion Heal grade C (used)"
 ];
 
 export const overhealSnapshot = [
+  "tic 0 — LH Ready",
+  "tic 0 — RH Ready",
   "Your left hand drinks Heal Potion (0 tics)…",
   "Your left hand's potion restores 10 HP.",
   "Potion A used — in battle.  HP: 1000/1000  buffs: none"
 ];
 
 export const buffLandSnapshot = [
+  "tic 0 — LH Ready",
+  "tic 0 — RH Ready",
   "Your left hand drinks Dmg Potion (5 tics)…",
-  "Your left hand's potion grants damage +3 until tic 9.",
   "tic 4 — A hits player for 7",
-  "Potion A used — in battle.  HP: 993/1000  buffs: damage +3 until tic 9",
+  "Your left hand's potion grants damage +3 until tic 10.",
+  "Potion A used — in battle.  HP: 993/1000  buffs: damage +3 until tic 10",
   "#2 Dmg Potion Dmg grade B (used)"
 ];
 
-// Short-duration buff (2 tics) drank at weaponSpeed 0, seed 106: lands at tic 0
-// (endTic 2), hand recovers at tic 1, buff expires at tic 2 — full transcript
+// Short-duration buff (2 tics) drank at weaponSpeed 0, seed 106: lands at tic 1
+// (endTic 3), hand recovers at tic 2, buff expires at tic 3 — full transcript
 // including the expiry narration and the 'buffs: none' summary.
 export const buffExpirySnapshot = [
+  "tic 0 — LH Ready",
+  "tic 0 — RH Ready",
   "Your left hand drinks Dmg Potion (1 tics)…",
-  "Your left hand's potion grants damage +3 until tic 2.",
-  "tic 1 — LH Ready",
+  "Your left hand's potion grants damage +3 until tic 3.",
+  "tic 2 — LH Ready",
   "The Dmg Potion buff fades.",
   "Potion A used — in battle.  HP: 1000/1000  buffs: none"
 ];

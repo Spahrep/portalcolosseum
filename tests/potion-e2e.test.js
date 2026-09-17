@@ -138,8 +138,8 @@ describe('Potion E2E parity (PC-39)', () => {
     eng.commitPotion('A', { weaponSpeed: 4 });
     const state = advanceUntilUsed(eng);
     assert.equal(state.buffs.length, 1);
-    assert.equal(state.buffs[0].endTic, 9);
-    assert.equal(formatBuffs(state.buffs), 'damage +3 until tic 9');
+    assert.equal(state.buffs[0].endTic, 10);
+    assert.equal(formatBuffs(state.buffs), 'damage +3 until tic 10');
     const meta = { slot: 'A', phase: 'in-battle', potion_used: true, player_hp: state.participants.player.hp, state };
     const consumables = [{ ...buffPotion, used: true }];
     const transcript = buildTranscript(state, meta, consumables);
@@ -185,11 +185,11 @@ describe('Potion E2E parity (PC-39)', () => {
     const eng = createEngine(seededRNG(106));
     const p = makeParticipants({ ...buffPotion, rolled_speed: 2, duration_ticks: 2 });
     eng.startBattle(p);
-    // pre = ceil((0+2)/2) = 1 -> lands at tic 0 with endTic 0 + 2 = 2
+    // pre = ceil((0+2)/2) = 1 -> lands at tic 1 with endTic 1 + 2 = 3
     const landed = eng.commitPotion('A', { weaponSpeed: 0 });
     assert.equal(landed.buffs.length, 1);
-    assert.equal(landed.buffs[0].endTic, 2);
-    assert.equal(formatBuffs(landed.buffs), 'damage +3 until tic 2');
+    assert.equal(landed.buffs[0].endTic, 3);
+    assert.equal(formatBuffs(landed.buffs), 'damage +3 until tic 3');
     // advance until the expiry feed line appears
     let s = landed;
     let expired = false;

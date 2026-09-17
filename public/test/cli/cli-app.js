@@ -436,7 +436,7 @@ function narrateFeed(feedLines, participants = null) {
 }
 
 // Queue events shown in the state dump, humanized (engine sends raw event names).
-const QUEUE_ACTION_LABELS = { cooldown: 'Ready', winding: 'Casting', impact: 'Attack', attack: 'Attack' };
+const QUEUE_ACTION_LABELS = { cooldown: 'Ready', winding: 'Casting', impact: 'Attack', attack: 'Attack', approach: 'Ready' };
 
 function turnPromptFromState(stateObj) {
   const s = stateObj && stateObj.state ? stateObj.state : stateObj;

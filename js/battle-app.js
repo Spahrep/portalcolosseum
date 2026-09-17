@@ -487,6 +487,7 @@ function queueLabel(row) {
 }
 
 function queueEventName(row, monsters, bs) {
+  if (row.event === 'approach') return '';
   // A hand freeing is a state change — the queue counts down to "Ready".
   if (row.event === 'cooldown' || row.event === 'recovery') return 'Ready';
   if (row.event === 'drinking') {
@@ -653,8 +654,9 @@ function renderActionMenu(bs) {
     status.textContent = ['LH', 'RH'].map(h => {
       const w = weapons[h === 'LH' ? 'hand_l' : 'hand_r'];
       if (!w || !w.id) return null;
-      const windingRow = queue.find(q => q.event === 'winding' && q.label === h);
-      return `${h} — winding${windingRow && windingRow.tics != null ? ' ' + windingRow.tics + ' tics' : ''}`;
+      const approachOrWindingRow = queue.find(q => (q.event === 'winding' || q.event === 'approach') && q.label === h);
+      const row = approachOrWindingRow;
+      return `${h} — ${row ? row.event : 'winding'}${row && row.tics != null ? ' ' + row.tics + ' tics' : ''}`;
     }).filter(Boolean).join('  ·  ') || 'No hand ready';
     wrap.appendChild(status);
     return;

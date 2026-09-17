@@ -250,8 +250,9 @@ async function handle(request) {
             }
             if (monsters.length > 0) {
               const potionLoadout = await buildPotionLoadout(run);
+              const handSpeeds = await handApproachSpeeds(handL, handR);
               const participants = {
-                loadout: { hand_l: handL, hand_r: handR, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
+                loadout: { hand_l: handL, hand_r: handR, ...handSpeeds, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
                 monsters
               };
               const eng = createEngine();
@@ -432,7 +433,7 @@ async function handle(request) {
         potionInfo(run.consume_b_id, !!run.consume_b_used)
       ]);
 
-      const { data: fistCfg } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy').eq('id', 1).maybeSingle();
+      const { data: fistCfg } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed').eq('id', 1).maybeSingle();
 
       const safeState = {
         queue: state.queue || [],
@@ -440,7 +441,7 @@ async function handle(request) {
         feed: state.feed || [],
         tic: state.tic || 0,
         buffs: state.buffs || [],
-        weapons: { hand_l: handL, hand_r: handR, belt: beltW, fist: fistCfg ? { name: 'Fist (unarmed)', damage: fistCfg.fist_damage, speed: 0, accuracy: fistCfg.fist_accuracy, base_damage: fistCfg.fist_damage, damage_range: 0, grade: null, attacks: [{ id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time: fistCfg.fist_prepare_time, cooldown_time: fistCfg.fist_cooldown_time, prepare_time_range: fistCfg.fist_prepare_time_range, cooldown_time_range: fistCfg.fist_cooldown_time_range, description: '', base_damage_multiplier: 1 }] } : null },
+        weapons: { hand_l: handL, hand_r: handR, belt: beltW, fist: fistCfg ? { name: 'Fist (unarmed)', damage: fistCfg.fist_damage, speed: fistCfg.fist_speed ?? 6, accuracy: fistCfg.fist_accuracy, base_damage: fistCfg.fist_damage, damage_range: 0, grade: null, attacks: [{ id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time: fistCfg.fist_prepare_time, cooldown_time: fistCfg.fist_cooldown_time, prepare_time_range: fistCfg.fist_prepare_time_range, cooldown_time_range: fistCfg.fist_cooldown_time_range, description: '', base_damage_multiplier: 1 }] } : null },
         potions: { potion_a: potionA, potion_b: potionB },
         monsters,
         dice
@@ -504,8 +505,9 @@ async function handle(request) {
       }
 
       const potionLoadout = await buildPotionLoadout(run);
+      const handSpeeds = await handApproachSpeeds(run.hand_l_weapon_id, run.hand_r_weapon_id);
       const participants = {
-        loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
+        loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, ...handSpeeds, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
         monsters
       };
       const engine = createEngine();
@@ -572,7 +574,7 @@ async function handle(request) {
       const weaponId = hand === 'LH' ? run.hand_l_weapon_id : run.hand_r_weapon_id;
       let castTicks, cooldownTicks, playerDamage, playerAccuracy, attackName;
       if (!weaponId) {
-        const { data: config } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy').eq('id', 1).single();
+        const { data: config } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed').eq('id', 1).single();
         if (!config) return json({ error: 'Game config missing' }, 500);
         castTicks = rollStat(config.fist_prepare_time, config.fist_prepare_time_range);
         cooldownTicks = rollStat(config.fist_cooldown_time, config.fist_cooldown_time_range);
@@ -685,8 +687,9 @@ async function handle(request) {
             monsters.push({ id: 11 + newBattle, max_hp: 90, damage: 12, speed: 5, accuracy: 65, label: 'Monster B' });
           }
           const potionLoadout = await buildPotionLoadout(run);
+          const handSpeeds = await handApproachSpeeds(run.hand_l_weapon_id, run.hand_r_weapon_id);
           const participants = {
-            loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
+            loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, ...handSpeeds, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
             monsters
           };
           const freshEngine = createEngine();
@@ -763,7 +766,7 @@ async function handle(request) {
         const potionLoadout = await buildPotionLoadout(run);
         engine = createEngine();
         engine.startBattle({
-          loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
+          loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, ...(await handApproachSpeeds(run.hand_l_weapon_id, run.hand_r_weapon_id)), consume_a: potionLoadout.A, consume_b: potionLoadout.B },
           monsters: []
         }, null, run.player_hp > 0 ? run.player_hp : null);
       }
@@ -873,7 +876,7 @@ async function handle(request) {
       } else {
         engine = createEngine();
         engine.startBattle({
-          loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, consume_a: null, consume_b: null },
+          loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, ...(await handApproachSpeeds(run.hand_l_weapon_id, run.hand_r_weapon_id)), consume_a: null, consume_b: null },
           monsters: []
         }, null, run.player_hp > 0 ? run.player_hp : null);
       }
@@ -1189,6 +1192,32 @@ async function handle(request) {
 
     // Shared potion-loadout builder: engine-shape potion objects for slots A/B,
     // seeded from the run's consumable instances (PC-39). used mirrors the DB flag.
+    // PC-64: initial turn order — each hand starts on the timing track at its
+    // weapon's instance speed; unarmed hands use fist_speed from game_config.
+    async function handApproachSpeeds(handL, handR) {
+      const ids = [handL, handR].filter(id => id != null);
+      const speeds = {};
+      if (ids.length > 0) {
+        try {
+          const { data: wInsts } = await admin.from('weapon_instance').select('id, speed').in('id', ids);
+          for (const w of (wInsts || [])) speeds[w.id] = w.speed;
+        } catch (e) {
+          console.error('hand speed fetch error', e);
+        }
+      }
+      let fistSpeed = 6;
+      try {
+        const { data: cfg } = await admin.from('game_config').select('fist_speed').eq('id', 1).maybeSingle();
+        if (cfg && cfg.fist_speed != null) fistSpeed = cfg.fist_speed;
+      } catch (e) {
+        console.error('fist_speed fetch error', e);
+      }
+      return {
+        hand_l_speed: handL != null ? (speeds[handL] ?? fistSpeed) : fistSpeed,
+        hand_r_speed: handR != null ? (speeds[handR] ?? fistSpeed) : fistSpeed
+      };
+    }
+
     async function buildPotionLoadout(run) {
       const ids = [run.consume_a_id, run.consume_b_id].filter(Boolean);
       const map = {};
@@ -1233,8 +1262,9 @@ async function handle(request) {
 
     async function rebuildBattleState(run, monsters, playerHp) {
       const potionLoadout = await buildPotionLoadout(run);
+      const handSpeeds = await handApproachSpeeds(run.hand_l_weapon_id, run.hand_r_weapon_id);
       const participants = {
-        loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
+        loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, ...handSpeeds, consume_a: potionLoadout.A, consume_b: potionLoadout.B },
         monsters
       };
       const freshEngine = createEngine();

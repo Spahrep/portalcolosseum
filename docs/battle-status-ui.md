@@ -134,21 +134,25 @@ it (same as Enter). Palette not locked; per-player window theming = PMVP (PC-DEC
 Both hands ready = resolve one hand then the next (rule above). No hand-switch chip —
 prefHand removed in PC-63; the order is deterministic per PC-DEC-028.
 
-### Initiative (PC-DEC-021 + 029 + 030 — compare ruled, integration OPEN)
+### Initiative — initial turn order (PC-DEC-032, implemented as PC-64)
 
-At the start of combat, each hand is assigned an **initiative** value from 1 to the
-equipped weapon's speed (PC-DEC-021). Purpose (PC-DEC-029): ordering the player
-against monsters within a tic — the player does NOT always act first; a monster may
-go first. The both-hands-ready hand order is a separate rule (PC-DEC-028, above).
+At combat start each hand gets one **approach** row on the timing rail at its weapon's
+instance speed (PC-DEC-032; supersedes PC-DEC-021's rolled 1..speed initiative —
+placement is now deterministic, no roll). Unarmed hands use `game_config.fist_speed`.
+Monsters need no initiative of their own: they are already on the rail at their
+instance speed (PC-DEC-030).
 
-Compare (PC-DEC-030): monsters do NOT roll — each monster's initiative is its instance
-speed value from combat start. Ties → the player goes first. Assumption, not stated:
-higher initiative acts first within the tic (consistent with a hand rolling max vs a
-monster's static speed = tie → player first).
+When an approach row hits 0 the hand becomes **Ready** and the player picks their
+action then — the command menu opens at the first decision point, not at tic 0.
+`startBattle` advances the clock to that point, so a monster faster than both hands
+genuinely acts first (its attack lands during the advance and it re-seeds at its
+instance speed as usual). Ties → player first (LH/RH before monsters on the same
+tic, PC-DEC-030).
 
-OPEN (not ruled): how initiative ordering composes with the existing windup/timing
-rail (engine design — Spahrep + DarkJester decide together, tracked as PC-64). Not
-implemented; the cascade menu does not depend on it.
+The approach row is **initial placement only**: the attack timing formula
+(weapon speed + rolled prepare/cooldown) is unchanged, and after an attack's
+cooldown fires the hand is actionable immediately, as before. Both-hands-ready
+hand order is PC-DEC-028 (above).
 
 ### UNDECIDED (mechanism + visuals locked; band open — PC-56 carry-over, parked)
 

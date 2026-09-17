@@ -188,8 +188,8 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Source: Discord thread "Implement Dragon Warrior style command selection" (1549822905100017745)
   Speaker: Spahrep
   Verbatim: "At the start of combat, each hand gets assigned an 'initiative' value. This is from 1 to their speed value (the equiped weapon)."
-  Status: DECIDED
-  Notes: Stated in answer to the "which hand opens?" design-review question. Purpose ruled later the same day (PC-DEC-029): player-vs-monster ordering within a tic — the player is not guaranteed to act first. Hand-order tie-break when both hands are ready = PC-DEC-028. Roll/compare mechanics remain OPEN (battle-status-ui.md).
+  Status: SUPERSEDED (2026-09-17, PC-DEC-032)
+  Notes: Stated in answer to the "which hand opens?" design-review question. Purpose ruled later the same day (PC-DEC-029): player-vs-monster ordering within a tic — the player is not guaranteed to act first. Hand-order tie-break when both hands are ready = PC-DEC-028. The ROLL (1..weapon speed) was replaced by Spahrep's deterministic model (PC-DEC-032): each hand sits on the track at its weapon's instance speed, no roll.
 
 - ID: PC-DEC-022
   Date: 2026-09-16
@@ -270,6 +270,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Verbatim: "you can switch your weapon with whatever is in your belt loop mid combat whenever your hand has an action. If I want to switch my dagger for my great axe, it should compare the base speeds of both weapons and delay that hands next action by whichever is longer."
   Status: DECIDED
   Notes: Belt-loop swap timing formula. Shipped as PC-54: mid-battle swap when the hand is Ready, delay = max of the two weapons' speeds (implemented on the weapon `speed` field; js/combat/participants.js swapHandWithBelt). Closes current-design-status.md Open Q #4's formula half; the BL root-menu row (PC-DEC-023) is the swap surface. Still open: whether the swapped-in weapon can attack immediately or needs a draw tic.
+
+- ID: PC-DEC-032
+  Date: 2026-09-17
+  Source: Discord thread "Initial turn order decision" (1550154633501085840)
+  Speaker: Spahrep
+  Verbatim: "The intial tic ordering: 1) LH/RH each get their weapons base speed and get put on the track 2) Each monster get's put on the track based on their instance's speed" + "Once the hands get to zero, then they get their action."
+  Status: DECIDED
+  Notes: SUPERSEDES PC-DEC-021's roll (initiative 1..weapon speed). Deterministic placement: at combat start each hand gets one **approach** row on the timing rail at its weapon's instance speed (unarmed hand = `game_config.fist_speed`, migration 20260917140000); monsters already seed attack rows at their instance speed. When an approach row hits 0 the hand becomes Ready and the player picks their action THEN. `startBattle` advances to the first decision point, so a faster monster genuinely acts before the player. Ties → player first (PC-DEC-030, unchanged). Attack timing formula (weapon speed + rolled prepare/cooldown) unchanged — the approach row is initial placement only; after an attack's cooldown the hand is actionable immediately as before. Shipped as PC-64.
 
 ## Open
 

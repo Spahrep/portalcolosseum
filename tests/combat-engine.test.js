@@ -495,3 +495,78 @@ describe('PC-54 belt swap (swapHandWithBelt + engine wiring)', () => {
     assert.match(res.error, /not Ready/i);
   });
 });
+
+describe('PC-64 initial turn order (hand approach rows)', () => {
+  it('startBattle seeds one approach row per hand at the given hand speed; hands start in Approach state', () => {
+    const eng = createEngine(seededRNG(7));
+    const state = eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 8, accuracy: 70, label: 'A' }]
+    });
+    // advance stops at the first decision point: LH (4) fired, RH (6) and A (8) still counting
+    assert.equal(state.participants.player.hands.LH.state, 'Ready');
+    assert.equal(state.participants.player.hands.RH.state, 'Approach');
+    const approachRows = state.queue.filter(r => r.event === 'approach');
+    assert.equal(approachRows.length, 1);
+    assert.equal(approachRows[0].label, 'RH');
+    assert.equal(approachRows[0].tics, 2); // 6 - 4 elapsed
+    const monsterRow = state.queue.find(r => r.event === 'attack');
+    assert.equal(monsterRow.tics, 4); // 8 - 4 elapsed
+    assert.ok(state.feed.some(l => l.includes('LH Ready')));
+    assert.ok(!state.feed.some(l => l.includes('RH Ready')));
+  });
+
+  it('commitAttack throws Hand not ready while a hand is still approaching; succeeds after it fires', () => {
+    const eng = createEngine(seededRNG(7));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 100 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 100, accuracy: 70, label: 'A' }]
+    });
+    // LH fired at 4; RH still approaching
+    assert.equal(eng.state.player.hands.LH.state, 'Ready');
+    assert.equal(eng.state.player.hands.RH.state, 'Approach');
+    assert.throws(() => eng.commitAttack('RH', 1, [1]), /Hand not ready/);
+    const res = eng.commitAttack('LH', 42, [1]);
+    assert.ok(res.queue.length > 0 || res.feed.length > 0);
+  });
+
+  it('monster-first: a monster faster than both hands acts before the player', () => {
+    const eng = createEngine(seededRNG(7));
+    const state = eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+    });
+    const hits = state.feed.filter(l => l.includes('A hits player'));
+    assert.ok(hits.length >= 1, 'monster attacked during the advance');
+    const firstHitIdx = state.feed.findIndex(l => l.includes('A hits player'));
+    const firstReadyIdx = state.feed.findIndex(l => l.includes('Ready'));
+    assert.ok(firstHitIdx !== -1 && firstReadyIdx !== -1);
+    assert.ok(firstHitIdx < firstReadyIdx, 'monster hit lands before the player hand becomes ready');
+    assert.equal(state.participants.player.hands.LH.state, 'Ready'); // then LH fired
+    assert.ok(state.tic > 3);
+  });
+
+  it('tie: hand and monster at the same speed → hand acts first (player-first)', () => {
+    const eng = createEngine(seededRNG(7));
+    const state = eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 100 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 5, accuracy: 100, label: 'A' }]
+    });
+    const lhIdx = state.feed.findIndex(l => l.includes('LH Ready'));
+    const hitIdx = state.feed.findIndex(l => l.includes('A hits player'));
+    assert.ok(lhIdx !== -1 && hitIdx !== -1);
+    assert.ok(lhIdx < hitIdx, 'LH fires before the monster on a tie');
+  });
+
+  it('unarmed hand: fist speed from loadout gives the hand a real approach position', () => {
+    const eng = createEngine(seededRNG(7));
+    const state = eng.startBattle({
+      loadout: { hand_l: null, hand_r: null, hand_l_speed: 6, hand_r_speed: 6 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 100, accuracy: 70, label: 'A' }]
+    });
+    assert.equal(state.participants.player.hands.LH.state, 'Ready');
+    assert.equal(state.participants.player.hands.RH.state, 'Ready');
+    assert.ok(state.feed.some(l => l.includes('LH Ready')));
+    assert.ok(state.feed.some(l => l.includes('RH Ready')));
+  });
+});
