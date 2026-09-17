@@ -32,6 +32,7 @@ const MONSTER_FADE_MS = 1400;      // per-monster fade duration
 // in, the timing track fills (First → last); the command window appears only after the
 // track is full (the fill's onDone removes intro-pending).
 let battleIntroPending = false;
+let introTimer = null; // PC-64: countdown interval for the battle-intro replay
 const QUEUE_FILL_STAGGER = 600; // ms between timing rows appearing (First → last, one at a time)
 const QUEUE_FILL_MS = 700;      // per-row fade
 
@@ -454,27 +455,9 @@ function renderQueue(bs, fill = false, onDone = null) {
   }
   if (queue.length === 0) return;
   const monsters = bs.monsters || [];
-  const sorted = [...queue].sort((a, b) => (a.tics ?? 0) - (b.tics ?? 0));
+  const sorted = sortQueueRows(queue);
   for (const row of sorted) {
-    const div = document.createElement('div');
-    div.className = 'queue-row';
-    const nameSpan = document.createElement('span');
-    nameSpan.className = 'name';
-    nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
-    const ticSpan = document.createElement('span');
-    ticSpan.className = 'tic';
-    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
-    div.appendChild(nameSpan);
-    div.appendChild(ticSpan);
-    // PC-56: '>' timing markers on the right rail, mirroring the DW mockup —
-    // one marker per affected row, keyed by row id, cleared on selection change.
-    if (queueMarkers && queueMarkers.has(row.id)) {
-      const markerSpan = document.createElement('span');
-      markerSpan.className = 'queue-marker';
-      markerSpan.textContent = queueMarkers.get(row.id);
-      div.appendChild(markerSpan);
-    }
-    el.appendChild(div);
+    el.appendChild(buildQueueRow(row, monsters, bs, true));
   }
   if (fill) {
     // Ceremony-intro: intro fill — rows are sorted by tics, so the top row is First
@@ -485,6 +468,126 @@ function renderQueue(bs, fill = false, onDone = null) {
       setTimeout(() => { row.style.opacity = '1'; }, i * QUEUE_FILL_STAGGER);
     });
   }
+}
+
+// Shared rail-row builder: used by renderQueue and the PC-64 intro countdown so
+// countdown rows are pixel-identical to the real queue (same sort, same DOM).
+// withMarkers=false omits PC-56 '>' timing markers (no selection during the intro).
+function buildQueueRow(row, monsters, bs, withMarkers) {
+  const div = document.createElement('div');
+  div.className = 'queue-row';
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'name';
+  nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+  const ticSpan = document.createElement('span');
+  ticSpan.className = 'tic';
+  ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+  div.appendChild(nameSpan);
+  div.appendChild(ticSpan);
+  // PC-56: '>' timing markers on the right rail, mirroring the DW mockup —
+  // one marker per affected row, keyed by row id, cleared on selection change.
+  if (withMarkers && queueMarkers && queueMarkers.has(row.id)) {
+    const markerSpan = document.createElement('span');
+    markerSpan.className = 'queue-marker';
+    markerSpan.textContent = queueMarkers.get(row.id);
+    div.appendChild(markerSpan);
+  }
+  return div;
+}
+
+// PC-64 battle intro: rows sorted by tics ascending with player-first ties —
+// identical ordering to renderQueue (see sortQueueRows below).
+function sortQueueRows(queue) {
+  return [...queue].sort((a, b) => {
+    if ((a.tics ?? 0) !== (b.tics ?? 0)) return (a.tics ?? 0) - (b.tics ?? 0);
+    const aPlayer = a.label === 'LH' || a.label === 'RH' ? 0 : 1;
+    const bPlayer = b.label === 'LH' || b.label === 'RH' ? 0 : 1;
+    return aPlayer - bPlayer;
+  });
+}
+
+// PC-64: tic-0 countdown to the first decision point — theater over the
+// authoritative state. Replays the approach: rows decrement per step, fires
+// reveal their feed lines and HP/rail updates in order, then the real state
+// snaps in and onDone() opens the command window.
+function playIntroCountdown(bs, intro, onDone) {
+  document.body.classList.remove('queue-filling'); // timing track appears
+  const el = document.getElementById('queue');
+  if (el) el.innerHTML = '';
+  const monsters = bs.monsters || [];
+  const rail = intro.rows.map(r => ({ label: r.label, event: r.event, tics: r.tics }));
+  const ordered = sortQueueRows(rail);
+  for (const row of ordered) {
+    if (el) el.appendChild(buildQueueRow(row, monsters, bs, false));
+  }
+  renderPlayerHP({ player_hp: intro.hpStart });
+  const battleLabel = document.getElementById('battle-label');
+  if (battleLabel) battleLabel.textContent = battleLabel.textContent.replace(/— TIC \d+$/, '— TIC 0');
+
+  const total = bs.tic || 0;
+  if (total > 60 || !Array.isArray(intro.fires)) {
+    // Defensive: unreasonably long countdown (or malformed intro) — snap to real state.
+    finishIntroSnap(bs, onDone);
+    return;
+  }
+  const dwell = Math.max(60, Math.min(600, Math.round(4500 / Math.max(total, 1))));
+  let k = 0;
+  clearIntroTimer();
+  introTimer = setInterval(() => {
+    k++;
+    // Decrement every visible row's tics (floor 0).
+    for (const row of ordered) {
+      if (row.tics > 0) row.tics--;
+    }
+    // Reveal fires for the tic that just elapsed (pre-increment tic k-1), in order.
+    const fires = (intro.fires || []).filter(f => f.tic === k - 1);
+    for (const f of fires) {
+      appendFeedLine(f.line);
+      renderPlayerHP({ player_hp: f.hp });
+      if (f.after) {
+        const row = ordered.find(r => r.label === f.label);
+        if (row) row.tics = f.after.tics;
+      } else {
+        const idx = ordered.findIndex(r => r.label === f.label);
+        if (idx !== -1) ordered.splice(idx, 1);
+      }
+    }
+    // Re-render the rail from the mirror so decrements + after-effects show.
+    if (el) {
+      el.innerHTML = '';
+      for (const row of sortQueueRows(ordered)) {
+        el.appendChild(buildQueueRow(row, monsters, bs, false));
+      }
+    }
+    if (battleLabel) battleLabel.textContent = battleLabel.textContent.replace(/— TIC \d+$/, `— TIC ${k}`);
+    if (k >= total) {
+      clearIntroTimer();
+      finishIntroSnap(bs, onDone);
+    }
+  }, dwell);
+}
+
+function appendFeedLine(line) {
+  const box = document.getElementById('message-box');
+  if (!box) return;
+  const div = document.createElement('div');
+  div.className = 'msg-line';
+  div.textContent = line;
+  box.appendChild(div);
+  box.scrollTop = box.scrollHeight;
+}
+
+function clearIntroTimer() {
+  if (introTimer) {
+    clearInterval(introTimer);
+    introTimer = null;
+  }
+}
+
+function finishIntroSnap(bs, onDone) {
+  renderQueue(bs); // real rows replace the mirrored DOM
+  renderFeed(bs.feed || []); // full feed replaces revealed lines
+  if (onDone) onDone();
 }
 
 function queueLabel(row) {
@@ -992,23 +1095,6 @@ async function loadBattle(runId) {
     const battleLabel = document.getElementById('battle-label');
     const bs = run.battle_state || {};
     lastBs = bs;
-    if (battleLabel) {
-      const cb = run.current_battle || 1;
-      const tb = run.total_battles || 1;
-      let bsTic = (bs.tic != null) ? bs.tic : 0;
-      if (battleIntroPending && bs.intro?.fires?.length > 0) {
-        bsTic = 0;
-      }
-      battleLabel.textContent = `BATTLE ${cb} OF ${tb} — TIC ${bsTic}`;
-    }
-
-    if (battleIntroPending && bs.intro?.fires?.length > 0) {
-      renderPlayerHP({ player_hp: bs.intro.hpStart });
-      renderFeed([]);
-    } else {
-      renderPlayerHP(run);
-      renderFeed(bs.feed || []);
-    }
     queueMarkers = null; // PC-56: fresh battle state — no selection, no markers
     // Capture BEFORE renderDice — the animation path clears the flag.
     // Ceremony-intro: the command window and timing track are part of the same
@@ -1018,9 +1104,27 @@ async function loadBattle(runId) {
     monstersPendingReveal = willRoll;
     battleIntroPending = willRoll;
     if (!willRoll) shouldAnimateDice = false; // no roll playing — consume the flag
+    // PC-64: the tic-0 countdown only plays when the ceremony runs AND the engine
+    // captured fires (a battle that started pre-PC-64 has no intro to replay).
+    const introPlays = battleIntroPending && bs.intro?.fires?.length > 0;
+    if (battleLabel) {
+      const cb = run.current_battle || 1;
+      const tb = run.total_battles || 1;
+      const bsTic = introPlays ? 0 : ((bs.tic != null) ? bs.tic : 0);
+      battleLabel.textContent = `BATTLE ${cb} OF ${tb} — TIC ${bsTic}`;
+    }
+
+    if (introPlays) {
+      // PC-64: show the pre-advance state — full HP, empty feed ('Battle begins...');
+      // the countdown reveals real damage and feed lines as it plays.
+      renderPlayerHP({ player_hp: bs.intro.hpStart });
+      renderFeed([]);
+    } else {
+      renderPlayerHP(run);
+      renderFeed(bs.feed || []);
+    }
     renderDice(bs.dice || {});
     renderMonsters(bs.monsters || []);
-    renderFeed(bs.feed || []);
     renderLoadout(bs);
     if (battleIntroPending) {
       // Ceremony-intro: die still rolling — command window + timing track stay hidden.

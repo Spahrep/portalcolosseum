@@ -579,7 +579,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.ok(state.intro, 'intro present');
     assert.ok(Array.isArray(state.intro.rows));
     assert.equal(state.intro.rows.length, 3);
-    assert.equal(state.intro.hpStart, 1000); // default from createPlayer
+    assert.equal(state.intro.hpStart, 1000); // PLAYER_MAX_HP default
     assert.ok(Array.isArray(state.intro.fires));
     assert.ok(state.intro.fires.length > 0);
   });
@@ -634,14 +634,17 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
 
   it('loadState guard: intro only from startBattle, cleared on loadState', () => {
     const eng = createEngine(seededRNG(7));
-    const state1 = eng.startBattle({
+    eng.startBattle({
       loadout: { hand_l_speed: 4, hand_r_speed: 6 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
     });
-    assert.ok(state1.intro);
+    // persisted engine state carries the intro (same JSON round-trip the API uses)
+    const persisted = JSON.parse(JSON.stringify(eng.state));
+    assert.ok(persisted.intro, 'persisted state includes intro');
     const fresh = createEngine(seededRNG(7));
-    fresh.loadState({});
+    fresh.loadState(persisted);
     const state2 = fresh.getState();
-    assert.equal(state2.intro, null);
+    assert.equal(state2.intro, null, 'loadState must not restore stale intro');
+    assert.ok(state2.tic > 0, 'rest of the persisted state survives');
   });
 });
