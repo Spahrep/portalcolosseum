@@ -341,7 +341,7 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Speaker: Spahrep
   Verbatim: "we dont need to worry about the web CLI any more. We focus on the actual game now."
   Status: DECIDED
-  Notes: Direction change: the web CLI (public/test/cli/cli-app.js) is no longer a focus — the actual game is. Supersedes the native-cli.md maintenance note (2026-09-16) that called the web CLI "canonical, fully-maintained". Both CLIs are now secondary to the game itself; the native CLI stays fix-on-break only. Applied to native-cli.md.
+  Notes: Direction change: the product focus is the actual game (run.html GUI), not the web CLI's UX. This is NOT a deprecation of the web CLI — clarified by PC-DEC-041 (web CLI is the sole CLI after the native purge) and PC-DEC-042 ("We are keeping webCLI", 2026-09-17): the web CLI stays as the canonical, engine-parity test harness; "not a focus" means no new product UX work there, not "drop it". Supersedes the old native-cli.md maintenance note's "canonical, fully-maintained" framing only in that sense. Applied to native-cli.md (file since removed by the PC-DEC-041 purge).
 
 - ID: PC-DEC-041
   Date: 2026-09-17
@@ -350,6 +350,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Verbatim: "let's purge the native CLI then from the codebase and update documents and memory accordingly and we will keep doing the web-cli"
   Status: DECIDED
   Notes: Native CLI (scripts/cli/) deleted from the repo — its two audiences (agent-driven headless QA, human terminal play) evaporated; the web CLI is the sole CLI and the in-browser fixture factory (engine parity kept). Supersedes PC-DEC-040's "native CLI stays fix-on-break" (it is gone, not dormant). Shared potion-format.mjs moved to js/combat/ so the engine fixture tests keep importing it. Applied to: repo (scripts/cli/ + docs/native-cli.md removed), potion-contract.md, run-ux-flow.md, cli-app.js comments.
+
+- ID: PC-DEC-042
+  Date: 2026-09-17
+  Source: Discord thread 1550210298768662663 (reply to the midday sweep's conflict flags)
+  Speaker: Spahrep
+  Verbatim: "We are keeping webCLI."
+  Status: DECIDED
+  Notes: Response to the sweep's flag ① — confirms PC-DEC-041: the web CLI (public/test/cli/cli-app.js) is KEPT as the sole CLI and stays the canonical, engine-parity test harness. PC-DEC-040's "no longer a focus" means no new product-UX work on the web CLI (the game GUI is the product), NOT deprecation. Applied to: pending-decisions.md (PC-DEC-040 note amended to point here).
 
 ## Open
 
