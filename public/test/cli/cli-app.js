@@ -772,7 +772,18 @@ async function cmdMenu(args = []) {
     const w = weapons[wKey];
     const rows = [];
     let letter = 97;
-    for (const a of (w && w.attacks) || []) rows.push({ kind: 'attack', attack: a, letter: String.fromCharCode(letter++) });
+    if (w && w.id) {
+      for (const a of (w && w.attacks) || []) rows.push({ kind: 'attack', attack: a, letter: String.fromCharCode(letter++) });
+    } else {
+      // PC-52r parity with the GUI cascade: an empty hand always acts via the
+      // Fist profile the API attaches to battle_state.weapons.fist; degrade to
+      // the GUI's hardcoded fallback (attack id 1, engine default timings) if
+      // the server omitted it.
+      const fistW = weapons.fist;
+      const fist = (fistW && fistW.attacks && fistW.attacks[0]) ||
+        { id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time: 3, cooldown_time: 2, description: '' };
+      rows.push({ kind: 'attack', attack: fist, letter: String.fromCharCode(letter++) });
+    }
     rows.push({ kind: 'bl', letter: String.fromCharCode(letter++) });
     rows.push({ kind: 'c1', letter: String.fromCharCode(letter++) });
     rows.push({ kind: 'c2', letter: String.fromCharCode(letter++) });
