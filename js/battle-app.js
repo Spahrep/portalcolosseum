@@ -28,8 +28,9 @@ const MONSTER_FADE_STAGGER = 1000; // ms pause between monster reveals (one at a
 const MONSTER_FADE_MS = 1400;      // per-monster fade duration
 
 // Ceremony-intro: the battle-start dice ceremony also gates the command window and the
-// timing track — both stay hidden while the die rolls, and appear only after
-// the last monster has faded in (finishBattleIntro(), called from the reveal).
+// timing track — both stay hidden while the die rolls. Once the last monster has faded
+// in, the timing track fills (First → last); the command window appears only after the
+// track is full (the fill's onDone removes intro-pending).
 let battleIntroPending = false;
 const QUEUE_FILL_STAGGER = 600; // ms between timing rows appearing (First → last, one at a time)
 const QUEUE_FILL_MS = 700;      // per-row fade
@@ -201,7 +202,7 @@ function renderDice(dice) {
         const selectAndRoll = (landedBox) => {
           rollDiceAnimation(landedBox, current, dice.faces, () => {
             updateCurrentDie(curEl, current); // persistent slot lights up
-            revealMonsters(() => finishBattleIntro()); // roll done → monsters fade in one at a time, then menu + timing track
+            revealMonsters(() => finishBattleIntro()); // roll done → monsters fade in, then timing track fills, then command window
             setTimeout(() => renderDice(dice), 350);
           });
         };
@@ -377,14 +378,17 @@ function revealMonsters(onDone) {
   if (onDone) setTimeout(onDone, (cards.length - 1) * MONSTER_FADE_STAGGER + MONSTER_FADE_MS);
 }
 
-// Ceremony-intro: once every monster is in, the command window reappears and the
-// timing track fills in from First (next) to last. Idempotent via the flag.
+// Ceremony-intro: once every monster is in, the timing track fills in from
+// First (next) to last; the command window appears only after the track is
+// full (the fill's onDone). Idempotent via the flag.
 function finishBattleIntro() {
   if (!battleIntroPending) return;
   battleIntroPending = false;
-  document.body.classList.remove('intro-pending');
-  renderActionMenu(lastBs);   // command window appears once monsters are in
-  renderQueue(lastBs, true);  // timing track fills First (next) → last
+  document.body.classList.remove('queue-filling'); // timing track appears (rows still hidden)
+  renderQueue(lastBs, true, () => {
+    document.body.classList.remove('intro-pending'); // command window only after the track is full
+    renderActionMenu(lastBs);
+  });
 }
 
 function renderFeed(feed) {
@@ -430,11 +434,17 @@ function renderLoadout(bs) {
  * Rows are countdowns to a state change: an attack landing, a hand freeing
  * ("Ready"), a monster striking, a potion taking effect.
  */
-function renderQueue(bs, fill = false) {
+function renderQueue(bs, fill = false, onDone = null) {
   const el = document.getElementById('queue');
   if (!el) return;
   el.innerHTML = '';
   const queue = bs.queue || [];
+  if (fill && onDone) {
+    // Ceremony-intro: signal completion after the last row's fade lands, so the
+    // command window never waits on an animation that cannot start (empty queue).
+    const rows = Math.max(queue.length, 1);
+    setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+  }
   if (queue.length === 0) return;
   const monsters = bs.monsters || [];
   const sorted = [...queue].sort((a, b) => (a.tics ?? 0) - (b.tics ?? 0));
@@ -996,7 +1006,7 @@ async function loadBattle(runId) {
     renderLoadout(bs);
     if (battleIntroPending) {
       // Ceremony-intro: die still rolling — command window + timing track stay hidden.
-      document.body.classList.add('intro-pending');
+      document.body.classList.add('intro-pending', 'queue-filling');
     } else {
       renderActionMenu(bs);
       renderQueue(bs);

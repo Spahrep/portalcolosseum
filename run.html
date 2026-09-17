@@ -151,11 +151,15 @@
       border-left: 2px solid #334466;
     }
     /* Ceremony-intro: while the battle-start dice ceremony plays, the command window
-       and the timing track stay hidden; both appear after the last monster
-       fades in (battle-app.js removes the class via finishBattleIntro). */
+       stays hidden until the timing track has finished filling in (battle-app.js
+       removes the class via the queue fill's onDone). */
     body.intro-pending .action-menu,
-    body.intro-pending .footer-info,
-    body.intro-pending .queue-panel {
+    body.intro-pending .footer-info {
+      display: none;
+    }
+    /* Timing track stays hidden until the monsters are in; released by
+       finishBattleIntro() when the fill starts (rows then fade in one at a time). */
+    body.queue-filling .queue-panel {
       display: none;
     }
     .queue-row {
