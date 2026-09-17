@@ -60,6 +60,103 @@ function bandClass(m) {
   return BAND_CLASS[word] || 'st-green';
 }
 
+// PC-DEC-044: typewriter battle log presets (charMs per char, lineDelayMs beat after line)
+const BATTLE_TEXT = {
+  STANDARD: { charMs: 15, lineDelayMs: 1000, label: 'Standard' },
+  SLOW: { charMs: 25, lineDelayMs: 1600, label: 'Slow' },
+  INSTANT: { charMs: 0, lineDelayMs: 0, label: 'Instant' }
+};
+let battleTextSpeedKey = localStorage.getItem('pc_battle_text_speed') || 'STANDARD';
+if (!BATTLE_TEXT[battleTextSpeedKey]) battleTextSpeedKey = 'STANDARD';
+
+function getBattleTextPreset() {
+  return BATTLE_TEXT[battleTextSpeedKey] || BATTLE_TEXT.STANDARD;
+}
+
+function cycleBattleTextSpeed() {
+  const order = ['STANDARD', 'SLOW', 'INSTANT'];
+  const idx = order.indexOf(battleTextSpeedKey);
+  battleTextSpeedKey = order[(idx + 1) % order.length];
+  localStorage.setItem('pc_battle_text_speed', battleTextSpeedKey);
+  updateTextSpeedUI();
+}
+
+function updateTextSpeedUI() {
+  const el = document.getElementById('text-speed');
+  if (el) {
+    const p = getBattleTextPreset();
+    el.textContent = `TEXT SPEED: ${p.label}`;
+  }
+}
+
+// PC-DEC-044: typewriter state + helpers (only new lines type; appendFeedLine + system paths stay instant)
+let typingInProgress = false;
+let typingTimeouts = [];
+let typingSetBusy = false; // track if *this* typing batch set the busy gate
+let feedPinned = true; // DO-2: auto-scroll only while pinned; user scroll-up pauses for the batch
+
+function clearTyping() {
+  typingTimeouts.forEach(t => clearTimeout(t));
+  typingTimeouts = [];
+  typingInProgress = false;
+  if (typingSetBusy) {
+    setBusy(false);
+    typingSetBusy = false;
+  }
+}
+
+function typeFeedLines(lines, onComplete) {
+  // Latest-feed-wins: a commit/Enter can land mid-batch (keyboard path bypasses the
+  // disabled buttons). If a batch is already typing, complete it instantly first so
+  // only ONE typing loop runs at a time — same skip semantics as click-to-complete.
+  if (typingInProgress) clearTyping();
+  const box = document.getElementById('message-box');
+  if (!box) {
+    if (onComplete) onComplete();
+    return;
+  }
+  const preset = getBattleTextPreset();
+  if (preset.charMs === 0 || lines.length === 0) {
+    lines.forEach(l => appendFeedLine(l));
+    if (onComplete) onComplete();
+    return;
+  }
+  typingInProgress = true;
+  setBusy(true); // gate action menu during typing per spec
+  typingSetBusy = true;
+  feedPinned = true; // start pinned for this batch; scroll-up will unpin for remainder of batch
+  let lineIndex = 0;
+  function typeNextLine() {
+    if (lineIndex >= lines.length) {
+      typingInProgress = false;
+      setBusy(false);
+      if (onComplete) onComplete();
+      return;
+    }
+    const lineText = lines[lineIndex];
+    const div = document.createElement('div');
+    div.className = 'msg-line';
+    box.appendChild(div);
+    if (feedPinned) box.scrollTop = box.scrollHeight;
+    let charIndex = 0;
+    function typeChar() {
+      if (charIndex < lineText.length) {
+        div.textContent = lineText.slice(0, charIndex + 1);
+        charIndex++;
+        if (feedPinned) box.scrollTop = box.scrollHeight;
+        const t = setTimeout(typeChar, preset.charMs);
+        typingTimeouts.push(t);
+      } else {
+        lineIndex++;
+        const t = setTimeout(typeNextLine, preset.lineDelayMs);
+        typingTimeouts.push(t);
+      }
+    }
+    typeChar();
+  }
+  typeNextLine();
+}
+
 function getAuthToken() {
   return supabase?.auth?.getSession?.().then(({ data }) => data?.session?.access_token);
 }
@@ -402,21 +499,26 @@ function finishBattleIntro() {
 function renderFeed(feed) {
   const box = document.getElementById('message-box');
   if (!box) return;
-  box.innerHTML = '';
-  if (!feed || feed.length === 0) {
-    const line = document.createElement('div');
-    line.className = 'msg-line';
-    line.textContent = 'Battle begins...';
-    box.appendChild(line);
+  const currentLines = feed || [];
+  // EMPTY feed = new-battle reset signal (tic-0 ceremony): clear box, show placeholder instantly, reset state
+  if (currentLines.length === 0) {
+    box.innerHTML = '';
+    appendFeedLine('Battle begins...');
+    typingInProgress = false;
+    typingSetBusy = false;
+    typingTimeouts = [];
     return;
   }
-  feed.forEach(lineText => {
-    const line = document.createElement('div');
-    line.className = 'msg-line';
-    line.textContent = lineText;
-    box.appendChild(line);
-  });
-  box.scrollTop = box.scrollHeight;
+  const existingCount = box.children.length;
+  // incremental: only type NEW lines (diff by count); history never re-types
+  if (currentLines.length <= existingCount) return;
+  const newLines = currentLines.slice(existingCount);
+  const preset = getBattleTextPreset();
+  if (preset.charMs === 0) {
+    newLines.forEach(lineText => appendFeedLine(lineText));
+    return;
+  }
+  typeFeedLines(newLines);
 }
 
 function renderPlayerHP(runOrState) {
@@ -586,8 +688,23 @@ function clearIntroTimer() {
 
 function finishIntroSnap(bs, onDone) {
   renderQueue(bs); // real rows replace the mirrored DOM
-  renderFeed(bs.feed || []); // full feed replaces revealed lines
-  if (onDone) onDone();
+  const feed = bs.feed || [];
+  const preset = getBattleTextPreset();
+  if (preset.charMs === 0) {
+    renderFeed(feed);
+    if (onDone) onDone();
+    return;
+  }
+  // PC-DEC-044: hold onDone until typing completes; reset path in renderFeed clears for from-the-top reveal
+  // always type the FULL feed (after placeholder) for intro snap
+  if (feed.length > 0) {
+    // clear any prior content (placeholder + any revealed) so we type the full post-reset feed
+    const box = document.getElementById('message-box');
+    if (box) box.innerHTML = '';
+    typeFeedLines(feed, onDone);
+  } else if (onDone) {
+    onDone();
+  }
 }
 
 function queueLabel(row) {
@@ -1257,6 +1374,30 @@ async function init() {
   shouldAnimateDice = true; // run start transition
   await loadBattle(runId);
   setupEndRunButton(runId);
+
+  // PC-DEC-044: wire TEXT SPEED cycling control
+  const speedEl = document.getElementById('text-speed');
+  if (speedEl) {
+    speedEl.onclick = () => {
+      cycleBattleTextSpeed();
+    };
+    updateTextSpeedUI();
+  }
+
+  // PC-DEC-044: click message log to instantly complete pending typing
+  const msgBox = document.getElementById('message-box');
+  if (msgBox) {
+    msgBox.onclick = () => {
+      if (typingInProgress) {
+        clearTyping();
+      }
+    };
+    // DO-2 scroll-pinning: toggle pinned flag; typing only auto-scrolls while pinned
+    msgBox.addEventListener('scroll', () => {
+      const atBottom = msgBox.scrollTop + msgBox.clientHeight >= msgBox.scrollHeight - 8;
+      feedPinned = atBottom;
+    });
+  }
 }
 
 init();
