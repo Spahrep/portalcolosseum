@@ -16,7 +16,7 @@ Players start with limited carrying capacity to enforce meaningful choices:
 - **Hand L / Hand R** — weapons (or potion use; see consumables.md — a hand may drink even while holding a weapon)
 - **Empty hand = Fist** — an empty hand can still act: drink a potion, or make an unarmed **Fist** attack (very low damage, fast speed, out-DPS'd by the worst weapon). A weapon in hand is **universally better** than an empty hand, except for weapon swaps and drinking potions (Spahrep 2026-09-16). Dual wielding is the damage ceiling; an empty hand is a consumable/recovery tool, not a soft-lock.
 - **Belt Loop (BL)** — swap/reserve slot holding a **second weapon** (not a consumable — Spahrep 2026-09-16 corrected DarkJester's belt-as-third-consumable idea as confusion). No attack path of its own; it does NOT satisfy the ≥1 hand weapon entry rule (see run-ux-flow.md).
-  - Mid-battle swap is **not implemented yet** (battle-app.js: "belt weapon — no mid-battle swap"); the swap timing formula stays open (current-design-status.md Open Q #4)
+  - **Mid-battle swap is shipped (PC-54)** — swap hand weapon ↔ belt weapon when the hand is Ready; the hand's next action is delayed by the **longer of the two weapons' speeds** (DarkJester 2026-09-15, PC-DEC-031; implemented on the weapon `speed` field). Still open: whether the swapped-in weapon can attack immediately or needs a draw tic. Decided by DarkJester, 2026-09-15.
   - Hands are fully independent — UNLESS a 2H weapon exists (PMVP), in which case both hands must be free for the swap
 - **C1 / C2** — the two consumable slots (potions, etc.); usable during combat or between fights. Use time = **weapon-in-hand speed + consumable speed** (Spahrep 2026-09-16)
 

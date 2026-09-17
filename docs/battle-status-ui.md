@@ -39,6 +39,13 @@ Timing information is shown as a **range exactly once — during browse** — th
 > area needs to be revisited.** Current code: `js/battle-app.js renderQueue()` renders
 > the next-up events column (`Label EventName | tics`, sorted ascending); there is NO
 > preview band, no ">" markers, no browse-phase range display anywhere in the client.
+>
+> **ANNOTATION 2026-09-17 (sweep):** part of the above is superseded. The
+> '>'-markers-vs-band fork is RULED (PC-DEC-020: simple '>' timing markers now, full
+> band preview PMVP) and the markers SHIPPED with PC-56 (CLI + web GUI,
+> `computeTimingMarkers`; see TIMING MARKERS RULED below) — "no '>' markers anywhere in
+> the client" is outdated as of PC-56. Still standing: no full preview band exists, and
+> the timing-column design remains an open revisit (PC-DEC-004 OPEN).
 
 ### Phase 1 — Browse (free, instant)
 
@@ -254,9 +261,11 @@ the core UI depends on it. (Spahrep 2026-09-08)
 - Buffs: chips on the stat block with end-tic (MVP). Buff expiry *could* be a column row
   (it IS a state change) — revisit if buffs become load-bearing.
 - Sound: subtle chime when a hand frees (PMVP — the visual beat carries MVP).
-- Whether attacks are player-chosen (gui1 style) or proc on slot chance (weapon-generation
-  `slot_N_chance`) is unresolved and affects whether command boxes show multiple attacks
-  per hand. Current GUI = chosen. See combat-system.md / weapon-generation.md.
+- RESOLVED (2026-09-17): attacks are **player-chosen** from the hand weapon's real attack
+  list — the DW action window lists the weapon's attacks as selectable rows
+  (PC-DEC-021..027; confirm-line format PC-DEC-025) and command boxes show that hand's
+  attacks. `slot_N_chance` governs GENERATION only (which attacks a rolled weapon gets —
+  weapon-generation.md), never in-combat selection.
 - Three-zone read (guaranteed-prior / potential-trade / safe-after) is a later refinement;
   MVP renders one tint.
 

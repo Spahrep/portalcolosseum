@@ -152,7 +152,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 1. **Loot Rules on Stop** — exact % of prize pool kept when stopping early; how random selection works (uniform? weighted by rarity?)
 2. **Multi-Enemy Attack Balance** — how much less damage cleave/whirlwind do per target; fixed or scales with weapon quality. Higher priority since encounters are confirmed multi-monster groups. (Parked 2026-09-16 — future design decision, not a conflict.)
 3. **Wizard Tent Healing Model** — AP and/or gold, hourly drip, or 1×/day full heal (see ap-economy.md)
-4. **Belt Loop Swap Timing** — exact formula f(weapon in hand speed, belt weapon speed); whether swapped-in weapon can attack immediately or needs a draw tic; whether counter resets on shop refresh. (DarkJester's working candidate 2026-09-15: delay that hand by the longer of the two weapons' base speeds — not yet shipped; mid-battle swap is currently unimplemented.)
+4. **Belt Loop Swap Timing** — formula RULED (PC-DEC-031, DarkJester 2026-09-15: delay that hand by the longer of the two weapons' speeds; shipped PC-54 as max(speeds), hand must be Ready). Remaining open: whether the swapped-in weapon can attack immediately or needs a draw tic. Decided by DarkJester, 2026-09-15.
 5. **Consumable Use Formula** — total time = weapon-in-hand speed + consumable speed (ruled PC-DEC-013, Spahrep 2026-09-16); pre/post split of that total + duration numbers per template still TBD
 6. **Shop Numbers** — refresh timer, reroll base/multiplier, price curve exact values, whether reroll counter resets on shop refresh
 7. **Encounter System Open Questions** (see encounter-system.md)
@@ -166,4 +166,4 @@ This file captures the current state of design decisions for Portal Colosseum. I
 
 ---
 
-**Next Priority**: Lock the belt-loop swap timing and the consumable pre/post split (the last timing unknowns — the consumable total, weapon speed + consumable speed, is already ruled), then the shop numbers (refresh, reroll base/multiplier). After that the item/economy design is complete enough to hand to implementation.
+**Next Priority**: Lock the consumable pre/post split — the last timing unknown (the total, weapon speed + consumable speed, is ruled PC-DEC-013; belt-loop swap timing is ruled PC-DEC-031, with only the swapped-in draw-tic question open) — then the shop numbers (refresh, reroll base/multiplier). After that the item/economy design is complete enough to hand to implementation.

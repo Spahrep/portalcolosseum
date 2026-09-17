@@ -263,6 +263,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Monster side of the initiative compare: NO roll — each monster's initiative IS its instance speed value from combat start. Tie → player acts first. Assumption (not stated): HIGHER initiative acts first within a tic — consistent with a hand rolling max vs a monster's static speed producing a tie (player first); flagged for confirmation when the engine ticket is built (PC-64). How initiative ordering composes with the existing windup/timing rail is NOT ruled — engine design, Spahrep + DarkJester decide together.
 
+- ID: PC-DEC-031
+  Date: 2026-09-15
+  Source: Discord thread "Ensure players keep one weapon" (1549499851736350781), 16:35:28 — captured late by the 2026-09-17 sweep (listed as uncaptured candidate 2 in docs/reviews/2026-09-16.md)
+  Speaker: DarkJester
+  Verbatim: "you can switch your weapon with whatever is in your belt loop mid combat whenever your hand has an action. If I want to switch my dagger for my great axe, it should compare the base speeds of both weapons and delay that hands next action by whichever is longer."
+  Status: DECIDED
+  Notes: Belt-loop swap timing formula. Shipped as PC-54: mid-battle swap when the hand is Ready, delay = max of the two weapons' speeds (implemented on the weapon `speed` field; js/combat/participants.js swapHandWithBelt). Closes current-design-status.md Open Q #4's formula half; the BL root-menu row (PC-DEC-023) is the swap surface. Still open: whether the swapped-in weapon can attack immediately or needs a draw tic.
+
 ## Open
 
 - ID: PC-DEC-004

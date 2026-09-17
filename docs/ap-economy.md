@@ -1,6 +1,6 @@
 # AP Economy
 
-**Updated:** 2026-09-08 — 3× cap, sink split, entry costs, leaderboard rationale, wizard tent (TBD)
+**Updated:** 2026-09-16 — Starting AP=10 + gold 0 via game_config (PC-DEC-018), bottom-dock AP/gold HUD confirmed (PC-DEC-009); 3× cap, sink split, entry costs, leaderboard rationale, wizard tent (TBD)
 
 ## The Resource
 

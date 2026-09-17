@@ -55,7 +55,7 @@ When a player starts a portal run:
 
 Ownership chain (Spahrep, 2026-09-11): the LH/RH/Belt/Consume and monsters are all assigned to the portal run; the monsters specifically are assigned to the first battle, which is assigned to the portal.
 
-Implementation status: `POST /api/combat/runs` takes hand_l/hand_r/belt (ownership-validated); `consume_a_id`/`consume_b_id` exist on `portal_run` as placeholders on `weapon_instance` (consumable_instance table pending); the dice pool is materialized at run creation (`portal_run_dice`); the draw + roll + monster-generation engine is Slice 3, unbuilt — monsters are currently generated at battle start.
+Implementation status (updated 2026-09-17): `POST /api/combat/runs` takes hand_l/hand_r/belt (ownership-validated); `consume_a_id`/`consume_b_id` on `portal_run` now reference real consumable instances (consumable_template + consumable_instance shipped PC-17/PC-37); the dice pool is materialized at run creation (`portal_run_dice`); the draw + roll + monster-group selection engine is shipped (PC-16, wired into run creation + battle start).
 
 ## Battle Generation
 

@@ -43,7 +43,7 @@
 - **Cooldowns live on HANDS, never on weapons.** The potion's "cooldown" IS pre + post, costed by the weapon in that hand.
 - The **other hand keeps attacking** the whole time — drinking locks one hand, not the turn.
 - Formula shape: pre/post scale with the weapon in hand AND the potion's own speed. Exact formula TBD.
-- Weapon speed does triple duty: attack rate, potion timing, and (TBD) swap timing.
+- Weapon speed does triple duty: attack rate, potion timing, and swap timing (ruled PC-DEC-031: swapped hand delayed by the longer of the two weapons' speeds).
 
 ## Buffs & Debuffs
 

@@ -2,7 +2,7 @@
 
 **Source:** Jester's Ideas Log (2026-08-26)
 **Status:** MVP Implementation
-**Updated:** 2026-09-05 — Slot 0 now stored as FK column, attack selection via mapping table with weights
+**Updated:** 2026-09-16 — SSS starter template (flat 5/20/70, zero deltas) referenced by game_config; 2026-09-05 — Slot 0 stored as FK column, attack selection via mapping table with weights
 **Principle:** Randomness at all stages with normal distribution centered on base values.
 
 ## Overview
