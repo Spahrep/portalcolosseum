@@ -612,9 +612,9 @@ async function handle(request) {
         const weaponSpeed = Number(weapon?.speed) || 0;
         castTicks = weaponSpeed + rollStat(attackRow?.prepare_time, attackRow?.prepare_time_range);
         cooldownTicks = weaponSpeed + rollStat(attackRow?.cooldown_time, attackRow?.cooldown_time_range);
-        const multiplier = attackRow?.base_damage_multiplier || 0;
+        const multiplier = attackRow?.base_damage_multiplier ?? 1;
 
-        playerDamage = Math.round((weapon?.damage || 10) * (1 + multiplier));
+        playerDamage = Math.round((weapon?.damage || 10) * multiplier);
         playerAccuracy = weapon?.accuracy;
         attackName = attackRow?.name || null;
       }
