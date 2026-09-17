@@ -1,13 +1,14 @@
 // js/combat/participants.js
-// Pure ESM. Player (HP 1000, two hands) and monsters (rolled stats, secret max_hp).
+// Pure ESM. Player (max HP from config, two hands) and monsters (rolled stats, secret max_hp).
 // Hand state: Ready -> winding -> impact -> cooldown -> Ready. Monster rows per-cycle.
 
-export const PLAYER_MAX_HP = 1000;
+export const PLAYER_MAX_HP = 1000; // engine default; live value comes from game_config.starting_hp
 
-export function createPlayer(loadout) {
+export function createPlayer(loadout, maxHp = PLAYER_MAX_HP) {
   return {
     type: 'player',
-    hp: PLAYER_MAX_HP,
+    hp: maxHp,
+    max_hp: maxHp,
     hands: {
       LH: { state: 'Ready', weaponId: loadout.hand_l, attackId: null },
       RH: { state: 'Ready', weaponId: loadout.hand_r, attackId: null }

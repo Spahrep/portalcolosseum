@@ -6,7 +6,7 @@
 // F10: startBattle accepts optional initialPlayerHp for cross-battle HP carry.
 
 import { createQueue, commitNewRow, tick, sortQueue, morphHandRow } from './tic-queue.js';
-import { createPlayer, createMonster, isPlayerDead, isMonsterDead, applyDamage, swapHandWithBelt as swapHandWithBeltPure } from './participants.js';
+import { createPlayer, createMonster, isPlayerDead, isMonsterDead, applyDamage, swapHandWithBelt as swapHandWithBeltPure, PLAYER_MAX_HP } from './participants.js';
 import { getHpWord } from './hp-words.js';
 import { rollDamage, checkHit, resolveAttack, multiTargetReduction } from './damage.js';
 import { POTION_SLOTS, ALL_EFFECT_TYPES, HAND_LABELS, POTION_PHASES, potionPrePostTicks } from './potion-contract.js';
@@ -188,9 +188,9 @@ export function createEngine(rng = Math.random) {
     return advanceToNextDecision();
   }
 
-  function startBattle(participants, seededRng, initialPlayerHp = null) {
+  function startBattle(participants, seededRng, initialPlayerHp = null, maxPlayerHp = PLAYER_MAX_HP) {
     if (seededRng) state.rng = seededRng;
-    state.player = createPlayer(participants.loadout || { hand_l: 1, hand_r: 2 });
+    state.player = createPlayer(participants.loadout || { hand_l: 1, hand_r: 2 }, maxPlayerHp);
     // F10: support HP carry from previous battle (battle_state.player.hp source of truth)
     if (initialPlayerHp != null && typeof initialPlayerHp === 'number' && initialPlayerHp > 0) {
       state.player.hp = initialPlayerHp;
@@ -232,9 +232,10 @@ export function createEngine(rng = Math.random) {
 
   function getState() {
     const hp = state.player ? state.player.hp : 0;
+    const maxHp = state.player ? state.player.max_hp ?? 0 : 0;
     const hands = state.player ? state.player.hands : {};
     const participantsOut = {
-      player: { hp, hands },
+      player: { hp, max_hp: maxHp, hands },
       monsters: state.monsters.map(m => ({
         label: m.label,
         hp_word: getHpWord(m.current_hp || 0, m.max_hp || 0),

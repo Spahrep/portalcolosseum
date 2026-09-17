@@ -584,6 +584,28 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.ok(state.intro.fires.length > 0);
   });
 
+  it('config-driven max HP flows into player and intro.hpStart', () => {
+    const eng = createEngine(seededRNG(7));
+    const state = eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+    }, null, null, 1500);
+    assert.ok(state.participants.player.hp < 1500); // intro advance resolved a fire
+    assert.equal(state.participants.player.max_hp, 1500);
+    assert.equal(state.intro.hpStart, 1500); // captured pre-advance
+  });
+
+  it('HP carry does not override config-driven max', () => {
+    const eng = createEngine(seededRNG(7));
+    const state = eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+    }, null, 450, 1500);
+    assert.ok(state.participants.player.hp < 450); // F10 carry applied, then intro advance resolves fires
+    assert.ok(state.participants.player.hp > 0);
+    assert.equal(state.participants.player.max_hp, 1500); // max stays config-driven
+  });
+
   it('monster-first fires timeline', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({

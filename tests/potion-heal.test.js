@@ -63,6 +63,13 @@ describe('Heal effects (PC-39)', () => {
     assert.equal(result.healed, 0);
   });
 
+  it('direct: cap follows config-driven max_hp (e.g. game_config.starting_hp)', () => {
+    const state = { player: { hp: 1400, max_hp: 1500 }, buffs: [] };
+    const result = applyPotionEffect(state, { type: 'heal', amount: 200, name: 'Heal' }, 0);
+    assert.equal(state.player.hp, 1500);
+    assert.equal(result.healed, 100);
+  });
+
   it('direct: missing rolled_floor throws Heal potion missing rolled_floor', () => {
     const state = { player: { hp: 500 }, buffs: [] };
     assert.throws(() => applyPotionEffect(state, { type: 'heal', amount: undefined, name: 'Heal' }, 0), /Heal potion missing rolled_floor/);

@@ -31,7 +31,8 @@ export function applyPotionEffect(state, payload, tic) {
       throw new Error('Heal potion missing rolled_floor');
     }
     const before = state.player.hp;
-    state.player.hp = Math.min(PLAYER_MAX_HP, state.player.hp + payload.amount);
+    const cap = state.player.max_hp ?? PLAYER_MAX_HP; // config-driven max; fallback for legacy states
+    state.player.hp = Math.min(cap, state.player.hp + payload.amount);
     return { kind: 'heal', healed: state.player.hp - before };
   } else {
     // buff branch

@@ -37,6 +37,18 @@ function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: CORS });
 }
 
+// PC-64r2: player max HP is config-driven (game_config.starting_hp).
+// Returns null when unset/unreadable → engine falls back to PLAYER_MAX_HP (1000).
+async function startingHp(admin) {
+  try {
+    const { data } = await admin.from('game_config').select('starting_hp').eq('id', 1).maybeSingle();
+    const v = Number(data?.starting_hp);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 function getAdminClient() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -179,6 +191,9 @@ async function handle(request) {
       const { data: tmpl } = await admin.from('portal_template').select('fights, green_dice_count, yellow_dice_count, red_dice_count, green_faces, yellow_faces, red_faces').eq('id', portalTemplateIdNum).single();
       if (!tmpl) return json({ error: 'Portal template not found' }, 404);
 
+      // PC-64r2: player max HP comes from game_config.starting_hp, not a literal
+      const maxPlayerHp = await startingHp(admin);
+
       let run;
       try {
         const { data: inserted, error: insErr } = await admin.from('portal_run').insert({
@@ -192,7 +207,7 @@ async function handle(request) {
           status: 'active',
           current_battle: 1,
           total_battles: tmpl.fights || 5,
-          player_hp: 1000,
+          player_hp: maxPlayerHp ?? 1000,
           battle_state: {}
         }).select().single();
         if (insErr) throw insErr;
@@ -256,7 +271,7 @@ async function handle(request) {
                 monsters
               };
               const eng = createEngine();
-              eng.startBattle(participants);
+              eng.startBattle(participants, null, null, maxPlayerHp);
               battleStateForRun1 = eng.state;
               await admin.from('portal_run').update({ battle_state: battleStateForRun1 }).eq('id', run.id).eq('user_id', user.id);
             }
@@ -511,7 +526,7 @@ async function handle(request) {
         monsters
       };
       const engine = createEngine();
-      const battleStateOut = engine.startBattle(participants);
+      const battleStateOut = engine.startBattle(participants, null, null, await startingHp(admin));
       await admin.from('portal_run')
         .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp })
         .eq('id', id).eq('user_id', user.id);
@@ -695,7 +710,7 @@ async function handle(request) {
           const freshEngine = createEngine();
           // F10: carry HP via initialPlayerHp param into startBattle
           const carryHp = engine && engine.state.player ? engine.state.player.hp : run.player_hp;
-          freshEngine.startBattle(participants, null, carryHp);
+          freshEngine.startBattle(participants, null, carryHp, await startingHp(admin));
           newBattleState = freshEngine.state;
           await admin.from('portal_run')
             .update({ battle_state: newBattleState, current_battle: newBattle, player_hp: carryHp })
@@ -768,7 +783,7 @@ async function handle(request) {
         engine.startBattle({
           loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, ...(await handApproachSpeeds(run.hand_l_weapon_id, run.hand_r_weapon_id)), consume_a: potionLoadout.A, consume_b: potionLoadout.B },
           monsters: []
-        }, null, run.player_hp > 0 ? run.player_hp : null);
+        }, null, run.player_hp > 0 ? run.player_hp : null, await startingHp(admin));
       }
 
       const inBattle = !!engine.state.player && engine.state.monsters.some(m => (m.current_hp || 0) > 0);
@@ -878,7 +893,7 @@ async function handle(request) {
         engine.startBattle({
           loadout: { hand_l: run.hand_l_weapon_id, hand_r: run.hand_r_weapon_id, ...(await handApproachSpeeds(run.hand_l_weapon_id, run.hand_r_weapon_id)), consume_a: null, consume_b: null },
           monsters: []
-        }, null, run.player_hp > 0 ? run.player_hp : null);
+        }, null, run.player_hp > 0 ? run.player_hp : null, await startingHp(admin));
       }
 
       const result = engine.swapHandWithBelt(hand, weapons);
@@ -1268,7 +1283,7 @@ async function handle(request) {
         monsters
       };
       const freshEngine = createEngine();
-      freshEngine.startBattle(participants, null, playerHp);
+      freshEngine.startBattle(participants, null, playerHp, await startingHp(admin));
       const newState = freshEngine.state;
       // persist
       try {
