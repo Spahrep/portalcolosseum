@@ -811,10 +811,12 @@ function renderActionMenu(bs) {
   // Cascade geometry (PC-DEC-043; shared/CascadeIssue.png "Desired"): every window
   // renders at the SAME box size — the tallest window's natural height, capped to
   // the root — so the fixed down-right step produces an even staircase: each window
-  // overlaps the parent by a uniform amount, keeping the parent's header strip
-  // (hand tab + first rows) and left column visible. No size-mismatch gaps.
-  const CASCADE_STEP_X = 140; // px right per level — parent's left column stays readable
-  const CASCADE_STEP_Y = 62;  // px down per level — parent's tab + first rows stay readable
+  // overlaps the parent by a uniform amount. Per Spahrep 2026-09-17 the steps are
+  // kept small because a parent's rows are obsolete once you advance ("you really
+  // dont need to see it, so it can overlap the words too") — only the parent's
+  // hand tab stays visible. No size-mismatch gaps.
+  const CASCADE_STEP_X = 96; // px right per level — parent's left sliver stays readable
+  const CASCADE_STEP_Y = 26; // px down per level — parent's hand tab stays visible; rows may be covered
   const stack = [];
 
   function yesNoRows(onYes) {

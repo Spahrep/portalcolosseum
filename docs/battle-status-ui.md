@@ -111,9 +111,10 @@ Each new window overlaps the previous down-right; it always fully covers its own
 content and may clip the parent (authentic DW) — the ACTIVE window's text never clips.
 Cascade geometry (PC-DEC-043, shared/CascadeIssue.png): all windows render at one
 uniform box — the tallest window's natural height, capped to the panel — stepped a
-fixed 140px right / 62px down, so each window overlaps the parent by the same
-amount and the stack reads as one even staircase (parent's hand tab + first rows +
-left column stay visible; no mismatched sizes or floating gaps).
+fixed 96px right / 26px down, so each window overlaps the parent by the same
+amount and the stack reads as one even staircase. Steps are deliberately small:
+a parent's rows are obsolete once you advance, so they may be covered — only the
+parent's hand tab stays visible (Spahrep 2026-09-17).
 
 1. **Action window (root)** — black window, orange border, orange pixel-mono text;
    a blue tab straddling the top border shows the owner hand ("Left Hand" / "Right

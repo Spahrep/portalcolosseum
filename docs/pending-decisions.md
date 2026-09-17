@@ -365,7 +365,7 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Speaker: Spahrep
   Verbatim: "each window needs to overlap the existing one by some amount, for the exact amoutn you can use the /personality designer"
   Status: DECIDED
-  Notes: Cascade geometry ruling from shared/CascadeIssue.png ("Actual" vs "Desired" panels). All cascade windows render at ONE uniform box — the tallest window's natural height, capped to the panel — and step down-right by a fixed amount (140px right / 62px down, named constants CASCADE_STEP_X/Y). Every window therefore overlaps the parent by the same amount: the parent's header strip (hand tab + first rows) and left column stay visible, and no window floats disconnected from the stack. Applied to js/battle-app.js renderStack + run.html .dw-window (box-sizing: border-box, width 316px total = previous 290px content).
+  Notes: Cascade geometry ruling from shared/CascadeIssue.png ("Actual" vs "Desired" panels). All cascade windows render at ONE uniform box — the tallest window's natural height, capped to the panel — and step down-right by a fixed amount (named constants CASCADE_STEP_X/Y), so every window overlaps the parent by the same amount and no window floats disconnected from the stack. Tuned 2026-09-17 (same thread, "they end up pushing down too far"): steps set to 96px right / 26px down — a parent's rows are obsolete once you advance ("you really dont need to see it, so it can overlap the words too"), so only the parent's hand tab stays visible and the stack stays compact (downward reach ~52px + box height, vs 124px + box before). Applied to js/battle-app.js renderStack + run.html .dw-window (box-sizing: border-box, width 316px total = previous 290px content).
 
 ## Open
 
