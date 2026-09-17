@@ -274,10 +274,10 @@ function performSweepAnimation(diceEls, targetIndex, onLand) {
 }
 
 // Roll tumbles real faces[color] from payload (defensive [face] if missing).
-// No invented values. Every tick flashes the box (and avoids re-showing the
-// previous value when the pool allows), so a die whose faces repeat — e.g.
-// two 10s — never looks stuck mid-roll. Settles with pop; #current-die
-// lights only after.
+// No invented values — repeated faces are legitimate (dice carry the same
+// value on several faces), so every tick flashes the box instead: the roll
+// reads as alive even when the number stays the same. Settles with pop;
+// #current-die lights only after.
 function rollDiceAnimation(box, current, faces, onDone) {
   // The box keeps its color and highlight — it is already the draw's die.
   const pool = (faces && faces[current.color] && faces[current.color].length > 0)
@@ -286,16 +286,6 @@ function rollDiceAnimation(box, current, faces, onDone) {
 
   let tick = 0;
   let interval = DICE_ANIM.ROLL_INITIAL;
-  // Pick the next tumbled face. Faces stay real; we only skip the value that
-  // is already showing, so consecutive repeats (10, 10, 10…) can't happen
-  // unless the pool is literally all one value. String-compare because the
-  // box holds text while the pool holds numbers.
-  function nextFace(prev) {
-    const distinct = pool.filter((v) => String(v) !== String(prev));
-    return distinct.length > 0
-      ? distinct[Math.floor(Math.random() * distinct.length)]
-      : pool[Math.floor(Math.random() * pool.length)];
-  }
   function flash() {
     box.classList.remove('rolling');
     void box.offsetWidth; // reflow so the flash animation restarts for THIS roll
@@ -311,7 +301,7 @@ function rollDiceAnimation(box, current, faces, onDone) {
       onDone();
       return;
     }
-    box.textContent = nextFace(box.textContent);
+    box.textContent = pool[Math.floor(Math.random() * pool.length)];
     flash();
     tick++;
     interval = Math.min(DICE_ANIM.ROLL_MIN, Math.floor(interval * DICE_ANIM.ROLL_DECEL));
