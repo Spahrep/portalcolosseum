@@ -584,12 +584,16 @@ async function handle(request) {
           .eq('weapon_template_id', wInst.template_id).eq('attack_id', attackIdNum);
         if (!mapCount) return json({ error: 'Attack not on equipped weapon' }, 403);
 
-        // F14: clamp prepare/cooldown to >=1 (rollStat already clamps; range 0 returns base exactly)
-        castTicks = rollStat(attackRow?.prepare_time, attackRow?.prepare_time_range);
-        cooldownTicks = rollStat(attackRow?.cooldown_time, attackRow?.cooldown_time_range);
+        // Spahrep 2026-09-17: total attack timing = weapon speed + the attack's own
+        // rolled pre/post. The attack's prepare/cooldown (and ranges) are kept as-is;
+        // the weapon's base speed is added into each computation. rollStat clamps >=1,
+        // range 0 returns base exactly.
+        const { data: weapon } = await admin.from('weapon_instance').select('damage, accuracy, speed').eq('id', weaponId).single();
+        const weaponSpeed = Number(weapon?.speed) || 0;
+        castTicks = weaponSpeed + rollStat(attackRow?.prepare_time, attackRow?.prepare_time_range);
+        cooldownTicks = weaponSpeed + rollStat(attackRow?.cooldown_time, attackRow?.cooldown_time_range);
         const multiplier = attackRow?.base_damage_multiplier || 0;
 
-        const { data: weapon } = await admin.from('weapon_instance').select('damage, accuracy').eq('id', weaponId).single();
         playerDamage = Math.round((weapon?.damage || 10) * (1 + multiplier));
         playerAccuracy = weapon?.accuracy;
         attackName = attackRow?.name || null;

@@ -709,7 +709,7 @@ export async function cmdMenu(args = []) {
 
     if (row.kind === 'attack') {
       // '>' timing markers on the queue for this attack (approved mockup semantics)
-      const markers = computeTimingMarkers(bs.queue || [], row.attack);
+      const markers = computeTimingMarkers(bs.queue || [], row.attack, (bs.weapons?.[hand === 'LH' ? 'hand_l' : 'hand_r']?.speed) || 0);
       if (!isQuiet() && !isJson()) {
         console.log('queue:');
         printQueueWithMarkers(bs.queue || [], markers);

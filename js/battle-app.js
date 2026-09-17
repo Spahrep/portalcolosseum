@@ -633,7 +633,7 @@ function renderActionMenu(bs) {
   }
 
   function setMarkers(attack) {
-    queueMarkers = new Map(computeTimingMarkers(queue, attack).map(m => [m.id, m.marker]));
+    queueMarkers = new Map(computeTimingMarkers(queue, attack, (w && w.speed) || 0).map(m => [m.id, m.marker]));
     renderQueue(lastBs);
   }
   function clearMarkers() {

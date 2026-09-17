@@ -407,6 +407,15 @@ describe('PC-56 timing markers (computeTimingMarkers)', () => {
     const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
     assert.deepEqual(res, []);
   });
+
+  it('weaponSpeed is added to the window (total = weapon speed + attack prepare)', () => {
+    const q = mk([5, 6]); // spd 0: window 3..5, tics=5 is maxT boundary -> single marker
+    assert.deepEqual(computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 }), [{ id: 'r0', marker: '>' }]);
+    // same attack, weapon speed 4: window 7..9, nothing >= 9 -> []
+    assert.deepEqual(computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 }, 4), []);
+    // same attack, weapon speed 1: window 4..6, tics=5 strictly inside; no row < 4 or > 6 to bound -> []
+    assert.deepEqual(computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 }, 1), []);
+  });
 });
 
 describe('PC-54 belt swap (swapHandWithBelt + engine wiring)', () => {

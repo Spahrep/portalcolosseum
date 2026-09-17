@@ -814,7 +814,7 @@ async function cmdMenu(args = []) {
 
     if (row.kind === 'attack') {
       // '>' timing markers on the queue panel for this attack (approved mockup semantics)
-      menuAttack = { attack: row.attack, queue: bs.queue || [] };
+      menuAttack = { attack: row.attack, queue: bs.queue || [], weaponSpeed: (weapons[hand === 'LH' ? 'hand_l' : 'hand_r']?.speed) || 0 };
       try { await refreshRunPanels(); } catch (_) {}
       let targets = [];
       if (row.attack && row.attack.is_multi_target) {
@@ -1518,7 +1518,7 @@ function updateSidePanelsFromRun(run) {
         // PC-56: '>' timing marker on rows inside the selected attack's window
         let marker = '';
         if (menuAttack && menuAttack.queue === queue) {
-          const marked = computeTimingMarkers(menuAttack.queue, menuAttack.attack);
+          const marked = computeTimingMarkers(menuAttack.queue, menuAttack.attack, menuAttack.weaponSpeed);
           if (marked.some(m => m.id === q.id)) marker = ' >';
         }
         html += `<div>${tics} - ${label}: ${ev}${marker}</div>`;
