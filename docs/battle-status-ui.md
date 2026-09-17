@@ -143,16 +143,47 @@ Monsters need no initiative of their own: they are already on the rail at their
 instance speed (PC-DEC-030).
 
 When an approach row hits 0 the hand becomes **Ready** and the player picks their
-action then — the command menu opens at the first decision point, not at tic 0.
-`startBattle` advances the clock to that point, so a monster faster than both hands
-genuinely acts first (its attack lands during the advance and it re-seeds at its
-instance speed as usual). Ties → player first (LH/RH before monsters on the same
-tic, PC-DEC-030).
+action then. The battle is **presented from Tic 0 and progresses until the first
+entity has an action** (PC-DEC-039, Decided by Spahrep, 2026-09-17) — a tic-0
+countdown intro shows the approach rows advancing; there is no jump straight to
+the first decision point. `startBattle` still advances the engine clock to that
+point, so a monster faster than both hands genuinely acts first (its attack lands
+during the advance and it re-seeds at its instance speed as usual). Ties → player
+first (LH/RH before monsters on the same tic, PC-DEC-030).
 
 The approach row is **initial placement only**: the attack timing formula
 (weapon speed + rolled prepare/cooldown) is unchanged, and after an attack's
-cooldown fires the hand is actionable immediately, as before. Both-hands-ready
-hand order is PC-DEC-028 (above).
+cooldown fires the hand is actionable immediately, as before. Confirmed
+engine-enforced 2026-09-17 (PC-DEC-034, Decided by Spahrep, 2026-09-17):
+windup = weapon base speed + rolled prepare, cooldown = weapon base speed +
+rolled cooldown — the weapon's base speed is added into every attack timing
+computation. Both-hands-ready hand order is PC-DEC-028 (above).
+
+### Battle Intro Sequence — dice ceremony (PC-DEC-038, Decided by Spahrep, 2026-09-17)
+
+Before the die is finished rolling: **no command window, no monsters, no timing
+track** — none of the battle is shown. After the die lands:
+
+1. Monsters **fade in one at a time** — pronounced fade with a pause between
+   each element (longer fade + pause per the 11:51 refinement).
+2. Once all monsters are in, the **timing table fills up from First (next) to
+   last** — each item on the tracker fades in one at a time.
+3. Only after the track is filled does the **command window** appear — the
+   action menu must never come in before the time track is filled.
+
+Shipped: f76ea21 (command window + timing track hidden until the dice ceremony
+completes), e7d32f5 (pronounced one-at-a-time reveals), cec8a60 (command window
+waits for the timing track).
+
+### Die Roll Presentation — per-roll face rotation (PC-DEC-036/037, Decided by Spahrep, 2026-09-17)
+
+A rolling die gives a **visual notification on every roll tick**: the face
+**rotates** (spins) to the new value rather than just flashing. Natural repeats
+are allowed and expected — the die may land on the same face several times in a
+row (dice can have the same value on multiple faces); do NOT filter consecutive
+repeats, the rotation per tick is what shows it is still rolling. Shipped as
+PC-70: 7b388a5 (flash on every roll tick) → 56be7e0 (keep natural repeats) →
+1303299 (spin the die face per roll tick instead of flashing).
 
 ### UNDECIDED (mechanism + visuals locked; band open — PC-56 carry-over, parked)
 
