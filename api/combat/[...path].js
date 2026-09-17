@@ -432,13 +432,15 @@ async function handle(request) {
         potionInfo(run.consume_b_id, !!run.consume_b_used)
       ]);
 
+      const { data: fistCfg } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy').eq('id', 1).maybeSingle();
+
       const safeState = {
         queue: state.queue || [],
         player: state.player ? { hp: state.player.hp, hands: state.player.hands } : null,
         feed: state.feed || [],
         tic: state.tic || 0,
         buffs: state.buffs || [],
-        weapons: { hand_l: handL, hand_r: handR, belt: beltW },
+        weapons: { hand_l: handL, hand_r: handR, belt: beltW, fist: fistCfg ? { name: 'Fist (unarmed)', damage: fistCfg.fist_damage, speed: 0, accuracy: fistCfg.fist_accuracy, base_damage: fistCfg.fist_damage, damage_range: 0, grade: null, attacks: [{ id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time: fistCfg.fist_prepare_time, cooldown_time: fistCfg.fist_cooldown_time, prepare_time_range: fistCfg.fist_prepare_time_range, cooldown_time_range: fistCfg.fist_cooldown_time_range, description: '', base_damage_multiplier: 1 }] } : null },
         potions: { potion_a: potionA, potion_b: potionB },
         monsters,
         dice
@@ -570,11 +572,12 @@ async function handle(request) {
       const weaponId = hand === 'LH' ? run.hand_l_weapon_id : run.hand_r_weapon_id;
       let castTicks, cooldownTicks, playerDamage, playerAccuracy, attackName;
       if (!weaponId) {
-        // PC-52r: Fist unarmed attack from empty hand (fixed stats; not a weapon — no grade/variance)
-        castTicks = 6;
-        cooldownTicks = 6;
-        playerDamage = 5;
-        playerAccuracy = 90;
+        const { data: config } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy').eq('id', 1).single();
+        if (!config) return json({ error: 'Game config missing' }, 500);
+        castTicks = rollStat(config.fist_prepare_time, config.fist_prepare_time_range);
+        cooldownTicks = rollStat(config.fist_cooldown_time, config.fist_cooldown_time_range);
+        playerDamage = config.fist_damage;
+        playerAccuracy = config.fist_accuracy;
         attackName = 'Fist';
       } else {
         const { data: wInst } = await admin.from('weapon_instance').select('template_id').eq('id', weaponId).single();

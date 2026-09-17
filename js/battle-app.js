@@ -607,8 +607,6 @@ function renderActionMenu(bs) {
   const hand = readyHands[0];
   const w = weapons[hand === 'LH' ? 'hand_l' : 'hand_r'];
   const handLineText = hand === 'LH' ? 'L.HAND' : 'R.HAND';
-  // PC-52r: display stats for the empty-hand Fist (fixed; matches the backend Fist profile)
-  const FIST_WEAPON = { base_damage: 5, damage_range: 0 };
 
   function potionFor(slot) {
     return potions[slot === 'A' ? 'potion_a' : 'potion_b'] || potions[slot] || null;
@@ -668,7 +666,7 @@ function renderActionMenu(bs) {
       doAttack(currentRunId, hand, a.id, []);
       return;
     }
-    const weapon = (w && w.id) ? w : FIST_WEAPON;
+    const weapon = (w && w.id) ? w : (weapons && weapons.fist) || null;
     if (a.is_multi_target) {
       // multi-target hits ALL live monsters — a single row, no pick (CLI parity: ids)
       stack.push({ kind: 'target', attack: a, weapon, rows: [{ html: 'ALL MONSTERS' }] });
@@ -817,23 +815,25 @@ function renderActionMenu(bs) {
       });
     });
   } else {
-    // PC-52r: empty hand → Fist unarmed attack (fixed stats, no grade/variance; not a weapon).
-    // attack_id 1 matches the CLI path; the backend applies the Fist profile when the hand is empty.
-    const fist = {
-      id: 1,
-      name: 'Fist (unarmed)',
-      prepare_time: 6, cooldown_time: 6,
-      prepare_time_range: 0, cooldown_time_range: 0,
-      is_multi_target: false,
-      description: ''
-    };
-    const fistWeapon = { base_damage: 5, damage_range: 0 };
-    rootRows.push({
-      html: 'Fist (unarmed)',
-      info: attackInfo(fist, fistWeapon),
-      attack: fist,
-      enter() { pickTarget(fist); }
-    });
+    const fistW = weapons.fist;
+    if (fistW && fistW.attacks && fistW.attacks.length > 0) {
+      const fist = fistW.attacks[0];
+      rootRows.push({
+        html: escHtml(fist.name),
+        info: attackInfo(fist, fistW),
+        attack: fist,
+        enter() { pickTarget(fist); }
+      });
+    } else {
+      // degrade without any numbers if server did not provide fist profile
+      const attack = { id: 1, name: 'Fist (unarmed)', is_multi_target: false, description: '' };
+      rootRows.push({
+        html: 'Fist (unarmed)',
+        info: '<strong>Fist (unarmed)</strong>',
+        attack,
+        enter() { pickTarget(attack); }
+      });
+    }
   }
   rootRows.push({ blank: true });
   ['A', 'B'].forEach(slot => {
