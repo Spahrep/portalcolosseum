@@ -106,16 +106,16 @@
       0%   { transform: scale(1.15); }
       100% { transform: scale(1); }
     }
-    /* PC-70: every roll tick flashes the die, so a repeated face value
-       (dice can carry the same value on several faces) still reads as
-       actively rolling instead of stuck. Fires once per tick via the
-       reflow-restart trick in rollDiceAnimation(). */
-    .die.rolling {
-      animation: die-roll-flash 0.18s ease-out;
+    /* PC-70: the die face number spins in on every roll tick — each tick is
+       a fresh span, so the reel animation replays even when the value is
+       unchanged (duplicate faces are legitimate dice design). */
+    .die.rolling .die-face {
+      display: block;
+      animation: die-face-roll 0.22s ease-out;
     }
-    @keyframes die-roll-flash {
-      0%   { box-shadow: 0 0 16px 6px rgba(255,255,255,0.95), inset 0 0 0 2px rgba(255,255,255,0.35), inset 0 0 0 3px rgba(0,0,0,0.2); transform: scale(1.12); }
-      100% { box-shadow: 0 0 0 0 rgba(255,255,255,0), inset 0 0 0 2px rgba(255,255,255,0.35), inset 0 0 0 3px rgba(0,0,0,0.2); transform: scale(1); }
+    @keyframes die-face-roll {
+      0%   { transform: perspective(48px) rotateX(90deg); }
+      100% { transform: perspective(48px) rotateX(0deg); }
     }
     .dice-labels {
       font-size: 9px;

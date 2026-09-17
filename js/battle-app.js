@@ -275,9 +275,9 @@ function performSweepAnimation(diceEls, targetIndex, onLand) {
 
 // Roll tumbles real faces[color] from payload (defensive [face] if missing).
 // No invented values — repeated faces are legitimate (dice carry the same
-// value on several faces), so every tick flashes the box instead: the roll
-// reads as alive even when the number stays the same. Settles with pop;
-// #current-die lights only after.
+// value on several faces), so each tick spins a fresh face span in instead:
+// the number visibly rotates between rolls even when it stays the same.
+// Settles with pop; #current-die lights only after.
 function rollDiceAnimation(box, current, faces, onDone) {
   // The box keeps its color and highlight — it is already the draw's die.
   const pool = (faces && faces[current.color] && faces[current.color].length > 0)
@@ -286,11 +286,9 @@ function rollDiceAnimation(box, current, faces, onDone) {
 
   let tick = 0;
   let interval = DICE_ANIM.ROLL_INITIAL;
-  function flash() {
-    box.classList.remove('rolling');
-    void box.offsetWidth; // reflow so the flash animation restarts for THIS roll
-    box.classList.add('rolling');
-  }
+  // The reel animation lives on the span, and each tick creates a NEW span —
+  // the spin replays automatically, no class-toggle dance needed.
+  box.classList.add('rolling');
   function step() {
     if (tick >= DICE_ANIM.ROLL_TICKS) {
       box.classList.remove('rolling');
@@ -301,8 +299,10 @@ function rollDiceAnimation(box, current, faces, onDone) {
       onDone();
       return;
     }
-    box.textContent = pool[Math.floor(Math.random() * pool.length)];
-    flash();
+    const face = document.createElement('span');
+    face.className = 'die-face';
+    face.textContent = pool[Math.floor(Math.random() * pool.length)];
+    box.replaceChildren(face);
     tick++;
     interval = Math.min(DICE_ANIM.ROLL_MIN, Math.floor(interval * DICE_ANIM.ROLL_DECEL));
     setTimeout(step, interval);
