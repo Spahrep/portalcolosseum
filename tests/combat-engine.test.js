@@ -569,4 +569,79 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.ok(state.feed.some(l => l.includes('LH Ready')));
     assert.ok(state.feed.some(l => l.includes('RH Ready')));
   });
+
+  it('intro shape: rows pre-advance, hpStart, fires array', () => {
+    const eng = createEngine(seededRNG(7));
+    const state = eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+    });
+    assert.ok(state.intro, 'intro present');
+    assert.ok(Array.isArray(state.intro.rows));
+    assert.equal(state.intro.rows.length, 3);
+    assert.equal(state.intro.hpStart, 1000); // default from createPlayer
+    assert.ok(Array.isArray(state.intro.fires));
+    assert.ok(state.intro.fires.length > 0);
+  });
+
+  it('monster-first fires timeline', () => {
+    const eng = createEngine(seededRNG(7));
+    const state = eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+    });
+    const fires = state.intro.fires;
+    assert.ok(fires[0].tic === 2 && fires[0].label === 'A' && fires[0].event === 'attack');
+    assert.ok(fires[0].line.startsWith('tic 2 — A hits player for'));
+    assert.ok(fires[0].hp < 1000);
+    assert.deepEqual(fires[0].after, { event: 'attack', tics: 3 });
+    assert.ok(fires[1].tic === 3 && fires[1].label === 'LH' && fires[1].event === 'approach');
+    assert.equal(fires[1].line, 'tic 3 — LH Ready');
+    assert.equal(fires[1].hp, fires[0].hp);
+    assert.equal(fires[1].after, null);
+  });
+
+  it('fast monster double-fire', () => {
+    const eng = createEngine(seededRNG(7));
+    const state = eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 6 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
+    });
+    const fires = state.intro.fires;
+    const monsterFires = fires.filter(f => f.label === 'A');
+    assert.equal(monsterFires.length, 2);
+    assert.equal(monsterFires[0].tic, 1);
+    assert.equal(monsterFires[1].tic, 3);
+    assert.ok(monsterFires[0].hp > monsterFires[1].hp);
+    assert.deepEqual(monsterFires[0].after, { event: 'attack', tics: 2 });
+    assert.deepEqual(monsterFires[1].after, { event: 'attack', tics: 2 });
+    const handFire = fires.find(f => f.label === 'LH');
+    assert.equal(handFire.tic, 4);
+  });
+
+  it('tie: LH before monster', () => {
+    const eng = createEngine(seededRNG(7));
+    const state = eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 100 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 5, accuracy: 100, label: 'A' }]
+    });
+    const fires = state.intro.fires;
+    const lhIdx = fires.findIndex(f => f.label === 'LH');
+    const monIdx = fires.findIndex(f => f.label === 'A');
+    assert.ok(lhIdx < monIdx);
+    assert.equal(fires[lhIdx].tic, fires[monIdx].tic);
+  });
+
+  it('loadState guard: intro only from startBattle, cleared on loadState', () => {
+    const eng = createEngine(seededRNG(7));
+    const state1 = eng.startBattle({
+      loadout: { hand_l_speed: 4, hand_r_speed: 6 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+    });
+    assert.ok(state1.intro);
+    const fresh = createEngine(seededRNG(7));
+    fresh.loadState({});
+    const state2 = fresh.getState();
+    assert.equal(state2.intro, null);
+  });
 });

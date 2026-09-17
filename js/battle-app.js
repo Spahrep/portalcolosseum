@@ -384,11 +384,18 @@ function revealMonsters(onDone) {
 function finishBattleIntro() {
   if (!battleIntroPending) return;
   battleIntroPending = false;
-  document.body.classList.remove('queue-filling'); // timing track appears (rows still hidden)
-  renderQueue(lastBs, true, () => {
-    document.body.classList.remove('intro-pending'); // command window only after the track is full
-    renderActionMenu(lastBs);
-  });
+  if (lastBs && lastBs.intro?.fires?.length > 0) {
+    playIntroCountdown(lastBs, lastBs.intro, () => {
+      document.body.classList.remove('intro-pending');
+      renderActionMenu(lastBs);
+    });
+  } else {
+    document.body.classList.remove('queue-filling'); // timing track appears (rows still hidden)
+    renderQueue(lastBs, true, () => {
+      document.body.classList.remove('intro-pending'); // command window only after the track is full
+      renderActionMenu(lastBs);
+    });
+  }
 }
 
 function renderFeed(feed) {
@@ -983,16 +990,25 @@ async function loadBattle(runId) {
     const runTitle = document.getElementById('run-title');
     if (runTitle) runTitle.textContent = `PORTAL · RUN ${run.id}`;
     const battleLabel = document.getElementById('battle-label');
+    const bs = run.battle_state || {};
+    lastBs = bs;
     if (battleLabel) {
       const cb = run.current_battle || 1;
       const tb = run.total_battles || 1;
-      const bsTic = (run.battle_state && run.battle_state.tic != null) ? run.battle_state.tic : 0;
+      let bsTic = (bs.tic != null) ? bs.tic : 0;
+      if (battleIntroPending && bs.intro?.fires?.length > 0) {
+        bsTic = 0;
+      }
       battleLabel.textContent = `BATTLE ${cb} OF ${tb} — TIC ${bsTic}`;
     }
 
-    renderPlayerHP(run);
-    const bs = run.battle_state || {};
-    lastBs = bs;
+    if (battleIntroPending && bs.intro?.fires?.length > 0) {
+      renderPlayerHP({ player_hp: bs.intro.hpStart });
+      renderFeed([]);
+    } else {
+      renderPlayerHP(run);
+      renderFeed(bs.feed || []);
+    }
     queueMarkers = null; // PC-56: fresh battle state — no selection, no markers
     // Capture BEFORE renderDice — the animation path clears the flag.
     // Ceremony-intro: the command window and timing track are part of the same

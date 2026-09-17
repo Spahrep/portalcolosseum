@@ -112,11 +112,30 @@ export function createEngine(rng = Math.random) {
     }
   }
 
-  function advanceToNextDecision() {
+  function advanceToNextDecision(captureFires = null) {
     let steps = 0;
     while (steps < 50) {
       steps++;
-      const fired = tick(state.queue, (row) => handleFire(row));
+      const fired = tick(state.queue, (row) => {
+        handleFire(row);
+        if (captureFires) {
+          const mon = state.monsters.find(m => m.label === row.label);
+          let after = null;
+          if (row.event === 'attack' && mon && !isMonsterDead(mon)) {
+            after = { event: 'attack', tics: mon.speed };
+          } else {
+            after = null;
+          }
+          captureFires.push({
+            tic: state.tic,
+            label: row.label,
+            event: row.event,
+            line: state.feed[state.feed.length - 1],
+            hp: state.player.hp,
+            after
+          });
+        }
+      });
       state.tic++;
       // PC-39: expire buffs at the start of the new tic (after increment), log each
       const stillActive = [];
@@ -140,7 +159,7 @@ export function createEngine(rng = Math.random) {
 
   function isBattleOver() {
     const allMonstersDead = state.monsters.length > 0 && state.monsters.every(isMonsterDead);
-    return allMonstersDead || isPlayerDead(state.player);
+    return allMonstersDead || (state.player ? isPlayerDead(state.player) : true);
   }
 
   function commitAttack(hand, attackId, targetIds = [], params = {}) {
@@ -205,16 +224,20 @@ export function createEngine(rng = Math.random) {
     state.player.hands.RH.state = 'Approach';
     commitNewRow(state.queue, 'LH', 'approach', handLSpeed);
     commitNewRow(state.queue, 'RH', 'approach', handRSpeed);
-    advanceToNextDecision();
+    const intro = { rows: state.queue.map(r => ({ label: r.label, event: r.event, tics: r.tics })), hpStart: state.player.hp, fires: [] };
+    advanceToNextDecision(intro.fires);
+    state.intro = intro;
     return getState();
   }
 
   function getState() {
+    const hp = state.player ? state.player.hp : 0;
+    const hands = state.player ? state.player.hands : {};
     const participantsOut = {
-      player: { hp: state.player.hp, hands: state.player.hands },
+      player: { hp, hands },
       monsters: state.monsters.map(m => ({
         label: m.label,
-        hp_word: getHpWord(m.current_hp, m.max_hp),
+        hp_word: getHpWord(m.current_hp || 0, m.max_hp || 0),
         id: m.id
       }))
     };
@@ -224,10 +247,11 @@ export function createEngine(rng = Math.random) {
       feed: [...state.feed],
       tic: state.tic,
       battle_over: isBattleOver(),
-      player_dead: isPlayerDead(state.player),
+      player_dead: state.player ? isPlayerDead(state.player) : true,
       monsters_dead: state.monsters.length > 0 && state.monsters.every(isMonsterDead),
       potions: state.potions ? { A: state.potions.A, B: state.potions.B } : null,
-      buffs: state.buffs.map(b => ({ ...b }))
+      buffs: state.buffs.map(b => ({ ...b })),
+      intro: state.intro || null
     };
   }
 
@@ -240,6 +264,7 @@ export function createEngine(rng = Math.random) {
     state.tic = persisted.tic || 0;
     state.buffs = persisted.buffs || [];
     state.potions = persisted.potions || null;
+    state.intro = undefined;
   }
 
   function describeEffect(result) {
