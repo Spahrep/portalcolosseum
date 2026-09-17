@@ -808,6 +808,13 @@ function renderActionMenu(bs) {
   }
 
   // ---- cascade stack: levels { kind: action|target|confirm, rows, activeIdx } ----
+  // Cascade geometry (PC-DEC-043; shared/CascadeIssue.png "Desired"): every window
+  // renders at the SAME box size — the tallest window's natural height, capped to
+  // the root — so the fixed down-right step produces an even staircase: each window
+  // overlaps the parent by a uniform amount, keeping the parent's header strip
+  // (hand tab + first rows) and left column visible. No size-mismatch gaps.
+  const CASCADE_STEP_X = 140; // px right per level — parent's left column stays readable
+  const CASCADE_STEP_Y = 62;  // px down per level — parent's tab + first rows stay readable
   const stack = [];
 
   function yesNoRows(onYes) {
@@ -912,12 +919,12 @@ function renderActionMenu(bs) {
     root.className = 'dw-root';
     wrap.appendChild(root);
     const topIdx = stack.length - 1;
+    const wins = [];
     stack.forEach((lvl, i) => {
       if (lvl.activeIdx == null) lvl.activeIdx = 0; // every window opens with row 0 selected
       const win = document.createElement('div');
       win.className = 'dw-window' + (i === topIdx ? ' top' : '');
-      win.style.left = (i * 140) + 'px';
-      win.style.top = (i * 62) + 'px';
+      win.style.left = (i * CASCADE_STEP_X) + 'px';
       win.style.zIndex = String(10 + i);
       if (i === 0 && lvl.tab) {
         const tab = document.createElement('div');
@@ -950,6 +957,18 @@ function renderActionMenu(bs) {
         win.appendChild(el);
       });
       root.appendChild(win);
+      wins.push(win);
+    });
+    // Uniform cascade box: size every window to the tallest natural height so the
+    // down-right steps form an even staircase (no mismatched sizes, no gaps).
+    // Capped to the root's own height so the stack never spills onto the footer.
+    const boxH = Math.min(
+      root.clientHeight || 236,
+      Math.max(0, ...wins.map(win => win.offsetHeight))
+    );
+    wins.forEach((win, i) => {
+      win.style.height = boxH + 'px';
+      win.style.top = (i * CASCADE_STEP_Y) + 'px';
     });
     paintReadout();
   }

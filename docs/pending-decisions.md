@@ -359,6 +359,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Response to the sweep's flag ① — confirms PC-DEC-041: the web CLI (public/test/cli/cli-app.js) is KEPT as the sole CLI and stays the canonical, engine-parity test harness. PC-DEC-040's "no longer a focus" means no new product-UX work on the web CLI (the game GUI is the product), NOT deprecation. Applied to: pending-decisions.md (PC-DEC-040 note amended to point here).
 
+- ID: PC-DEC-043
+  Date: 2026-09-17
+  Source: Discord thread 1550243055871729677 ("Look in the shared folder there is an image "casscadeIssue". Can we change how the windows cascade?")
+  Speaker: Spahrep
+  Verbatim: "each window needs to overlap the existing one by some amount, for the exact amoutn you can use the /personality designer"
+  Status: DECIDED
+  Notes: Cascade geometry ruling from shared/CascadeIssue.png ("Actual" vs "Desired" panels). All cascade windows render at ONE uniform box — the tallest window's natural height, capped to the panel — and step down-right by a fixed amount (140px right / 62px down, named constants CASCADE_STEP_X/Y). Every window therefore overlaps the parent by the same amount: the parent's header strip (hand tab + first rows) and left column stay visible, and no window floats disconnected from the stack. Applied to js/battle-app.js renderStack + run.html .dw-window (box-sizing: border-box, width 316px total = previous 290px content).
+
 ## Open
 
 - ID: PC-DEC-004
