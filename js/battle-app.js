@@ -24,15 +24,15 @@ let shouldAnimateDice = false;
 // fade in one at a time. Set in the battle render when a roll will run;
 // revealMonsters() clears it when the roll completes.
 let monstersPendingReveal = false;
-const MONSTER_FADE_STAGGER = 450; // ms between monster reveals
-const MONSTER_FADE_MS = 650;      // per-monster fade duration
+const MONSTER_FADE_STAGGER = 1000; // ms pause between monster reveals (one at a time, with a beat)
+const MONSTER_FADE_MS = 1400;      // per-monster fade duration
 
 // Ceremony-intro: the battle-start dice ceremony also gates the command window and the
 // timing track — both stay hidden while the die rolls, and appear only after
 // the last monster has faded in (finishBattleIntro(), called from the reveal).
 let battleIntroPending = false;
-const QUEUE_FILL_STAGGER = 140; // ms between timing rows appearing (First → last)
-const QUEUE_FILL_MS = 350;      // per-row fade
+const QUEUE_FILL_STAGGER = 600; // ms between timing rows appearing (First → last, one at a time)
+const QUEUE_FILL_MS = 700;      // per-row fade
 
 // Tuning constants for dice-selection roulette (client theater only).
 // Sweep: uniform left→right walk, stops on random same-color box (incl phantom).
