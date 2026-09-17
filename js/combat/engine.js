@@ -59,6 +59,10 @@ export function createEngine(rng = Math.random) {
             }
           });
         }
+        // PC-68: kill cancels queued attacks on the dead target. If another
+        // hand is winding an attack whose targets are ALL dead now, cancel it
+        // straight into its own cooldown — no wasted cast time, no whiff.
+        cancelQueuedAttacksOnDeadTargets();
         const cd = row.cooldownTicks || 2;
         morphHandRow(state.queue, row.label, 'cooldown', cd);
       } else if (row.event === 'cooldown') {
@@ -109,6 +113,27 @@ export function createEngine(rng = Math.random) {
       }
       const idx = state.queue.findIndex(r => r.id === row.id);
       if (idx !== -1) state.queue.splice(idx, 1);
+    }
+  }
+
+  // PC-68: when an attack kills the last target of another hand's queued
+  // attack, that queued attack is moot — cancel it straight into its own
+  // cooldown so the hand isn't stuck winding at a corpse (then whiffing).
+  // Only rows with explicit targetIds are cancelled; auto-target rows
+  // (empty targetIds) still resolve to the first living monster at impact.
+  function cancelQueuedAttacksOnDeadTargets() {
+    const deadIds = new Set(state.monsters.filter(isMonsterDead).map(m => m.id));
+    if (deadIds.size === 0) return;
+    for (const q of [...state.queue]) {
+      if (q.label !== 'LH' && q.label !== 'RH') continue;
+      if (q.event !== 'winding') continue;
+      if (!q.targetIds || q.targetIds.length === 0) continue;
+      const allDead = q.targetIds.every(id => deadIds.has(id));
+      if (allDead) {
+        const cd = q.cooldownTicks || 2;
+        morphHandRow(state.queue, q.label, 'cooldown', cd);
+        log(`${q.label} ${q.attackName || 'attack'} cancelled — target already defeated`);
+      }
     }
   }
 

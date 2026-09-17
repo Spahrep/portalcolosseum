@@ -700,3 +700,56 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.ok(state2.tic > 0, 'rest of the persisted state survives');
   });
 });
+
+describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
+  it('second attack on same target jumps straight to its own cooldown when the first attack kills', () => {
+    const eng = createEngine(seededRNG(42));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [{ id: 1, max_hp: 5, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
+    });
+    // RH commits first with a slow cast; LH then commits a fast one-shot kill.
+    eng.commitAttack('RH', 2, [1], { castTicks: 8, cooldownTicks: 3, playerDamage: 100 });
+    const after = eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
+    const rh = after.queue.find(r => r.label === 'RH');
+    assert.ok(rh, 'RH row exists');
+    assert.equal(rh.event, 'cooldown', 'RH cancelled straight into cooldown, not winding/impact');
+    assert.equal(rh.tics, 3, 'RH cooldown uses its own cooldownTicks');
+    assert.equal(eng.state.monsters[0].current_hp, 0, 'monster dead from LH kill');
+    assert.ok(after.feed.some(l => l.includes('RH attack cancelled')), 'feed explains the cancel');
+    assert.ok(after.feed.some(l => l.includes('A is defeated')), 'feed shows the kill');
+  });
+
+  it('queued attack with a living target is NOT cancelled (no false cancel)', () => {
+    const eng = createEngine(seededRNG(42));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [
+        { id: 1, max_hp: 5, damage: 8, speed: 5, accuracy: 70, label: 'A' },
+        { id: 2, max_hp: 500, damage: 8, speed: 5, accuracy: 70, label: 'B' }
+      ]
+    });
+    eng.commitAttack('RH', 2, [2], { castTicks: 3, cooldownTicks: 3, playerDamage: 100 });
+    const after = eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
+    assert.ok(after.feed.some(l => l.includes('RH attack hits B')), 'RH still lands on its living target');
+    assert.ok(!after.feed.some(l => l.includes('RH attack cancelled')), 'no false cancellation');
+    assert.equal(eng.state.monsters[0].current_hp, 0, 'A killed by LH');
+    assert.ok(eng.state.monsters[1].current_hp > 0, 'B survives');
+  });
+
+  it('multi-target attack is cancelled only when ALL its targets are dead', () => {
+    const eng = createEngine(seededRNG(42));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [
+        { id: 1, max_hp: 5, damage: 8, speed: 5, accuracy: 70, label: 'A' },
+        { id: 2, max_hp: 500, damage: 8, speed: 5, accuracy: 70, label: 'B' }
+      ]
+    });
+    eng.commitAttack('RH', 2, [1, 2], { castTicks: 3, cooldownTicks: 3, playerDamage: 100, isMultiTarget: true });
+    const after = eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
+    // A dies to LH, but RH's multi-target still has B alive → not cancelled.
+    assert.ok(after.feed.some(l => l.includes('RH attack hits B')), 'RH multi-target still hits living B');
+    assert.ok(!after.feed.some(l => l.includes('RH attack cancelled')), 'no cancellation while a target lives');
+  });
+});
