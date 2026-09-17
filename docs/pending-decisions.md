@@ -279,6 +279,78 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: SUPERSEDES PC-DEC-021's roll (initiative 1..weapon speed). Deterministic placement: at combat start each hand gets one **approach** row on the timing rail at its weapon's instance speed (unarmed hand = `game_config.fist_speed`, migration 20260917140000); monsters already seed attack rows at their instance speed. When an approach row hits 0 the hand becomes Ready and the player picks their action THEN. `startBattle` advances to the first decision point, so a faster monster genuinely acts before the player. Ties → player first (PC-DEC-030, unchanged). Attack timing formula (weapon speed + rolled prepare/cooldown) unchanged — the approach row is initial placement only; after an attack's cooldown the hand is actionable immediately as before. Shipped as PC-64.
 
+- ID: PC-DEC-033
+  Date: 2026-09-17
+  Source: Discord thread 1550108847467921430, 08:39 — captured by the 2026-09-17 midday sweep
+  Speaker: Spahrep
+  Verbatim: "When you type 'End Run' you should be able to hit enter to confirm, right now it forces you to use the mouse to click the button"
+  Status: DECIDED
+  Notes: Keyboard-first confirm for the End Run typed-confirmation dialog (same principle as PC-DEC-026). Shipped a70c8a9 (fix(run): Enter confirms End Run typed-confirmation dialog). Applied to run-ux-flow.md.
+
+- ID: PC-DEC-034
+  Date: 2026-09-17
+  Source: Discord thread 1550127819139579909, 09:54–09:58 — captured by the 2026-09-17 midday sweep
+  Speaker: Spahrep
+  Verbatim: "When an attack is selected, the time (tics) before it fires should be weapon base speed + a roll on the attack's speed (Base + delta roll). Then after the attack fires, the hand goes back into the que with a delay of X tics, where X is the weapon's speed." + "if attacks alreayd have pre/post speeds, keep those, just make sure that the base speed of the weapon is added into each computation" + "i forgot we had a pre-post range field seperately. This still works though, Any time an attack's speed is calcualted, pre or post, you add in the weapon"
+  Status: DECIDED
+  Notes: CONFIRMS the documented attack timing formula (battle-status-ui.md): windup = weapon base speed + rolled prepare, cooldown = weapon base speed + rolled cooldown — attack pre/post ranges are kept and the weapon's base speed is added into each computation. The engine had drifted (weapon speed missing from timings); fixed same day (6a996bd: weapon base speed added into every attack timing computation). Applied to battle-status-ui.md.
+
+- ID: PC-DEC-035
+  Date: 2026-09-17
+  Source: Discord thread 1550127819139579909, 10:10–10:12 — captured by the 2026-09-17 midday sweep
+  Speaker: Spahrep
+  Verbatim: "for unarmed, let's remove the hard coding and put any required values in our configuration table for now. We may move them later, but I dont want hard coded valeus anywhere."
+  Status: DECIDED
+  Notes: Triggered by "where do we have the damange and speeds asigned to unarmed? Are they in a config table or hard coded?" (10:10). Fist/unarmed stats moved from hardcoded constants into `game_config` (migrations 20260917120000 + 20260917140000; 84be3d4): fist_damage, fist_accuracy, fist_prepare_time (+range), fist_cooldown_time (+range), fist_speed. The client consumes the server's fist payload — no hardcoded unarmed values anywhere. Applied to current-design-status.md.
+
+- ID: PC-DEC-036
+  Date: 2026-09-17
+  Source: Discord thread 1550151417426354318, 11:28–11:33 — captured by the 2026-09-17 midday sweep
+  Speaker: Spahrep
+  Verbatim: "When a die is 'rolling' i want it to flash each time it is rolled. If not flash, then another visual notificatoin. The issue is some times it shows 10 multipe times in a row (dice can have the same value on multiple faces) and it looks like it is stuck before changing again seconds later."
+  Status: DECIDED
+  Notes: Mechanism refined in-thread: "instead of a flash, could the number on the die instead 'rotate' between rolls?" (11:33) — the chosen notification is the die face ROTATING per roll tick (shipped as PC-70, 1303299: spin the die face in per roll tick instead of flashing). Applied to battle-status-ui.md.
+
+- ID: PC-DEC-037
+  Date: 2026-09-17
+  Source: Discord thread 1550151417426354318, 11:31 — captured by the 2026-09-17 midday sweep
+  Speaker: Spahrep
+  Verbatim: "i didnt say to stop the die from rolling the same thing several times in a row, that is 100% allowed and an expected design"
+  Status: DECIDED
+  Notes: Natural die repeats are allowed and expected — no consecutive-face filtering (dice can have the same value on multiple faces). Shipped as PC-70 (56be7e0: keep natural repeats — flash only, no consecutive-face filtering). Applied to battle-status-ui.md.
+
+- ID: PC-DEC-038
+  Date: 2026-09-17
+  Source: Discord thread 1550153771609227316, 11:37–11:54 — captured by the 2026-09-17 midday sweep
+  Speaker: Spahrep
+  Verbatim: "Before the die is finished rolling, there should be no command window displayed. The monsters should be hidden and the timing track should be hidden. After the die is rolled, the monsters should fade in 1 at a time, and then after all the monsers are in, the timing table should fill up from First (next) to last."
+  Status: DECIDED
+  Notes: Battle-intro sequence ruling. Refinements same thread: "Ok, i checked it myself, it is working, but let's have the fade in be more pronoucned. And each item on the tracker should fade in one at a time." (11:49); "the fade duration needs to be longer and or pause a bit between each element being loaded." (11:51); "Looks good, but the action menu came in before the time track was filled" (11:54 → the command window must wait for the timing track). Shipped: f76ea21 (command window + timing track hidden until the dice ceremony completes), e7d32f5 (pronounced one-at-a-time reveals), cec8a60 (command window waits for the timing track). Applied to battle-status-ui.md.
+
+- ID: PC-DEC-039
+  Date: 2026-09-17
+  Source: Discord thread 1550153771609227316, 12:41 — captured by the 2026-09-17 midday sweep
+  Speaker: Spahrep
+  Verbatim: "The battle still starts at Tic 0, and progresses until the first entity has an action."
+  Status: DECIDED
+  Notes: Refines PC-DEC-032's presentation: the battle is PRESENTED from Tic 0 and progresses until the first entity acts — no jump straight to the first decision point. Shipped as the PC-64 battle intro (5dde661/212b014 on branch pc-64-battle-intro: `intro` timeline on the startBattle result + tic-0 countdown presentation). Engine placement unchanged (PC-DEC-032): startBattle still advances the clock so a faster monster genuinely acts first. Applied to battle-status-ui.md + current-design-status.md.
+
+- ID: PC-DEC-040
+  Date: 2026-09-17
+  Source: Discord thread 1550153771609227316, 13:00 — captured by the 2026-09-17 midday sweep
+  Speaker: Spahrep
+  Verbatim: "we dont need to worry about the web CLI any more. We focus on the actual game now."
+  Status: DECIDED
+  Notes: Direction change: the web CLI (public/test/cli/cli-app.js) is no longer a focus — the actual game is. Supersedes the native-cli.md maintenance note (2026-09-16) that called the web CLI "canonical, fully-maintained". Both CLIs are now secondary to the game itself; the native CLI stays fix-on-break only. Applied to native-cli.md.
+
+- ID: PC-DEC-041
+  Date: 2026-09-17
+  Source: CLI session (native-CLI purge)
+  Speaker: Spahrep
+  Verbatim: "let's purge the native CLI then from the codebase and update documents and memory accordingly and we will keep doing the web-cli"
+  Status: DECIDED
+  Notes: Native CLI (scripts/cli/) deleted from the repo — its two audiences (agent-driven headless QA, human terminal play) evaporated; the web CLI is the sole CLI and the in-browser fixture factory (engine parity kept). Supersedes PC-DEC-040's "native CLI stays fix-on-break" (it is gone, not dormant). Shared potion-format.mjs moved to js/combat/ so the engine fixture tests keep importing it. Applied to: repo (scripts/cli/ + docs/native-cli.md removed), potion-contract.md, run-ux-flow.md, cli-app.js comments.
+
 ## Open
 
 - ID: PC-DEC-004

@@ -102,7 +102,7 @@ Between fights there is no hand involvement and no queue: use → effect → per
 - **Formula functions:** `potionPrePostTicks(weaponSpeed, potionSpeed)` → `ceil((w+p)/2)`; `potionTotalTicks(weaponSpeed, potionSpeed)` → `w + p`. Marked as tuning placeholders.
 - **JSDoc typedefs** (TypeScript-compatible via checkJs — this is the "TypeScript interface" surface for a plain-ESM repo): `PotionSlot`, `PotionEffectType`, `PotionCategory`, `HealEffect`, `BuffEffect`, `PotionEffectPayload` (discriminated union on `type`), `PotionUseRequest` (`{slot, phase}`), `PotionTiming` (`{preTicks, postTicks, totalTicks}`), `CombatBuff` (`{name, value, endTic, type}`), `PotionInstanceSummary` (instance_id, template_name, effect_type, effect_label, grade, used).
 
-Importable by engine (`js/combat/`), API (`api/combat/[...path].js`), web CLI (`public/test/cli/cli-app.js` — served under `/js/`), and native CLI (`scripts/cli/*.mjs`). No runtime imports of engine internals; this module is the single shared vocabulary.
+Importable by engine (`js/combat/`), API (`api/combat/[...path].js`), and web CLI (`public/test/cli/cli-app.js` — served under `/js/`). No runtime imports of engine internals; this module is the single shared vocabulary.
 
 ## 9. Acceptance mapping
 

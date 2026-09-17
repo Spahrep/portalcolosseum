@@ -1,4 +1,4 @@
-# Run UX Flow (web + native CLI)
+# Run UX Flow (web CLI)
 
 **Updated:** 2026-09-16 — ≥1 hand weapon entry rule + empty-hand Fist (PC-DEC-007/011); flow locked for build 2026-09-13 (Spahrep 2026-09-13); copy is draft (designer-consult suggestions, approved shape, words adjustable).
 

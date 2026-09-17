@@ -1,6 +1,6 @@
-// scripts/cli/potion-format.mjs
+// js/combat/potion-format.mjs
 // Pure text builders for the `use`/`drink` potion command (PC-39 CLI parity).
-// No I/O, no printing — imported by commands.mjs and the CLI fixture tests.
+// No I/O, no printing — imported by the engine fixture tests.
 //
 // The engine (js/combat/engine.js) logs potion events as raw feed lines:
 //   in-battle commit: tic N — LH drinks Heal (3 tics)
@@ -10,7 +10,7 @@
 //   buff expiry:      tic N — Vigor Tonic buff expired
 // mapPotionFeedLine turns those into player-facing narration.
 
-import { PLAYER_MAX_HP } from '../../js/combat/participants.js';
+import { PLAYER_MAX_HP } from './participants.js';
 
 const HAND_WORD = { LH: 'left', RH: 'right' };
 

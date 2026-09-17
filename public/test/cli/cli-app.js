@@ -389,7 +389,7 @@ function narrateFeed(feedLines, participants = null) {
       continue;
     }
 
-    // PC-39 potion rules (mirror scripts/cli/potion-format.mjs mapPotionFeedLine)
+    // PC-39 potion rules (mirror js/combat/potion-format.mjs mapPotionFeedLine)
     m = raw.match(/^tic \d+ — (LH|RH) drinks (.+?) \((\d+) tics\)$/);
     if (m) {
       mapped = `Your ${m[1] === 'LH' ? 'left' : 'right'} hand drinks ${m[2]} (${m[3]} tics)…`;
@@ -753,7 +753,6 @@ async function cmdAttack(args) {
 
 // PC-56: Dragon-Warrior-style interactive combat menu (per-hand rows, letter
 // labels, '>' timing markers, attack→target→confirm, potion + BL rows).
-// Mirrors the native CLI commands.mjs cmdMenu exactly (parity port).
 async function cmdMenu(args = []) {
   if (!currentRunId) { printError('no run'); return; }
   let hand = String(args[0] || 'LH').toUpperCase();
@@ -877,7 +876,7 @@ async function runCommit(run, hand, attack, targets) {
   }
 }
 
-// PC-54: mid-battle belt swap. 'swap LH|RH' or 'bl LH|RH' (parity with native CLI).
+// PC-54: mid-battle belt swap. 'swap LH|RH' or 'bl LH|RH'.
 async function cmdSwap(args = []) {
   if (!currentRunId) { printError('no run'); return; }
   const hand = String(args[0] || '').toUpperCase();

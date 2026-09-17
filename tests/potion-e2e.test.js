@@ -7,7 +7,7 @@ import {
   formatBuffs,
   formatConsumableSummary,
   classifyPotionError
-} from '../scripts/cli/potion-format.mjs';
+} from '../js/combat/potion-format.mjs';
 import {
   healPotion,
   buffPotion,
