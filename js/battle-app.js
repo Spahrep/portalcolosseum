@@ -27,6 +27,13 @@ let monstersPendingReveal = false;
 const MONSTER_FADE_STAGGER = 450; // ms between monster reveals
 const MONSTER_FADE_MS = 650;      // per-monster fade duration
 
+// Ceremony-intro: the battle-start dice ceremony also gates the command window and the
+// timing track — both stay hidden while the die rolls, and appear only after
+// the last monster has faded in (finishBattleIntro(), called from the reveal).
+let battleIntroPending = false;
+const QUEUE_FILL_STAGGER = 140; // ms between timing rows appearing (First → last)
+const QUEUE_FILL_MS = 350;      // per-row fade
+
 // Tuning constants for dice-selection roulette (client theater only).
 // Sweep: uniform left→right walk, stops on random same-color box (incl phantom).
 // Landed box IS selection (no morph). Roll: real faces from payload, weighty decel.
@@ -194,7 +201,7 @@ function renderDice(dice) {
         const selectAndRoll = (landedBox) => {
           rollDiceAnimation(landedBox, current, dice.faces, () => {
             updateCurrentDie(curEl, current); // persistent slot lights up
-            revealMonsters(); // roll done → monsters fade in one at a time
+            revealMonsters(() => finishBattleIntro()); // roll done → monsters fade in one at a time, then menu + timing track
             setTimeout(() => renderDice(dice), 350);
           });
         };
@@ -350,14 +357,34 @@ function hideForReveal(el) {
   el.style.opacity = '0';
 }
 
-function revealMonsters() {
-  if (!monstersPendingReveal) return;
+function revealMonsters(onDone) {
+  if (!monstersPendingReveal) {
+    if (onDone) onDone(); // no ceremony pending — nothing to wait for
+    return;
+  }
   monstersPendingReveal = false;
   const container = document.getElementById('monsters');
-  if (!container) return;
-  Array.from(container.children).forEach((card, i) => {
+  const cards = container ? Array.from(container.children) : [];
+  if (cards.length === 0) {
+    if (onDone) onDone();
+    return;
+  }
+  cards.forEach((card, i) => {
     setTimeout(() => { card.style.opacity = '1'; }, i * MONSTER_FADE_STAGGER);
   });
+  // onDone fires after the LAST card is fully in (stagger of the last card
+  // plus its own fade) — the timing track and command window follow.
+  if (onDone) setTimeout(onDone, (cards.length - 1) * MONSTER_FADE_STAGGER + MONSTER_FADE_MS);
+}
+
+// Ceremony-intro: once every monster is in, the command window reappears and the
+// timing track fills in from First (next) to last. Idempotent via the flag.
+function finishBattleIntro() {
+  if (!battleIntroPending) return;
+  battleIntroPending = false;
+  document.body.classList.remove('intro-pending');
+  renderActionMenu(lastBs);   // command window appears once monsters are in
+  renderQueue(lastBs, true);  // timing track fills First (next) → last
 }
 
 function renderFeed(feed) {
@@ -403,7 +430,7 @@ function renderLoadout(bs) {
  * Rows are countdowns to a state change: an attack landing, a hand freeing
  * ("Ready"), a monster striking, a potion taking effect.
  */
-function renderQueue(bs) {
+function renderQueue(bs, fill = false) {
   const el = document.getElementById('queue');
   if (!el) return;
   el.innerHTML = '';
@@ -431,6 +458,15 @@ function renderQueue(bs) {
       div.appendChild(markerSpan);
     }
     el.appendChild(div);
+  }
+  if (fill) {
+    // Ceremony-intro: intro fill — rows are sorted by tics, so the top row is First
+    // (next); reveal them in that order, top to bottom, one at a time.
+    Array.from(el.children).forEach((row, i) => {
+      row.style.transition = `opacity ${QUEUE_FILL_MS}ms ease`;
+      row.style.opacity = '0';
+      setTimeout(() => { row.style.opacity = '1'; }, i * QUEUE_FILL_STAGGER);
+    });
   }
 }
 
@@ -947,13 +983,24 @@ async function loadBattle(runId) {
     lastBs = bs;
     queueMarkers = null; // PC-56: fresh battle state — no selection, no markers
     // Capture BEFORE renderDice — the animation path clears the flag.
-    monstersPendingReveal = shouldAnimateDice;
+    // Ceremony-intro: the command window and timing track are part of the same
+    // ceremony — they stay hidden until every monster has faded in.
+    const willRoll = shouldAnimateDice
+      && !!(bs.dice && bs.dice.current && bs.dice.current.color && bs.dice.current.face != null);
+    monstersPendingReveal = willRoll;
+    battleIntroPending = willRoll;
+    if (!willRoll) shouldAnimateDice = false; // no roll playing — consume the flag
     renderDice(bs.dice || {});
     renderMonsters(bs.monsters || []);
     renderFeed(bs.feed || []);
     renderLoadout(bs);
-    renderActionMenu(bs);
-    renderQueue(bs);
+    if (battleIntroPending) {
+      // Ceremony-intro: die still rolling — command window + timing track stay hidden.
+      document.body.classList.add('intro-pending');
+    } else {
+      renderActionMenu(bs);
+      renderQueue(bs);
+    }
 
 
     // battle-over detection on reload: safeState has no battle_over flag —

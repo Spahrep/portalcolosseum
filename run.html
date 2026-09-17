@@ -150,6 +150,14 @@
       background: rgba(0,0,0,0.45);
       border-left: 2px solid #334466;
     }
+    /* Ceremony-intro: while the battle-start dice ceremony plays, the command window
+       and the timing track stay hidden; both appear after the last monster
+       fades in (battle-app.js removes the class via finishBattleIntro). */
+    body.intro-pending .action-menu,
+    body.intro-pending .footer-info,
+    body.intro-pending .queue-panel {
+      display: none;
+    }
     .queue-row {
       display: flex;
       justify-content: space-between;
