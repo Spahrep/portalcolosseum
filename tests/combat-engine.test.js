@@ -48,6 +48,36 @@ describe('Tic queue ordering + player-first ties', () => {
   });
 });
 
+describe('PC-66: event-driven time-skip', () => {
+  it('tick(skip) subtracts the gap from all rows and fires the due ones', () => {
+    const q = createQueue();
+    commitNewRow(q, 'M', 'attack', 5);
+    commitNewRow(q, 'LH', 'impact', 1);
+    commitNewRow(q, 'RH', 'cooldown', 9);
+    const fired = [];
+    tick(q, (r) => fired.push(r.label), 1); // next fire is 1 tic away
+    assert.deepEqual(fired, ['LH']);
+    assert.equal(q.find(r => r.label === 'M').tics, 4);
+    assert.equal(q.find(r => r.label === 'RH').tics, 8);
+  });
+
+  it('advances past a 50-tic no-decision gap instead of stranding (run 75 softlock)', () => {
+    const eng = createEngine(seededRNG(7));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [{ id: 1, max_hp: 500, damage: 1, speed: 40, accuracy: 1, label: 'A' }]
+    });
+    // Both hands approach-ready; commit both with slow 38+38 cycles (run 75's
+    // weapons). The old per-tic loop capped at 50 tics mid-gap and stranded.
+    eng.commitAttack('LH', 1, [1], { castTicks: 38, cooldownTicks: 38, playerDamage: 5, attackName: 'Attack' });
+    eng.commitAttack('RH', 1, [1], { castTicks: 38, cooldownTicks: 38, playerDamage: 5, attackName: 'Attack' });
+    const state = eng.getState();
+    assert.ok(state.tic > 50, `advance crossed the old 50-tic cap (tic=${state.tic})`);
+    const ready = Object.values(state.participants.player.hands).some(h => h.state === 'Ready');
+    assert.ok(ready, 'advance reached a decision point (a ready hand) instead of stranding');
+  });
+});
+
 describe('Engine core (deterministic seeded)', () => {
   it('startBattle seeds queue and participants', () => {
     const eng = createEngine(seededRNG(123));

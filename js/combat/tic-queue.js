@@ -14,10 +14,15 @@ export function addEvent(queue, label, event, tics, id = null) {
   return entry;
 }
 
-export function tick(queue, onFire) {
+export function tick(queue, onFire, skip = 1) {
+  // PC-66: time-skip — subtract `skip` (default 1 = old per-tic behavior) from
+  // every row at once and fire the rows that land on 0. Callers that jump a
+  // gap pass the gap; callers processing a single iteration pass 1. Rows are
+  // clamped at 0 so morphed 0-tic rows (winding → impact) fire every iteration
+  // until their handler moves them on — exactly the old per-tic behavior.
   const fired = [];
   for (const row of queue) {
-    if (row.tics > 0) row.tics--;
+    row.tics = Math.max(0, row.tics - skip);
     if (row.tics === 0) {
       fired.push(row);
     }
