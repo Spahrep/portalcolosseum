@@ -1538,24 +1538,17 @@ async function loadBattle(runId) {
       // during the ceremony (dice → populate monsters → action queue). Feed
       // renders only after the ceremony finishes (see finishBattleIntro).
       renderPlayerHP({ player_hp: bs.intro.hpStart });
-      // Explicitly clear the message box so no old text bleeds through
-      // the ceremony overlay notices.
+    } else {
+      renderPlayerHP(run);
+    }
+    // If a ceremony intro is pending, force the message box completely empty
+    // so no old text bleeds through the ceremony overlay notices. Feed is
+    // populated later in finishBattleIntro (intro fires → playIntroCountdown;
+    // no fires → renderFeed([])).
+    if (battleIntroPending) {
       const msgBox = document.getElementById('message-box');
       if (msgBox) { msgBox.innerHTML = ''; }
       renderedFeedLines = 0;
-    } else {
-      renderPlayerHP(run);
-      // PC-72: resume — populate the full log instantly; history never re-types.
-      // On a resume (fresh page load), renderedFeedLines is 0 and all feed
-      // lines are historical — suppress feedback. After a commit, the feed
-      // incrementally adds new lines — use renderFeed so the typewriter and
-      // hit reactions play for real combat results.
-      const feed = bs.feed || [];
-      if (renderedFeedLines === 0) {
-        populateFeedInstantly(feed);
-      } else {
-        renderFeed(feed);
-      }
     }
     renderDice(bs.dice || {});
     renderMonsters(bs.monsters || []);
