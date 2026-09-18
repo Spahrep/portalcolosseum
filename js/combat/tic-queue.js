@@ -86,12 +86,12 @@ export function computeTimingMarkers(queue, attack, weaponSpeed = 0) {
   // Inclusive: rows with tics within [minT, maxT]
   const inside = sorted.filter(r => r.tics >= minT && r.tics <= maxT);
   if (inside.length > 0) {
-    return { kind: 'bar', firstId: inside[0].id, lastId: inside[inside.length - 1].id, hasInside: true };
+    return { kind: 'bar', firstId: inside[0].id, lastId: inside[inside.length - 1].id, minT, maxT, hasInside: true };
   }
   // No row inside: expand to nearest boundary rows
   const before = sorted.filter(r => r.tics < minT);
   const after = sorted.filter(r => r.tics > maxT);
   const firstId = before.length > 0 ? before[before.length - 1].id : sorted[0].id;
   const lastId = after.length > 0 ? after[0].id : sorted[sorted.length - 1].id;
-  return { kind: 'bar', firstId, lastId, hasInside: false };
+  return { kind: 'bar', firstId, lastId, minT, maxT, hasInside: false };
 }

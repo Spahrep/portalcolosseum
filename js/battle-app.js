@@ -859,27 +859,39 @@ function renderQueue(bs, fill = false, onDone = null) {
   sorted.forEach((row, index) => {
     el.appendChild(buildQueueRow(row, monsters, bs, true, index));
   });
-  // PC-56: Prediction bar — position depends on whether inside rows exist
+  // PC-56: Prediction bar — maps [minT, maxT] onto continuous tic → pixel interpolation
   if (queueBarInfo && queueBarInfo.kind === 'bar' && queueBarInfo.firstId && queueBarInfo.lastId) {
-    const firstRow = el.querySelector(`[data-row-id="${queueBarInfo.firstId}"]`);
-    const lastRow = el.querySelector(`[data-row-id="${queueBarInfo.lastId}"]`);
-    if (firstRow && lastRow) {
-      const firstRect = firstRow.getBoundingClientRect();
-      const lastRect = lastRow.getBoundingClientRect();
-      const queueRect = el.getBoundingClientRect();
-      const bar = document.createElement('div');
-      bar.className = 'prediction-bar';
-      if (queueBarInfo.hasInside) {
-        // Bar spans from top of first inside row to bottom of last — attack CAN land in these
-        bar.style.top = `${firstRect.top - queueRect.top}px`;
-        bar.style.height = `${lastRect.bottom - firstRect.top}px`;
-      } else {
-        // Bar sits in the gap between the two boundary rows — attack lands BETWEEN them
-        bar.style.top = `${firstRect.bottom - queueRect.top}px`;
-        bar.style.height = `${Math.max(4, lastRect.top - firstRect.bottom)}px`;
-      }
-      el.appendChild(bar);
+    const bar = document.createElement('div');
+    bar.className = 'prediction-bar';
+    // Build a tic→position ladder from DOM rows (in DOM order, already sorted)
+    const rowEls = Array.from(el.querySelectorAll('.queue-row'));
+    const queueRect = el.getBoundingClientRect();
+    const ladder = rowEls.filter(r => r.dataset.tics !== undefined).map(r => {
+      const rect = r.getBoundingClientRect();
+      return { tics: Number(r.dataset.tics), top: rect.top - queueRect.top, bottom: rect.bottom - queueRect.top };
+    });
+    ladder.sort((a, b) => a.tics - b.tics);
+    function yAtTics(t) {
+      if (ladder.length === 0) return 0;
+      if (t <= ladder[0].tics) return ladder[0].top;
+      if (t >= ladder[ladder.length - 1].tics) return ladder[ladder.length - 1].bottom;
+      // Find the exact row match
+      const exact = ladder.find(r => r.tics === t);
+      if (exact) return exact.top + (exact.bottom - exact.top) / 2;
+      // Bracket: which gap
+      let i = 0;
+      while (i < ladder.length - 1 && ladder[i + 1].tics < t) i++;
+      const lo = ladder[i], hi = ladder[i + 1];
+      const frac = (t - lo.tics) / (hi.tics - lo.tics);
+      return lo.bottom + frac * (hi.top - lo.bottom);
     }
+    const minT = Number(queueBarInfo.minT);
+    const maxT = Number(queueBarInfo.maxT);
+    const barTop = yAtTics(minT);
+    const barBottom = yAtTics(maxT);
+    bar.style.top = `${barTop}px`;
+    bar.style.height = `${Math.max(4, barBottom - barTop)}px`;
+    el.appendChild(bar);
   }
   if (fill) {
     // Ceremony-intro: intro fill — rows are sorted by tics, so the top row is First
@@ -914,6 +926,7 @@ function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
     div.classList.add('top-row');
   }
   div.dataset.rowId = row.id;
+  div.dataset.tics = row.tics;
   const nameSpan = document.createElement('span');
   nameSpan.className = 'name';
   nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
