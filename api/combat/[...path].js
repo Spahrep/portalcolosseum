@@ -447,12 +447,18 @@ async function handle(request) {
       // --- potions (consumable slots A/B) for state response ---
       // used mirrors the portal_run.consume_*_used flag (DB is the source of truth,
       // so a reloaded run cannot re-drink an already-consumed potion).
+      const { data: cfg } = await admin.from('game_config')
+        .select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed, fist_crit_chance, potion_crit_effect_multiplier, potion_crit_duration_multiplier')
+        .eq('id', 1).maybeSingle();
+      const pCritEffect = Number(cfg?.potion_crit_effect_multiplier) || 1.5;
+      const pCritDuration = Number(cfg?.potion_crit_duration_multiplier) || 1.5;
+
       async function potionInfo(consumeId, used = false) {
         if (!consumeId) return null;
         try {
           const { data: inst } = await admin
             .from('consumable_instance')
-            .select('id, rolled_floor, rolled_window, grade, consumable_template:template_id (name, effect_type)')
+            .select('id, rolled_floor, rolled_window, grade, crit_chance, consumable_template:template_id (name, effect_type)')
             .eq('id', consumeId)
             .maybeSingle();
           if (!inst) return null;
@@ -463,7 +469,10 @@ async function handle(request) {
             effect_type: inst.consumable_template?.effect_type || 'heal',
             effect_label: effectLabel,
             grade: inst.grade,
-            used: !!used
+            used: !!used,
+            crit_chance: Number(inst.crit_chance) || 0,
+            critEffectMultiplier: pCritEffect,
+            critDurationMultiplier: pCritDuration
           };
         } catch (e) {
           console.error('potion fetch error', e);
@@ -475,15 +484,13 @@ async function handle(request) {
         potionInfo(run.consume_b_id, !!run.consume_b_used)
       ]);
 
-      const { data: fistCfg } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed, fist_crit_chance').eq('id', 1).maybeSingle();
-
       const safeState = {
         queue: state.queue || [],
         player: state.player ? { hp: state.player.hp, hands: state.player.hands } : null,
         feed: state.feed || [],
         tic: state.tic || 0,
         buffs: state.buffs || [],
-        weapons: { hand_l: handL, hand_r: handR, belt: beltW, fist: fistCfg ? { name: 'Fist (unarmed)', damage: fistCfg.fist_damage, speed: fistCfg.fist_speed ?? 6, accuracy: fistCfg.fist_accuracy, crit_chance: fistCfg.fist_crit_chance ?? 0, base_damage: fistCfg.fist_damage, damage_range: 0, grade: null, attacks: [{ id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time: fistCfg.fist_prepare_time, cooldown_time: fistCfg.fist_cooldown_time, prepare_time_range: fistCfg.fist_prepare_time_range, cooldown_time_range: fistCfg.fist_cooldown_time_range, description: '', base_damage_multiplier: 1 }] } : null },
+        weapons: { hand_l: handL, hand_r: handR, belt: beltW, fist: cfg ? { name: 'Fist (unarmed)', damage: cfg.fist_damage, speed: cfg.fist_speed ?? 6, accuracy: cfg.fist_accuracy, crit_chance: cfg.fist_crit_chance ?? 0, base_damage: cfg.fist_damage, damage_range: 0, grade: null, attacks: [{ id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time: cfg.fist_prepare_time, cooldown_time: cfg.fist_cooldown_time, prepare_time_range: cfg.fist_prepare_time_range, cooldown_time_range: cfg.fist_cooldown_time_range, description: '', base_damage_multiplier: 1 }] } : null },
         potions: { potion_a: potionA, potion_b: potionB },
         monsters,
         dice
