@@ -55,7 +55,10 @@ COMMENT ON COLUMN public.game_config.fist_crit_chance IS 'Base crit chance perce
 COMMENT ON COLUMN public.game_config.potion_crit_effect_multiplier IS '+50% effect multiplier on potion crit (e.g. heal amount)';
 COMMENT ON COLUMN public.game_config.potion_crit_duration_multiplier IS '+50% duration multiplier on potion crit (for buff/debuff potions)';
 
--- 8. Update generate_monster to roll and return crit_chance (mirror accuracy roll style exactly: uniform [-range,+range], range=0 returns base exactly, clamped >=0)
+-- 8. Update generate_monster to roll and return crit_chance.
+--    BASE = PC-53 body (20260915235900_purge_monster_instance.sql): NO monster_instance
+--    insert, UUID id via gen_random_uuid(), max_hp via uniform_int, speed_range column.
+--    crit_chance: uniform [-range,+range], range 0 returns base exactly, clamped >=0.
 CREATE OR REPLACE FUNCTION generate_monster(p_template_id bigint)
 RETURNS jsonb AS $func$
 DECLARE
@@ -65,6 +68,7 @@ DECLARE
     v_damage int;
     v_speed int;
     v_accuracy int;
+    v_max_hp int;
     v_crit_chance int;
 
     v_attack0 jsonb;
@@ -72,10 +76,8 @@ DECLARE
     v_attack2 jsonb;
     v_attack3 jsonb;
     v_attack4 jsonb;
-
-    v_row monster_instance%rowtype;
 BEGIN
-    -- Fetch template
+    -- Fetch template (base_hp + max_hp_delta from prior migration)
     SELECT *
     INTO v_tmpl
     FROM monster_template
@@ -92,39 +94,44 @@ BEGIN
     WHERE a.id = v_tmpl.slot_0_attack_id
     LIMIT 1;
 
-    -- Roll stats using normal distribution (Box-Muller) for damage/speed/accuracy; uniform for crit (per PC-72)
+    -- Roll stats using normal distribution (Box-Muller) for non-HP stats
     v_damage := normal_int(v_tmpl.base_damage, v_tmpl.damage_range);
-    v_speed := normal_int(v_tmpl.base_speed, v_tmpl.speed_variance);
+    v_speed := normal_int(v_tmpl.base_speed, v_tmpl.speed_range);
     v_accuracy := normal_int(v_tmpl.base_accuracy, v_tmpl.accuracy_range);
 
-    -- crit_chance: exact mirror of accuracy uniform style from SSS migrations (range 0 returns base exactly)
+    -- HP: even/uniform distribution (requirement)
+    v_max_hp := uniform_int(v_tmpl.base_hp, v_tmpl.max_hp_delta);
+
+    -- crit_chance: uniform base ± range; range 0 returns base exactly; clamped >= 0
     IF COALESCE(v_tmpl.crit_range, 0) <= 0 THEN
         v_crit_chance := GREATEST(0, v_tmpl.crit_base);
     ELSE
         v_crit_chance := GREATEST(0, v_tmpl.crit_base + FLOOR(RANDOM() * (v_tmpl.crit_range * 2 + 1)) - v_tmpl.crit_range);
     END IF;
 
-    -- Slot 1-4 attacks (unchanged)
+    -- Slot 1: Always granted, weighted random from mapping table
     v_attack1 := get_random_monster_attack_for_slot(p_template_id, 1);
 
-    IF RANDOM() < COALESCE(v_tmpl.slot_1_chance, 0) THEN
+    -- Slot 2: conditional chain
+    IF random() < COALESCE(v_tmpl.slot_1_chance, 0) THEN
         v_attack2 := get_random_monster_attack_for_slot(p_template_id, 2);
     END IF;
 
-    IF v_attack2 IS NOT NULL AND RANDOM() < COALESCE(v_tmpl.slot_2_chance, 0) THEN
+    IF v_attack2 IS NOT NULL AND random() < COALESCE(v_tmpl.slot_2_chance, 0) THEN
         v_attack3 := get_random_monster_attack_for_slot(p_template_id, 3);
     END IF;
 
-    IF v_attack3 IS NOT NULL AND RANDOM() < COALESCE(v_tmpl.slot_3_chance, 0) THEN
+    IF v_attack3 IS NOT NULL AND random() < COALESCE(v_tmpl.slot_3_chance, 0) THEN
         v_attack4 := get_random_monster_attack_for_slot(p_template_id, 4);
     END IF;
 
-    -- Build result as JSON (include crit_chance in payload)
+    -- Build result as JSON (include max_hp + crit_chance)
     v_result := jsonb_build_object(
         'template_id', p_template_id,
         'damage', v_damage,
         'speed', v_speed,
         'accuracy', v_accuracy,
+        'max_hp', v_max_hp,
         'crit_chance', v_crit_chance,
         'slot_0_attack', v_attack0,
         'slot_1_attack', v_attack1,
@@ -133,30 +140,8 @@ BEGIN
         'slot_4_attack', v_attack4
     );
 
-    -- Persist to monster_instance (crit_chance not yet in table per this ticket; payload only)
-    INSERT INTO monster_instance (
-        template_id, damage, speed, accuracy,
-        slot_0_attack_id, slot_1_attack_id, slot_2_attack_id, slot_3_attack_id, slot_4_attack_id
-    )
-    VALUES (
-        p_template_id,
-        v_damage,
-        v_speed,
-        v_accuracy,
-        NULLIF(v_attack0->>'id', '')::bigint,
-        NULLIF(v_attack1->>'id', '')::bigint,
-        NULLIF(v_attack2->>'id', '')::bigint,
-        NULLIF(v_attack3->>'id', '')::bigint,
-        NULLIF(v_attack4->>'id', '')::bigint
-    )
-    RETURNING id, created_at
-    INTO v_row.id, v_row.created_at;
-
-    -- Merge persist-only fields into the result object
-    v_result := v_result || jsonb_build_object(
-        'id', v_row.id,
-        'created_at', TO_CHAR(v_row.created_at, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
-    );
+    -- Emit UUID id (no persist); created_at is now() for contract compatibility
+    v_result := v_result || jsonb_build_object('id', gen_random_uuid(), 'created_at', to_char(now(), 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'));
 
     RETURN v_result;
 END;
