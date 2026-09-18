@@ -510,9 +510,11 @@ function renderMonsters(monsters) {
   monsters.forEach((m, i) => {
     const card = document.createElement('div');
     card.className = 'monster-card';
-    // PC-70: letter = the engine feed-line label (A/B/C…) so hit feedback can
-    // target the exact card that took the hit (multi-target = one line each).
-    card.dataset.letter = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || '';
+    // PC-70: letter = the monster's arena key from its label (feed lines use
+    // the raw label: "Monster A" / "A" / "Monster #12"). Same normalization as
+    // parseHitLine + queueLabel. Index order is NOT the contract — labels are
+    // "next free A-Z" at spawn and drift from array order when monsters die.
+    card.dataset.letter = String(m.label || '').replace(/^Monster\s*/i, '');
     card.style.cssText = 'background:rgba(0,0,0,0.4);border:2px solid #4a90d9;padding:8px 10px;margin-bottom:6px;';
     const sprite = document.createElement('div');
     sprite.className = 'monster-sprite';
