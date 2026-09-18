@@ -182,6 +182,32 @@ function setBattleTextSpeed(speedKey) {
   if (!BATTLE_SPEED_LABELS[speedKey]) return;
   localStorage.setItem('pc_battle_text_speed', speedKey);
   highlightSpeedButtons();
+  // Sync to server (background — don't block UI on failure)
+  syncSettings({ battle_text_speed: speedKey });
+}
+
+/**
+ * Sync a partial settings object to the server.
+ * Merges the provided keys into the user's profile settings via PATCH /api/user/profile.
+ * Fails silently — localStorage is the local authoritative cache.
+ */
+async function syncSettings(partial) {
+  if (!supabase) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session?.access_token) return;
+    await fetch('/api/user/profile', {
+      method: 'PATCH',
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify({ settings: partial }),
+    });
+  } catch (e) {
+    console.error('Settings sync failed (soft):', e);
+  }
 }
 
 function initMenuSettings() {
@@ -393,6 +419,11 @@ async function initGame() {
     console.error('Active run check failed (soft):', e);
   }
 
+  // Load persisted settings from the server into localStorage
+  // This runs asynchronously — the game doesn't block on it.
+  // If it fails, localStorage already has the user's last-known values.
+  loadServerSettings(session.access_token);
+
   // Initialize the game canvas context (placeholder for future rendering)
   // No placeholder text drawn — the canvas is ready for arena battle rendering
   const canvas = document.getElementById('game');
@@ -410,6 +441,29 @@ async function initGame() {
   document.getElementById('not-ready-modal')?.addEventListener('click', hideNotReadyModal);
   // Explicit close (×) button
   document.getElementById('not-ready-close')?.addEventListener('click', hideNotReadyModal);
+}
+
+/**
+ * Fetch settings from the server and merge into localStorage.
+ * Server values win — they reflect the user's last confirmed choice across any device.
+ * Fails silently on network/auth errors; localStorage cache survives.
+ */
+async function loadServerSettings(tokenForHeader) {
+  if (!tokenForHeader) return;
+  try {
+    const res = await fetch('/api/user/profile', {
+      headers: { Authorization: `Bearer ${tokenForHeader}` },
+    });
+    if (!res.ok) return;
+    const { settings } = await res.json();
+    if (!settings) return;
+    // Merge each known setting into localStorage
+    if (settings.battle_text_speed) {
+      localStorage.setItem('pc_battle_text_speed', settings.battle_text_speed);
+    }
+  } catch (e) {
+    console.error('Settings fetch failed (soft):', e);
+  }
 }
 
 /**
