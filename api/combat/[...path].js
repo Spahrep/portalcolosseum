@@ -1064,7 +1064,7 @@ async function handle(request) {
       let portals;
       try {
         const res = await admin.from('portal_template')
-          .select('id,name,fights,green_dice_count,yellow_dice_count,red_dice_count,green_faces,yellow_faces,red_faces')
+          .select('id,name,fights,green_dice_count,yellow_dice_count,red_dice_count,green_faces,yellow_faces,red_faces,ap_cost,unlock_gold_cost')
           .order('id');
         portals = res.data;
         if (res.error) throw res.error;
@@ -1072,6 +1072,28 @@ async function handle(request) {
         console.error('portals query error', e);
         return json({ error: 'Internal server error' }, 500);
       }
+
+      // PC-75: player access logic — Portal 1 always accessible; N>1 requires completed_previous (portal N-1)
+      try {
+        const { data: completedRuns } = await admin.from('portal_run')
+          .select('portal_template_id')
+          .eq('user_id', user.id)
+          .eq('status', 'completed');
+        const completedIds = new Set((completedRuns || []).map(r => r.portal_template_id));
+        for (const p of portals || []) {
+          const prevId = p.id - 1;
+          const hasCompletedPrev = p.id === 1 || completedIds.has(prevId);
+          p.player_has_completed_previous = hasCompletedPrev;
+          p.is_locked = !hasCompletedPrev;
+        }
+      } catch (e) {
+        console.error('completed previous check error', e);
+        for (const p of portals || []) {
+          p.player_has_completed_previous = p.id === 1;
+          p.is_locked = p.id !== 1;
+        }
+      }
+
       return json({ portals: portals || [] });
     }
 

@@ -111,8 +111,8 @@ function enterLocation() {
 
   // Trigger location-specific action
   if (loc.name === 'portal') {
-    // Enter The Portal — redirect to the GUI battle test
-    window.location.href = '/run-equip.html';
+    // Enter The Portal — redirect to portal selection (PC-75)
+    window.location.href = '/portal-select.html';
   } else if (loc.name === 'menu') {
     // Menu / Settings panel — replaces the drunk-jester placeholder
     showMenuSettings();
