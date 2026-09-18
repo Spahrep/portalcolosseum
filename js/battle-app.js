@@ -868,17 +868,31 @@ function renderQueue(bs, fill = false, onDone = null) {
     const queueRect = el.getBoundingClientRect();
     const ladder = rowEls.filter(r => r.dataset.tics !== undefined).map(r => {
       const rect = r.getBoundingClientRect();
-      return { tics: Number(r.dataset.tics), top: rect.top - queueRect.top, bottom: rect.bottom - queueRect.top };
+      return { tics: Number(r.dataset.tics), top: rect.top - queueRect.top, bottom: rect.bottom - queueRect.top, height: rect.height };
     });
     ladder.sort((a, b) => a.tics - b.tics);
+    const gapPx = 2; // matches .queue-row margin-bottom
     function yAtTics(t) {
       if (ladder.length === 0) return 0;
-      if (t <= ladder[0].tics) return ladder[0].top;
-      if (t >= ladder[ladder.length - 1].tics) return ladder[ladder.length - 1].bottom;
-      // Find the exact row match
+      const first = ladder[0], last = ladder[ladder.length - 1];
+      // Virtual extension above first row
+      if (t <= first.tics) {
+        if (t === first.tics) return first.top;
+        const stepTics = ladder.length > 1 ? ladder[1].tics - first.tics : Math.max(first.tics, 1);
+        const frac = Math.min((first.tics - t) / stepTics, 1);
+        return first.top - frac * (last.height + gapPx);
+      }
+      // Virtual extension below last row (at most one row-height)
+      if (t >= last.tics) {
+        if (t === last.tics) return last.top + last.height / 2;
+        const stepTics = ladder.length > 1 ? last.tics - ladder[ladder.length - 2].tics : Math.max(last.tics, 1);
+        const frac = Math.min((t - last.tics) / stepTics, 1);
+        return last.bottom + frac * (last.height + gapPx);
+      }
+      // Exact match on a row
       const exact = ladder.find(r => r.tics === t);
-      if (exact) return exact.top + (exact.bottom - exact.top) / 2;
-      // Bracket: which gap
+      if (exact) return exact.top + exact.height / 2;
+      // Between two rows — lerp across the gap
       let i = 0;
       while (i < ladder.length - 1 && ladder[i + 1].tics < t) i++;
       const lo = ladder[i], hi = ladder[i + 1];
