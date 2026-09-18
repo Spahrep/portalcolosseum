@@ -17,7 +17,7 @@ Category mapping is derived, never stored: `heal` is its own category; `speed`, 
 
 The **effect amount is the instance's `rolled_floor`** — the number on the card (`X+, up to Y`). No re-roll at use time; the value is fixed at generation.
 
-- **Heal:** `{ type: 'heal', amount: rolled_floor }`. Instant — no duration. HP restored is capped at `PLAYER_MAX_HP` (1000, `js/combat/participants.js`). Overheal is wasted, never stored.
+- **Heal:** `{ type: 'heal', amount: rolled_floor }`. Instant — no duration. HP restored is capped at the player's max HP — the live value comes from `game_config.starting_hp` (PC-DEC-045, Decided by Spahrep, 2026-09-17); `PLAYER_MAX_HP` (1000, `js/combat/participants.js`) is the offline engine default only. Overheal is wasted, never stored.
 - **Buff:** `{ type: 'speed' | 'accuracy' | 'damage', value: rolled_floor, durationTicks: template.duration_ticks, endTic: tic + durationTicks }`.
   - Duration comes from the **template** (`duration_ticks`), never the instance. `duration_ticks` is NULL for heal templates.
   - `endTic` is computed at effect-land time: `endTic = state.tic + duration_ticks`.

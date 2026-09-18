@@ -1,4 +1,4 @@
-# Current Design Status (as of 2026-09-16)
+# Current Design Status (as of 2026-09-18)
 
 This file captures the current state of design decisions for Portal Colosseum. It is intended as a living reference until decisions are moved into more permanent documents.
 
@@ -16,7 +16,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 ## Attack Slot System (documented in weapon-generation.md)
 
 - **Slot 0 — Default "Attack"**: Every weapon has this; uses base stats unmodified. Stored as `slot_0_attack_id` (NOT NULL FK → attack.id) on `weapon_template` and `weapon_instance`.
-- **Slots 1–4 — Additional Attacks**: Pool membership comes from the `weapon_template_attack_mapping` junction table (weapon_template → attack × slot) via FK integer IDs. Each slot has a `slot_N_chance` column (0.0–1.0) in `weapon_template` controlling activation probability. The mapping table also has a `weight` column (real, default 1.0) for weighted random selection within each slot. Max total attacks = 5 (Slot 0 + up to 4 configurable slots).
+- **Slots 1–4 — Additional Attacks**: Pool membership comes from the `weapon_template_attack_mapping` junction table (weapon_template → attack × slot) via FK integer IDs. Each slot has a `slot_N_chance` column (0.0–1.0) in `weapon_template` controlling activation probability. The mapping table also has a `weight` column (real, default 1.0) for weighted random selection within each slot. Max total attacks = 5 (Slot 0 + up to 4 configurable slots). **Attack damage multipliers are base ± range with an EVEN (uniform) spread** — `base_damage_multiplier_range` on the attack table (e.g. Heavy Chop x1.5 → rolls 1.3–1.7, EV stays 1.5; 0 = no variance); monster damage = mean ± σ via `damage_variance` (Box-Muller); both admin-editable with a band preview (PC-DEC-047, Decided by DarkJester, 2026-09-17; shipped on branch wt/pc-65).
 
 ## Consumables (documented in consumables.md) — NEW 2026-09-08
 
@@ -66,7 +66,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Hand rows **morph**: attack lands → same row relabels to `Ready|cd` → re-sorts. One row per hand always
 - Monster rows don't morph: damage applies, next attack in cycle spawns as a new row (repetition visible)
 - Pre/cooldown profiles can be any mix (short pre + long cd, etc.) — sorting handles all of them
-- **Ties resolve player-first**, always (no same-tic mutual kills); death-cancels-in-flight = PMVP
+- **Ties resolve player-first**, always (no same-tic mutual kills). **Kill-cancel (PC-DEC-046, DarkJester 2026-09-17, shipped 48ddd58):** when an attack impact kills a monster, any other hand still winding an attack whose targets are ALL dead is cancelled straight into its own move's cooldown at the kill tic — no corpse whiff, no redirect for explicit targets. Multi-target attacks survive partial kills (cancel only when every queued target is dead); auto-target attacks still redirect to the first living monster. Whether a monster that dies on a tic still resolves its own in-flight attack = PMVP
 - **DW cascading command selection is the combat command mechanism** (PC-DEC-010; full visual spec 2026-09-16 — PC-DEC-021..027, image `shared/CommandSelection.png`): three cascading windows (action → target → confirm), hand-name tab on the window border, Esc backs one level, root window NOT closable (Delay/Defend PMVP), potions follow the same flow, keyboard-first + mouse, palette not locked (theming PMVP). Detailed spec in battle-status-ui.md
 - **Initial turn order (PC-DEC-032, shipped as PC-64)**: at combat start each hand gets one **approach** row on the timing rail at its weapon's instance speed (unarmed = `game_config.fist_speed`); monsters already sit there at their instance speed. When a hand's approach row hits 0 it becomes Ready and the player picks their action then. `startBattle` advances to the first decision point — a faster monster acts first. Ties → player first. Deterministic — supersedes PC-DEC-021's roll (1..speed). Attack timing formula unchanged; the approach row is initial placement only. **Presentation (PC-DEC-039, Decided by Spahrep, 2026-09-17)**: the battle is presented from Tic 0 and progresses until the first entity acts — tic-0 countdown intro, no jump to the decision point (shipped on branch pc-64-battle-intro)
 - **Both-hands-ready order (PC-DEC-028)**: faster base attack (lowest equipped-weapon speed) opens first; equal speed → left hand first. Deterministic — the hand-switch chip was never asked for and is removed (PC-63)
@@ -95,7 +95,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - **MaxHP delta = EVEN (uniform) distribution, not bell curve** (Spahrep 2026-09-08) — every value equally likely, so the secret max stays unpredictable with play
 - Other monster stat rolls: **damage, speed, accuracy = Box-Muller `normal_int()` bell curve**; HP = uniform (above)
 - **SCHEMA (2026-09-15):** `monster_template.base_hp` + `monster_template.max_hp_delta`. Monster instances are NOT a table — `generate_monster()` returns a jsonb document (UUID id, rolled damage/speed/accuracy via `normal_int()`, max_hp via `uniform_int()`, resolved attack slots) and the instance lives inside `portal_run.battle_state` jsonb. `monster_instance` table purged 2026-09-15 (Spahrep: JSON for the portal instance — faster/lighter than a DB-heavy table; Decided by Spahrep, 2026-09-15).
-- **SCHEMA (2026-09-16):** `game_config` single-row table = global game variables (Spahrep: "we will make a config table. It will basicaly be global variables."). Carries starting values — gold 0, AP 10 (Decided by Spahrep, 2026-09-16) — and the starter-template reference (SSS). Supersedes the JSON-config-file idea and the per-row `is_starter` flag on weapon_template (which would have added a useless column to 99% of rows). **Unarmed (Fist) values live here too** — fist_damage, fist_accuracy, fist_prepare_time (+range), fist_cooldown_time (+range), fist_speed: no hardcoded unarmed stats anywhere, client consumes the server's fist payload (PC-DEC-035, Decided by Spahrep, 2026-09-17; migrations 20260917120000 + 20260917140000).
+- **SCHEMA (2026-09-16):** `game_config` single-row table = global game variables (Spahrep: "we will make a config table. It will basicaly be global variables."). Carries starting values — gold 0, AP 10 (Decided by Spahrep, 2026-09-16) — and the starter-template reference (SSS). Supersedes the JSON-config-file idea and the per-row `is_starter` flag on weapon_template (which would have added a useless column to 99% of rows). **Unarmed (Fist) values live here too** — fist_damage, fist_accuracy, fist_prepare_time (+range), fist_cooldown_time (+range), fist_speed: no hardcoded unarmed stats anywhere, client consumes the server's fist payload (PC-DEC-035, Decided by Spahrep, 2026-09-17; migrations 20260917120000 + 20260917140000). **Player max HP lives here too** — `starting_hp` (1000) is read end-to-end (run insert, battle start, heal-potion cap); the engine constant is fallback-only (PC-DEC-045, Decided by Spahrep, 2026-09-17; shipped 271a75d).
 - **SCHEMA (2026-09-16):** `player_inventory` table + `player_backpack` view PURGED (Spahrep: "let's purge the player_inventory table."; PC-55). Player items live as `weapon_instance` rows with a player FK; no separate backpack table (Decided by Spahrep, 2026-09-16).
 
 ## Portal Runs (documented in portal-runs.md) — UPDATED 2026-09-10
@@ -146,7 +146,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - `inspect #` during preamble = item inspect (client-side from /weapons + /consumables payloads); monster inspect unchanged in-run.
 - After every battle **win**, CLI offers continue/stop explicitly (bare `continue`/`stop` commands; `battle end X` alias stays). Offer once per battle.
 - Loot + consumables NOT implemented (2026-09-13) — pool line is honest ("The prize pool has grown"), no fake numbers.
-- Native CLI same flow; `run new` flags + `--quiet`/`--json` bypass the interactive gate (parity preserved).
+- Web CLI only (native CLI purged, PC-DEC-041 2026-09-17); `run new` flags + `--quiet`/`--json` bypass the interactive gate.
 
 ## Open / Undocumented Points
 

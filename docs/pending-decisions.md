@@ -375,7 +375,31 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Typewriter battle log (MESSAGE LOG, #message-box) — exact values delegated to the gamedesigner persona ("talk to the /personality designer to get some info"), ruling recorded per that persona. Ruling: (1) only NEW feed lines type — the log is re-rendered wholesale on every commit, so the renderer diffs by line count (incremental append) or the whole history re-types itself each turn; (2) per-char reveal at 15ms/char, 1000ms beat after each line completes (Spahrep's starting value); (3) soft gate — the action menu is inert while a batch types (the player must read the result before deciding; same pattern as the intro ceremony gating the command window), and clicking the log instantly completes pending typing; (4) three text-speed presets behind ONE knob — standard (15ms/1000ms, default) / slow (25ms/1600ms) / instant (no typing = today's behavior, no gate) — stored client-side in localStorage (pc_battle_text_speed), per-browser not per-account (display taste ≠ game rules; the DB config table stays for game config), small TEXT SPEED control in the MESSAGE LOG title row; (5) system text stays instant: 'Battle begins...' placeholder, showMessage toasts/errors, and intro-countdown appendFeedLine (its pacing is the countdown dwell, PC-64); finishIntroSnap re-renders the full feed from the top (from-top flag) so the battle-start log types once after the countdown snaps, holding onDone until the reveal completes. Pure client-side presentation in js/battle-app.js + run.html — no API/DB changes. Applied to: PC-66 (kanban → Grok builder).
 
-## Open
+- ID: PC-DEC-045
+  Date: 2026-09-17
+  Source: Discord thread "Initial turn order decision" (1550154633501085840), ~14:35 (message 1550198430180319313) — captured by the 2026-09-18 nightly sweep
+  Speaker: Spahrep
+  Verbatim: "is Player_max_HP in a config talbe, it shouldnt' be hard coded."
+  Status: DECIDED
+  Notes: Player max HP must come from the config table, not a hard-coded literal — extends PC-DEC-035's no-hardcoding principle to the player. Shipped 271a75d (2026-09-17, pushed to main): `game_config.starting_hp` read via a startingHp() helper and wired into all startBattle sites + the run insert + the heal-potion cap; `js/combat/participants.js` keeps PLAYER_MAX_HP=1000 only as the offline engine fallback — the live value is fully config-driven. Applied to combat-system.md, potion-contract.md, current-design-status.md.
+
+- ID: PC-DEC-046
+  Date: 2026-09-17
+  Source: Discord thread 1550243421862502432 ("Fix second attack cooldown on kill"), 17:33 — confirmed 18:03 (message 1550250876415770625); captured by the 2026-09-18 nightly sweep
+  Speaker: DarkJester
+  Verbatim: "If you send two attacks at the same enemy and the first one kills it the other hand should immediately start the moves cooldown time instead of being redirected or missing." + "Ok, please make it so that after the first move kills, the hand targeting it immediately goes on that moves cooldown"
+  Status: DECIDED
+  Notes: Kill-cancel rule. When an attack impact kills a monster, any other hand still winding an attack whose targets are ALL dead is cancelled straight into its own move's cooldown at the kill tic — no finishing the cast, no corpse whiff, no redirect for explicit targets. Shipped 48ddd58 (engine.js): multi-target attacks survive partial kills (cancel only when every queued target is dead); auto-target attacks (no explicit target) still redirect to the first living monster; the cancelled hand pays its own move's cooldown (insurance tax — no free double-tap). Feed line: "RH attack cancelled — target already defeated". Partially resolves the parked "death-cancels-in-flight = PMVP" item: the player same-enemy double-tap case is ruled; whether a monster that dies on a tic still resolves its own in-flight attack stays PMVP. Applied to battle-status-ui.md + current-design-status.md.
+
+- ID: PC-DEC-047
+  Date: 2026-09-17
+  Source: Discord thread 1550222931395743796 ("Check run 74 logs for Heavy Chop damage"), 16:12 — sequencing 16:25 (1550228413514784971), ticket 16:50 (1550232534065881109); captured by the 2026-09-18 nightly sweep
+  Speaker: DarkJester
+  Verbatim: "Also, the attacks should have ranges for their multipliers, so instead of heavy chop being x1.5 DMG it should be a range of 1.3 - 1.7 for an example, and an even spread for more variance."
+  Status: DECIDED
+  Notes: Attack damage multipliers are base ± range with an EVEN (uniform) spread for more variance — Heavy Chop x1.5 rolls 1.3–1.7, EV stays 1.5. Sequencing ruled same thread: "Fix the double count, then I'll do a run to make sure it is fixed, then if I report success we add the ranges" — double-count bug fixed 31430f0; verification passed (Heavy Chop = 57 = 38 × 1.5); then "Create the ticket, and have the mult adjustment be done how ever you think is best" — delegated to the builder ticket, shipped on branch wt/pc-65 (kanban done): `base_damage_multiplier_range` on the attack table (uniform ± roll, 0 = no variance), monster damage = mean ± σ via a `damage_variance` column (Box-Muller), both admin-editable with a band preview. Applied to combat-system.md + current-design-status.md.
+
+ ## Open
 
 - ID: PC-DEC-004
   Date: 2026-09-16

@@ -229,9 +229,17 @@ that's correct and intended (the old tic-track couldn't show repetition; the que
 If two events land on the same tic: **player always resolves first.** Locked.
 No "I killed it on the same tic it killed me" salt.
 
-**PMVP — Cancel on death:** whether a participant who dies this tic still resolves an
-in-flight attack (death-cancels vs attack-resolves-anyway). Parked; the current rule is
-draw-to-player on ties only. Revisit post-MVP.
+**Kill-cancel — RULED (PC-DEC-046, DarkJester 2026-09-17, shipped 48ddd58):** when an
+attack impact kills a monster, any other hand still winding an attack whose targets
+are ALL dead is cancelled straight into its own move's cooldown at the kill tic — no
+finishing the cast, no corpse whiff, no redirect for explicit targets (feed: "RH
+attack cancelled — target already defeated"). Multi-target attacks survive partial
+kills (cancel only when every queued target is dead); auto-target attacks (no explicit
+target) still redirect to the first living monster.
+
+**PMVP — Cancel on death (remainder):** whether a participant that dies on a tic still
+resolves its own in-flight attack (death-cancels vs attack-resolves-anyway). Parked;
+the current rule is draw-to-player on ties only. Revisit post-MVP.
 
 ## Monster HP — Words Only
 

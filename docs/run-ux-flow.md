@@ -61,7 +61,7 @@ Type "continue" to risk the next fight, or "stop" to claim your current share an
 
 ## Parity & guardrails
 
-- Native CLI gets the same flow. `run new --lh --rh --belt --ca --cb` flags and `--quiet`/`--json` skip the interactive gate entirely (byte-for-byte parity preserved).
+- The web CLI is the sole CLI (native CLI purged, PC-DEC-041 2026-09-17): `run new --lh --rh --belt --ca --cb` flags and `--quiet`/`--json` skip the interactive gate entirely.
 - Presentation layer only: no API, engine, schema, dice, or balance changes. No new dependencies, plain JS.
 
 ## PC-50r: One active run, auto-resume, End Run (2026-09-15)

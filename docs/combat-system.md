@@ -2,7 +2,9 @@
 
 ## Player Stats
 
-- **Starting HP**: 1,000
+- **Starting HP**: 1,000 — the live value comes from `game_config.starting_hp`,
+  not a hard-coded literal (PC-DEC-045, Decided by Spahrep, 2026-09-17); the
+  engine constant (1000) is only the offline fallback default.
 
 ## Core Mechanics
 
@@ -21,6 +23,11 @@ Combat operates on a **tic-based** system rather than strict turn-based alternat
 All combat outcomes incorporate variance:
 - Damage ranges (base ± delta)
 - Individual attack variance on top of base ranges
+- **Attack damage multipliers are base ± range, even (uniform) spread** — e.g.
+  Heavy Chop x1.5 rolls 1.3–1.7 (EV stays 1.5); stored as
+  `base_damage_multiplier_range` on the attack table (0 = no variance); monster
+  damage = mean ± σ via the `damage_variance` column (Box-Muller). (PC-DEC-047,
+  Decided by DarkJester, 2026-09-17; shipped on branch wt/pc-65.)
 - Monster stats and behavior include randomness
 
 ## Monster Stats
