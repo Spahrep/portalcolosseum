@@ -407,7 +407,15 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Hit feedback shipped on main 986cd97 (PC-70). The FORM is Spahrep's decision (window shake on monster→player; monster shake/flash on player→monster; sprite change deferred to TODO). Amplitudes/durations are assistant-determined values per the gamedesigner persona, justified by the impact-impulse recipe (short, sharp, decaying — a jolt, not rumble): run-window contents jolt 4px/280ms (the .container only — page background and status dock stay put, per "not incluing the background"); monster card recoils 3px/220ms; sprite box white-flashes 180ms (white = universal hit-confirmed signal, not red — red stays the HP-band severity language). Values are exposed as named constants (HIT_FEEDBACK in js/battle-app.js; keyframes in run.html) for easy retuning. Feedback fires as the feed line starts typing; misses/Ready/defeat get none (feedback must not lie about impact). Intro-countdown fires shake live; the intro-snap history re-type is suppressed so old hits don't re-shake. Sprite change on hit (hit/damaged sprite variant swap at impact) = TODO, tracked in battle-status-ui.md Open/Visual Nits; no sprites yet — the white-flash already occupies the sprite box, so the swap slot is reserved.
 
- ## Open
+- ID: PC-DEC-049
+  Date: 2026-09-18
+  Source: Discord thread 1550496129332813914 ("When someone retuns to a battle after exiting part way…"), 2026-09-18
+  Speaker: Spahrep
+  Verbatim: "When someone retuns to a battle after exiting part way, we dont need to show the roll animations and slow feed all the old action logs. It can simply put them right back to where they were. The action log should instantly be populated, and the dice should be insntaly selected etc."
+  Status: DECIDED
+  Notes: Battle resume = instant restore (shipped main 38a29a7 as PC-72). Loading run.html?id=<run> is ALWAYS a resume unless it is the genuine first entry of a NEW run: the die ceremony (sweep + roll) and the intro countdown + full-history re-type play only (a) on first entry — a sessionStorage marker set by run-equip right before navigating to a freshly created run, and (b) on in-session battle continue. Every other load — returning after exiting part way, reload, reopened tab, direct URL, the run-equip active-run bounce — restores instantly: the action log populates at once (no typewriter, historical hits do NOT re-shake), the current die renders already selected with its face + rolled value, monsters render without the fade-in, and the command window + timing track appear immediately. sessionStorage (not localStorage) so a closed tab never replays the ceremony.
+
+## Open
 
 - ID: PC-DEC-004
   Date: 2026-09-16

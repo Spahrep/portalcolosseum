@@ -87,6 +87,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Player sees full color distribution before starting; tracks remaining dice throughout
 - Die selection is random (player doesn't choose) — casino/roulette sweep animation (indicator fast→slow across the dice boxes, lands on the selected die) at run start + between battles
 - Die roll produces a **point budget** → spent on a monster group (1–5 monsters) via weighted selection from per-portal monster mapping table
+- **Battle resume = instant restore (PC-DEC-049, decided by Spahrep 2026-09-18; shipped main 38a29a7 as PC-72)**: returning to a battle after exiting part way (any run.html?id=<run> page load that is not the fresh entry of a new run) skips the die ceremony, the intro countdown, and the history re-type — the action log populates instantly, the current die renders already selected, monsters and the command window appear immediately. The ceremony plays only on a genuine first entry (run-equip sets a sessionStorage marker when creating a NEW run) and on in-session battle continue.
 - Max 5 monsters per battle; 5th monster absorbs remaining points
 - Battles are **groups of monsters**, not single encounters — multi-enemy attacks (Cleave, Whirlwind) become core
 
