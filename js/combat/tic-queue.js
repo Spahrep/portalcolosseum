@@ -69,10 +69,12 @@ export function morphHandRow(queue, handLabel, newEvent, newTics) {
   return row;
 }
 
-// PC-56: computeTimingMarkers returns bar/pin info for prediction bar UX
+// PC-56: computeTimingMarkers returns bar info for prediction bar UX
 // Returns:
-//   {kind: 'bar', firstId: string, lastId: string} — 1+ rows with tics strictly inside (minT < tics < maxT); bar spans first to last inside inclusive
-//   {kind: 'pin', rowId: string} — no rows strictly inside; pin on first row with tics >= maxT (or last row)
+//   {kind: 'bar', firstId: string, lastId: string} — ALWAYS a bar covering the timing range,
+//     expanded to the nearest boundary row(s) when no row falls inside [minT, maxT].
+//     firstId is the first row with tics >= minT (or the last row with tics < minT if none).
+//     lastId is the last row with tics <= maxT (or the first row with tics > maxT if none).
 //   null — empty queue or no attack
 export function computeTimingMarkers(queue, attack, weaponSpeed = 0) {
   if (!queue || queue.length === 0 || !attack) return null;
@@ -80,19 +82,15 @@ export function computeTimingMarkers(queue, attack, weaponSpeed = 0) {
   const range = Number(attack.prepare_time_range || attack.prepareTimeRange || 0);
   const maxT = minT + range;
   const sorted = [...queue].sort((a, b) => a.tics - b.tics);
-  // find rows strictly inside
-  const inside = sorted.filter(r => r.tics > minT && r.tics < maxT);
+  // Inclusive: rows with tics within [minT, maxT]
+  const inside = sorted.filter(r => r.tics >= minT && r.tics <= maxT);
   if (inside.length > 0) {
     return { kind: 'bar', firstId: inside[0].id, lastId: inside[inside.length - 1].id };
   }
-  // no inside: pin on first >= maxT, or last row
-  for (const row of sorted) {
-    if (row.tics >= maxT) {
-      return { kind: 'pin', rowId: row.id };
-    }
-  }
-  if (sorted.length > 0) {
-    return { kind: 'pin', rowId: sorted[sorted.length - 1].id };
-  }
-  return null;
+  // No row inside: expand to nearest boundary rows
+  const before = sorted.filter(r => r.tics < minT);
+  const after = sorted.filter(r => r.tics > maxT);
+  const firstId = before.length > 0 ? before[before.length - 1].id : sorted[0].id;
+  const lastId = after.length > 0 ? after[0].id : sorted[sorted.length - 1].id;
+  return { kind: 'bar', firstId, lastId };
 }

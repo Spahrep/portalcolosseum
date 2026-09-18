@@ -19,7 +19,7 @@ let currentRunId = null;
 let lastBs = null; // last loaded battle_state (safeState) — source for attack/potion lookups
 let busy = false;
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
-let queueBarInfo = null;   // {kind:'bar',firstId,lastId} | {kind:'pin',rowId} | null — PC-56 prediction bar/pin
+let queueBarInfo = null; // {kind:'bar',firstId,lastId} | null — PC-56 prediction bar
 let playerName = 'Player';
 let shouldAnimateDice = false;
 // PC-51: monsters stay hidden while the dice roll ceremony plays, then
@@ -859,31 +859,21 @@ function renderQueue(bs, fill = false, onDone = null) {
   sorted.forEach((row, index) => {
     el.appendChild(buildQueueRow(row, monsters, bs, true, index));
   });
-  // PC-56: Prediction bar / pin after rows are in DOM
-  if (queueBarInfo) {
-    if (queueBarInfo.kind === 'bar' && queueBarInfo.firstId && queueBarInfo.lastId) {
-      const firstRow = el.querySelector(`[data-row-id="${queueBarInfo.firstId}"]`);
-      const lastRow = el.querySelector(`[data-row-id="${queueBarInfo.lastId}"]`);
-      if (firstRow && lastRow) {
-        const firstRect = firstRow.getBoundingClientRect();
-        const lastRect = lastRow.getBoundingClientRect();
-        const queueRect = el.getBoundingClientRect();
-        const top = firstRect.top - queueRect.top;
-        const height = (lastRect.bottom - firstRect.top);
-        const bar = document.createElement('div');
-        bar.className = 'prediction-bar';
-        bar.style.top = `${top}px`;
-        bar.style.height = `${height}px`;
-        el.appendChild(bar);
-      }
-    } else if (queueBarInfo.kind === 'pin' && queueBarInfo.rowId) {
-      const pinRow = el.querySelector(`[data-row-id="${queueBarInfo.rowId}"]`);
-      if (pinRow) {
-        const pin = document.createElement('span');
-        pin.className = 'queue-pin';
-        pin.textContent = '>';
-        pinRow.appendChild(pin);
-      }
+  // PC-56: Prediction bar (always bar mode; pin mode eliminated per design ref)
+  if (queueBarInfo && queueBarInfo.kind === 'bar' && queueBarInfo.firstId && queueBarInfo.lastId) {
+    const firstRow = el.querySelector(`[data-row-id="${queueBarInfo.firstId}"]`);
+    const lastRow = el.querySelector(`[data-row-id="${queueBarInfo.lastId}"]`);
+    if (firstRow && lastRow) {
+      const firstRect = firstRow.getBoundingClientRect();
+      const lastRect = lastRow.getBoundingClientRect();
+      const queueRect = el.getBoundingClientRect();
+      const top = firstRect.top - queueRect.top;
+      const height = (lastRect.bottom - firstRect.top);
+      const bar = document.createElement('div');
+      bar.className = 'prediction-bar';
+      bar.style.top = `${top}px`;
+      bar.style.height = `${height}px`;
+      el.appendChild(bar);
     }
   }
   if (fill) {
@@ -927,13 +917,7 @@ function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   div.appendChild(nameSpan);
   div.appendChild(ticSpan);
-  // PC-56: pin marker (yellow '>') when queueBarInfo is pin mode for this row
-  if (withMarkers && queueBarInfo && queueBarInfo.kind === 'pin' && queueBarInfo.rowId === row.id) {
-    const pinSpan = document.createElement('span');
-    pinSpan.className = 'queue-pin';
-    pinSpan.textContent = '>';
-    div.appendChild(pinSpan);
-  }
+  // PC-56: bar-only mode — no pin markers; the prediction bar is added by renderQueue
   return div;
 }
 
