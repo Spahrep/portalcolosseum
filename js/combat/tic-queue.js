@@ -71,10 +71,11 @@ export function morphHandRow(queue, handLabel, newEvent, newTics) {
 
 // PC-56: computeTimingMarkers returns bar info for prediction bar UX
 // Returns:
-//   {kind: 'bar', firstId: string, lastId: string} — ALWAYS a bar covering the timing range,
-//     expanded to the nearest boundary row(s) when no row falls inside [minT, maxT].
-//     firstId is the first row with tics >= minT (or the last row with tics < minT if none).
-//     lastId is the last row with tics <= maxT (or the first row with tics > maxT if none).
+//   {kind: 'bar', firstId: string, lastId: string, hasInside: boolean}
+//     hasInside=true — the bar spans rows that contain the timing range (attack CAN land in these)
+//     hasInside=false — no rows fall inside [minT,maxT]; bar sits in the GAP between boundary rows
+//     firstId is the first inside row (hasInside=true) or the last row with tics < minT (hasInside=false)
+//     lastId is the last inside row (hasInside=true) or the first row with tics > maxT (hasInside=false)
 //   null — empty queue or no attack
 export function computeTimingMarkers(queue, attack, weaponSpeed = 0) {
   if (!queue || queue.length === 0 || !attack) return null;
@@ -85,12 +86,12 @@ export function computeTimingMarkers(queue, attack, weaponSpeed = 0) {
   // Inclusive: rows with tics within [minT, maxT]
   const inside = sorted.filter(r => r.tics >= minT && r.tics <= maxT);
   if (inside.length > 0) {
-    return { kind: 'bar', firstId: inside[0].id, lastId: inside[inside.length - 1].id };
+    return { kind: 'bar', firstId: inside[0].id, lastId: inside[inside.length - 1].id, hasInside: true };
   }
   // No row inside: expand to nearest boundary rows
   const before = sorted.filter(r => r.tics < minT);
   const after = sorted.filter(r => r.tics > maxT);
   const firstId = before.length > 0 ? before[before.length - 1].id : sorted[0].id;
   const lastId = after.length > 0 ? after[0].id : sorted[sorted.length - 1].id;
-  return { kind: 'bar', firstId, lastId };
+  return { kind: 'bar', firstId, lastId, hasInside: false };
 }

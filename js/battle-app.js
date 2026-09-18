@@ -859,7 +859,7 @@ function renderQueue(bs, fill = false, onDone = null) {
   sorted.forEach((row, index) => {
     el.appendChild(buildQueueRow(row, monsters, bs, true, index));
   });
-  // PC-56: Prediction bar (always bar mode; pin mode eliminated per design ref)
+  // PC-56: Prediction bar — position depends on whether inside rows exist
   if (queueBarInfo && queueBarInfo.kind === 'bar' && queueBarInfo.firstId && queueBarInfo.lastId) {
     const firstRow = el.querySelector(`[data-row-id="${queueBarInfo.firstId}"]`);
     const lastRow = el.querySelector(`[data-row-id="${queueBarInfo.lastId}"]`);
@@ -867,12 +867,17 @@ function renderQueue(bs, fill = false, onDone = null) {
       const firstRect = firstRow.getBoundingClientRect();
       const lastRect = lastRow.getBoundingClientRect();
       const queueRect = el.getBoundingClientRect();
-      const top = firstRect.top - queueRect.top;
-      const height = (lastRect.bottom - firstRect.top);
       const bar = document.createElement('div');
       bar.className = 'prediction-bar';
-      bar.style.top = `${top}px`;
-      bar.style.height = `${height}px`;
+      if (queueBarInfo.hasInside) {
+        // Bar spans from top of first inside row to bottom of last — attack CAN land in these
+        bar.style.top = `${firstRect.top - queueRect.top}px`;
+        bar.style.height = `${lastRect.bottom - firstRect.top}px`;
+      } else {
+        // Bar sits in the gap between the two boundary rows — attack lands BETWEEN them
+        bar.style.top = `${firstRect.bottom - queueRect.top}px`;
+        bar.style.height = `${Math.max(4, lastRect.top - firstRect.bottom)}px`;
+      }
       el.appendChild(bar);
     }
   }
