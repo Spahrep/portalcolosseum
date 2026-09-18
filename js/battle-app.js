@@ -95,6 +95,13 @@ let typingInProgress = false;
 let typingTimeouts = [];
 let typingSetBusy = false; // track if *this* typing batch set the busy gate
 let feedPinned = true; // DO-2: auto-scroll only while pinned; user scroll-up pauses for the batch
+// Feed lines already displayed in #message-box. The box is NOT a pure feed
+// mirror — it also holds the battle-complete panel, "Advancing..." and
+// "Attack committed" system lines — so the incremental feed diff must track
+// the feed by count, not box children (children-based diffs drop history
+// lines once any system content sits in the box, and can let a stale
+// battle-complete panel survive into the next battle).
+let renderedFeedLines = 0;
 
 function clearTyping() {
   typingTimeouts.forEach(t => clearTimeout(t));
@@ -206,6 +213,7 @@ function showErrorState(title, detail, showReturn = true) {
   const box = document.getElementById('message-box');
   if (!box) return;
   box.innerHTML = '';
+  renderedFeedLines = 0; // error screen replaces the log — next render starts fresh
   const err = document.createElement('div');
   err.className = 'msg-error';
   err.innerHTML = `<strong>${title}</strong><br>${detail || ''}`;
@@ -657,22 +665,25 @@ function renderFeed(feed) {
   // EMPTY feed = new-battle reset signal (tic-0 ceremony): clear box, show placeholder instantly, reset state
   if (currentLines.length === 0) {
     box.innerHTML = '';
+    renderedFeedLines = 0; // placeholder is a system line, not feed
     appendFeedLine('Battle begins...');
     typingInProgress = false;
     typingSetBusy = false;
     typingTimeouts = [];
     return;
   }
-  const existingCount = box.children.length;
-  // incremental: only type NEW lines (diff by count); history never re-types
-  if (currentLines.length <= existingCount) return;
-  const newLines = currentLines.slice(existingCount);
+  // incremental: only type NEW lines (diff by feed count, not box children —
+  // the box also holds panel/system lines that must not shift the feed diff)
+  if (currentLines.length <= renderedFeedLines) return;
+  const newLines = currentLines.slice(renderedFeedLines);
   const preset = getBattleTextPreset();
   if (preset.charMs === 0) {
     newLines.forEach(lineText => appendFeedLine(lineText));
+    renderedFeedLines = currentLines.length;
     return;
   }
   typeFeedLines(newLines);
+  renderedFeedLines = currentLines.length;
 }
 
 // PC-72: resume path — the battle already happened; restore the log at once
@@ -687,7 +698,12 @@ function populateFeedInstantly(feed) {
   }
   suppressHitFeedback = true;
   try {
-    lines.forEach(line => appendFeedLine(line));
+    // Only append feed lines not yet shown (PC-72 resume: full feed on a
+    // fresh page because the counter starts at 0; commits append only the
+    // new lines — no duplicates, and system lines never shift the diff).
+    const fresh = lines.slice(renderedFeedLines);
+    fresh.forEach(line => appendFeedLine(line));
+    renderedFeedLines = lines.length;
   } finally {
     suppressHitFeedback = false;
   }
@@ -826,6 +842,7 @@ function playIntroCountdown(bs, intro, onDone) {
         if (idx !== -1) ordered.splice(idx, 1);
       }
     }
+    renderedFeedLines += fires.length; // intro fires are feed lines — keep the diff counter in sync
     // Re-render the rail from the mirror so decrements + after-effects show.
     if (el) {
       el.innerHTML = '';
@@ -881,7 +898,9 @@ function finishIntroSnap(bs, onDone) {
     // clear any prior content (placeholder + any revealed) so we type the full post-reset feed
     const box = document.getElementById('message-box');
     if (box) box.innerHTML = '';
+    renderedFeedLines = 0; // full-feed re-type starts from the top
     typeFeedLines(feed, done);
+    renderedFeedLines = feed.length;
   } else {
     done();
   }
@@ -914,6 +933,7 @@ function showAdvanceUI(runId, state) {
   const box = document.getElementById('message-box');
   if (!box) return;
   box.innerHTML = '';
+  renderedFeedLines = 0; // the panel is not feed — next battle's log starts fresh
   // No more actions to pick — clear the action row.
   const actionWrap = document.getElementById('action-choices');
   if (actionWrap) actionWrap.innerHTML = '';
@@ -926,16 +946,24 @@ function showAdvanceUI(runId, state) {
   contBtn.className = 'action-btn';
   contBtn.style.marginTop = '8px';
   contBtn.onclick = async () => {
+    if (busy) return; // also covers typing-gate: the panel buttons are not disabled by setBusy
     setBusy(true);
+    contBtn.disabled = true; // double-click would double-advance the run server-side
     try {
-      const res = await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'continue' });
+      await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'continue' });
+      // New battle starts with a clean log: the battle-complete panel must
+      // never survive into the next battle (it obscures the fresh feed).
+      const box = document.getElementById('message-box');
+      if (box) box.innerHTML = '';
+      renderedFeedLines = 0;
       showMessage('Advancing to next battle...');
-      shouldAnimateDice = true; // post-continue battle-start transition
+      shouldAnimateDice = true;
       await loadBattle(runId);
     } catch (e) {
       showMessage(e.message, true);
     }
     setBusy(false);
+    contBtn.disabled = false;
   };
   const stopBtn = document.createElement('button');
   stopBtn.textContent = 'Stop run';
