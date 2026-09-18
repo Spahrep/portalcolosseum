@@ -20,6 +20,7 @@ let lastBs = null; // last loaded battle_state (safeState) — source for attack
 let busy = false;
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
 let queueMarkers = null;   // Map<rowId, '>'> — PC-56 timing markers for the selected attack
+let playerName = 'Player';
 let shouldAnimateDice = false;
 // PC-51: monsters stay hidden while the dice roll ceremony plays, then
 // fade in one at a time. Set in the battle render when a roll will run;
@@ -980,7 +981,8 @@ function finishIntroSnap(bs, onDone) {
 }
 
 function queueLabel(row) {
-  if (row.label === 'LH' || row.label === 'RH') return row.label;
+  if (row.label === 'LH') return 'L. Hand';
+  if (row.label === 'RH') return playerName + ' R. Hand';
   // Monsters show as single-letter arena markers (A/B/C), like the mockups.
   return String(row.label || '?').replace(/^Monster\s*/i, '');
 }
@@ -1427,22 +1429,22 @@ function renderActionMenu(bs) {
     const p = potionFor(slot);
     const used = p && p.used;
     if (!p) {
-      rootRows.push({ html: `${slot}: <span class="dw-dim">empty</span>`, info: `${slot}: no potion in this slot`, disabled: true });
+      rootRows.push({ html: `Pouch ${slot}: <span class="dw-dim">empty</span>`, info: `Pouch ${slot}: no potion in this slot`, disabled: true });
       return;
     }
     if (used) {
-      rootRows.push({ html: `${escHtml(p.template_name)} <span class="dw-dim">(USED)</span>`, info: `${slot}: already used`, disabled: true });
+      rootRows.push({ html: `${escHtml(p.template_name)} <span class="dw-dim">(USED)</span>`, info: `Pouch ${slot}: already used`, disabled: true });
       return;
     }
     rootRows.push({
       html: escHtml(p.template_name),
-      info: `${slot}: ${escHtml(p.template_name)} · ${escHtml(p.effect_label || '')}`,
+      info: `Pouch ${slot}: ${escHtml(p.template_name)} · ${escHtml(p.effect_label || '')}`,
       enter() { pickPotion(slot, p); }
     });
   });
   rootRows.push({ blank: true });
   rootRows.push({
-    html: `Equip: <span class="${belt && belt.id ? 'dw-weapon' : 'dw-dim'}">${escHtml(belt && belt.id ? belt.name : 'none')}</span>`,
+    html: `Belt Loop: <span class="${belt && belt.id ? 'dw-weapon' : 'dw-dim'}">${escHtml(belt && belt.id ? belt.name : 'none')}</span>`,
     info: belt && belt.id ? `Belt: ${escHtml(belt.name)}` : 'No belt weapon equipped',
     disabled: !belt || !belt.id,
     enter() { if (belt && belt.id) pickEquip(); }
@@ -1652,6 +1654,9 @@ async function init() {
     const meta = session.user.user_metadata || {};
     hudName.textContent = meta.username || meta.full_name || (session.user.email ? session.user.email.split('@')[0] : 'PLAYER');
   }
+  // PC follow-up: global playerName for queue labels
+  const hudNameEl = document.getElementById('hud-name');
+  playerName = hudNameEl ? hudNameEl.textContent : 'Player';
 
   const params = new URLSearchParams(window.location.search);
   const runId = params.get('id');
