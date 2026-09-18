@@ -569,7 +569,10 @@ async function cmdHelp() {
       '  /kill player                   — kill the player',
       '  /nuke                          — clear all monsters from battle_state',
       '  /list templates                — show all weapon + monster template ids',
-      '  /abandon run                   — abandon current active run'
+      '  /abandon run                   — abandon current active run',
+      '  /give weapon <user> <template_id> [count] — roll+grant weapons to a player',
+      '  /give sss <user>                    — grant starter SSS (idempotent)',
+      '  /list users                         — list accounts for targeting'
     ], 'dim');
   }
 }
@@ -1319,8 +1322,65 @@ async function cmdDevList(args) {
     } catch (e) {
       printError('list: ' + e.message);
     }
+  } else if (sub === 'users') {
+    try {
+      const data = await apiCall('GET', '/dev/users');
+      if (!data.users || data.users.length === 0) {
+        appendLine('No users.', 'amber');
+        return;
+      }
+      data.users.forEach(u => {
+        const role = u.is_admin ? 'admin' : 'player';
+        appendLine(`${u.username} (${role})`, 'green');
+      });
+    } catch (e) {
+      printError('list: ' + e.message);
+    }
   } else {
-    printError('usage: /list weapons|monsters');
+    printError('usage: /list weapons|monsters|users');
+  }
+}
+
+async function cmdDevGive(args) {
+  const sub = args[0];
+  if (sub === 'weapon') {
+    const username = args[1];
+    const templateId = parseInt(args[2], 10);
+    let count = parseInt(args[3], 10);
+    if (!username || isNaN(templateId) || templateId <= 0) {
+      printError('usage: /give weapon <user> <template_id> [count]');
+      return;
+    }
+    if (isNaN(count) || count < 1) count = 1;
+    try {
+      const res = await apiCall('POST', '/dev/give-weapon', { username, template_id: templateId, count });
+      appendLine(`granted ${res.granted.length} × ${res.template_name} to ${res.username}`, 'green');
+      res.granted.forEach(g => {
+        appendLine(`#${g.instance_id} dmg ${g.damage} spd ${g.speed} acc ${g.accuracy} ${g.grade}`, 'dim');
+      });
+    } catch (e) {
+      printError('give: ' + e.message);
+    }
+  } else if (sub === 'sss') {
+    const username = args[1];
+    if (!username) {
+      printError('usage: /give sss <user>');
+      return;
+    }
+    try {
+      const res = await apiCall('POST', '/dev/give-starter', { username });
+      if (res.granted) {
+        appendLine(`SSS granted to ${username}`, 'green');
+        const inst = res.instance;
+        appendLine(`#${inst.instance_id} dmg ${inst.damage} spd ${inst.speed} acc ${inst.accuracy} ${inst.grade}`, 'dim');
+      } else {
+        appendLine(res.reason || 'already has starter', 'dim');
+      }
+    } catch (e) {
+      printError('give: ' + e.message);
+    }
+  } else {
+    printError('usage: /give weapon <user> <template_id> [count] | /give sss <user>');
   }
 }
 
@@ -1436,7 +1496,8 @@ const DEV_COMMANDS = {
   '/kill': cmdDevKill,
   '/nuke': cmdDevNuke,
   '/inspect': cmdInspect,
-  '/abandon': cmdDevAbandonRun
+  '/abandon': cmdDevAbandonRun,
+  '/give': cmdDevGive
 };
 
 /**
