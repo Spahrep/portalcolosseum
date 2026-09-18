@@ -30,6 +30,29 @@ export function createEngine(rng = Math.random) {
     if (state.feed.length > 10) state.feed.shift();
   }
 
+  // PC-72: potion crit. Rolled ONLY when crit_chance > 0 so legacy potions and
+  // pre-crit tests consume no extra RNG. On crit: heal amount and buff value
+  // × critEffectMultiplier, buff duration × critDurationMultiplier (rounded).
+  // Heals have no duration — effect only.
+  function applyPotionWithCrit(potion, tic) {
+    const critChance = Number(potion?.crit_chance) || 0;
+    const crit = critChance > 0 && state.rng() * 100 < critChance;
+    const effectMult = crit ? (Number(potion?.critEffectMultiplier) || 1.5) : 1;
+    const durMult = crit ? (Number(potion?.critDurationMultiplier) || 1.5) : 1;
+    const payload = buildPotionPayload(potion, tic);
+    if (crit) {
+      if (payload.type === 'heal') {
+        payload.amount = Math.round(payload.amount * effectMult);
+      } else {
+        payload.value = Math.round(payload.value * effectMult);
+        payload.durationTicks = Math.round(payload.durationTicks * durMult);
+        payload.endTic = tic + payload.durationTicks;
+      }
+    }
+    const result = applyPotionEffect(state, payload, tic);
+    return { result, crit };
+  }
+
   function handleFire(row) {
     if (row.label === 'LH' || row.label === 'RH') {
       if (row.event === 'winding') {
@@ -45,11 +68,17 @@ export function createEngine(rng = Math.random) {
         }
         if (targets.length && typeof row.damage === 'number') {
           const attackObj = { is_multi_target: !!row.isMultiTarget };
-          const attacker = { damage: row.damage, accuracy: row.accuracy ?? 100, damage_range: 0 };
+          const attacker = {
+            damage: row.damage,
+            accuracy: row.accuracy ?? 100,
+            damage_range: 0,
+            critChance: row.critChance || 0,
+            critMultiplier: row.critMultiplier || 2.0
+          };
           const results = resolveAttack(attacker, targets, attackObj, state.rng);
           results.forEach(r => {
             if (r.hit) {
-              log(`${row.label} ${row.attackName || 'attack'} hits ${r.target} for ${r.damage}`);
+              log(`${row.label} ${row.attackName || 'attack'} hits ${r.target} for ${r.damage}${r.crit ? ' CRITICAL!' : ''}`);
               const tgtMon = state.monsters.find(m => m.label === r.target);
               if (tgtMon && isMonsterDead(tgtMon)) {
                 log(`${r.target} is defeated`);
@@ -85,8 +114,8 @@ export function createEngine(rng = Math.random) {
           return;
         }
         potion.used = true;
-        const result = applyPotionEffect(state, buildPotionPayload(potion, state.tic), state.tic);
-        log(`${row.label} ${describeEffect(result)}`);
+        const { result, crit } = applyPotionWithCrit(potion, state.tic);
+        log(`${row.label} ${describeEffect(result)}${crit ? ' CRITICAL!' : ''}`);
         morphHandRow(state.queue, row.label, 'recovery', row.postTicks ?? 0);
       } else if (row.event === 'recovery') {
         const handState = state.player.hands[row.label];
@@ -99,11 +128,22 @@ export function createEngine(rng = Math.random) {
       const mon = state.monsters.find(m => m.label === row.label);
       if (mon && !isMonsterDead(mon)) {
         const atks = (mon.attacks||[]).filter(a => a && typeof a.name === 'string' && a.name);
-        const atkName = atks.length ? atks[Math.floor(state.rng()*atks.length)].name : null;
-        const dmg = rollDamage(mon.damage, 3, state.rng);
+        const atk = atks.length ? atks[Math.floor(state.rng()*atks.length)] : null;
+        const atkName = atk ? atk.name : null;
+        let dmg = rollDamage(mon.damage, 3, state.rng);
         if (checkHit(mon.accuracy, state.rng)) {
+          // PC-72: monster crit — mon.critChance (from generate_monster payload)
+          // × pickedAttack.crit_factor, same formula as the player side. Roll
+          // only after a hit lands (misses can't crit) and only when the final
+          // chance is > 0, so legacy states/tests consume no extra RNG.
+          const finalCritChance = (Number(mon.crit_chance ?? mon.critChance) || 0) * (Number(atk?.crit_factor) || 1);
+          let crit = false;
+          if (finalCritChance > 0 && state.rng() * 100 < finalCritChance) {
+            dmg = Math.round(dmg * (Number(atk?.crit_multiplier) || 2.0));
+            crit = true;
+          }
           applyDamage(state.player, dmg);
-          log(`${row.label} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}`);
+          log(`${row.label} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}${crit ? ' CRITICAL!' : ''}`);
         } else {
           log(`${row.label} ${atkName ? atkName + ' ' : ''}misses`);
         }
@@ -246,6 +286,8 @@ export function createEngine(rng = Math.random) {
     const playerDamage = (params.playerDamage || 10) + dmgBuff;
     const isMultiTarget = !!params.isMultiTarget;
     const attackName = params.attackName || null;
+    const playerCritChance = params.playerCritChance || 0;
+    const playerCritMultiplier = params.playerCritMultiplier || 2.0;
     const row = commitNewRow(state.queue, hand, 'winding', castTicks);
     row.attackId = attackId;
     row.targetIds = targetIds;
@@ -254,6 +296,8 @@ export function createEngine(rng = Math.random) {
     row.cooldownTicks = cooldownTicks;
     row.attackName = attackName;
     row.accuracy = (params.playerAccuracy ?? 100) + accBuff;
+    row.critChance = playerCritChance;
+    row.critMultiplier = playerCritMultiplier;
     state.player.hands[hand].state = 'winding';
     state.player.hands[hand].attackId = attackId;
     log(`${hand} commits ${attackName ? attackName : `attack ${attackId}`} (cast ${castTicks})`);
@@ -373,10 +417,9 @@ export function createEngine(rng = Math.random) {
     }
     // BETWEEN-FIGHTS path (instant apply, no hand/queue)
     if (phase === 'between-fights') {
-      const payload = buildPotionPayload(potion, state.tic);
-      const result = applyPotionEffect(state, payload, state.tic);
+      const { result, crit } = applyPotionWithCrit(potion, state.tic);
       potion.used = true;
-      log(`Potion ${slot} used — ${describeEffect(result)}`);
+      log(`Potion ${slot} used — ${describeEffect(result)}${crit ? ' CRITICAL!' : ''}`);
       return getState();
     }
     // IN-BATTLE path

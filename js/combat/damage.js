@@ -26,10 +26,23 @@ export function resolveAttack(attacker, targets, attack, rng = Math.random) {
   if (isMulti) {
     dmg = multiTargetReduction(dmg, targets.length);
   }
+  // PC-72/PC-73: crit rolls PER TARGET inside the hit path only — a miss never
+  // reaches here, so misses can't crit. Chance = attacker.critChance (instance
+  // crit × attack factor, computed by the caller). 0% is a data value: no roll
+  // is even consumed when critChance is 0, keeping RNG streams stable for
+  // legacy states/tests that predate crit.
+  const critChance = Number(attacker.critChance) || 0;
+  const critMultiplier = Number(attacker.critMultiplier) || 2.0;
   for (const t of targets) {
-    if (t.type === 'player') t.hp = Math.max(0, t.hp - dmg);
-    else t.current_hp = Math.max(0, t.current_hp - dmg);
-    results.push({ hit: true, damage: dmg, target: t.label || t.id });
+    let d = dmg;
+    let crit = false;
+    if (critChance > 0 && rng() * 100 < critChance) {
+      d = Math.round(d * critMultiplier);
+      crit = true;
+    }
+    if (t.type === 'player') t.hp = Math.max(0, t.hp - d);
+    else t.current_hp = Math.max(0, t.current_hp - d);
+    results.push(crit ? { hit: true, damage: d, target: t.label || t.id, crit: true } : { hit: true, damage: d, target: t.label || t.id });
   }
   return results;
 }
