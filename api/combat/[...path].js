@@ -392,6 +392,7 @@ async function handle(request) {
           damage: m.damage,
           speed: m.speed,
           accuracy: m.accuracy,
+          crit_chance: m.crit_chance ?? m.critChance ?? 0,
           attacks
         };
       });
@@ -401,7 +402,7 @@ async function handle(request) {
       let weaponRows = [];
       if (weaponIds.length) {
         const res = await admin.from('weapon_instance')
-          .select('id, damage, speed, accuracy, grade, template_id, weapon_template:template_id (name, base_damage, damage_range)')
+          .select('id, damage, speed, accuracy, grade, crit_chance, template_id, weapon_template:template_id (name, base_damage, damage_range)')
           .in('id', weaponIds);
         weaponRows = res.data || [];
       }
@@ -425,6 +426,7 @@ async function handle(request) {
           speed: w.speed,
           accuracy: w.accuracy,
           grade: w.grade ?? null,
+          crit_chance: w.crit_chance ?? 0,
           base_damage: w.weapon_template?.base_damage ?? null,
           damage_range: w.weapon_template?.damage_range ?? null,
           attacks: attacks.map(a => ({
@@ -473,7 +475,7 @@ async function handle(request) {
         potionInfo(run.consume_b_id, !!run.consume_b_used)
       ]);
 
-      const { data: fistCfg } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed').eq('id', 1).maybeSingle();
+      const { data: fistCfg } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed, fist_crit_chance').eq('id', 1).maybeSingle();
 
       const safeState = {
         queue: state.queue || [],
@@ -481,7 +483,7 @@ async function handle(request) {
         feed: state.feed || [],
         tic: state.tic || 0,
         buffs: state.buffs || [],
-        weapons: { hand_l: handL, hand_r: handR, belt: beltW, fist: fistCfg ? { name: 'Fist (unarmed)', damage: fistCfg.fist_damage, speed: fistCfg.fist_speed ?? 6, accuracy: fistCfg.fist_accuracy, base_damage: fistCfg.fist_damage, damage_range: 0, grade: null, attacks: [{ id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time: fistCfg.fist_prepare_time, cooldown_time: fistCfg.fist_cooldown_time, prepare_time_range: fistCfg.fist_prepare_time_range, cooldown_time_range: fistCfg.fist_cooldown_time_range, description: '', base_damage_multiplier: 1 }] } : null },
+        weapons: { hand_l: handL, hand_r: handR, belt: beltW, fist: fistCfg ? { name: 'Fist (unarmed)', damage: fistCfg.fist_damage, speed: fistCfg.fist_speed ?? 6, accuracy: fistCfg.fist_accuracy, crit_chance: fistCfg.fist_crit_chance ?? 0, base_damage: fistCfg.fist_damage, damage_range: 0, grade: null, attacks: [{ id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time: fistCfg.fist_prepare_time, cooldown_time: fistCfg.fist_cooldown_time, prepare_time_range: fistCfg.fist_prepare_time_range, cooldown_time_range: fistCfg.fist_cooldown_time_range, description: '', base_damage_multiplier: 1 }] } : null },
         potions: { potion_a: potionA, potion_b: potionB },
         monsters,
         dice
@@ -582,7 +584,7 @@ async function handle(request) {
 
       // Fetch attack early to know isMultiTarget for R2 single-target restriction
       const { data: attackRow } = await admin.from('attack')
-        .select('prepare_time, cooldown_time, prepare_time_range, cooldown_time_range, is_multi_target, base_damage_multiplier, name')
+        .select('prepare_time, cooldown_time, prepare_time_range, cooldown_time_range, is_multi_target, base_damage_multiplier, name, crit_factor, crit_multiplier')
         .eq('id', attackIdNum).single();
       const isMultiTarget = !!attackRow?.is_multi_target;
 
@@ -612,14 +614,16 @@ async function handle(request) {
       }
 
       const weaponId = hand === 'LH' ? run.hand_l_weapon_id : run.hand_r_weapon_id;
-      let castTicks, cooldownTicks, playerDamage, playerAccuracy, attackName;
+      let castTicks, cooldownTicks, playerDamage, playerAccuracy, playerCritChance, playerCritMultiplier, attackName;
       if (!weaponId) {
-        const { data: config } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed').eq('id', 1).single();
+        const { data: config } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed, fist_crit_chance').eq('id', 1).single();
         if (!config) return json({ error: 'Game config missing' }, 500);
         castTicks = rollStat(config.fist_prepare_time, config.fist_prepare_time_range);
         cooldownTicks = rollStat(config.fist_cooldown_time, config.fist_cooldown_time_range);
         playerDamage = config.fist_damage;
         playerAccuracy = config.fist_accuracy;
+        playerCritChance = config.fist_crit_chance ?? 0;
+        playerCritMultiplier = 2.0;
         attackName = 'Fist';
       } else {
         const { data: wInst } = await admin.from('weapon_instance').select('template_id').eq('id', weaponId).single();
@@ -633,7 +637,7 @@ async function handle(request) {
         // rolled pre/post. The attack's prepare/cooldown (and ranges) are kept as-is;
         // the weapon's base speed is added into each computation. rollStat clamps >=1,
         // range 0 returns base exactly.
-        const { data: weapon } = await admin.from('weapon_instance').select('damage, accuracy, speed').eq('id', weaponId).single();
+        const { data: weapon } = await admin.from('weapon_instance').select('damage, accuracy, speed, crit_chance').eq('id', weaponId).single();
         const weaponSpeed = Number(weapon?.speed) || 0;
         castTicks = weaponSpeed + rollStat(attackRow?.prepare_time, attackRow?.prepare_time_range);
         cooldownTicks = weaponSpeed + rollStat(attackRow?.cooldown_time, attackRow?.cooldown_time_range);
@@ -641,6 +645,9 @@ async function handle(request) {
 
         playerDamage = Math.round((weapon?.damage || 10) * multiplier);
         playerAccuracy = weapon?.accuracy;
+        // PC-72: player crit chance = weapon instance crit_chance × attack crit_factor
+        playerCritChance = (Number(weapon?.crit_chance) || 0) * (Number(attackRow?.crit_factor) || 1);
+        playerCritMultiplier = Number(attackRow?.crit_multiplier) || 2.0;
         attackName = attackRow?.name || null;
       }
 
@@ -654,7 +661,7 @@ async function handle(request) {
       // F11: advance-when-busy instead of 500 on unready hand
       let advanced = false;
       try {
-        engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName, playerAccuracy });
+        engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName, playerAccuracy, playerCritChance, playerCritMultiplier });
       } catch (e) {
         if (e.message === 'Hand not ready' && engine.state && engine.state.queue && engine.state.queue.length > 0) {
           engine.advanceToNextDecision();
@@ -962,7 +969,7 @@ async function handle(request) {
       let instances;
       try {
         const res = await admin.from('weapon_instance')
-          .select('id, damage, speed, accuracy, grade, template_id, weapon_template:template_id (name)')
+          .select('id, damage, speed, accuracy, grade, crit_chance, template_id, weapon_template:template_id (name)')
           .eq('user_id', user.id)
           .order('id');
         instances = res.data;
@@ -992,6 +999,7 @@ async function handle(request) {
           speed: inst.speed ?? null,
           accuracy: inst.accuracy ?? null,
           grade: inst.grade ?? null,
+          crit_chance: inst.crit_chance ?? 0,
           attacks: attacks.map(a => ({
             id: a.id,
             name: a.name,
@@ -1261,11 +1269,25 @@ async function handle(request) {
     async function buildPotionLoadout(run) {
       const ids = [run.consume_a_id, run.consume_b_id].filter(Boolean);
       const map = {};
+      // PC-72: potion crit multipliers come from game_config; crit_chance from the instance.
+      let critEffectMultiplier = 1.5;
+      let critDurationMultiplier = 1.5;
+      try {
+        const { data: gc } = await admin.from('game_config')
+          .select('potion_crit_effect_multiplier, potion_crit_duration_multiplier')
+          .eq('id', 1).maybeSingle();
+        if (gc) {
+          critEffectMultiplier = gc.potion_crit_effect_multiplier ?? 1.5;
+          critDurationMultiplier = gc.potion_crit_duration_multiplier ?? 1.5;
+        }
+      } catch (e) {
+        console.error('potion crit config fetch error', e);
+      }
       if (ids.length) {
         try {
           const { data: rows } = await admin
             .from('consumable_instance')
-            .select('id, rolled_floor, rolled_window, rolled_speed, consumable_template:template_id (name, effect_type, duration_ticks)')
+            .select('id, rolled_floor, rolled_window, rolled_speed, crit_chance, consumable_template:template_id (name, effect_type, duration_ticks)')
             .in('id', ids);
           for (const inst of (rows || [])) {
             map[inst.id] = {
@@ -1275,6 +1297,9 @@ async function handle(request) {
               rolled_window: inst.rolled_window,
               rolled_speed: inst.rolled_speed,
               duration_ticks: inst.consumable_template?.duration_ticks,
+              crit_chance: inst.crit_chance ?? 0,
+              critEffectMultiplier,
+              critDurationMultiplier,
               used: run.consume_a_id === inst.id ? !!run.consume_a_used : !!run.consume_b_used
             };
           }
@@ -1723,6 +1748,104 @@ async function handle(request) {
           console.error('weapon_instance insert error', e);
           return json({ error: 'Internal server error' }, 500);
         }
+      }
+
+      // 13. POST /dev/set-weapon-stats (PC-69, ported from wt/pc-69 0ddc83e + PC-72 crit) — overwrite stats on any existing weapon_instance, recompute grade
+      if (path === '/dev/set-weapon-stats') {
+        const body = await request.json().catch(() => ({}));
+        const instance_id = parseInt(body.instance_id, 10);
+        const damage = body.damage !== undefined ? parseInt(body.damage, 10) : undefined;
+        const speed = body.speed !== undefined ? parseInt(body.speed, 10) : undefined;
+        const accuracy = body.accuracy !== undefined ? parseInt(body.accuracy, 10) : undefined;
+        const crit = body.crit !== undefined ? parseInt(body.crit, 10) : undefined;
+        if (isNaN(instance_id) || instance_id <= 0) return json({ error: 'Invalid instance_id' }, 400);
+        const provided = [damage, speed, accuracy, crit].filter(v => v !== undefined);
+        if (provided.length === 0 || provided.some(v => isNaN(v)) || [damage, speed, accuracy].some(v => v !== undefined && v < 1) || (crit !== undefined && crit < 0)) {
+          return json({ error: 'Provide at least one stat (damage/speed/accuracy/crit); damage/speed/accuracy >= 1, crit >= 0' }, 400);
+        }
+        // fetch instance + template (spec: select('*'))
+        let inst, tmpl;
+        try {
+          const iRes = await admin.from('weapon_instance').select('*').eq('id', instance_id).single();
+          inst = iRes.data;
+          if (iRes.error || !inst) throw iRes.error || new Error('not found');
+          const tRes = await admin.from('weapon_template').select('id, name, base_damage, damage_range, base_speed, speed_range, base_accuracy, accuracy_range').eq('id', inst.template_id).single();
+          tmpl = tRes.data;
+          if (tRes.error || !tmpl) throw tRes.error || new Error('template not found');
+        } catch (e) {
+          return json({ error: 'weapon instance not found' }, 404);
+        }
+        // merge provided stats over current
+        const update = {};
+        let d = inst.damage, s = inst.speed, a = inst.accuracy, c = inst.crit_chance;
+        if (damage !== undefined) { update.damage = damage; d = damage; }
+        if (speed !== undefined) { update.speed = speed; s = speed; }
+        if (accuracy !== undefined) { update.accuracy = accuracy; a = accuracy; }
+        // PC-72: optional crit param writes crit_chance; crit is NOT part of the
+        // grade formula this pass — setting crit must NOT change grade.
+        if (crit !== undefined) { update.crit_chance = crit; c = crit; }
+        // recompute grade exactly as in give-weapon (zs inverted for speed)
+        const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
+        const zs = tmpl.speed_range ? (tmpl.base_speed - s) / tmpl.speed_range : 0;
+        const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
+        const z = (zd + zs + za) / 3;
+        const grade = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
+        update.grade = grade;
+        try {
+          await admin.from('weapon_instance').update(update).eq('id', instance_id);
+        } catch (e) {
+          console.error('set-weapon-stats update error', e);
+          return json({ error: 'Internal server error' }, 500);
+        }
+        return json({ instance_id, template_name: tmpl.name, damage: d, speed: s, accuracy: a, crit_chance: c, grade });
+      }
+
+      // 14. POST /dev/set-consumable-stats (PC-69, ported from wt/pc-69 0ddc83e + PC-72 crit) — overwrite stats on any existing consumable_instance, recompute grade
+      if (path === '/dev/set-consumable-stats') {
+        const body = await request.json().catch(() => ({}));
+        const instance_id = parseInt(body.instance_id, 10);
+        const floor = body.floor !== undefined ? parseInt(body.floor, 10) : undefined;
+        const window = body.window !== undefined ? parseInt(body.window, 10) : undefined;
+        const speed = body.speed !== undefined ? parseInt(body.speed, 10) : undefined;
+        const crit = body.crit !== undefined ? parseInt(body.crit, 10) : undefined;
+        if (isNaN(instance_id) || instance_id <= 0) return json({ error: 'Invalid instance_id' }, 400);
+        const provided = [floor, window, speed, crit].filter(v => v !== undefined);
+        if (provided.length === 0 || provided.some(v => isNaN(v)) || [floor, window, speed].some(v => v !== undefined && v < 1) || (crit !== undefined && crit < 0)) {
+          return json({ error: 'Provide at least one stat (floor/window/speed/crit); floor/window/speed >= 1, crit >= 0' }, 400);
+        }
+        let inst, tmpl;
+        try {
+          const iRes = await admin.from('consumable_instance').select('id, template_id, user_id, rolled_floor, rolled_window, rolled_speed, crit_chance').eq('id', instance_id).single();
+          inst = iRes.data;
+          if (iRes.error || !inst) throw iRes.error || new Error('not found');
+          const tRes = await admin.from('consumable_template').select('id, name, floor_base, floor_delta, window_base, window_delta, speed_base, speed_delta').eq('id', inst.template_id).single();
+          tmpl = tRes.data;
+          if (tRes.error || !tmpl) throw tRes.error || new Error('template not found');
+        } catch (e) {
+          return json({ error: 'consumable instance not found' }, 404);
+        }
+        const update = {};
+        let f = inst.rolled_floor, w = inst.rolled_window, sp = inst.rolled_speed, c = inst.crit_chance;
+        if (floor !== undefined) { update.rolled_floor = floor; f = floor; }
+        if (window !== undefined) { update.rolled_window = window; w = window; }
+        if (speed !== undefined) { update.rolled_speed = speed; sp = speed; }
+        // PC-72: optional crit param writes crit_chance; crit is NOT part of the
+        // grade formula this pass — setting crit must NOT change grade.
+        if (crit !== undefined) { update.crit_chance = crit; c = crit; }
+        // recompute grade exactly per generate_consumable_instance (EV/sigma from template)
+        const expEV = tmpl.floor_base + (tmpl.floor_delta / 2) + ((tmpl.window_base + tmpl.window_delta) / 2) / 2;
+        const sigma = Math.max((tmpl.window_base + tmpl.window_delta) / 2, 1);
+        const rolledEV = f + (w / 2);
+        const z = (rolledEV - expEV) / sigma;
+        const grade = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
+        update.grade = grade;
+        try {
+          await admin.from('consumable_instance').update(update).eq('id', instance_id);
+        } catch (e) {
+          console.error('set-consumable-stats update error', e);
+          return json({ error: 'Internal server error' }, 500);
+        }
+        return json({ instance_id, template_name: tmpl.name, floor: f, window: w, speed: sp, crit_chance: c, grade });
       }
 
       return json({ error: 'unknown dev command' }, 404);
