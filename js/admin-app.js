@@ -193,7 +193,7 @@ async function renderAttacks(container) {
     <button class="btn" id="create-attack-btn">+ Create New Attack</button>
     <div id="attack-form-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Dmg Mult</th><th>Prep</th><th>CD</th><th>Multi?</th><th>Weight</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Dmg Mult</th><th>Mult Rng</th><th>Prep</th><th>Prep Rng</th><th>CD</th><th>CD Rng</th><th>Multi?</th><th>Weight</th><th>Crit Factor</th><th>Crit ×</th><th>Actions</th></tr></thead>
       <tbody id="attacks-tbody"></tbody>
     </table>
   `;
@@ -206,13 +206,18 @@ async function renderAttacks(container) {
     tr.innerHTML = `
       <td>${esc(a.name)}</td>
       <td>${a.base_damage_multiplier}</td>
+      <td>${a.base_damage_multiplier_range ?? 0}</td>
       <td>${a.prepare_time}</td>
+      <td>${a.prepare_time_range ?? 0}</td>
       <td>${a.cooldown_time}</td>
+      <td>${a.cooldown_time_range ?? 0}</td>
       <td>${a.is_multi_target ? '✓' : ''}</td>
       <td>${a.weight}</td>
+      <td>${a.crit_factor ?? 1.0}</td>
+      <td>${a.crit_multiplier ?? 2.0}</td>
       <td>
-        <button class="btn" data-edit="${a.id}">Edit</button>
-        <button class="btn btn-danger" data-delete="${a.id}">Delete</button>
+        <button class=\"btn\" data-edit=\"${a.id}\">Edit</button>
+        <button class=\"btn btn-danger\" data-delete=\"${a.id}\">Delete</button>
       </td>
     `;
     tbody.appendChild(tr);
@@ -238,8 +243,15 @@ function showAttackForm(id = null) {
       <div class="form-group"><label>Description</label><textarea id="f-description" rows="2">${esc(attack.description || '')}</textarea></div>
       <div class="form-group">
       <div class="form-group"><label>Base Damage Multiplier</label><input id="f-base_damage_multiplier" type="number" step="0.1" value="${attack.base_damage_multiplier ?? 1.0}"></div>
+      <div class="form-group"><label>Mult Range (±)</label><input id="f-base_damage_multiplier_range" type="number" step="0.1" value="${attack.base_damage_multiplier_range ?? 0}"></div>
+      <div class="form-group">
+        <label>Band Preview</label>
+        <div id="f-band-preview" style="background:#0a1428; border:1px solid #ff6b3b; padding:6px 10px; font-family:monospace; font-size:13px; min-height:20px;"></div>
+      </div>
       <div class="form-group"><label>Prepare Time</label><input id="f-prepare_time" type="number" value="${attack.prepare_time ?? 10}"></div>
+      <div class="form-group"><label>Prep Time Range (±)</label><input id="f-prepare_time_range" type="number" value="${attack.prepare_time_range ?? 0}"></div>
       <div class="form-group"><label>Cooldown Time</label><input id="f-cooldown_time" type="number" value="${attack.cooldown_time ?? 10}"></div>
+      <div class="form-group"><label>CD Time Range (±)</label><input id="f-cooldown_time_range" type="number" value="${attack.cooldown_time_range ?? 0}"></div>
       <div class="form-group"><label><input id="f-is_multi_target" type="checkbox" ${attack.is_multi_target ? 'checked' : ''}> Multi Target</label></div>
       <div class="form-group"><label>Weight</label><input id="f-weight" type="number" step="0.1" value="${attack.weight ?? 1.0}"></div>
       <div class="form-group"><label>Crit Factor (× chance)</label><input id="f-crit_factor" type="number" step="0.1" value="${attack.crit_factor ?? 1.0}"></div>
@@ -250,13 +262,32 @@ function showAttackForm(id = null) {
   `;
 
   document.getElementById('cancel-attack-btn').addEventListener('click', () => { container.innerHTML = ''; });
+
+  // Live band preview for damage multiplier
+  function updateBandPreview() {
+    const base = parseFloat(val('f-base_damage_multiplier')) || 0;
+    const range = parseFloat(val('f-base_damage_multiplier_range')) || 0;
+    const lo = Math.max(0, (base - range).toFixed(1));
+    const hi = (base + range).toFixed(1);
+    const el = document.getElementById('f-band-preview');
+    if (el) el.textContent = range > 0 ? `${base} ± ${range} → ${lo}–${hi}` : `${base} (no variance)`;
+  }
+  ['f-base_damage_multiplier', 'f-base_damage_multiplier_range'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', updateBandPreview);
+  });
+  updateBandPreview();
+
   document.getElementById('save-attack-btn').addEventListener('click', async () => {
     const body = {
       name: val('f-name'),
       description: val('f-description') || null,
       base_damage_multiplier: parseFloat(val('f-base_damage_multiplier')),
+      base_damage_multiplier_range: parseFloat(val('f-base_damage_multiplier_range')),
       prepare_time: parseInt(val('f-prepare_time')),
+      prepare_time_range: parseInt(val('f-prepare_time_range')),
       cooldown_time: parseInt(val('f-cooldown_time')),
+      cooldown_time_range: parseInt(val('f-cooldown_time_range')),
       is_multi_target: document.getElementById('f-is_multi_target').checked,
       weight: parseFloat(val('f-weight')),
       crit_factor: parseFloat(val('f-crit_factor')),
@@ -433,7 +464,7 @@ async function showWeaponMappingEditor(templateId) {
     let html = `
       <div class="form-card mapping-editor">
         <h3>Attack Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Base stats: DMG ${template.base_damage}±${template.damage_range} · SPD ${template.base_speed}±${template.speed_range} · ACC ${template.base_accuracy}±${template.accuracy_range}</p>
+        <p class="muted">Base stats: DMG ${template.base_damage}±${template.damage_range} · SPD ${template.base_speed}±${template.speed_range} · ACC ${template.base_accuracy}±${template.accuracy_range} · CRIT ${template.crit_base ?? 5}±${template.crit_range ?? 0}</p>
         <p class="muted">Slot 0 (always): ${template.slot_0_attack?.name ? esc(template.slot_0_attack.name) : '—'} · S1: ${(template.slot_1_chance*100)}% · S2: ${(template.slot_2_chance*100)}% · S3: ${(template.slot_3_chance*100)}% · S4: ${(template.slot_4_chance*100)}%</p>
     `;
 
@@ -533,7 +564,7 @@ async function renderMonsterTemplates(container) {
     <div id="mt-form-container"></div>
     <div id="mt-mapping-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Dmg (base ± range)</th><th>Speed (base ± range)</th><th>Accuracy (base ± range)</th><th>Slot 0 Attack</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Dmg (base ± range)</th><th>Speed (base ± range)</th><th>Accuracy (base ± range)</th><th>Crit (base ± range)</th><th>Slot 0 Attack</th><th>Actions</th></tr></thead>
       <tbody id="mt-tbody"></tbody>
     </table>
   `;
@@ -549,6 +580,7 @@ async function renderMonsterTemplates(container) {
       <td>${t.base_damage} ± ${t.damage_range}</td>
       <td>${t.base_speed} ± ${t.speed_range}</td>
       <td>${t.base_accuracy} ± ${t.accuracy_range}</td>
+      <td>${t.crit_base ?? 5} ± ${t.crit_range ?? 0}</td>
       <td>${t.slot_0_attack?.name ? esc(t.slot_0_attack.name) : '<span class="muted">—</span>'}</td>
       <td>
         <button class="btn" data-edit="${t.id}">Edit</button>
@@ -590,6 +622,8 @@ function showMonsterTemplateForm(id = null) {
         <div class="form-group"><label>Speed Range</label><input id="mt-speed_range" type="number" value="${t.speed_range ?? 0}"></div>
         <div class="form-group"><label>Base Accuracy</label><input id="mt-base_accuracy" type="number" value="${t.base_accuracy ?? ''}"></div>
         <div class="form-group"><label>Accuracy Range</label><input id="mt-accuracy_range" type="number" value="${t.accuracy_range ?? 0}"></div>
+        <div class="form-group"><label>Base Crit %</label><input id="mt-crit_base" type="number" value="${t.crit_base ?? 5}"></div>
+        <div class="form-group"><label>Crit Range</label><input id="mt-crit_range" type="number" value="${t.crit_range ?? 0}"></div>
         <div class="form-group">
           <label>Slot 0 Attack</label>
           <select id="mt-slot_0_attack_id">
@@ -617,6 +651,8 @@ function showMonsterTemplateForm(id = null) {
         speed_range: parseInt(val('mt-speed_range')),
         base_accuracy: parseInt(val('mt-base_accuracy')),
         accuracy_range: parseInt(val('mt-accuracy_range')),
+        crit_base: parseInt(val('mt-crit_base')),
+        crit_range: parseInt(val('mt-crit_range')),
         slot_0_attack_id: parseInt(val('mt-slot_0_attack_id')),
         slot_1_chance: parseFloat(val('mt-slot_1_chance')),
         slot_2_chance: parseFloat(val('mt-slot_2_chance')),
@@ -665,7 +701,7 @@ async function showMonsterMappingEditor(templateId) {
     let html = `
       <div class="form-card mapping-editor">
         <h3>Attack Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Base stats: DMG ${template.base_damage}±${template.damage_range} · SPD ${template.base_speed}±${template.speed_range} · ACC ${template.base_accuracy}±${template.accuracy_range}</p>
+        <p class="muted">Base stats: DMG ${template.base_damage}±${template.damage_range} · SPD ${template.base_speed}±${template.speed_range} · ACC ${template.base_accuracy}±${template.accuracy_range} · CRIT ${template.crit_base ?? 5}±${template.crit_range ?? 0}</p>
         <p class="muted">Slot 0 (always): ${template.slot_0_attack?.name ? esc(template.slot_0_attack.name) : '—'}</p>
     `;
 
