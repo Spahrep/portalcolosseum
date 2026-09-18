@@ -1672,11 +1672,14 @@ function updateSidePanelsFromRun(run) {
         const label = q.label || '?';
         const tics = q.tics ?? 0;
         const ev = QUEUE_ACTION_LABELS[q.event] || (q.event ? q.event[0].toUpperCase() + q.event.slice(1) : '?');
-        // PC-56: '>' timing marker on rows inside the selected attack's window
+        // PC-56: prediction bar/pin using new return format
         let marker = '';
         if (menuAttack && menuAttack.queue === queue) {
-          const marked = computeTimingMarkers(menuAttack.queue, menuAttack.attack, menuAttack.weaponSpeed);
-          if (marked.some(m => m.id === q.id)) marker = ' >';
+          const info = computeTimingMarkers(menuAttack.queue, menuAttack.attack, menuAttack.weaponSpeed);
+          if (info) {
+            if (info.kind === 'pin' && info.rowId === q.id) marker = ' >';
+            else if (info.kind === 'bar' && (info.firstId === q.id || info.lastId === q.id)) marker = ' |';
+          }
         }
         html += `<div>${tics} - ${label}: ${ev}${marker}</div>`;
       });

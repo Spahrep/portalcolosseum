@@ -254,7 +254,84 @@
     }
     .queue-row .name { color: #ccddff; }
     .queue-row .tic { color: #6688aa; font-size: 9px; }
-    .queue-row .queue-marker { color: #ffcc66; font-weight: bold; font-size: 11px; }
+    /* PC-56 Queue Font Size + top-row + prediction bar/pin + animations (added inside existing <style>) */
+    .queue-size-S .queue-row { font-size: 10px!important; }
+    .queue-size-S .queue-row .tic { font-size: 9px!important; }
+    .queue-size-S .queue-row.top-row { font-size: 12px!important; }
+
+    .queue-size-M .queue-row { font-size: 13px!important; }
+    .queue-size-M .queue-row .tic { font-size: 11px!important; }
+    .queue-size-M .queue-row.top-row { font-size: 15px!important; }
+
+    .queue-size-L .queue-row { font-size: 16px!important; }
+    .queue-size-L .queue-row .tic { font-size: 13px!important; }
+    .queue-size-L .queue-row.top-row { font-size: 18px!important; }
+
+    /* ---- Top 3 rows ---- */
+    .queue-row.top-row {
+      color: #ffeedd;
+      font-weight: bold;
+      background: rgba(255,255,255,0.04);
+    }
+
+    /* ---- Prediction bar (continuous yellow strip) ---- */
+    .queue-panel { position: relative; } /* container for absolute bar */
+    #queue { position: relative; }
+    .prediction-bar {
+      position: absolute;
+      right: 0;
+      width: 4px;
+      background: #ffcc66;
+      border-radius: 2px;
+      opacity: 0.7;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* ---- Pin marker ---- */
+    .queue-pin {
+      color: #ffcc66;
+      font-weight: bold;
+      font-size: 14px;
+      margin-left: auto;
+    }
+
+    /* ---- Resolve animation (flash then shrink) ---- */
+    @keyframes queue-flash {
+      0%   { background: transparent; }
+      30%  { background: rgba(255, 204, 102, 0.3); }
+      100% { background: transparent; }
+    }
+    .queue-row-flash {
+      animation: queue-flash 0.3s ease-out;
+    }
+    .queue-row-shrink {
+      transition: transform 0.3s ease-in, opacity 0.3s ease-in;
+      transform: scaleY(0);
+      opacity: 0;
+      max-height: 0;
+      overflow: hidden;
+    }
+
+    /* ---- Enter animation ---- */
+    @keyframes queue-enter {
+      0%   { opacity: 0; transform: translateX(10px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    .queue-row-enter {
+      animation: queue-enter 0.3s ease-out;
+    }
+
+    /* ---- Text speed & font size toggle area ---- */
+    .queue-size-toggle {
+      font-size: 10px;
+      opacity: 0.8;
+      cursor: pointer;
+      user-select: none;
+      padding: 1px 6px;
+      border: 1px solid #334455;
+      border-radius: 3px;
+    }
     /* PC-63 DW cascading command menu — three-window modal cascade per the
        locked spec (docs/battle-status-ui.md Cascading Window Spec;
        shared/CommandSelection.png). Orange frames/text, blue hand tab, green
@@ -585,6 +662,7 @@
       <div class="panel-title" style="margin:0 0 6px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
         MESSAGE LOG
         <span id="text-speed" style="font-size:10px; opacity:0.8; cursor:pointer; user-select:none; padding:1px 6px; border:1px solid #334455; border-radius:3px;">TEXT SPEED: Standard</span>
+        <span id="queue-font-size" class="queue-size-toggle">FONT: M</span>
       </div>
       <div id="message-box" class="message-box"></div>
     </div>

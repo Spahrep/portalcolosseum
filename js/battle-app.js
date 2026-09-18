@@ -19,7 +19,7 @@ let currentRunId = null;
 let lastBs = null; // last loaded battle_state (safeState) — source for attack/potion lookups
 let busy = false;
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
-let queueMarkers = null;   // Map<rowId, '>'> — PC-56 timing markers for the selected attack
+let queueBarInfo = null;   // {kind:'bar',firstId,lastId} | {kind:'pin',rowId} | null — PC-56 prediction bar/pin
 let playerName = 'Player';
 let shouldAnimateDice = false;
 // PC-51: monsters stay hidden while the dice roll ceremony plays, then
@@ -88,6 +88,42 @@ function updateTextSpeedUI() {
   if (el) {
     const p = getBattleTextPreset();
     el.textContent = `TEXT SPEED: ${p.label}`;
+  }
+}
+
+// PC-56 Queue Font Size (exact pattern of BATTLE_TEXT/textSpeed)
+const QUEUE_FONT_SIZES = {
+  S: { scale: '0.85', label: 'Small' },
+  M: { scale: '1.0', label: 'Medium' },
+  L: { scale: '1.3', label: 'Large' }
+};
+let queueFontSizeKey = localStorage.getItem('pc_queue_font_size') || 'M';
+if (!QUEUE_FONT_SIZES[queueFontSizeKey]) queueFontSizeKey = 'M';
+
+function getQueueFontSizePreset() {
+  return QUEUE_FONT_SIZES[queueFontSizeKey] || QUEUE_FONT_SIZES.M;
+}
+
+function cycleQueueFontSize() {
+  const order = ['S', 'M', 'L'];
+  const idx = order.indexOf(queueFontSizeKey);
+  queueFontSizeKey = order[(idx + 1) % order.length];
+  localStorage.setItem('pc_queue_font_size', queueFontSizeKey);
+  updateQueueFontSizeUI();
+  // re-render to apply classes
+  if (lastBs) renderQueue(lastBs);
+}
+
+function updateQueueFontSizeUI() {
+  const el = document.getElementById('queue-font-size');
+  if (el) {
+    el.textContent = `FONT: ${queueFontSizeKey}`;
+  }
+  // apply class to .queue-panel
+  const panel = document.querySelector('.queue-panel');
+  if (panel) {
+    panel.classList.remove('queue-size-S', 'queue-size-M', 'queue-size-L');
+    panel.classList.add(`queue-size-${queueFontSizeKey}`);
   }
 }
 
@@ -820,8 +856,35 @@ function renderQueue(bs, fill = false, onDone = null) {
   if (queue.length === 0) return;
   const monsters = bs.monsters || [];
   const sorted = sortQueueRows(queue);
-  for (const row of sorted) {
-    el.appendChild(buildQueueRow(row, monsters, bs, true));
+  sorted.forEach((row, index) => {
+    el.appendChild(buildQueueRow(row, monsters, bs, true, index));
+  });
+  // PC-56: Prediction bar / pin after rows are in DOM
+  if (queueBarInfo) {
+    if (queueBarInfo.kind === 'bar' && queueBarInfo.firstId && queueBarInfo.lastId) {
+      const firstRow = el.querySelector(`[data-row-id="${queueBarInfo.firstId}"]`);
+      const lastRow = el.querySelector(`[data-row-id="${queueBarInfo.lastId}"]`);
+      if (firstRow && lastRow) {
+        const firstRect = firstRow.getBoundingClientRect();
+        const lastRect = lastRow.getBoundingClientRect();
+        const queueRect = el.getBoundingClientRect();
+        const top = firstRect.top - queueRect.top;
+        const height = (lastRect.bottom - firstRect.top);
+        const bar = document.createElement('div');
+        bar.className = 'prediction-bar';
+        bar.style.top = `${top}px`;
+        bar.style.height = `${height}px`;
+        el.appendChild(bar);
+      }
+    } else if (queueBarInfo.kind === 'pin' && queueBarInfo.rowId) {
+      const pinRow = el.querySelector(`[data-row-id="${queueBarInfo.rowId}"]`);
+      if (pinRow) {
+        const pin = document.createElement('span');
+        pin.className = 'queue-pin';
+        pin.textContent = '>';
+        pinRow.appendChild(pin);
+      }
+    }
   }
   if (fill) {
     // Ceremony-intro: intro fill — rows are sorted by tics, so the top row is First
@@ -834,12 +897,28 @@ function renderQueue(bs, fill = false, onDone = null) {
   }
 }
 
+// diff for resolve/enter animations (non-blocking)
+function diffQueueForAnimation(oldBs, newBs) {
+  const oldRows = sortQueueRows(oldBs.queue || []);
+  const newRows = sortQueueRows(newBs.queue || []);
+  const oldIds = new Set(oldRows.map(r => r.id));
+  const newIds = new Set(newRows.map(r => r.id));
+  return {
+    resolved: oldRows.filter(r => !newIds.has(r.id)).map(r => r.id),
+    added: newRows.filter(r => !oldIds.has(r.id)).map(r => r.id)
+  };
+}
+
 // Shared rail-row builder: used by renderQueue and the PC-64 intro countdown so
 // countdown rows are pixel-identical to the real queue (same sort, same DOM).
 // withMarkers=false omits PC-56 '>' timing markers (no selection during the intro).
-function buildQueueRow(row, monsters, bs, withMarkers) {
+function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   const div = document.createElement('div');
   div.className = 'queue-row';
+  if (index >= 0 && index < 3) {
+    div.classList.add('top-row');
+  }
+  div.dataset.rowId = row.id;
   const nameSpan = document.createElement('span');
   nameSpan.className = 'name';
   nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
@@ -848,13 +927,12 @@ function buildQueueRow(row, monsters, bs, withMarkers) {
   ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   div.appendChild(nameSpan);
   div.appendChild(ticSpan);
-  // PC-56: '>' timing markers on the right rail, mirroring the DW mockup —
-  // one marker per affected row, keyed by row id, cleared on selection change.
-  if (withMarkers && queueMarkers && queueMarkers.has(row.id)) {
-    const markerSpan = document.createElement('span');
-    markerSpan.className = 'queue-marker';
-    markerSpan.textContent = queueMarkers.get(row.id);
-    div.appendChild(markerSpan);
+  // PC-56: pin marker (yellow '>') when queueBarInfo is pin mode for this row
+  if (withMarkers && queueBarInfo && queueBarInfo.kind === 'pin' && queueBarInfo.rowId === row.id) {
+    const pinSpan = document.createElement('span');
+    pinSpan.className = 'queue-pin';
+    pinSpan.textContent = '>';
+    div.appendChild(pinSpan);
   }
   return div;
 }
@@ -1199,11 +1277,12 @@ function renderActionMenu(bs) {
   }
 
   function setMarkers(attack) {
-    queueMarkers = new Map(computeTimingMarkers(queue, attack, (w && w.speed) || 0).map(m => [m.id, m.marker]));
+    const q = (lastBs && lastBs.queue) || [];
+    queueBarInfo = computeTimingMarkers(q, attack, (w && w.speed) || 0);
     renderQueue(lastBs);
   }
   function clearMarkers() {
-    queueMarkers = null;
+    queueBarInfo = null;
     renderQueue(lastBs);
   }
 
@@ -1515,8 +1594,9 @@ async function loadBattle(runId) {
     if (runTitle) runTitle.textContent = `PORTAL · RUN ${run.id}`;
     const battleLabel = document.getElementById('battle-label');
     const bs = run.battle_state || {};
+    const prevBs = lastBs;
     lastBs = bs;
-    queueMarkers = null; // PC-56: fresh battle state — no selection, no markers
+    queueBarInfo = null; // PC-56: fresh battle state — no selection, no markers
     // Capture BEFORE renderDice — the animation path clears the flag.
     // Ceremony-intro: the command window and timing track are part of the same
     // ceremony — they stay hidden until every monster has faded in.
@@ -1560,7 +1640,40 @@ async function loadBattle(runId) {
       document.body.classList.add('intro-pending', 'queue-filling');
     } else {
       renderActionMenu(bs);
-      renderQueue(bs);
+      // PC-56: resolve/enter animations (non-blocking setTimeout, rest of loadBattle continues)
+      if (prevBs) {
+        const diff = diffQueueForAnimation(prevBs, bs);
+        const queueEl = document.getElementById('queue');
+        if (queueEl && diff.resolved.length > 0) {
+          diff.resolved.forEach(id => {
+            const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
+            if (rowEl) {
+              rowEl.classList.add('queue-row-flash');
+              setTimeout(() => {
+                if (rowEl.parentNode) rowEl.classList.add('queue-row-shrink');
+              }, 100);
+            }
+          });
+          setTimeout(() => {
+            renderQueue(bs);
+            // added rows enter anim after render
+            const newQueueEl = document.getElementById('queue');
+            if (newQueueEl && diff.added.length > 0) {
+              diff.added.forEach(id => {
+                const rowEl = newQueueEl.querySelector(`[data-row-id="${id}"]`);
+                if (rowEl) {
+                  rowEl.classList.add('queue-row-enter');
+                  setTimeout(() => rowEl.classList.remove('queue-row-enter'), 300);
+                }
+              });
+            }
+          }, 500);
+        } else {
+          renderQueue(bs);
+        }
+      } else {
+        renderQueue(bs);
+      }
     }
 
 
@@ -1684,6 +1797,18 @@ async function init() {
       cycleBattleTextSpeed();
     };
     updateTextSpeedUI();
+  }
+
+  // PC-56: wire FONT SIZE cycling control (next to TEXT SPEED)
+  const fontEl = document.getElementById('queue-font-size');
+  if (fontEl) {
+    fontEl.onclick = () => {
+      cycleQueueFontSize();
+    };
+    updateQueueFontSizeUI();
+  } else {
+    // fallback if element not present yet
+    updateQueueFontSizeUI();
   }
 
   // PC-DEC-044: click message log to instantly complete pending typing
