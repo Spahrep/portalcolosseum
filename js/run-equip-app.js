@@ -21,6 +21,7 @@ let backpack = [];
 let loadout = [null, null, null, null, null];
 let selectedIndex = null;
 let popupEl;
+let hoverTimer = null;
 let currentPortal = null;
 let weaponsById = {};
 let consumablesById = {};
@@ -127,6 +128,8 @@ function renderBackpack() {
       slot.appendChild(nameSpan);
       slot.dataset.index = i;
       slot.onclick = () => selectBackpackItem(i, slot);
+      slot.onmouseenter = () => onHoverItem(backpack[i], slot);
+      slot.onmouseleave = onHoverLeave;
     } else {
       slot.classList.add('empty');
       slot.textContent = (i + 1).toString().padStart(2, '0');
@@ -139,7 +142,7 @@ function selectBackpackItem(index, el) {
   // Clicking the already-selected item again deselects it
   if (selectedIndex === index) {
     selectedIndex = null;
-    popupEl.style.display = 'none';
+    hidePopup();
     clearHighlights();
     return;
   }
@@ -177,10 +180,7 @@ function clearHighlights() {
   document.querySelectorAll('.inv-slot').forEach(s => s.classList.remove('selected', 'valid-target', 'invalid-target'));
 }
 
-function showInspectPopup(item, targetEl) {
-  popupEl.innerHTML = '';
-  popupEl.style.display = 'block';
-
+function buildPopupHtml(item) {
   let nameHtml = item.name;
   if (item.grade && GRADE_COLORS[item.grade]) {
     nameHtml = `<span style='background:${GRADE_COLORS[item.grade]};color:#000;font-size:9px;padding:0 3px;margin-right:4px;border-radius:2px;'>${item.grade}</span><span style='color:${GRADE_COLORS[item.grade]}'>${item.name}</span>`;
@@ -213,38 +213,82 @@ function showInspectPopup(item, targetEl) {
       html += `<div class="stat-line">${c.description || c.effect_label || c.template_name || 'Effect'}</div>`;
     }
   }
-  popupEl.innerHTML = html;
+  return html;
+}
 
-  // Position beside the clicked item, never covering the loadout slots (the
-  // next click target). The loadout panel's right edge is a hard left boundary;
-  // if the popup still overflows the container's right edge on narrow windows,
-  // it may stick out over the page background rather than hide the slots.
+function positionPopup(targetEl) {
   const rect = targetEl.getBoundingClientRect();
   const contRect = document.querySelector('.container').getBoundingClientRect();
   const loadoutRight = document.querySelector('.loadout-panel').getBoundingClientRect().right - contRect.left;
   const minLeft = loadoutRight + 6;
   const popupW = popupEl.offsetWidth;
   const popupH = popupEl.offsetHeight;
-  let left = rect.left - contRect.left + 30;
+  const GAP = 12;
+  // Beside the item, a full gap clear of its right edge — never ON the item.
+  // A popup over the button it describes eats the click meant for that button
+  // (the old rect.left + 30 anchored to the item's LEFT edge, so the popup
+  // overlapped ~75% of it). pointer-events:none on .info-popup is the
+  // click-through backstop for any residual overlap.
+  let left = rect.right - contRect.left + GAP;
   if (left < minLeft) left = minLeft;
+  // Overflowing the container's right edge: flip to the item's left side,
+  // again a full gap clear of the item's left edge.
   if (left + popupW > contRect.width - 8) {
-    const flipped = rect.left - contRect.left - popupW - 30;
-    if (flipped >= minLeft) left = flipped;
+    const flipped = rect.left - contRect.left - popupW - GAP;
+    left = flipped >= minLeft ? flipped : Math.max(minLeft, contRect.width - popupW - 8);
   }
-  let top = rect.top - contRect.top - 10;
+  let top = rect.top - contRect.top - 6;
+  if (top < 8) top = 8;
   if (top + popupH > contRect.height - 8) top = Math.max(8, contRect.height - popupH - 8);
   popupEl.style.left = left + 'px';
   popupEl.style.top = top + 'px';
+}
 
-  setTimeout(() => {
-    document.addEventListener('click', function handler(ev) {
-      if (!popupEl.contains(ev.target) && !targetEl.contains(ev.target)) {
-        popupEl.style.display = 'none';
-        clearHighlights();
-        document.removeEventListener('click', handler);
-      }
-    }, { once: true });
-  }, 10);
+function showInfoFor(item, targetEl) {
+  popupEl.innerHTML = buildPopupHtml(item);
+  positionPopup(targetEl);
+  popupEl.style.display = 'block';
+}
+
+function hidePopup() {
+  if (popupEl) popupEl.style.display = 'none';
+}
+
+function onHoverItem(item, el) {
+  clearTimeout(hoverTimer);
+  showInfoFor(item, el);
+}
+
+function onHoverLeave() {
+  clearTimeout(hoverTimer);
+  // Short grace so moving between adjacent slots doesn't blink the popup.
+  hoverTimer = setTimeout(() => {
+    if (selectedIndex !== null && backpack[selectedIndex]) {
+      // Pinned selection: revert to the selected item's info.
+      const selEl = document.querySelector('.inv-slot.selected');
+      if (selEl) showInfoFor(backpack[selectedIndex], selEl);
+      else hidePopup();
+    } else {
+      hidePopup();
+    }
+  }, 150);
+}
+
+function showInspectPopup(item, targetEl) {
+  showInfoFor(item, targetEl);
+}
+
+// Persistent dismissal for the pinned (click-selected) popup. Backpack and
+// loadout clicks manage themselves (select/deselect, assign/unequip); anything
+// else — background, bottom bar, dice panel — clears the selection.
+function setupDismiss() {
+  document.addEventListener('click', (ev) => {
+    if (selectedIndex === null) return;
+    if (ev.target.closest('.inv-slot') || ev.target.closest('.slot-row')) return;
+    selectedIndex = null;
+    clearHighlights();
+    hidePopup();
+  });
 }
 
 function assignToSlot(slotIndex) {
@@ -322,6 +366,13 @@ function renderLoadout() {
         origClick();
       }
     };
+    // Hover an equipped slot to inspect its item (clicking a slot unequips —
+    // hover is the only way to read its full info). Suppressed while an item
+    // is selected so the equip-flow popup stays put.
+    row.onmouseenter = () => {
+      if (loadout[i] && selectedIndex === null) onHoverItem(loadout[i], content);
+    };
+    row.onmouseleave = onHoverLeave;
   }
 }
 
@@ -495,6 +546,7 @@ async function init() {
   }
   renderAll();
   setupKeyboard();
+  setupDismiss();
   setupEnterButton();
   setupCancelButton();
   if (popupEl) popupEl.style.display = 'none';

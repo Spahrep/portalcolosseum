@@ -256,6 +256,9 @@
       box-shadow: 0 0 0 1px #000;
       min-width: 220px;
       display: none;
+      /* Info is display-only: never intercept clicks meant for whatever the
+       * popup happens to cover, and never steal the hover of the item below. */
+      pointer-events: none;
     }
     .info-popup .name {
       color: #ffcc66;
