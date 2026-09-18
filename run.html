@@ -148,6 +148,25 @@
       100% { background: #112233; filter: brightness(1); }
     }
     .sprite-flash { animation: sprite-hit-flash 0.18s ease-out; }
+    /* PC-71: monster death — the card flashes red (three pulses) then fades
+       out in place. Keyframes override the card's inline background/border
+       while the animation runs; `forwards` keeps the faded end state until
+       battle-app.js removes the element (animationend + timeout fallback).
+       Duration must match MONSTER_DEATH_MS in js/battle-app.js. */
+    @keyframes monster-death {
+      0%   { background-color: rgba(0, 0, 0, 0.4); border-color: #4a90d9; opacity: 1; }
+      14%  { background-color: #dd2222; border-color: #ff6666; }
+      28%  { background-color: rgba(0, 0, 0, 0.4); border-color: #4a90d9; }
+      42%  { background-color: #ee2222; border-color: #ff6666; }
+      56%  { background-color: rgba(0, 0, 0, 0.4); border-color: #4a90d9; }
+      70%  { background-color: #ff2222; border-color: #ff8888; }
+      82%  { background-color: #991111; border-color: #cc4444; opacity: 1; }
+      100% { background-color: #550000; border-color: #881111; opacity: 0; }
+    }
+    .monster-dying {
+      animation: monster-death 1.2s ease-in forwards;
+      pointer-events: none;
+    }
     .dice-labels {
       font-size: 9px;
       color: #88aaff;

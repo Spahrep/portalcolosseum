@@ -241,6 +241,16 @@ let windowShakeTimer = null;
 let suppressHitFeedback = false; // intro-snap re-type narrates HISTORY — only NEW hits react
 const cardHitTimers = new WeakMap(); // per-card cleanup timer for multi-target hits
 
+// PC-71: monster death — a dead monster's card flashes red and fades out in
+// place (run.html @keyframes monster-death), then is removed. Duration must
+// match the keyframes; the +200ms timeout is the fallback for environments
+// where animationend never fires (reduced-motion etc.).
+const MONSTER_DEATH_MS = 1200;
+// Death cards survive renderMonsters' innerHTML wipe: they're re-appended
+// from this map (keyed by monster id) in their original arena position while
+// the animation plays, so a fast follow-up action can't cut the beat short.
+const deathCards = new Map(); // monster id -> { el, timer }
+
 function triggerWindowShake() {
   const el = document.querySelector('.container');
   if (!el) return;
@@ -498,41 +508,100 @@ function rollDiceAnimation(box, current, faces, onDone) {
 function renderMonsters(monsters) {
   const container = document.getElementById('monsters');
   if (!container) return;
+  // Fresh battle ceremony = a new arena — drop any in-flight death animations
+  // from the previous battle rather than letting corpses linger into battle 2.
+  if (monstersPendingReveal && deathCards.size > 0) {
+    for (const entry of deathCards.values()) {
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.el.remove();
+    }
+    deathCards.clear();
+  }
   container.innerHTML = '';
-  if (!monsters || monsters.length === 0) {
-    const empty = document.createElement('div');
-    empty.style.cssText = 'color:#556677;font-size:11px;padding:12px;';
-    empty.textContent = 'No monsters present.';
-    if (monstersPendingReveal) hideForReveal(empty);
-    container.appendChild(empty);
+  const list = monsters || [];
+  if (list.length === 0) {
+    appendNoMonsters(container);
     return;
   }
-  monsters.forEach((m, i) => {
-    const card = document.createElement('div');
-    card.className = 'monster-card';
-    // PC-70: letter = the monster's arena key from its label (feed lines use
-    // the raw label: "Monster A" / "A" / "Monster #12"). Same normalization as
-    // parseHitLine + queueLabel. Index order is NOT the contract — labels are
-    // "next free A-Z" at spawn and drift from array order when monsters die.
-    card.dataset.letter = String(m.label || '').replace(/^Monster\s*/i, '');
-    card.style.cssText = 'background:rgba(0,0,0,0.4);border:2px solid #4a90d9;padding:8px 10px;margin-bottom:6px;';
-    const sprite = document.createElement('div');
-    sprite.className = 'monster-sprite';
-    sprite.style.cssText = 'width:64px;height:48px;background:#112233;border:1px solid #335577;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#66ccff;';
-    sprite.textContent = m.name ? m.name.substring(0,3).toUpperCase() : 'MON';
-    const name = document.createElement('div');
-    name.style.cssText = 'color:#ffcc66;font-size:11px;text-align:center;';
-    name.textContent = m.name || 'Monster';
-    const hp = document.createElement('div');
-    hp.style.cssText = 'margin-top:4px;text-align:center;';
+  // Render in array order so a dying card keeps its slot among the living
+  // (the API keeps dead monsters in place, flagged `dead: true`).
+  for (const m of list) {
+    if (m.dead) {
+      const key = m.id != null ? m.id : m.label;
+      const existing = deathCards.get(key);
+      if (existing) {
+        container.appendChild(existing.el); // still animating — don't restart it
+        continue;
+      }
+      const card = buildMonsterCard(m, true);
+      const entry = { el: card, timer: null };
+      deathCards.set(key, entry);
+      container.appendChild(card);
+      card.addEventListener('animationend', (e) => {
+        // only the death beat ends the card — a hit-feedback shake on the
+        // same tick (the killing blow) must not remove it early
+        if (e.animationName === 'monster-death') finishDeath(key);
+      });
+      entry.timer = setTimeout(() => finishDeath(key), MONSTER_DEATH_MS + 200);
+    } else {
+      container.appendChild(buildMonsterCard(m, false));
+    }
+  }
+  if (!list.some(m => !m.dead) && deathCards.size === 0) appendNoMonsters(container);
+}
+
+function buildMonsterCard(m, dying) {
+  const card = document.createElement('div');
+  card.className = 'monster-card' + (dying ? ' monster-dying' : '');
+  // PC-70: letter = the monster's arena key from its label (feed lines use
+  // the raw label: "Monster A" / "A" / "Monster #12"). Same normalization as
+  // parseHitLine + queueLabel. Index order is NOT the contract — labels are
+  // "next free A-Z" at spawn and drift from array order when monsters die.
+  card.dataset.letter = String(m.label || '').replace(/^Monster\s*/i, '');
+  card.style.cssText = 'background:rgba(0,0,0,0.4);border:2px solid #4a90d9;padding:8px 10px;margin-bottom:6px;';
+  const sprite = document.createElement('div');
+  sprite.className = 'monster-sprite';
+  sprite.style.cssText = 'width:64px;height:48px;background:#112233;border:1px solid #335577;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#66ccff;';
+  sprite.textContent = m.name ? m.name.substring(0, 3).toUpperCase() : 'MON';
+  const name = document.createElement('div');
+  name.style.cssText = 'color:#ffcc66;font-size:11px;text-align:center;';
+  name.textContent = m.name || 'Monster';
+  const hp = document.createElement('div');
+  hp.style.cssText = 'margin-top:4px;text-align:center;';
+  if (dying) {
+    // dead is not Critical — the card is leaving; the word is DEFEATED in red
+    hp.innerHTML = '<span class="st-red" style="font-size:10px;">DEFEATED</span>';
+  } else {
     const hpWord = m.hp_word || m.hpWord || 'Healthy';
     hp.innerHTML = `<span class="${bandClass(m)}" style="font-size:10px;">HP: ${hpWord}</span>`;
-    card.appendChild(sprite);
-    card.appendChild(name);
-    card.appendChild(hp);
-    if (monstersPendingReveal) hideForReveal(card);
-    container.appendChild(card);
-  });
+  }
+  card.appendChild(sprite);
+  card.appendChild(name);
+  card.appendChild(hp);
+  if (!dying && monstersPendingReveal) hideForReveal(card);
+  return card;
+}
+
+function appendNoMonsters(container) {
+  const empty = document.createElement('div');
+  empty.style.cssText = 'color:#556677;font-size:11px;padding:12px;';
+  empty.textContent = 'No monsters present.';
+  if (monstersPendingReveal) hideForReveal(empty);
+  container.appendChild(empty);
+}
+
+function finishDeath(key) {
+  const entry = deathCards.get(key);
+  if (!entry) return; // animationend + timeout race — first caller wins
+  if (entry.timer) {
+    clearTimeout(entry.timer);
+    entry.timer = null;
+  }
+  deathCards.delete(key);
+  entry.el.remove();
+  // Last monster fell — restore the empty-arena placeholder.
+  const container = document.getElementById('monsters');
+  if (container && container.children.length === 0) appendNoMonsters(container);
 }
 // While the roll plays, monster cards render invisible (laid out, opacity 0)
 // and materialize one at a time once the roll completes.
