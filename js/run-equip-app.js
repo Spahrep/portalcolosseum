@@ -235,7 +235,10 @@ function positionPopup(targetEl) {
   // again a full gap clear of the item's left edge.
   if (left + popupW > contRect.width - 8) {
     const flipped = rect.left - contRect.left - popupW - GAP;
-    left = flipped >= minLeft ? flipped : Math.max(minLeft, contRect.width - popupW - 8);
+    // Flip to the item's left side, a full gap clear of its left edge. If even
+    // that doesn't fit (very narrow viewport), clamp to the backpack area's
+    // left edge — never slide the popup back right over the hovered item.
+    left = flipped >= minLeft ? flipped : minLeft;
   }
   let top = rect.top - contRect.top - 6;
   if (top < 8) top = 8;
@@ -256,6 +259,13 @@ function hidePopup() {
 
 function onHoverItem(item, el) {
   clearTimeout(hoverTimer);
+  if (!item) {
+    // Empty slot (spare backpack cell, empty loadout row): clear any stale
+    // popup rather than dereferencing a null item. While an item is selected
+    // the pinned popup stays put.
+    if (selectedIndex === null) hidePopup();
+    return;
+  }
   showInfoFor(item, el);
 }
 
@@ -370,7 +380,10 @@ function renderLoadout() {
     // hover is the only way to read its full info). Suppressed while an item
     // is selected so the equip-flow popup stays put.
     row.onmouseenter = () => {
-      if (loadout[i] && selectedIndex === null) onHoverItem(loadout[i], content);
+      if (selectedIndex === null) {
+        if (loadout[i]) onHoverItem(loadout[i], content);
+        else hidePopup();
+      }
     };
     row.onmouseleave = onHoverLeave;
   }
