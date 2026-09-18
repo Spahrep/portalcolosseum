@@ -10,8 +10,8 @@
  * event listeners via DOMContentLoaded.
  *
  * Town Navigation:
- *   Arrow keys cycle selection between town locations (Portal, Store, Wizard,
- *   Leaderboards). The selected marker shows [x] via CSS ::before.
+ *   Arrow keys cycle selection between town locations (Menu, Store, Portal,
+ *   Wizard, Leaderboards). The selected marker shows [x] via CSS ::before.
  *   Enter triggers the selected location's action (pan to building + Enter The Portal).
  */
 
@@ -29,11 +29,13 @@ let supabase;
 // The [ ] / [x] checkbox is rendered via CSS ::before on .location-marker.selected.
 
 // Location definitions: position on the panorama in image percentages.
-// Order determines the arrow-key navigation cycle: Store → Portal → Wizard → Leaderboard
+// Order determines the arrow-key navigation cycle: Menu → Store → Portal → Wizard → Leaderboard
 // x = % across the 300vh panorama image (0-100)
 // y = % down from top of the image — all at same height for alignment
 // data-x/data-y in game.html match these values
 const LOCATIONS = [
+  // The campfire at the far left of the panorama is the Menu section (PC menu)
+  { name: 'menu',        label: 'Menu',            x: 6,   y: 80 },
   { name: 'store',       label: 'Store',            x: 20,  y: 80 },
   { name: 'portal',      label: 'Enter The Portal', x: 50,  y: 80 },
   { name: 'wizard',      label: 'Wizard Hut',       x: 68,  y: 80 },
@@ -112,7 +114,7 @@ function enterLocation() {
     // Enter The Portal — redirect to the GUI battle test
     window.location.href = '/run-equip.html';
   } else {
-    // Store, Wizard Hut and Leaderboards are not built yet —
+    // Menu, Store, Wizard Hut and Leaderboards are not built yet —
     // show the default "not yet ready" placeholder (DrunkJester image).
     showNotReadyModal();
   }
@@ -429,7 +431,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // --- Town location navigation via arrow keys + mouse scroll ---
-  // Arrow keys cycle through town locations (store, portal, wizard, leaderboard)
+  // Arrow keys cycle through town locations (menu, store, portal, wizard, leaderboard)
   // Mouse wheel: scroll up = next location, scroll down = previous location
   // The selected marker shows [x] via CSS ::before
   // Enter triggers the location action (pan + enter)
