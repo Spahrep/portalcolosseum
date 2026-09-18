@@ -249,7 +249,10 @@
       justify-content: space-between;
       align-items: baseline;
       font-size: 10px;
-      padding: 1px 0;
+      padding: 2px 14px 2px 6px;
+      margin-bottom: 2px;
+      border: 1px solid #2a3a55;
+      border-radius: 2px;
       color: #aaccff;
     }
     .queue-row .name { color: #ccddff; }
@@ -279,7 +282,7 @@
     .prediction-bar {
       position: absolute;
       right: 0;
-      width: 4px;
+      width: 8px;
       background: #ffcc66;
       border-radius: 2px;
       opacity: 0.7;
@@ -655,9 +658,7 @@
 
     <!-- MESSAGE BOX -->
     <div style="padding:0 14px 8px 14px;">
-      <div class="panel-title" style="margin:0 0 6px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
-        MESSAGE LOG
-        <span id="text-speed" style="font-size:10px; opacity:0.8; cursor:pointer; user-select:none; padding:1px 6px; border:1px solid #334455; border-radius:3px;">TEXT SPEED: Standard</span>
+      <div class="panel-title" style="margin:0 0 6px;">MESSAGE LOG
       </div>
       <div id="message-box" class="message-box"></div>
     </div>
