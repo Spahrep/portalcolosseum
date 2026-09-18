@@ -353,17 +353,26 @@ function handleHitLine(line) {
 
 // Generic battle-notice toast: a small on-screen message for ceremony
 // phases. Replaces the old roll-notice with one reusable element.
-// Positioned at bottom-center so it never covers monsters/Action Queue.
+// Positioned to overlay the message log area so it never covers monsters/Action Queue.
 function showNotice(text) {
   let el = document.getElementById('battle-notice');
   if (!el) {
     el = document.createElement('div');
     el.id = 'battle-notice';
-    el.style.cssText = 'position:fixed;bottom:14%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.88);color:#fff;border:1px solid #4a90d9;padding:10px 20px;border-radius:6px;font-size:13px;letter-spacing:1px;z-index:50;pointer-events:none;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.5);white-space:nowrap;';
+    el.style.cssText = 'background:rgba(0,0,0,0.88);color:#fff;border:3px solid #4a90d9;padding:12px 14px;border-radius:4px;font-size:12px;letter-spacing:1px;z-index:60;pointer-events:none;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.5);white-space:nowrap;position:fixed;display:flex;align-items:center;justify-content:center;';
     document.body.appendChild(el);
   }
   el.textContent = text;
-  el.style.display = 'block';
+  // Position over the message box so ceremony notices cover that area
+  const msgBox = document.getElementById('message-box');
+  if (msgBox) {
+    const rect = msgBox.getBoundingClientRect();
+    el.style.left = rect.left + 'px';
+    el.style.top = rect.top + 'px';
+    el.style.width = rect.width + 'px';
+    el.style.height = rect.height + 'px';
+  }
+  el.style.display = 'flex';
 }
 
 function hideNotice() {
@@ -713,6 +722,9 @@ function finishBattleIntro() {
     document.body.classList.remove('queue-filling'); // timing track appears (rows still hidden)
     renderQueue(lastBs, true, () => {
       hideNotice();
+      // Ceremony done: show first feed line ('Battle begins...') now that
+      // the message box is no longer reserved for ceremony notices.
+      renderFeed([]);
       document.body.classList.remove('intro-pending'); // command window only after the track is full
       renderActionMenu(lastBs);
     });
@@ -1522,10 +1534,10 @@ async function loadBattle(runId) {
     }
 
     if (introPlays) {
-      // PC-64: show the pre-advance state — full HP, empty feed ('Battle begins...');
-      // the countdown reveals real damage and feed lines as it plays.
+      // PC-64: show the pre-advance state — full HP; message log stays blank
+      // during the ceremony (dice → populate monsters → action queue). Feed
+      // renders only after the ceremony finishes (see finishBattleIntro).
       renderPlayerHP({ player_hp: bs.intro.hpStart });
-      renderFeed([]);
     } else {
       renderPlayerHP(run);
       // PC-72: resume — populate the full log instantly; history never re-types.
