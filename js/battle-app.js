@@ -9,6 +9,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 import { computeTimingMarkers } from './combat/tic-queue.js';
+import { parseHitLine } from './combat/hit-feedback.js';
 
 const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
@@ -134,6 +135,9 @@ function typeFeedLines(lines, onComplete) {
       return;
     }
     const lineText = lines[lineIndex];
+    // PC-70: the hit reaction fires as the line STARTS typing — impact lands
+    // with the message, not after it finishes narrating.
+    handleHitLine(lineText);
     const div = document.createElement('div');
     div.className = 'msg-line';
     box.appendChild(div);
@@ -222,6 +226,56 @@ function setBusy(state) {
     btn.disabled = state;
     btn.style.opacity = state ? '0.5' : '1';
   });
+}
+
+// PC-70: hit feedback — window shake when a monster hits the player, monster
+// card shake + sprite white-flash when the player lands a hit. Durations must
+// match the keyframes in run.html; the class-restart pattern (remove → reflow →
+// re-add) replays the animation on rapid successive hits.
+const HIT_FEEDBACK = {
+  WINDOW_SHAKE_MS: 280,
+  CARD_SHAKE_MS: 220,
+  FLASH_MS: 180
+};
+let windowShakeTimer = null;
+let suppressHitFeedback = false; // intro-snap re-type narrates HISTORY — only NEW hits react
+const cardHitTimers = new WeakMap(); // per-card cleanup timer for multi-target hits
+
+function triggerWindowShake() {
+  const el = document.querySelector('.container');
+  if (!el) return;
+  clearTimeout(windowShakeTimer);
+  el.classList.remove('container-shake');
+  void el.offsetWidth;
+  el.classList.add('container-shake');
+  windowShakeTimer = setTimeout(() => el.classList.remove('container-shake'), HIT_FEEDBACK.WINDOW_SHAKE_MS);
+}
+
+function triggerMonsterHit(letter) {
+  const card = document.querySelector(`.monster-card[data-letter="${letter}"]`);
+  if (!card) return;
+  const sprite = card.querySelector('.monster-sprite');
+  const prior = cardHitTimers.get(card);
+  if (prior) clearTimeout(prior);
+  card.classList.remove('monster-hit');
+  if (sprite) sprite.classList.remove('sprite-flash');
+  void card.offsetWidth;
+  if (sprite) { void sprite.offsetWidth; sprite.classList.add('sprite-flash'); }
+  card.classList.add('monster-hit');
+  cardHitTimers.set(card, setTimeout(() => {
+    card.classList.remove('monster-hit');
+    if (sprite) sprite.classList.remove('sprite-flash');
+  }, Math.max(HIT_FEEDBACK.CARD_SHAKE_MS, HIT_FEEDBACK.FLASH_MS)));
+}
+
+// Route engine feed lines to the right reaction. parseHitLine is the single
+// source of truth for what counts as a hit (misses/Ready/defeat → no feedback).
+function handleHitLine(line) {
+  if (suppressHitFeedback) return;
+  const hit = parseHitLine(line);
+  if (!hit) return;
+  if (hit.type === 'monster') triggerWindowShake();
+  else triggerMonsterHit(hit.letter);
 }
 
 function renderDice(dice) {
@@ -431,8 +485,12 @@ function renderMonsters(monsters) {
   monsters.forEach((m, i) => {
     const card = document.createElement('div');
     card.className = 'monster-card';
+    // PC-70: letter = the engine feed-line label (A/B/C…) so hit feedback can
+    // target the exact card that took the hit (multi-target = one line each).
+    card.dataset.letter = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'[i] || '';
     card.style.cssText = 'background:rgba(0,0,0,0.4);border:2px solid #4a90d9;padding:8px 10px;margin-bottom:6px;';
     const sprite = document.createElement('div');
+    sprite.className = 'monster-sprite';
     sprite.style.cssText = 'width:64px;height:48px;background:#112233;border:1px solid #335577;margin:0 auto 6px;display:flex;align-items:center;justify-content:center;font-size:10px;color:#66ccff;';
     sprite.textContent = m.name ? m.name.substring(0,3).toUpperCase() : 'MON';
     const name = document.createElement('div');
@@ -670,6 +728,9 @@ function playIntroCountdown(bs, intro, onDone) {
 }
 
 function appendFeedLine(line) {
+  // PC-70: every feed line passes the hit router — covers the instant text
+  // preset, the intro-countdown fires, and one-shot lines.
+  handleHitLine(line);
   const box = document.getElementById('message-box');
   if (!box) return;
   const div = document.createElement('div');
@@ -689,10 +750,15 @@ function clearIntroTimer() {
 function finishIntroSnap(bs, onDone) {
   renderQueue(bs); // real rows replace the mirrored DOM
   const feed = bs.feed || [];
+  // PC-70: the snap re-narrates the FULL battle history (fires already played
+  // with their shakes during the countdown) — suppress feedback so history
+  // does not re-shake; only NEW lines react after the snap.
+  suppressHitFeedback = true;
+  const done = () => { suppressHitFeedback = false; if (onDone) onDone(); };
   const preset = getBattleTextPreset();
   if (preset.charMs === 0) {
     renderFeed(feed);
-    if (onDone) onDone();
+    done();
     return;
   }
   // PC-DEC-044: hold onDone until typing completes; reset path in renderFeed clears for from-the-top reveal
@@ -701,9 +767,9 @@ function finishIntroSnap(bs, onDone) {
     // clear any prior content (placeholder + any revealed) so we type the full post-reset feed
     const box = document.getElementById('message-box');
     if (box) box.innerHTML = '';
-    typeFeedLines(feed, onDone);
-  } else if (onDone) {
-    onDone();
+    typeFeedLines(feed, done);
+  } else {
+    done();
   }
 }
 
