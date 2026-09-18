@@ -252,6 +252,154 @@ body.game-page {
   pointer-events: none;
 }
 
+/* Menu / Settings modal -- replaces the drunk jester at the campfire */
+.menu-settings-modal {
+  cursor: default;
+}
+.menu-settings-frame {
+  min-width: 340px;
+  max-width: 420px;
+  padding: 0;
+  overflow: visible;
+}
+.menu-settings-body {
+  padding: 24px 28px 20px;
+}
+.settings-header {
+  text-align: center;
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #ffcc66;
+  margin-bottom: 22px;
+  text-shadow: 0 0 12px rgba(255, 204, 102, 0.5);
+}
+.settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+.settings-label {
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 13px;
+  color: #88aaff;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.setting-options {
+  display: flex;
+  gap: 6px;
+}
+.speed-opt {
+  background: #0a1a2e;
+  color: #88aaff;
+  border: 2px solid #334466;
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 11px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 0.5px;
+}
+.speed-opt:hover {
+  background: #1a3a5e;
+  border-color: #66ccff;
+  color: #ccddff;
+}
+.speed-opt.active {
+  background: #1a3a1a;
+  border-color: #66ff99;
+  color: #66ff99;
+  box-shadow: 0 0 6px rgba(102, 255, 153, 0.3);
+}
+.settings-divider {
+  height: 1px;
+  background: #334466;
+  margin: 16px 0;
+}
+.logout-row {
+  margin-bottom: 0;
+}
+.settings-logout {
+  background: #2a0a0a;
+  color: #ff6666;
+  border: 2px solid #5c1a1a;
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 12px;
+  padding: 6px 20px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 1px;
+}
+.settings-logout:hover {
+  background: #4a1a1a;
+  border-color: #ff6666;
+  color: #ff8888;
+  box-shadow: 0 0 6px rgba(255, 102, 102, 0.3);
+}
+
+/* Logout confirmation mini-dialog */
+.logout-confirm-dialog {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+}
+.logout-confirm-dialog[hidden] {
+  display: none;
+}
+.logout-confirm-body {
+  background: #1a1a2e;
+  border: 2px solid #ff6666;
+  padding: 18px 24px;
+  text-align: center;
+  box-shadow: 0 0 30px rgba(255, 102, 102, 0.25);
+}
+.logout-confirm-text {
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 14px;
+  color: #ffcc66;
+  margin-bottom: 14px;
+  letter-spacing: 1px;
+}
+.logout-confirm-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+.logout-confirm-actions button {
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 12px;
+  padding: 6px 20px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.15s ease;
+}
+#logout-confirm-yes {
+  background: #3a0a0a;
+  color: #ff6666;
+  border: 2px solid #5c1a1a;
+}
+#logout-confirm-yes:hover {
+  background: #5a1a1a;
+  border-color: #ff8888;
+}
+#logout-confirm-no {
+  background: #0a1a2e;
+  color: #88aaff;
+  border: 2px solid #334466;
+}
+#logout-confirm-no:hover {
+  background: #1a3a5e;
+  border-color: #66ccff;
+}
+
 /* AP & Gold bottom dock (PC-52) — placeholder values, backend hookup later */
 .status-dock { position:fixed; bottom:0; left:0; right:0; height:30px; background:rgba(10,26,46,0.7); border-top:2px solid #4a90d9; display:flex; align-items:center; justify-content:space-between; padding:0 16px; font-size:11px; z-index:100; font-family:'Pixeloid Mono','Courier New',monospace; }
 .dock-left { color:#ffcc66; }

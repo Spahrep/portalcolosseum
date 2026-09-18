@@ -67,13 +67,51 @@
     <button id="logout-btn" class="logout-corner-btn" title="Logout">×</button>
   </div>
 
-  <!-- "Not yet ready" modal — default placeholder for unbuilt town locations -->
+  <!-- Not yet ready modal -- default placeholder for unbuilt town locations -->
   <!-- Shows the DrunkJester image in a border with overlay text. Click or Esc dismisses. -->
   <div id="not-ready-modal" class="not-ready-modal" hidden>
     <div class="not-ready-frame">
-      <button id="not-ready-close" class="not-ready-close" aria-label="Close">×</button>
+      <button id="not-ready-close" class="not-ready-close" aria-label="Close">&times;</button>
       <img src="/public/pictures/ui/drunk-jester.jpg" alt="Feature not yet ready" class="not-ready-image">
       <div class="not-ready-text">this feature is not yet ready</div>
+    </div>
+  </div>
+
+  <!-- Menu / Settings modal -- replaces the drunk jester for the Menu (campfire) location -->
+  <div id="menu-settings-modal" class="not-ready-modal menu-settings-modal" hidden>
+    <div class="not-ready-frame menu-settings-frame">
+      <button id="menu-settings-close" class="not-ready-close" aria-label="Close">&times;</button>
+      <div class="menu-settings-body">
+        <div class="settings-header">MENU</div>
+
+        <!-- Battle text speed -->
+        <div class="settings-row">
+          <div class="settings-label">Battle Text Speed</div>
+          <div class="setting-options">
+            <button class="speed-opt" data-speed="STANDARD">Standard</button>
+            <button class="speed-opt" data-speed="SLOW">Slow</button>
+            <button class="speed-opt" data-speed="INSTANT">Instant</button>
+          </div>
+        </div>
+
+        <!-- Log out -->
+        <div class="settings-divider"></div>
+        <div class="settings-row logout-row">
+          <div class="settings-label">Session</div>
+          <button id="menu-logout-btn" class="settings-logout">Log Out</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Logout confirmation mini-dialog (inside settings modal) -->
+  <div id="logout-confirm-dialog" class="logout-confirm-dialog" hidden>
+    <div class="logout-confirm-body">
+      <div class="logout-confirm-text">Leave the realm?</div>
+      <div class="logout-confirm-actions">
+        <button id="logout-confirm-yes">Yes</button>
+        <button id="logout-confirm-no">No</button>
+      </div>
     </div>
   </div>
 

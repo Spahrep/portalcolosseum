@@ -113,8 +113,11 @@ function enterLocation() {
   if (loc.name === 'portal') {
     // Enter The Portal — redirect to the GUI battle test
     window.location.href = '/run-equip.html';
+  } else if (loc.name === 'menu') {
+    // Menu / Settings panel — replaces the drunk-jester placeholder
+    showMenuSettings();
   } else {
-    // Menu, Store, Wizard Hut and Leaderboards are not built yet —
+    // Store, Wizard Hut and Leaderboards are not built yet —
     // show the default "not yet ready" placeholder (DrunkJester image).
     showNotReadyModal();
   }
@@ -138,6 +141,99 @@ function showNotReadyModal() {
 function hideNotReadyModal() {
   const modal = document.getElementById('not-ready-modal');
   if (modal) modal.hidden = true;
+}
+
+// === MENU / SETTINGS MODAL ===
+// Replaces the drunk-jester placeholder for the Menu (campfire) location.
+// Player-adjustable settings: battle text speed, log out.
+const BATTLE_SPEED_LABELS = { STANDARD: 'Standard', SLOW: 'Slow', INSTANT: 'Instant' };
+const SPEED_CYCLE = ['STANDARD', 'SLOW', 'INSTANT'];
+
+function isMenuSettingsOpen() {
+  const modal = document.getElementById('menu-settings-modal');
+  return modal ? !modal.hidden : false;
+}
+
+function showMenuSettings() {
+  const modal = document.getElementById('menu-settings-modal');
+  if (modal) {
+    // Reset confirmation dialog in case it was left open
+    const confirm = document.getElementById('logout-confirm-dialog');
+    if (confirm) confirm.hidden = true;
+    modal.hidden = false;
+    // Highlight the currently active speed button
+    highlightSpeedButtons();
+  }
+}
+
+function hideMenuSettings() {
+  const modal = document.getElementById('menu-settings-modal');
+  if (modal) modal.hidden = true;
+}
+
+function highlightSpeedButtons() {
+  const current = localStorage.getItem('pc_battle_text_speed') || 'STANDARD';
+  document.querySelectorAll('.speed-opt').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.speed === current);
+  });
+}
+
+function setBattleTextSpeed(speedKey) {
+  if (!BATTLE_SPEED_LABELS[speedKey]) return;
+  localStorage.setItem('pc_battle_text_speed', speedKey);
+  highlightSpeedButtons();
+}
+
+function initMenuSettings() {
+  const closeBtn = document.getElementById('menu-settings-close');
+  if (closeBtn) closeBtn.addEventListener('click', hideMenuSettings);
+
+  // Click backdrop to dismiss (same pattern as not-ready-modal)
+  const modal = document.getElementById('menu-settings-modal');
+  const frame = modal?.querySelector('.menu-settings-frame');
+  if (modal && frame) {
+    modal.addEventListener('click', (e) => {
+      // Close only if clicking the backdrop, not the frame or its children
+      if (!frame.contains(e.target) && e.target !== closeBtn) {
+        hideMenuSettings();
+      }
+    });
+  }
+
+  // Speed option buttons
+  document.querySelectorAll('.speed-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setBattleTextSpeed(btn.dataset.speed);
+    });
+  });
+
+  // Logout button — shows the confirmation dialog
+  const logoutBtn = document.getElementById('menu-logout-btn');
+  if (logoutBtn) {
+    logoutBtn.addEventListener('click', () => {
+      const confirm = document.getElementById('logout-confirm-dialog');
+      if (confirm) confirm.hidden = false;
+    });
+  }
+
+  // Logout confirmation Yes — performs actual logout (reuses existing logout())
+  const confirmYes = document.getElementById('logout-confirm-yes');
+  if (confirmYes) {
+    confirmYes.addEventListener('click', () => {
+      hideMenuSettings();
+      // Give the modal time to hide before redirecting
+      setTimeout(() => logout(), 100);
+    });
+  }
+
+  // Logout confirmation No — dismisses the dialog
+  const confirmNo = document.getElementById('logout-confirm-no');
+  if (confirmNo) {
+    confirmNo.addEventListener('click', () => {
+      const confirm = document.getElementById('logout-confirm-dialog');
+      if (confirm) confirm.hidden = true;
+    });
+  }
 }
 
 /**
@@ -424,6 +520,8 @@ document.addEventListener('DOMContentLoaded', () => {
   initGame();
   // First-run tutorial overlay (localStorage-persisted, dismissible)
   showOnboarding();
+  // Menu/settings modal (in-town settings: text speed, log out)
+  initMenuSettings();
 
   // Re-pan on resize to account for aspect ratio changes
   window.addEventListener('resize', () => {
@@ -439,6 +537,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // While the "not ready" modal is open, only Escape is handled —
     // arrows/Enter must not navigate or re-trigger behind the modal.
     if (isNotReadyModalOpen() && e.key !== 'Escape') return;
+    // Same guard for the menu/settings modal — no nav behind it
+    if (isMenuSettingsOpen() && e.key !== 'Escape') return;
     switch (e.key) {
       case 'ArrowLeft':
         e.preventDefault();
@@ -468,6 +568,8 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'Escape':
         // Dismiss the "not ready" modal if open
         hideNotReadyModal();
+        // Dismiss the menu/settings modal if open
+        hideMenuSettings();
         break;
     }
   });
@@ -477,6 +579,8 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('wheel', (e) => {
     // Don't navigate behind an open "not ready" modal
     if (isNotReadyModalOpen()) return;
+    // Same guard for the menu/settings modal
+    if (isMenuSettingsOpen()) return;
     // Only handle vertical scroll, ignore horizontal
     if (Math.abs(e.deltaY) < Math.abs(e.deltaX)) return;
     e.preventDefault();
