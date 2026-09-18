@@ -2,7 +2,7 @@
 
 Disposable sketch variants exploring moving run info/dice to the top and monsters into the right rail (replacing the dice tray).
 
-- **01-tight-dock**: Literal swap. Single top-status bar with player left + run-info + full dice tray right. Monsters panel moved to right rail below TIME MENU.
+- **01-tight-dock**: Literal swap. Single top-status bar with player left + run-info + full dice tray right. Monsters panel moved to right rail below Action Queue.
 - **02-run-strip**: Persistent full-width run-strip HUD at very top (portal/run + battle counter + compact dice). Player bar below it contains only player info. Monsters in right rail.
 - **03-intel-rail**: Minimal top footprint. Compact run-info (battle line + dice row + condensed legend). Monsters use inline 10-cell HP bars (green/yellow/red fill) for at-a-glance status.
 

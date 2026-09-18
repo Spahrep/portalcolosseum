@@ -2,7 +2,7 @@
  * Portal Colosseum — Battle Test GUI (gui2)
  * External script extracted from index.html to comply with CSP.
  * No inline scripts allowed: script-src 'self' only.
- * Mockup only — the TIME MENU column and DICE tray are static demo data.
+ * Mockup only — the Action Queue column and DICE tray are static demo data.
  */
 
 let currentCol = 0;

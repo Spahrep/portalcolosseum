@@ -351,23 +351,22 @@ function handleHitLine(line) {
   }
 }
 
-// Roll notice: a small toast that tells the player the draw ceremony is
-// resolving battle difficulty. Shown when the dice sweep starts, hidden once
-// the roll settles (see selectAndRoll). Presentation only.
-function showRollNotice() {
-  let el = document.getElementById('roll-notice');
+// Generic battle-notice toast: a small on-screen message for ceremony
+// phases. Replaces the old roll-notice with one reusable element.
+function showNotice(text) {
+  let el = document.getElementById('battle-notice');
   if (!el) {
     el = document.createElement('div');
-    el.id = 'roll-notice';
-    el.textContent = 'Rolling for battle difficulty';
+    el.id = 'battle-notice';
     el.style.cssText = 'position:fixed;top:22%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.88);color:#fff;border:1px solid #4a90d9;padding:10px 20px;border-radius:6px;font-size:13px;letter-spacing:1px;z-index:50;pointer-events:none;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.5);white-space:nowrap;';
     document.body.appendChild(el);
   }
+  el.textContent = text;
   el.style.display = 'block';
 }
 
-function hideRollNotice() {
-  const el = document.getElementById('roll-notice');
+function hideNotice() {
+  const el = document.getElementById('battle-notice');
   if (el) el.style.display = 'none';
 }
 
@@ -415,7 +414,7 @@ function renderDice(dice) {
     if (current && current.color && current.face != null) {
       if (shouldAnimateDice) {
         shouldAnimateDice = false;
-        showRollNotice();
+        showNotice('Rolling for battle difficulty');
         curEl.style.display = 'none';
         // Stage 1 (selection): sweep row = remaining pool + the drawn die as an
         // extra box, so the roulette can land ON it. It shows the color marker
@@ -450,9 +449,13 @@ function renderDice(dice) {
         // and its highlight are cleared — final state = true post-draw.
         const selectAndRoll = (landedBox) => {
           rollDiceAnimation(landedBox, current, dice.faces, () => {
-            hideRollNotice(); // roll settled — the notice's job is done
+            hideNotice(); // roll settled — the notice's job is done
             updateCurrentDie(curEl, current); // persistent slot lights up
-            revealMonsters(() => finishBattleIntro()); // roll done → monsters fade in, then timing track fills, then command window
+            showNotice('Populating Monsters');
+            revealMonsters(() => {
+              showNotice('Creating Action Queue');
+              finishBattleIntro();
+            });
             setTimeout(() => renderDice(dice), 350);
           });
         };
@@ -701,12 +704,14 @@ function finishBattleIntro() {
   battleIntroPending = false;
   if (lastBs && lastBs.intro?.fires?.length > 0) {
     playIntroCountdown(lastBs, lastBs.intro, () => {
+      hideNotice();
       document.body.classList.remove('intro-pending');
       renderActionMenu(lastBs);
     });
   } else {
     document.body.classList.remove('queue-filling'); // timing track appears (rows still hidden)
     renderQueue(lastBs, true, () => {
+      hideNotice();
       document.body.classList.remove('intro-pending'); // command window only after the track is full
       renderActionMenu(lastBs);
     });
@@ -782,7 +787,7 @@ function renderLoadout(bs) {
 }
 
 /**
- * TIME MENU (next-up events column), per the design mockups: one row per
+ * Action Queue (next-up events column), per the design mockups: one row per
  * queued event, `Label EventName | tics-until-change`, next event on top.
  * Rows are countdowns to a state change: an attack landing, a hand freeing
  * ("Ready"), a monster striking, a potion taking effect.
