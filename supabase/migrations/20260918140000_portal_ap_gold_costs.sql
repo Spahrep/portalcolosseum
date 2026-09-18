@@ -8,6 +8,7 @@ UPDATE portal_template SET unlock_gold_cost = 0 WHERE id = 1;
 
 -- Seed portals 2-10 (progressively harder)
 INSERT INTO portal_template (id, name, tier, description, fights, green_dice_count, yellow_dice_count, red_dice_count, green_faces, yellow_faces, red_faces, ap_cost, unlock_gold_cost)
+OVERRIDING SYSTEM VALUE
 VALUES
   (2, 'Portal 2', 1, 'The next challenge awaits', 5, 4, 3, 3, '{10,10,10,15,15,20}', '{15,15,20,20,25,25}', '{20,25,30,35,40,45}', 0, 1000),
   (3, 'Portal 3', 1, 'Deeper into the arena', 5, 5, 3, 3, '{10,10,10,15,15,20}', '{15,15,20,20,25,25}', '{20,25,30,35,40,45}', 0, 1000),
