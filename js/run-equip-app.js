@@ -392,9 +392,12 @@ function renderDiceTray() {
     return faces ? `Faces: ${faces}` : '';
   };
   let html = '<div><div style="display:flex;gap:3px;margin-bottom:2px;">';
-  for (let i = 0; i < g; i++) html += `<div class="die green" title="${titleFor('green')}">G</div>`;
-  for (let i = 0; i < y; i++) html += `<div class="die yellow" title="${titleFor('yellow')}">Y</div>`;
-  for (let i = 0; i < r; i++) html += `<div class="die red" title="${titleFor('red')}">R</div>`;
+  // Die-box markers (presentation only): color letters swapped for glyphs —
+  // green ?? / yellow ?! / red !! (matches battle-app.js renderDice).
+  const MARK = { green: '??', yellow: '?!', red: '!!' };
+  for (let i = 0; i < g; i++) html += `<div class="die green" title="${titleFor('green')}">${MARK.green}</div>`;
+  for (let i = 0; i < y; i++) html += `<div class="die yellow" title="${titleFor('yellow')}">${MARK.yellow}</div>`;
+  for (let i = 0; i < r; i++) html += `<div class="die red" title="${titleFor('red')}">${MARK.red}</div>`;
   html += `</div><div class="dice-labels"><div>REMAINING (${total})</div><div>USED (0)</div></div></div>`;
   tray.innerHTML = html;
 }
