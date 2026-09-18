@@ -259,13 +259,13 @@
     .queue-size-S .queue-row .tic { font-size: 9px!important; }
     .queue-size-S .queue-row.top-row { font-size: 12px!important; }
 
-    .queue-size-M .queue-row { font-size: 13px!important; }
-    .queue-size-M .queue-row .tic { font-size: 11px!important; }
-    .queue-size-M .queue-row.top-row { font-size: 15px!important; }
+    .queue-size-M .queue-row { font-size: 12px!important; }
+    .queue-size-M .queue-row .tic { font-size: 10px!important; }
+    .queue-size-M .queue-row.top-row { font-size: 14px!important; }
 
-    .queue-size-L .queue-row { font-size: 16px!important; }
-    .queue-size-L .queue-row .tic { font-size: 13px!important; }
-    .queue-size-L .queue-row.top-row { font-size: 18px!important; }
+    .queue-size-L .queue-row { font-size: 14px!important; }
+    .queue-size-L .queue-row .tic { font-size: 11px!important; }
+    .queue-size-L .queue-row.top-row { font-size: 16px!important; }
 
     /* ---- Top 3 rows ---- */
     .queue-row.top-row {
@@ -275,7 +275,6 @@
     }
 
     /* ---- Prediction bar (continuous yellow strip) ---- */
-    .queue-panel { position: relative; } /* container for absolute bar */
     #queue { position: relative; }
     .prediction-bar {
       position: absolute;
@@ -324,13 +323,18 @@
 
     /* ---- Text speed & font size toggle area ---- */
     .queue-size-toggle {
-      font-size: 10px;
-      opacity: 0.8;
+      font-size: 9px;
+      opacity: 0.7;
       cursor: pointer;
       user-select: none;
-      padding: 1px 6px;
-      border: 1px solid #334455;
-      border-radius: 3px;
+      padding: 1px 4px;
+      border: 1px solid #445566;
+      border-radius: 2px;
+      color: #aaccff;
+    }
+    .queue-size-toggle:hover {
+      opacity: 1;
+      border-color: #ffcc66;
     }
     /* PC-63 DW cascading command menu — three-window modal cascade per the
        locked spec (docs/battle-status-ui.md Cascading Window Spec;
@@ -652,7 +656,7 @@
 
       <!-- ACTION QUEUE (next-up events, per design mockups) -->
       <div class="queue-panel">
-        <div class="panel-title">Action Queue</div>
+        <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">Action Queue <span id="queue-font-size" class="queue-size-toggle">FONT: M</span></div>
         <div id="queue"></div>
       </div>
     </div>
@@ -662,7 +666,6 @@
       <div class="panel-title" style="margin:0 0 6px; display:flex; justify-content:space-between; align-items:center; gap:8px;">
         MESSAGE LOG
         <span id="text-speed" style="font-size:10px; opacity:0.8; cursor:pointer; user-select:none; padding:1px 6px; border:1px solid #334455; border-radius:3px;">TEXT SPEED: Standard</span>
-        <span id="queue-font-size" class="queue-size-toggle">FONT: M</span>
       </div>
       <div id="message-box" class="message-box"></div>
     </div>
