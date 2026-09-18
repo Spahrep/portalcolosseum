@@ -148,6 +148,8 @@ function hideNotReadyModal() {
 // Player-adjustable settings: battle text speed, log out.
 const BATTLE_SPEED_LABELS = { STANDARD: 'Standard', SLOW: 'Slow', INSTANT: 'Instant' };
 const SPEED_CYCLE = ['STANDARD', 'SLOW', 'INSTANT'];
+/** Focusable items in the settings modal: 0-2 = speed buttons, 3 = Log Out */
+let menuFocusIndex = 0;
 
 function isMenuSettingsOpen() {
   const modal = document.getElementById('menu-settings-modal');
@@ -163,6 +165,9 @@ function showMenuSettings() {
     modal.hidden = false;
     // Highlight the currently active speed button
     highlightSpeedButtons();
+    // Reset keyboard focus index to the first speed button
+    menuFocusIndex = 0;
+    updateMenuFocus();
   }
 }
 
@@ -176,6 +181,70 @@ function highlightSpeedButtons() {
   document.querySelectorAll('.speed-opt').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.speed === current);
   });
+}
+
+/** Apply visual focus to the currently focused menu item index */
+function updateMenuFocus() {
+  const items = document.querySelectorAll('.speed-opt');
+  const logoutBtn = document.getElementById('menu-logout-btn');
+  items.forEach((btn, i) => btn.classList.toggle('menu-focused', i === menuFocusIndex && menuFocusIndex < 3));
+  if (logoutBtn) logoutBtn.classList.toggle('menu-focused', menuFocusIndex === 3);
+}
+
+/** Activate (click) whatever item is currently focused */
+function activateMenuFocus() {
+  const items = document.querySelectorAll('.speed-opt');
+  if (menuFocusIndex < 3 && items[menuFocusIndex]) {
+    items[menuFocusIndex].click();
+  } else if (menuFocusIndex === 3) {
+    const logoutBtn = document.getElementById('menu-logout-btn');
+    if (logoutBtn) logoutBtn.click();
+  }
+}
+
+/** Handle arrow key navigation within the settings modal. Returns true if handled. */
+function handleMenuKeydown(e) {
+  const confirm = document.getElementById('logout-confirm-dialog');
+  const confirmOpen = confirm && !confirm.hidden;
+
+  if (confirmOpen) {
+    // In logout confirmation: Enter = Yes (confirm), Escape/Esc = No
+    if (e.key === 'Enter') {
+      document.getElementById('logout-confirm-yes')?.click();
+      return true;
+    }
+    if (e.key === 'Escape') {
+      document.getElementById('logout-confirm-no')?.click();
+      return true;
+    }
+    return false;
+  }
+
+  switch (e.key) {
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      e.preventDefault();
+      if (menuFocusIndex > 0) menuFocusIndex--;
+      updateMenuFocus();
+      return true;
+    case 'ArrowRight':
+    case 'ArrowDown':
+      e.preventDefault();
+      if (menuFocusIndex === 3) menuFocusIndex = 0;
+      else menuFocusIndex++;
+      // Clamp — speed buttons (0-2) don't wrap individually, but Down from Log Out wraps
+      if (menuFocusIndex > 3) menuFocusIndex = 3;
+      updateMenuFocus();
+      return true;
+    case 'Enter':
+      e.preventDefault();
+      activateMenuFocus();
+      return true;
+    case 'Escape':
+      hideMenuSettings();
+      return true;
+  }
+  return false;
 }
 
 function setBattleTextSpeed(speedKey) {
@@ -591,8 +660,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // While the "not ready" modal is open, only Escape is handled —
     // arrows/Enter must not navigate or re-trigger behind the modal.
     if (isNotReadyModalOpen() && e.key !== 'Escape') return;
-    // Same guard for the menu/settings modal — no nav behind it
-    if (isMenuSettingsOpen() && e.key !== 'Escape') return;
+    // When the settings modal is open, route keys through the modal handler first.
+    // Arrow keys, Enter, and Escape are handled; other keys pass through.
+    if (isMenuSettingsOpen()) {
+      if (handleMenuKeydown(e)) return;
+    }
     switch (e.key) {
       case 'ArrowLeft':
         e.preventDefault();

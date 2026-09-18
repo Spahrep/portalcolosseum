@@ -353,12 +353,13 @@ function handleHitLine(line) {
 
 // Generic battle-notice toast: a small on-screen message for ceremony
 // phases. Replaces the old roll-notice with one reusable element.
+// Positioned at bottom-center so it never covers monsters/Action Queue.
 function showNotice(text) {
   let el = document.getElementById('battle-notice');
   if (!el) {
     el = document.createElement('div');
     el.id = 'battle-notice';
-    el.style.cssText = 'position:fixed;top:22%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.88);color:#fff;border:1px solid #4a90d9;padding:10px 20px;border-radius:6px;font-size:13px;letter-spacing:1px;z-index:50;pointer-events:none;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.5);white-space:nowrap;';
+    el.style.cssText = 'position:fixed;bottom:14%;left:50%;transform:translateX(-50%);background:rgba(0,0,0,0.88);color:#fff;border:1px solid #4a90d9;padding:10px 20px;border-radius:6px;font-size:13px;letter-spacing:1px;z-index:50;pointer-events:none;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.5);white-space:nowrap;';
     document.body.appendChild(el);
   }
   el.textContent = text;
