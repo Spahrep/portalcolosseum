@@ -286,25 +286,28 @@ function renderDice(dice) {
   const rem = dice.remaining || { green: 0, yellow: 0, red: 0 };
   const used = dice.used || { green: 0, yellow: 0, red: 0 };
   const current = dice.current;
+  // Die-box markers (presentation only): the single color letters were
+  // swapped for glyphs — green ?? / yellow ?! / red !!.
+  const MARK = { green: '??', yellow: '?!', red: '!!' };
 
   const remRow = document.createElement('div');
   remRow.style.cssText = 'display:flex;gap:3px;margin-bottom:4px;';
   for (let i = 0; i < (rem.green || 0); i++) {
     const d = document.createElement('div');
     d.className = 'die green';
-    d.textContent = 'G';
+    d.textContent = MARK.green;
     remRow.appendChild(d);
   }
   for (let i = 0; i < (rem.yellow || 0); i++) {
     const d = document.createElement('div');
     d.className = 'die yellow';
-    d.textContent = 'Y';
+    d.textContent = MARK.yellow;
     remRow.appendChild(d);
   }
   for (let i = 0; i < (rem.red || 0); i++) {
     const d = document.createElement('div');
     d.className = 'die red';
-    d.textContent = 'R';
+    d.textContent = MARK.red;
     remRow.appendChild(d);
   }
   tray.appendChild(remRow);
@@ -321,11 +324,11 @@ function renderDice(dice) {
         shouldAnimateDice = false;
         curEl.style.display = 'none';
         // Stage 1 (selection): sweep row = remaining pool + the drawn die as an
-        // extra box, so the roulette can land ON it. It shows the color letter
+        // extra box, so the roulette can land ON it. It shows the color marker
         // like every other box — never the face, or the result is spoiled early.
         const drawnEl = document.createElement('div');
         drawnEl.className = `die ${current.color}`;
-        drawnEl.textContent = current.color.substring(0, 1).toUpperCase();
+        drawnEl.textContent = MARK[current.color] || '??';
         // Phantom inserted at END of its color block (G→Y→R natural order preserved).
         // This keeps same-color boxes contiguous; out-of-order would be a tell.
         // Sweep will pick uniformly among same-color boxes (incl. phantom) and
