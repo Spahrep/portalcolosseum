@@ -49,6 +49,22 @@ Battles in portal runs are **groups of monsters**, not single encounters. The nu
 
 The existing "multi-enemy attack" concept (Cleave, Whirlwind, etc.) becomes core to group combat — these attacks do reduced damage per target but can hit multiple monsters in a single group.
 
+## Critical Strikes (MVP — decided by Spahrep, 2026-09-18, PC-DEC-050/051)
+
+- **Formula**: final crit chance = instance crit_chance × attack crit_factor. Both sides (player and monster) use the same formula.
+- **Weapon instance crit_chance**: rolled from weapon_template.crit_base ± crit_range (uniform roll). Backfilled to 5% for all existing instances.
+- **Monster instance crit_chance**: rolled from monster_template.crit_base ± crit_range (uniform roll). Backfilled to 5% for all existing monsters.
+- **Attack crit_factor**: per-attack multiplier against the instance crit chance (MVP baseline: 1.1 for all existing attacks). crit_multiplier: damage multiplier on crit (MVP baseline: ×2.0).
+- **No floor, no ceiling**: a chance over 100% always crits; no upper clamp — "swings of outrageous fortune" is the design.
+- **Misses can't crit**: accuracy is rolled first; a miss deals 0 regardless of crit roll.
+- **Multi-target attacks**: crit chance is rolled independently per target.
+- **Potions**: crit off their own rate (consumable_template.crit_base/range → rolled into consumable_instance.crit_chance), unaffected by weapon in hand. Crit effect amplification: game_config.potion_crit_effect_multiplier (1.5 = +50% effect) and potion_crit_duration_multiplier (1.5 = +50% duration). Heal potion crit = 1.5× heal amount; buff potion crit = 1.5× magnitude + 1.5× duration; potions with no duration get only the effect boost.
+- **Fist**: fist_crit_chance in game_config (5 default, ×2.0 multiplier) — no attack path is crit-dead.
+- **UI**: combat feed lines show "CRITICAL!" tag on crit. Weapon info screens/mouseovers display computed crit chance per attack (instance crit × factor) and the crit multiplier.
+- **CLI**: display and set crit on weapons/potions (god mode).
+- **Item grade**: crit stays out of the F→S grade formula this pass (everything flat at 5% — a no-op). PMVP: integrate crit into grading when it becomes a varied stat.
+- **Schema**: migration 20260918120000_crit_strikes.sql adds crit columns to attack, weapon_template, weapon_instance, monster_template, consumable_template, consumable_instance, and game_config tables. Shipped on main.
+
 ## Future Considerations
 
 - Procedural weapon attack slots (Simple/Advanced/Magic) with point budgets for balance

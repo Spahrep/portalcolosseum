@@ -12,6 +12,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Attacks roll **independently** of weapon grade (current idea, subject to change)
 - Weighted attack selection via `weapon_template_attack_mapping.weight` column
 - Multi-enemy attacks (Cleave, Whirlwind, etc.) do reduced damage per target
+- **Critical strikes (MVP, PC-DEC-050/051, Spahrep 2026-09-18, shipped on main)**: final crit chance = instance crit_chance × attack crit_factor (same formula player and monster). weapon_template.crit_base/range → weapon_instance.crit_chance (uniform roll, backfill 5%). monster_template.crit_base/range → per-instance (backfill 5%). attack.crit_factor (1.1 baseline) + attack.crit_multiplier (×2.0 baseline). No floor, no ceiling — swings of outrageous fortune. Potions: crit off own rate (consumable_template crit_base/range → instance), +50% effect/duration via game_config. Fist: fist_crit_chance in game_config (5 default), ×2.0. Misses can't crit. Multi-target attacks roll crit per target. Feed shows "CRITICAL!" tag. Weapon screens display computed crit. CLI god mode for crit. Crit stays out of grade formula this pass.
 
 ## Attack Slot System (documented in weapon-generation.md)
 
