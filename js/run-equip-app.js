@@ -475,6 +475,12 @@ async function enterPortal() {
   try {
     const result = await apiCall('/runs', 'POST', payload);
     const runId = result.run?.id || result.id;
+    // PC-72: fresh-entry marker — run.html plays the die ceremony only for a
+    // genuine first entry (a NEW run just created here). Every other load of
+    // that URL (returning after exiting part way, reload, reopened tab, direct
+    // link) is a resume and restores instantly instead. sessionStorage (not
+    // localStorage): a closed tab must not replay the ceremony.
+    sessionStorage.setItem(`pc_fresh_entry_${runId}`, '1');
     window.location.href = `/run.html?id=${runId}`;
   } catch (e) {
     const bottom = document.getElementById('bottom-bar');

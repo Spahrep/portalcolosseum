@@ -675,6 +675,24 @@ function renderFeed(feed) {
   typeFeedLines(newLines);
 }
 
+// PC-72: resume path — the battle already happened; restore the log at once
+// instead of typing history (the typewriter is for NEW lines only). Hit
+// reactions stay suppressed: re-shaking every historical hit would read as
+// fresh damage, not a resume.
+function populateFeedInstantly(feed) {
+  const lines = feed || [];
+  if (lines.length === 0) {
+    renderFeed([]); // empty state — 'Battle begins...' placeholder
+    return;
+  }
+  suppressHitFeedback = true;
+  try {
+    lines.forEach(line => appendFeedLine(line));
+  } finally {
+    suppressHitFeedback = false;
+  }
+}
+
 function renderPlayerHP(runOrState) {
   const el = document.getElementById('player-hp');
   if (!el) return;
@@ -1421,7 +1439,8 @@ async function loadBattle(runId) {
       renderFeed([]);
     } else {
       renderPlayerHP(run);
-      renderFeed(bs.feed || []);
+      // PC-72: resume — populate the full log instantly; history never re-types.
+      populateFeedInstantly(bs.feed || []);
     }
     renderDice(bs.dice || {});
     renderMonsters(bs.monsters || []);
@@ -1533,7 +1552,15 @@ async function init() {
     return;
   }
 
-  shouldAnimateDice = true; // run start transition
+  // PC-72: the die ceremony plays only on a genuine first entry — the marker is
+  // set by run-equip right before navigating to a NEW run. Any other load
+  // (returning to a battle after exiting part way, a reload, a reopened tab, a
+  // direct URL) is a resume: no roll animation, no re-typed history — the page
+  // puts the player right back where they were.
+  const freshKey = `pc_fresh_entry_${runId}`;
+  const freshEntry = sessionStorage.getItem(freshKey) === '1';
+  sessionStorage.removeItem(freshKey);
+  shouldAnimateDice = freshEntry; // run start transition (fresh entry only)
   await loadBattle(runId);
   setupEndRunButton(runId);
 
