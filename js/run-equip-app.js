@@ -249,8 +249,10 @@ function positionPopup(targetEl) {
 
 function showInfoFor(item, targetEl) {
   popupEl.innerHTML = buildPopupHtml(item);
-  positionPopup(targetEl);
+  // Measure AFTER showing: offsetWidth/offsetHeight are 0 while display:none,
+  // which broke overflow detection, the flip, and the vertical clamps.
   popupEl.style.display = 'block';
+  positionPopup(targetEl);
 }
 
 function hidePopup() {
