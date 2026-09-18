@@ -291,6 +291,31 @@ async function handle(request) {
       return json({ run: run || null });
     }
 
+    // GET /dev/users — admin-gated list of accounts for targeting (PC-68)
+    if (path === '/dev/users' && method === 'GET') {
+      let profile;
+      try {
+        const pRes = await admin.from('profiles').select('is_admin').eq('id', user.id).single();
+        profile = pRes.data;
+        if (pRes.error) throw pRes.error;
+      } catch (e) {
+        console.error('admin profile check error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      if (!profile || !profile.is_admin) {
+        return json({ error: 'Admin access required' }, 403);
+      }
+      let users;
+      try {
+        const uRes = await admin.from('profiles').select('id, username, is_admin').order('username');
+        users = uRes.data || [];
+      } catch (e) {
+        console.error('profiles query error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      return json({ users });
+    }
+
     // GET /api/combat/runs/:id  (state route updated for dice visibility)
     if (path.startsWith('/runs/') && !path.includes('/battle') && method === 'GET') {
       const idStr = path.split('/')[2];
@@ -1580,6 +1605,124 @@ async function handle(request) {
         if (!run) return json({ error: 'start a run first' }, 400);
         await admin.from('portal_run').update({ status: 'abandoned' }).eq('id', run.id).eq('user_id', user.id);
         return json({ run_id: run.id });
+      }
+
+      // 11. POST /dev/give-weapon (PC-68) — grant rolled weapon_instance(s) to target user (inventory only, no run/equip)
+      if (path === '/dev/give-weapon') {
+        const body = await request.json().catch(() => ({}));
+        const username = (body.username || '').trim();
+        const templateId = parseInt(body.template_id, 10);
+        let count = parseInt(body.count, 10);
+        if (!username) return json({ error: 'Invalid username' }, 400);
+        if (isNaN(templateId) || templateId <= 0) return json({ error: 'Invalid template_id' }, 400);
+        if (isNaN(count) || count < 1) count = 1;
+        count = Math.min(count, 25);
+        // resolve target user
+        let target;
+        try {
+          const uRes = await admin.from('profiles').select('id').eq('username', username).single();
+          target = uRes.data;
+          if (uRes.error || !target) throw uRes.error || new Error('not found');
+        } catch (e) {
+          return json({ error: 'user not found' }, 404);
+        }
+        // template lookup + roll logic (reused from createAndEquipWeapon)
+        let tmpl;
+        try {
+          const tRes = await admin.from('weapon_template').select('id, name, slot_0_attack_id, base_damage, damage_range, base_speed, speed_range, base_accuracy, accuracy_range').eq('id', templateId).single();
+          tmpl = tRes.data;
+          if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
+        } catch (e) {
+          return json({ error: 'weapon template not found' }, 404);
+        }
+        const granted = [];
+        for (let i = 0; i < count; i++) {
+          const d = rollStat(tmpl.base_damage, tmpl.damage_range);
+          const s = rollStat(tmpl.base_speed, tmpl.speed_range);
+          const a = rollStat(tmpl.base_accuracy, tmpl.accuracy_range);
+          const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
+          const zs = tmpl.speed_range ? (tmpl.base_speed - s) / tmpl.speed_range : 0;
+          const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
+          const z = (zd + zs + za) / 3;
+          const g = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
+          try {
+            const iRes = await admin.from('weapon_instance').insert({
+              user_id: target.id,
+              template_id: tmpl.id,
+              slot_0_attack_id: tmpl.slot_0_attack_id || 1,
+              damage: d,
+              speed: s,
+              accuracy: a,
+              grade: g
+            }).select('id, damage, speed, accuracy, grade').single();
+            if (iRes.error) throw iRes.error;
+            granted.push({ instance_id: iRes.data.id, damage: d, speed: s, accuracy: a, grade: g });
+          } catch (e) {
+            console.error('weapon_instance insert error', e);
+            return json({ error: 'Internal server error' }, 500);
+          }
+        }
+        return json({ username, template_id: templateId, template_name: tmpl.name, granted });
+      }
+
+      // 12. POST /dev/give-starter (PC-68) — idempotent grant of SSS starter to target
+      if (path === '/dev/give-starter') {
+        const body = await request.json().catch(() => ({}));
+        const username = (body.username || '').trim();
+        if (!username) return json({ error: 'Invalid username' }, 400);
+        // resolve target
+        let target;
+        try {
+          const uRes = await admin.from('profiles').select('id').eq('username', username).single();
+          target = uRes.data;
+          if (uRes.error || !target) throw uRes.error || new Error('not found');
+        } catch (e) {
+          return json({ error: 'user not found' }, 404);
+        }
+        // find SSS template
+        let tmpl;
+        try {
+          const tRes = await admin.from('weapon_template').select('id, name, slot_0_attack_id, base_damage, damage_range, base_speed, speed_range, base_accuracy, accuracy_range').eq('name', 'SSS').limit(1).single();
+          tmpl = tRes.data;
+          if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
+        } catch (e) {
+          return json({ error: 'starter template not found' }, 404);
+        }
+        // idempotent guard
+        try {
+          const existRes = await admin.from('weapon_instance').select('id').eq('user_id', target.id).eq('template_id', tmpl.id).limit(1).maybeSingle();
+          if (existRes.data) {
+            return json({ granted: false, reason: 'already has starter', instance_id: existRes.data.id });
+          }
+        } catch (e) {
+          console.error('starter check error', e);
+          return json({ error: 'Internal server error' }, 500);
+        }
+        // roll + insert one (reuse logic)
+        const d = rollStat(tmpl.base_damage, tmpl.damage_range);
+        const s = rollStat(tmpl.base_speed, tmpl.speed_range);
+        const a = rollStat(tmpl.base_accuracy, tmpl.accuracy_range);
+        const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
+        const zs = tmpl.speed_range ? (tmpl.base_speed - s) / tmpl.speed_range : 0;
+        const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
+        const z = (zd + zs + za) / 3;
+        const g = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
+        try {
+          const iRes = await admin.from('weapon_instance').insert({
+            user_id: target.id,
+            template_id: tmpl.id,
+            slot_0_attack_id: tmpl.slot_0_attack_id || 1,
+            damage: d,
+            speed: s,
+            accuracy: a,
+            grade: g
+          }).select('id, damage, speed, accuracy, grade').single();
+          if (iRes.error) throw iRes.error;
+          return json({ granted: true, instance: { instance_id: iRes.data.id, damage: d, speed: s, accuracy: a, grade: g } });
+        } catch (e) {
+          console.error('weapon_instance insert error', e);
+          return json({ error: 'Internal server error' }, 500);
+        }
       }
 
       return json({ error: 'unknown dev command' }, 404);
