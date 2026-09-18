@@ -82,7 +82,15 @@ async function loadData() {
   consumablesById = {};
   consumables.forEach(c => { if (c && c.id) consumablesById[c.id] = c; });
 
-  currentPortal = portals[0] || null;
+  // PC-75: support ?portal_id=N query param; default to Portal 1 if absent (backward compat)
+  const urlParams = new URLSearchParams(window.location.search);
+  const portalIdParam = urlParams.get('portal_id');
+  const portalId = portalIdParam ? parseInt(portalIdParam, 10) : null;
+  if (portalId && portals.length > 0) {
+    currentPortal = portals.find(p => p.id === portalId) || portals[0];
+  } else {
+    currentPortal = portals[0] || null;
+  }
 
   // One item per owned instance. Names repeat freely across instances.
   const weaponItems = weapons.filter(w => w && w.id).map(w => ({ kind: 'weapon', id: w.id, name: w.name, grade: w.grade || null }));

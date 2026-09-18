@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portal Colosseum • Select Portal</title>
+  <link rel="stylesheet" href="/fonts/pixeloid-mono/pixeloid-mono.css">
+  <script src="/api/env.js"></script>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px 20px 70px;
+      background: #000 url('/public/pictures/town/town_pano.jpg') center/cover no-repeat;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      color: #e0e0ff;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+      image-rendering: pixelated;
+    }
+    .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.35); pointer-events: none; z-index: 0; }
+    .container {
+      position: relative; z-index: 1;
+      box-sizing: border-box; width: min(92vw, 1100px);
+      min-height: 78vh; display: flex; flex-direction: column;
+      padding: 8px; background: #1a1a2e; border: 6px double #ffcc66;
+      outline: 3px solid #000; box-shadow: 0 0 40px rgba(255, 204, 102, 0.35);
+    }
+    .top-bar {
+      display: flex; border-bottom: 4px solid #4a90d9; background: rgba(10,26,46,0.78); flex-shrink: 0;
+    }
+    .run-info { flex: 1; padding: 10px 14px; border-right: 2px solid #334466; }
+    .run-info h1 { margin: 0 0 2px; font-size: 18px; color: #66ccff; letter-spacing: 2px; }
+    .run-info .subtitle { color: #4a90d9; font-size: 10px; }
+    .status-dock {
+      position: fixed; bottom: 0; left: 0; right: 0; height: 48px;
+      background: rgba(10,26,46,0.95); border-top: 3px solid #ffcc66;
+      display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-size: 11px;
+    }
+    .portal-grid {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px;
+      padding: 20px; flex: 1; overflow-y: auto;
+    }
+    .portal-card {
+      background: #0f1629; border: 3px solid #445577; padding: 12px; cursor: pointer;
+      transition: all 0.1s; display: flex; flex-direction: column; min-height: 148px;
+    }
+    .portal-card.unlocked { border-color: #66aa66; }
+    .portal-card.unlocked:hover { border-color: #aaffaa; background: #152b15; }
+    .portal-card.locked { border-color: #554444; opacity: 0.75; cursor: not-allowed; }
+    .portal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .portal-num { font-size: 11px; color: #88aaff; }
+    .portal-name { font-size: 14px; color: #ffcc66; }
+    .portal-costs { display: flex; gap: 8px; margin: 8px 0; }
+    .cost { flex: 1; background: rgba(0,0,0,0.4); padding: 4px 6px; font-size: 10px; text-align: center; }
+    .cost.ap span { color: #66ccff; } .cost.gold span { color: #ffcc66; }
+    .portal-status { margin-top: auto; font-size: 11px; padding: 4px; text-align: center; }
+    .portal-status.unlocked { color: #66ff99; background: rgba(0,80,0,0.3); }
+    .portal-status.locked { color: #ff6666; background: rgba(80,0,0,0.3); }
+    .lock-hint { font-size: 9px; color: #997777; text-align: center; margin-top: 4px; }
+    #loading, #error { text-align: center; padding: 40px; color: #88aaff; }
+    #error { color: #ff6666; display: none; }
+  </style>
+</head>
+<body>
+  <div class="overlay"></div>
+  <div class="container">
+    <div class="top-bar">
+      <div class="run-info">
+        <h1>SELECT PORTAL</h1>
+        <div class="subtitle">Choose your arena • Escape to return</div>
+      </div>
+    </div>
+
+    <div id="loading">Loading portals...</div>
+    <div id="error"></div>
+    <div id="portal-grid" class="portal-grid"></div>
+  </div>
+
+  <div class="status-dock">
+    <div>PORTAL SELECTION • PC-75</div>
+    <div id="back-btn" style="cursor:pointer;color:#88aaff;">← BACK TO TOWN (ESC)</div>
+    <div>AP / GOLD COSTS SHOWN</div>
+  </div>
+
+  <script type="module" src="/js/portal-select-app.js"></script>
+</body>
+</html>
