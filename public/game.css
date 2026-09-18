@@ -315,6 +315,13 @@ body.game-page {
   color: #66ff99;
   box-shadow: 0 0 6px rgba(102, 255, 153, 0.3);
 }
+
+/* Keyboard-focus highlight for arrow-key navigation */
+.speed-opt.menu-focused,
+.settings-logout.menu-focused {
+  outline: 2px solid #ffd700;
+  outline-offset: 2px;
+}
 .settings-divider {
   height: 1px;
   background: #334466;
