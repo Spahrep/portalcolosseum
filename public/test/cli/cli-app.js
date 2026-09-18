@@ -572,7 +572,10 @@ async function cmdHelp() {
       '  /abandon run                   — abandon current active run',
       '  /give weapon <user> <template_id> [count] — roll+grant weapons to a player',
       '  /give sss <user>                    — grant starter SSS (idempotent)',
-      '  /list users                         — list accounts for targeting'
+      '  /list users                         — list accounts for targeting',
+      '  /set weapon <id> [dmg N] [spd N] [acc N] — overwrite any weapon instance stats (grade recomputed)',
+      '  /set potion <id> [floor N] [window N] [spd N] — overwrite any potion instance stats (grade recomputed)',
+      '  /list weapons|potions [username]  — list instances (admin: any user, or all)'
     ], 'dim');
   }
 }
@@ -1245,8 +1248,56 @@ async function cmdDevDel(args) {
 }
 
 async function cmdDevSet(args) {
+  const sub = args[0];
+  if (sub === 'weapon') {
+    const instance_id = parseInt(args[1], 10);
+    const flags = args.slice(2);
+    let damage, speed, accuracy;
+    for (let i = 0; i < flags.length; i += 2) {
+      const k = flags[i];
+      const v = parseInt(flags[i + 1], 10);
+      if (k === 'dmg' || k === 'damage') damage = v;
+      else if (k === 'spd' || k === 'speed') speed = v;
+      else if (k === 'acc' || k === 'accuracy') accuracy = v;
+    }
+    if (isNaN(instance_id) || instance_id <= 0 || (!damage && !speed && !accuracy) || [damage, speed, accuracy].some(v => v !== undefined && (isNaN(v) || v < 1))) {
+      printError('usage: /set weapon <instance_id> [dmg N] [spd N] [acc N]');
+      return;
+    }
+    try {
+      const data = await apiCall('POST', '/dev/set-weapon-stats', { instance_id, damage, speed, accuracy });
+      printGreen(`#${data.instance_id} ${data.template_name}: dmg ${data.damage} spd ${data.speed} acc ${data.accuracy} ${data.grade}`);
+    } catch (e) {
+      printError('set: ' + e.message);
+    }
+    return;
+  }
+  if (sub === 'potion') {
+    const instance_id = parseInt(args[1], 10);
+    const flags = args.slice(2);
+    let floor, window, speed;
+    for (let i = 0; i < flags.length; i += 2) {
+      const k = flags[i];
+      const v = parseInt(flags[i + 1], 10);
+      if (k === 'floor') floor = v;
+      else if (k === 'window') window = v;
+      else if (k === 'spd' || k === 'speed') speed = v;
+    }
+    if (isNaN(instance_id) || instance_id <= 0 || (!floor && !window && !speed) || [floor, window, speed].some(v => v !== undefined && (isNaN(v) || v < 1))) {
+      printError('usage: /set potion <instance_id> [floor N] [window N] [spd N]');
+      return;
+    }
+    try {
+      const data = await apiCall('POST', '/dev/set-consumable-stats', { instance_id, floor, window, speed });
+      printGreen(`#${data.instance_id} ${data.template_name}: floor ${data.floor} window ${data.window} spd ${data.speed} ${data.grade}`);
+    } catch (e) {
+      printError('set: ' + e.message);
+    }
+    return;
+  }
+  // hp branch keeps original run guard
   if (!currentRunId) { printError('no run — use run new first'); return; }
-  if (args[0] !== 'hp') { printError('usage: /set hp <player|monster> <n>'); return; }
+  if (sub !== 'hp') { printError('usage: /set hp <player|monster> <n>'); return; }
   const target = args[1];
   const hp = parseInt(args[2], 10);
   if (!Number.isFinite(hp) || hp < 0) { printError('usage: /set hp <player|monster> <n>'); return; }
@@ -1288,21 +1339,53 @@ async function cmdDevKill(args) {
 async function cmdDevList(args) {
   const sub = args[0] || 'weapons';
   if (sub === 'weapons') {
+    const username = args[1];
+    if (username) {
+      try {
+        const data = await apiCall('GET', `/dev/weapons?username=${encodeURIComponent(username)}`);
+        if (!data.weapons || data.weapons.length === 0) {
+          appendLine('No weapons.', 'amber');
+          return;
+        }
+        data.weapons.forEach(w => {
+          appendLine(`#${w.instance_id} ${w.template_name} dmg ${w.damage} spd ${w.speed} acc ${w.accuracy} ${w.grade}`, 'green');
+        });
+      } catch (e) {
+        printError('list: ' + e.message);
+      }
+    } else {
+      // existing caller-own behavior untouched
+      try {
+        const data = await apiCall('GET', '/weapons');
+        if (!data.weapons || data.weapons.length === 0) {
+          appendLine('No weapons owned.', 'amber');
+          return;
+        }
+        data.weapons.forEach(w => {
+          const atkList = w.attacks.map(a => {
+            const pVar = a.prepare_time_range || 0;
+            const cVar = a.cooldown_time_range || 0;
+            const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
+            const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
+            return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
+          }).join(' ');
+          appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
+        });
+      } catch (e) {
+        printError('list: ' + e.message);
+      }
+    }
+  } else if (sub === 'potions') {
+    const username = args[1];
     try {
-      const data = await apiCall('GET', '/weapons');
-      if (!data.weapons || data.weapons.length === 0) {
-        appendLine('No weapons owned.', 'amber');
+      const url = username ? `/dev/potions?username=${encodeURIComponent(username)}` : '/dev/potions';
+      const data = await apiCall('GET', url);
+      if (!data.potions || data.potions.length === 0) {
+        appendLine('No potions.', 'amber');
         return;
       }
-      data.weapons.forEach(w => {
-        const atkList = w.attacks.map(a => {
-          const pVar = a.prepare_time_range || 0;
-          const cVar = a.cooldown_time_range || 0;
-          const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
-          const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
-          return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
-        }).join(' ');
-        appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
+      data.potions.forEach(p => {
+        appendLine(`#${p.instance_id} ${p.template_name} floor ${p.floor} window ${p.window} spd ${p.speed} ${p.grade}`, 'green');
       });
     } catch (e) {
       printError('list: ' + e.message);
@@ -1337,7 +1420,7 @@ async function cmdDevList(args) {
       printError('list: ' + e.message);
     }
   } else {
-    printError('usage: /list weapons|monsters|users');
+    printError('usage: /list weapons|monsters|users|potions [username]');
   }
 }
 
