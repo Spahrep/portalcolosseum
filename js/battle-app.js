@@ -1523,7 +1523,16 @@ async function loadBattle(runId) {
     } else {
       renderPlayerHP(run);
       // PC-72: resume — populate the full log instantly; history never re-types.
-      populateFeedInstantly(bs.feed || []);
+      // On a resume (fresh page load), renderedFeedLines is 0 and all feed
+      // lines are historical — suppress feedback. After a commit, the feed
+      // incrementally adds new lines — use renderFeed so the typewriter and
+      // hit reactions play for real combat results.
+      const feed = bs.feed || [];
+      if (renderedFeedLines === 0) {
+        populateFeedInstantly(feed);
+      } else {
+        renderFeed(feed);
+      }
     }
     renderDice(bs.dice || {});
     renderMonsters(bs.monsters || []);
