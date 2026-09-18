@@ -73,18 +73,18 @@ function renderPortals(portals) {
       </div>
       <div class="portal-costs">
         <div class="cost ap"><span>AP</span> ${p.ap_cost || 0}</div>
-        <div class="cost gold"><span>GOLD</span> ${p.unlock_gold_cost || 1000}</div>
+        ${p.is_locked ? `<div class="cost gold"><span>UNLOCK</span> ${p.unlock_gold_cost || 1000} GOLD</div>` : ''}
       </div>
       <div class="portal-status ${p.is_locked ? 'locked' : 'unlocked'}">
         ${p.is_locked ? '🔒 LOCKED' : '✅ UNLOCKED'}
       </div>
-      ${p.is_locked ? `<div class="lock-hint">Complete Portal ${p.id-1} to unlock</div>` : ''}
+      ${p.is_locked ? `<div class="lock-hint">Complete Portal ${p.id-1} first, then pay ${p.unlock_gold_cost || 1000} gold to unlock</div>` : ''}
     `;
     card.addEventListener('click', () => {
       if (!p.is_locked) {
         window.location.href = `/run-equip.html?portal_id=${p.id}`;
       } else {
-        showToast(`Complete Portal ${p.id - 1} to unlock`);
+        showToast(`Complete Portal ${p.id - 1} first, then pay ${p.unlock_gold_cost || 1000} gold to unlock`);
       }
     });
     grid.appendChild(card);

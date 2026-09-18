@@ -26,14 +26,14 @@ let currentPortal = null;
 let weaponsById = {};
 let consumablesById = {};
 
+// F/E excluded = no color badge (plain text — junk tier)
 const GRADE_COLORS = {
-  F: '#9d9d9d',
-  E: '#ffffff',
-  D: '#1eff00',
-  C: '#0070dd',
-  B: '#a335ee',
-  A: '#ff8000',
-  S: '#ffd700'
+  D: '#9d9d9d',  // gray  — below average
+  C: '#ffffff',  // white — average/baseline
+  B: '#1eff00',  // green — uncommon
+  A: '#0070dd',  // blue  — rare
+  S: '#a335ee',  // purple — top tier
+  // orange reserved for future beyond-S content
 };
 
 function getAuthToken() {
@@ -128,12 +128,18 @@ function renderBackpack() {
       nameSpan.textContent = item.name;
       if (item.grade && GRADE_COLORS[item.grade]) {
         nameSpan.style.color = GRADE_COLORS[item.grade];
-        const badge = document.createElement('span');
-        badge.textContent = item.grade;
-        badge.style.cssText = `background:${GRADE_COLORS[item.grade]};color:#000;font-size:9px;padding:0 3px;margin-right:4px;border-radius:2px;`;
-        slot.appendChild(badge);
       }
       slot.appendChild(nameSpan);
+      if (item.grade) {
+        const badge = document.createElement('span');
+        badge.textContent = item.grade;
+        if (GRADE_COLORS[item.grade]) {
+          badge.style.cssText = `background:${GRADE_COLORS[item.grade]};color:#000;font-size:9px;padding:0 3px;margin-left:4px;border-radius:2px;`;
+        } else {
+          badge.style.cssText = `color:#666;font-size:9px;margin-left:4px;`;
+        }
+        slot.appendChild(badge);
+      }
       slot.dataset.index = i;
       slot.onclick = () => selectBackpackItem(i, slot);
       slot.onmouseenter = () => onHoverItem(backpack[i], slot);
@@ -190,8 +196,12 @@ function clearHighlights() {
 
 function buildPopupHtml(item) {
   let nameHtml = item.name;
-  if (item.grade && GRADE_COLORS[item.grade]) {
-    nameHtml = `<span style='background:${GRADE_COLORS[item.grade]};color:#000;font-size:9px;padding:0 3px;margin-right:4px;border-radius:2px;'>${item.grade}</span><span style='color:${GRADE_COLORS[item.grade]}'>${item.name}</span>`;
+  if (item.grade) {
+    if (GRADE_COLORS[item.grade]) {
+      nameHtml = `<span style='color:${GRADE_COLORS[item.grade]}'>${item.name}</span> <span style='color:${GRADE_COLORS[item.grade]};font-size:11px;'>(${item.grade})</span>`;
+    } else {
+      nameHtml = `${item.name} <span style='color:#666;font-size:11px;'>(${item.grade})</span>`;
+    }
   }
   let html = `<div class="name">${nameHtml}</div>`;
   if (item.kind === 'weapon') {
@@ -380,8 +390,12 @@ function renderLoadout() {
         if (c) stats = c.description || c.effect_label || c.template_name || 'Effect';
       }
       let nameHtml = item.name;
-      if (item.grade && GRADE_COLORS[item.grade]) {
-        nameHtml = `<span style='background:${GRADE_COLORS[item.grade]};color:#000;font-size:9px;padding:0 3px;margin-right:4px;border-radius:2px;'>${item.grade}</span><span style='color:${GRADE_COLORS[item.grade]}'>${item.name}</span>`;
+      if (item.grade) {
+        if (GRADE_COLORS[item.grade]) {
+          nameHtml = `<span style='color:${GRADE_COLORS[item.grade]}'>${item.name}</span> <span style='color:${GRADE_COLORS[item.grade]};font-size:11px;'>(${item.grade})</span>`;
+        } else {
+          nameHtml = `${item.name} <span style='color:#666;font-size:11px;'>(${item.grade})</span>`;
+        }
       }
       content.innerHTML = `<span>${nameHtml}</span><span class="stats">${stats}</span>`;
       content.classList.remove('empty');

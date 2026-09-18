@@ -1073,7 +1073,9 @@ async function handle(request) {
         return json({ error: 'Internal server error' }, 500);
       }
 
-      // PC-75: player access logic — Portal 1 always accessible; N>1 requires completed_previous (portal N-1)
+      // PC-75: player access logic — Portal 1 always unlocked; N>1 requires
+      // both completed_previous (portal N-1) AND payed the gold unlock cost.
+      // Gold payment tracking not yet implemented, so N>1 always locked.
       try {
         const { data: completedRuns } = await admin.from('portal_run')
           .select('portal_template_id')
@@ -1084,7 +1086,8 @@ async function handle(request) {
           const prevId = p.id - 1;
           const hasCompletedPrev = p.id === 1 || completedIds.has(prevId);
           p.player_has_completed_previous = hasCompletedPrev;
-          p.is_locked = !hasCompletedPrev;
+          // Gold-unlock purchase not implemented — only Portal 1 is accessible
+          p.is_locked = p.id !== 1;
         }
       } catch (e) {
         console.error('completed previous check error', e);
