@@ -399,6 +399,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Attack damage multipliers are base ± range with an EVEN (uniform) spread for more variance — Heavy Chop x1.5 rolls 1.3–1.7, EV stays 1.5. Sequencing ruled same thread: "Fix the double count, then I'll do a run to make sure it is fixed, then if I report success we add the ranges" — double-count bug fixed 31430f0; verification passed (Heavy Chop = 57 = 38 × 1.5); then "Create the ticket, and have the mult adjustment be done how ever you think is best" — delegated to the builder ticket, shipped on branch wt/pc-65 (kanban done): `base_damage_multiplier_range` on the attack table (uniform ± roll, 0 = no variance), monster damage = mean ± σ via a `damage_variance` column (Box-Muller), both admin-editable with a band preview. Applied to combat-system.md + current-design-status.md.
 
+- ID: PC-DEC-048
+  Date: 2026-09-18
+  Source: Discord thread 1550484095316787241 ("During a portal run, when a monster hits a player…"), 2026-09-18
+  Speaker: Spahrep
+  Verbatim: "During a portal run, when a monster hits a player, the UI (not incluing the background just the thing sin the window for the portal; run) need to have a 'shake'. Work as designer to figure out the particulars.  Likewise when a player hits a monster, that monster needs to have a shake/flash, potentially a sprite change. We dont have sprites yet, so put that part on the to do list and complete what you can."
+  Status: DECIDED
+  Notes: Hit feedback shipped on main 986cd97 (PC-70). The FORM is Spahrep's decision (window shake on monster→player; monster shake/flash on player→monster; sprite change deferred to TODO). Amplitudes/durations are assistant-determined values per the gamedesigner persona, justified by the impact-impulse recipe (short, sharp, decaying — a jolt, not rumble): run-window contents jolt 4px/280ms (the .container only — page background and status dock stay put, per "not incluing the background"); monster card recoils 3px/220ms; sprite box white-flashes 180ms (white = universal hit-confirmed signal, not red — red stays the HP-band severity language). Values are exposed as named constants (HIT_FEEDBACK in js/battle-app.js; keyframes in run.html) for easy retuning. Feedback fires as the feed line starts typing; misses/Ready/defeat get none (feedback must not lie about impact). Intro-countdown fires shake live; the intro-snap history re-type is suppressed so old hits don't re-shake. Sprite change on hit (hit/damaged sprite variant swap at impact) = TODO, tracked in battle-status-ui.md Open/Visual Nits; no sprites yet — the white-flash already occupies the sprite box, so the swap slot is reserved.
+
  ## Open
 
 - ID: PC-DEC-004

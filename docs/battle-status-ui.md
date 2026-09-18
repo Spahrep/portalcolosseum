@@ -310,6 +310,13 @@ the core UI depends on it. (Spahrep 2026-09-08)
 - Buffs: chips on the stat block with end-tic (MVP). Buff expiry *could* be a column row
   (it IS a state change) — revisit if buffs become load-bearing.
 - Sound: subtle chime when a hand frees (PMVP — the visual beat carries MVP).
+- **Hit feedback shipped (PC-DEC-048, 2026-09-18, main 986cd97)**: monster→player hit
+  = the run-window contents jolt (`.container` — page background and status dock stay
+  put); player→monster hit = that monster's card shakes + its sprite box white-flashes.
+  Misses get none. **TODO — sprite change on hit:** swap the monster sprite to a
+  hit/damaged variant at impact once sprites exist. The white-flash already occupies
+  the sprite box (`.sprite-flash` on `.monster-sprite`), so the swap slot is reserved;
+  `js/combat/hit-feedback.js` already delivers the exact target letter + damage per hit.
 - RESOLVED (2026-09-17): attacks are **player-chosen** from the hand weapon's real attack
   list — the DW action window lists the weapon's attacks as selectable rows
   (PC-DEC-021..027; confirm-line format PC-DEC-025) and command boxes show that hand's
