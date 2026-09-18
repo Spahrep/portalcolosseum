@@ -224,6 +224,12 @@ function positionPopup(targetEl) {
   const popupW = popupEl.offsetWidth;
   const popupH = popupEl.offsetHeight;
   const GAP = 12;
+  // style.left/top are relative to the container's padding box (inset by its
+  // border), so offset the gaps by the border widths to keep the VISUAL gap
+  // at GAP on every side.
+  const contStyle = getComputedStyle(document.querySelector('.container'));
+  const borderL = parseFloat(contStyle.borderLeftWidth) || 0;
+  const borderT = parseFloat(contStyle.borderTopWidth) || 0;
   // Beside the item, a full gap clear of its right edge — never ON the item.
   // A popup over the button it describes eats the click meant for that button
   // (the old rect.left + 30 anchored to the item's LEFT edge, so the popup
@@ -234,7 +240,7 @@ function positionPopup(targetEl) {
   // Overflowing the container's right edge: flip to the item's left side,
   // again a full gap clear of the item's left edge.
   if (left + popupW > contRect.width - 8) {
-    const flipped = rect.left - contRect.left - popupW - GAP;
+    const flipped = rect.left - contRect.left - popupW - GAP - borderL;
     // Flip to the item's left side, a full gap clear of its left edge. If even
     // that doesn't fit (very narrow viewport), clamp to the backpack area's
     // left edge — never slide the popup back right over the hovered item.
@@ -242,7 +248,12 @@ function positionPopup(targetEl) {
   }
   let top = rect.top - contRect.top - 6;
   if (top < 8) top = 8;
-  if (top + popupH > contRect.height - 8) top = Math.max(8, contRect.height - popupH - 8);
+  if (top + popupH > contRect.height - 8) {
+    // Not enough room below (bottom row): flip upward, a full gap clear of the
+    // item, instead of dropping the popup over the bottom bar/ENTER button.
+    const above = rect.top - contRect.top - popupH - GAP - borderT;
+    top = above >= 8 ? above : Math.max(8, contRect.height - popupH - 8);
+  }
   popupEl.style.left = left + 'px';
   popupEl.style.top = top + 'px';
 }
