@@ -243,7 +243,10 @@ function setBusy(state) {
 const HIT_FEEDBACK = {
   WINDOW_SHAKE_MS: 280,
   CARD_SHAKE_MS: 220,
-  FLASH_MS: 180
+  FLASH_MS: 180,
+  // PC-74: harder/longer for crit juice (class restart still applies)
+  CRIT_WINDOW_SHAKE_MS: 420,
+  CRIT_FLASH_MS: 280
 };
 let windowShakeTimer = null;
 let suppressHitFeedback = false; // intro-snap re-type narrates HISTORY — only NEW hits react
@@ -286,14 +289,66 @@ function triggerMonsterHit(letter) {
   }, Math.max(HIT_FEEDBACK.CARD_SHAKE_MS, HIT_FEEDBACK.FLASH_MS)));
 }
 
+// PC-74 crit juice: harder shake on player being crit-hit, harder flash on player critting monster.
+// Uses separate classes so normal hits stay exactly as-is; restart pattern preserved.
+let critWindowShakeTimer = null;
+function triggerCritWindowShake() {
+  const el = document.querySelector('.container');
+  if (!el) return;
+  clearTimeout(critWindowShakeTimer);
+  el.classList.remove('container-crit-shake');
+  void el.offsetWidth;
+  el.classList.add('container-crit-shake');
+  critWindowShakeTimer = setTimeout(() => el.classList.remove('container-crit-shake'), HIT_FEEDBACK.CRIT_WINDOW_SHAKE_MS);
+}
+
+function triggerCritMonsterHit(letter) {
+  const card = document.querySelector(`.monster-card[data-letter="${letter}"]`);
+  if (!card) return;
+  const sprite = card.querySelector('.monster-sprite');
+  const prior = cardHitTimers.get(card);
+  if (prior) clearTimeout(prior);
+  card.classList.remove('monster-crit-hit');
+  if (sprite) sprite.classList.remove('sprite-crit-flash');
+  void card.offsetWidth;
+  if (sprite) { void sprite.offsetWidth; sprite.classList.add('sprite-crit-flash'); }
+  card.classList.add('monster-crit-hit');
+  cardHitTimers.set(card, setTimeout(() => {
+    card.classList.remove('monster-crit-hit');
+    if (sprite) sprite.classList.remove('sprite-crit-flash');
+  }, HIT_FEEDBACK.CRIT_FLASH_MS));
+}
+
+// PC-74 sprite-swap seam (sprites don't exist yet — documented hook only; future unique crit sprite swap slots in here)
+// Call setMonsterSprite(monsterId, 'crit') to mark a card for crit state (adds .crit class for CSS hook).
+// TODO: when crit sprites land, implement the 'crit' case to swap sprite.src or background.
+function setMonsterSprite(monsterId, state) {
+  // monsterId can be label or numeric id; find the card and toggle class
+  const cards = document.querySelectorAll('.monster-card');
+  for (const card of cards) {
+    if (card.dataset.id === String(monsterId) || card.dataset.letter === String(monsterId)) {
+      if (state === 'crit') card.classList.add('crit');
+      else card.classList.remove('crit');
+      return;
+    }
+  }
+}
+
 // Route engine feed lines to the right reaction. parseHitLine is the single
 // source of truth for what counts as a hit (misses/Ready/defeat → no feedback).
 function handleHitLine(line) {
   if (suppressHitFeedback) return;
-  const hit = parseHitLine(line);
+  const isCrit = typeof line === 'string' && line.includes(' CRITICAL!');
+  const cleanLine = isCrit ? line.replace(/ CRITICAL!$/, '') : line;
+  const hit = parseHitLine(cleanLine);
   if (!hit) return;
-  if (hit.type === 'monster') triggerWindowShake();
-  else triggerMonsterHit(hit.letter);
+  if (hit.type === 'monster') {
+    if (isCrit) triggerCritWindowShake();
+    else triggerWindowShake();
+  } else {
+    if (isCrit) triggerCritMonsterHit(hit.letter);
+    else triggerMonsterHit(hit.letter);
+  }
 }
 
 // Roll notice: a small toast that tells the player the draw ceremony is

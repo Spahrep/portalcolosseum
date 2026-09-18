@@ -190,7 +190,7 @@ function buildPopupHtml(item) {
     const w = weaponsById[item.id];
     if (w) {
       html += `<div class="type">WEAPON</div>`;
-      html += `<div class="stat-line">DMG ${w.damage ?? '??'} · SPD ${w.speed ?? '??'} · ACC ${w.accuracy ?? '??'}</div>`;
+      html += `<div class="stat-line">DMG ${w.damage ?? '??'} · SPD ${w.speed ?? '??'} · ACC ${w.accuracy ?? '??'} · CRIT ${w.crit_chance ?? 5}%</div>`;
       if (w.attacks && w.attacks.length) {
         const rows = w.attacks.map(a => {
           const bits = [];
@@ -198,6 +198,7 @@ function buildPopupHtml(item) {
           if (a.prepare_time != null) bits.push(`cast ${a.prepare_time}`);
           if (a.cooldown_time != null) bits.push(`cd ${a.cooldown_time}`);
           if (a.is_multi_target) bits.push('multi-target');
+          bits.push(`CRIT ${Math.round((w.crit_chance ?? 5) * (a.crit_factor ?? 1))}% ×${a.crit_multiplier ?? 2}`);
           let row = `<div class="attack-row"><strong>${a.name}</strong>`;
           if (bits.length) row += ` <span style="color:#88aaff;">${bits.join(' · ')}</span>`;
           if (a.description) row += `<div style="color:#7a8ca6;margin-top:2px;">${a.description}</div>`;

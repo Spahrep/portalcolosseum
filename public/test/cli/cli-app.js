@@ -508,7 +508,7 @@ function printStateFromRun(run) {
   for (const [hand, key] of [['LH', 'hand_l'], ['RH', 'hand_r'], ['BL', 'belt']]) {
     const w = weapons[key];
     if (w) {
-      lines.push(`${hand} #${w.id} ${w.name} dmg=${w.damage} spd=${w.speed} acc=${w.accuracy}`);
+      lines.push(`${hand} #${w.id} ${w.name} dmg=${w.damage} spd=${w.speed} acc=${w.accuracy} crit=${w.crit_chance ?? 5}`);
       lines.push(`    attacks: ${fmtAttacks(w.attacks)}`);
     } else {
       lines.push(`${hand} — no weapon`);
@@ -573,8 +573,8 @@ async function cmdHelp() {
       '  /give weapon <user> <template_id> [count] — roll+grant weapons to a player',
       '  /give sss <user>                    — grant starter SSS (idempotent)',
       '  /list users                         — list accounts for targeting',
-      '  /set weapon <id> [dmg N] [spd N] [acc N] — overwrite any weapon instance stats (grade recomputed)',
-      '  /set potion <id> [floor N] [window N] [spd N] — overwrite any potion instance stats (grade recomputed)',
+      '  /set weapon <id> [dmg N] [spd N] [acc N] [crit N] — overwrite any weapon instance stats (grade recomputed)',
+      '  /set potion <id> [floor N] [window N] [spd N] [crit N] — overwrite any potion instance stats (grade recomputed)',
       '  /list weapons|potions [username]  — list instances (admin: any user, or all)'
     ], 'dim');
   }
@@ -976,7 +976,7 @@ async function cmdInventory() {
           const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
           return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
         }).join(' ');
-        appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
+        appendLine(`#${w.id} ${w.name} dmg=${w.damage} crit=${w.crit_chance ?? 5}  attacks: ${atkList || 'none'}`, 'green');
       });
     }
 
@@ -1252,21 +1252,22 @@ async function cmdDevSet(args) {
   if (sub === 'weapon') {
     const instance_id = parseInt(args[1], 10);
     const flags = args.slice(2);
-    let damage, speed, accuracy;
+    let damage, speed, accuracy, crit;
     for (let i = 0; i < flags.length; i += 2) {
       const k = flags[i];
       const v = parseInt(flags[i + 1], 10);
       if (k === 'dmg' || k === 'damage') damage = v;
       else if (k === 'spd' || k === 'speed') speed = v;
       else if (k === 'acc' || k === 'accuracy') accuracy = v;
+      else if (k === 'crit') crit = v;
     }
-    if (isNaN(instance_id) || instance_id <= 0 || (!damage && !speed && !accuracy) || [damage, speed, accuracy].some(v => v !== undefined && (isNaN(v) || v < 1))) {
-      printError('usage: /set weapon <instance_id> [dmg N] [spd N] [acc N]');
+    if (isNaN(instance_id) || instance_id <= 0 || (!damage && !speed && !accuracy && crit === undefined) || [damage, speed, accuracy].some(v => v !== undefined && (isNaN(v) || v < 1)) || (crit !== undefined && (isNaN(crit) || crit < 0))) {
+      printError('usage: /set weapon <instance_id> [dmg N] [spd N] [acc N] [crit N]');
       return;
     }
     try {
-      const data = await apiCall('POST', '/dev/set-weapon-stats', { instance_id, damage, speed, accuracy });
-      printGreen(`#${data.instance_id} ${data.template_name}: dmg ${data.damage} spd ${data.speed} acc ${data.accuracy} ${data.grade}`);
+      const data = await apiCall('POST', '/dev/set-weapon-stats', { instance_id, damage, speed, accuracy, crit });
+      printGreen(`#${data.instance_id} ${data.template_name}: dmg ${data.damage} spd ${data.speed} acc ${data.accuracy} crit ${data.crit_chance ?? 0} ${data.grade}`);
     } catch (e) {
       printError('set: ' + e.message);
     }
@@ -1275,21 +1276,22 @@ async function cmdDevSet(args) {
   if (sub === 'potion') {
     const instance_id = parseInt(args[1], 10);
     const flags = args.slice(2);
-    let floor, window, speed;
+    let floor, window, speed, crit;
     for (let i = 0; i < flags.length; i += 2) {
       const k = flags[i];
       const v = parseInt(flags[i + 1], 10);
       if (k === 'floor') floor = v;
       else if (k === 'window') window = v;
       else if (k === 'spd' || k === 'speed') speed = v;
+      else if (k === 'crit') crit = v;
     }
-    if (isNaN(instance_id) || instance_id <= 0 || (!floor && !window && !speed) || [floor, window, speed].some(v => v !== undefined && (isNaN(v) || v < 1))) {
-      printError('usage: /set potion <instance_id> [floor N] [window N] [spd N]');
+    if (isNaN(instance_id) || instance_id <= 0 || (!floor && !window && !speed && crit === undefined) || [floor, window, speed].some(v => v !== undefined && (isNaN(v) || v < 1)) || (crit !== undefined && (isNaN(crit) || crit < 0))) {
+      printError('usage: /set potion <instance_id> [floor N] [window N] [spd N] [crit N]');
       return;
     }
     try {
-      const data = await apiCall('POST', '/dev/set-consumable-stats', { instance_id, floor, window, speed });
-      printGreen(`#${data.instance_id} ${data.template_name}: floor ${data.floor} window ${data.window} spd ${data.speed} ${data.grade}`);
+      const data = await apiCall('POST', '/dev/set-consumable-stats', { instance_id, floor, window, speed, crit });
+      printGreen(`#${data.instance_id} ${data.template_name}: floor ${data.floor} window ${data.window} spd ${data.speed} crit ${data.crit_chance ?? 0} ${data.grade}`);
     } catch (e) {
       printError('set: ' + e.message);
     }
@@ -1348,7 +1350,7 @@ async function cmdDevList(args) {
           return;
         }
         data.weapons.forEach(w => {
-          appendLine(`#${w.instance_id} ${w.template_name} dmg ${w.damage} spd ${w.speed} acc ${w.accuracy} ${w.grade}`, 'green');
+          appendLine(`#${w.instance_id} ${w.template_name} dmg ${w.damage} spd ${w.speed} acc ${w.accuracy} crit ${w.crit_chance ?? 5} ${w.grade}`, 'green');
         });
       } catch (e) {
         printError('list: ' + e.message);
@@ -1369,7 +1371,7 @@ async function cmdDevList(args) {
             const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
             return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
           }).join(' ');
-          appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
+          appendLine(`#${w.id} ${w.name} dmg=${w.damage} crit=${w.crit_chance ?? 5}  attacks: ${atkList || 'none'}`, 'green');
         });
       } catch (e) {
         printError('list: ' + e.message);
@@ -1384,8 +1386,9 @@ async function cmdDevList(args) {
         appendLine('No potions.', 'amber');
         return;
       }
-      data.potions.forEach(p => {
+data.potions.forEach(p => {
         appendLine(`#${p.instance_id} ${p.template_name} floor ${p.floor} window ${p.window} spd ${p.speed} ${p.grade}`, 'green');
+      });
       });
     } catch (e) {
       printError('list: ' + e.message);
