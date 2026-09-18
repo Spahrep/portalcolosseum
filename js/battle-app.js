@@ -1538,6 +1538,11 @@ async function loadBattle(runId) {
       // during the ceremony (dice → populate monsters → action queue). Feed
       // renders only after the ceremony finishes (see finishBattleIntro).
       renderPlayerHP({ player_hp: bs.intro.hpStart });
+      // Explicitly clear the message box so no old text bleeds through
+      // the ceremony overlay notices.
+      const msgBox = document.getElementById('message-box');
+      if (msgBox) { msgBox.innerHTML = ''; }
+      renderedFeedLines = 0;
     } else {
       renderPlayerHP(run);
       // PC-72: resume — populate the full log instantly; history never re-types.
