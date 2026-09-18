@@ -508,7 +508,7 @@ function printStateFromRun(run) {
   for (const [hand, key] of [['LH', 'hand_l'], ['RH', 'hand_r'], ['BL', 'belt']]) {
     const w = weapons[key];
     if (w) {
-      lines.push(`${hand} #${w.id} ${w.name} dmg=${w.damage} spd=${w.speed} acc=${w.accuracy}`);
+      lines.push(`${hand} #${w.id} ${w.name} dmg=${w.damage} spd=${w.speed} acc=${w.accuracy} crit=${w.crit_chance ?? 5}`);
       lines.push(`    attacks: ${fmtAttacks(w.attacks)}`);
     } else {
       lines.push(`${hand} — no weapon`);
@@ -973,7 +973,7 @@ async function cmdInventory() {
           const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
           return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
         }).join(' ');
-        appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
+        appendLine(`#${w.id} ${w.name} dmg=${w.damage} crit=${w.crit_chance ?? 5}  attacks: ${atkList || 'none'}`, 'green');
       });
     }
 
@@ -1302,7 +1302,7 @@ async function cmdDevList(args) {
           const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
           return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
         }).join(' ');
-        appendLine(`#${w.id} ${w.name} dmg=${w.damage}  attacks: ${atkList || 'none'}`, 'green');
+        appendLine(`#${w.id} ${w.name} dmg=${w.damage} crit=${w.crit_chance ?? 5}  attacks: ${atkList || 'none'}`, 'green');
       });
     } catch (e) {
       printError('list: ' + e.message);

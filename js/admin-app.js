@@ -242,6 +242,8 @@ function showAttackForm(id = null) {
       <div class="form-group"><label>Cooldown Time</label><input id="f-cooldown_time" type="number" value="${attack.cooldown_time ?? 10}"></div>
       <div class="form-group"><label><input id="f-is_multi_target" type="checkbox" ${attack.is_multi_target ? 'checked' : ''}> Multi Target</label></div>
       <div class="form-group"><label>Weight</label><input id="f-weight" type="number" step="0.1" value="${attack.weight ?? 1.0}"></div>
+      <div class="form-group"><label>Crit Factor (× chance)</label><input id="f-crit_factor" type="number" step="0.1" value="${attack.crit_factor ?? 1.0}"></div>
+      <div class="form-group"><label>Crit Multiplier (× dmg)</label><input id="f-crit_multiplier" type="number" step="0.1" value="${attack.crit_multiplier ?? 2.0}"></div>
       <button class="btn" id="save-attack-btn">${isEdit ? 'Update' : 'Create'}</button>
       <button class="btn btn-secondary" id="cancel-attack-btn">Cancel</button>
     </div>
@@ -257,6 +259,8 @@ function showAttackForm(id = null) {
       cooldown_time: parseInt(val('f-cooldown_time')),
       is_multi_target: document.getElementById('f-is_multi_target').checked,
       weight: parseFloat(val('f-weight')),
+      crit_factor: parseFloat(val('f-crit_factor')),
+      crit_multiplier: parseFloat(val('f-crit_multiplier')),
     };
     try {
       if (isEdit) {
@@ -297,7 +301,7 @@ async function renderWeaponTemplates(container) {
     <div id="wt-form-container"></div>
     <div id="wt-mapping-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Dmg (base ± range)</th><th>Speed (base ± range)</th><th>Accuracy (base ± range)</th><th>Slot 0 Attack</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Dmg (base ± range)</th><th>Speed (base ± range)</th><th>Accuracy (base ± range)</th><th>Crit (base ± range)</th><th>Slot 0 Attack</th><th>Actions</th></tr></thead>
       <tbody id="wt-tbody"></tbody>
     </table>
   `;
@@ -313,6 +317,7 @@ async function renderWeaponTemplates(container) {
       <td>${t.base_damage} ± ${t.damage_range}</td>
       <td>${t.base_speed} ± ${t.speed_range}</td>
       <td>${t.base_accuracy} ± ${t.accuracy_range}</td>
+      <td>${t.crit_base ?? 5} ± ${t.crit_range ?? 0}</td>
       <td>${t.slot_0_attack?.name ? esc(t.slot_0_attack.name) : '<span class="muted">—</span>'}</td>
       <td>
         <button class="btn" data-edit="${t.id}">Edit</button>
@@ -351,6 +356,8 @@ function showWeaponTemplateForm(id = null) {
         <div class="form-group"><label>Speed Range</label><input id="wt-speed_range" type="number" value="${t.speed_range ?? 0}"></div>
         <div class="form-group"><label>Base Accuracy</label><input id="wt-base_accuracy" type="number" value="${t.base_accuracy ?? ''}"></div>
         <div class="form-group"><label>Accuracy Range</label><input id="wt-accuracy_range" type="number" value="${t.accuracy_range ?? 0}"></div>
+        <div class="form-group"><label>Base Crit %</label><input id="wt-crit_base" type="number" value="${t.crit_base ?? 5}"></div>
+        <div class="form-group"><label>Crit Range</label><input id="wt-crit_range" type="number" value="${t.crit_range ?? 0}"></div>
         <div class="form-group">
           <label>Slot 0 Attack (default)</label>
           <select id="wt-slot_0_attack_id">
@@ -376,6 +383,8 @@ function showWeaponTemplateForm(id = null) {
         speed_range: parseInt(val('wt-speed_range')),
         base_accuracy: parseInt(val('wt-base_accuracy')),
         accuracy_range: parseInt(val('wt-accuracy_range')),
+        crit_base: parseInt(val('wt-crit_base')),
+        crit_range: parseInt(val('wt-crit_range')),
         slot_0_attack_id: parseInt(val('wt-slot_0_attack_id')),
         slot_1_chance: parseFloat(val('wt-slot_1_chance')),
         slot_2_chance: parseFloat(val('wt-slot_2_chance')),
