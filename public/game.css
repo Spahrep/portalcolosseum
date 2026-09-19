@@ -56,7 +56,7 @@ body.game-page {
 .location-marker {
   position: absolute;
   font-family: 'Pixeloid Mono', 'Courier New', monospace;
-  font-size: clamp(14px, 2.5vw, 28px);
+  font-size: clamp(16px, 2.5vw, 28px);
   font-weight: 700;
   white-space: nowrap;
   color: #f8f8f0;
@@ -236,7 +236,7 @@ body.game-page {
   top: 50%;
   transform: translate(-50%, -50%);
   font-family: 'Pixeloid Mono', 'Courier New', monospace;
-  font-size: clamp(14px, 2.5vw, 26px);
+  font-size: clamp(16px, 2.5vw, 26px);
   font-weight: 700;
   letter-spacing: 1px;
   color: #fff;
@@ -284,7 +284,7 @@ body.game-page {
 }
 .settings-label {
   font-family: 'Pixeloid Mono', 'Courier New', monospace;
-  font-size: 13px;
+  font-size: 14px;
   color: #88aaff;
   white-space: nowrap;
   flex-shrink: 0;
@@ -298,7 +298,7 @@ body.game-page {
   color: #88aaff;
   border: 2px solid #334466;
   font-family: 'Pixeloid Mono', 'Courier New', monospace;
-  font-size: 11px;
+  font-size: 13px;
   padding: 6px 12px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -335,7 +335,7 @@ body.game-page {
   color: #ff6666;
   border: 2px solid #5c1a1a;
   font-family: 'Pixeloid Mono', 'Courier New', monospace;
-  font-size: 12px;
+  font-size: 13px;
   padding: 6px 20px;
   cursor: pointer;
   transition: all 0.15s ease;
@@ -382,7 +382,7 @@ body.game-page {
 }
 .logout-confirm-actions button {
   font-family: 'Pixeloid Mono', 'Courier New', monospace;
-  font-size: 12px;
+  font-size: 13px;
   padding: 6px 20px;
   cursor: pointer;
   letter-spacing: 0.5px;
@@ -408,7 +408,7 @@ body.game-page {
 }
 
 /* AP & Gold bottom dock (PC-52) — placeholder values, backend hookup later */
-.status-dock { position:fixed; bottom:0; left:0; right:0; height:30px; background:rgba(10,26,46,0.7); border-top:2px solid #4a90d9; display:flex; align-items:center; justify-content:space-between; padding:0 16px; font-size:11px; z-index:100; font-family:'Pixeloid Mono','Courier New',monospace; }
+.status-dock { position:fixed; bottom:0; left:0; right:0; height:30px; background:rgba(10,26,46,0.7); border-top:2px solid #4a90d9; display:flex; align-items:center; justify-content:space-between; padding:0 16px; font-size:13px; z-index:100; font-family:'Pixeloid Mono','Courier New',monospace; }
 .dock-left { color:#ffcc66; }
 .dock-center { color:#66ccff; display:flex; align-items:center; gap:6px; }
 .dock-right { color:#ffcc66; }
