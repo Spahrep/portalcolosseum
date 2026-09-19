@@ -1389,7 +1389,6 @@ async function cmdDevList(args) {
 data.potions.forEach(p => {
         appendLine(`#${p.instance_id} ${p.template_name} floor ${p.floor} window ${p.window} spd ${p.speed} ${p.grade}`, 'green');
       });
-      });
     } catch (e) {
       printError('list: ' + e.message);
     }
