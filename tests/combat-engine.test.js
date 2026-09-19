@@ -405,46 +405,46 @@ describe('PC-56 timing markers (computeTimingMarkers)', () => {
   const mk = (tics) => tics.map((t, i) => ({ id: `r${i}`, tics: t }));
 
   it('empty queue returns []', () => {
-    assert.deepEqual(computeTimingMarkers([], { prepare_time: 3, prepare_time_range: 2 }), []);
+    assert.strictEqual(computeTimingMarkers([], { prepare_time: 3, prepare_time_range: 2 }), null);
   });
 
-  it('nothing strictly inside -> single marker on first row at/after maxT', () => {
-    const q = mk([1, 2, 5, 6]); // minT=3, maxT=5; nothing strictly inside (3<t<5)
+  it('nothing strictly inside -> bar on first row at/after maxT', () => {
+    const q = mk([1, 2, 5, 6]); // minT=3, maxT=5; tics=5 is inside (inclusive)
     const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
-    assert.deepEqual(res, [{ id: 'r2', marker: '>' }]);
+    assert.deepEqual(res, { kind: 'bar', firstId: 'r2', lastId: 'r2', minT: 3, maxT: 5, hasInside: true });
   });
 
-  it('row strictly inside -> bounding pair (last before minT, first after maxT)', () => {
+  it('row strictly inside -> bar spans the inside row', () => {
     const q = mk([1, 2, 4, 6]); // tics=4 strictly inside (3<4<5)
     const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
-    assert.deepEqual(res, [{ id: 'r1', marker: '>' }, { id: 'r3', marker: '>' }]);
+    assert.deepEqual(res, { kind: 'bar', firstId: 'r2', lastId: 'r2', minT: 3, maxT: 5, hasInside: true });
   });
 
-  it('boundary tics exactly at minT/maxT are NOT strictly inside -> single marker', () => {
-    const q = mk([3, 5]); // tics==3 (minT) and tics==5 (maxT) are boundaries, not inside
+  it('boundary tics exactly at minT/maxT are inside (inclusive) -> bar spans boundaries', () => {
+    const q = mk([3, 5]); // tics==3 (minT) and tics==5 (maxT) both >= minT and <= maxT
     const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
-    assert.deepEqual(res, [{ id: 'r1', marker: '>' }]);
+    assert.deepEqual(res, { kind: 'bar', firstId: 'r0', lastId: 'r1', minT: 3, maxT: 5, hasInside: true });
   });
 
-  it('all rows strictly inside -> pair brackets them (last before, first after)', () => {
+  it('all rows strictly inside -> bar spans the innermost pair', () => {
     const q = mk([0, 3.5, 4, 9]);
     const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
-    assert.deepEqual(res, [{ id: 'r0', marker: '>' }, { id: 'r3', marker: '>' }]);
+    assert.deepEqual(res, { kind: 'bar', firstId: 'r1', lastId: 'r2', minT: 3, maxT: 5, hasInside: true });
   });
 
-  it('no row at/after maxT and nothing inside -> []', () => {
+  it('no row at/after maxT and nothing inside -> bar in gap (hasInside=false)', () => {
     const q = mk([1, 2]); // maxT=5, nothing >= 5
     const res = computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 });
-    assert.deepEqual(res, []);
+    assert.deepEqual(res, { kind: 'bar', firstId: 'r1', lastId: 'r1', minT: 3, maxT: 5, hasInside: false });
   });
 
   it('weaponSpeed is added to the window (total = weapon speed + attack prepare)', () => {
-    const q = mk([5, 6]); // spd 0: window 3..5, tics=5 is maxT boundary -> single marker
-    assert.deepEqual(computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 }), [{ id: 'r0', marker: '>' }]);
-    // same attack, weapon speed 4: window 7..9, nothing >= 9 -> []
-    assert.deepEqual(computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 }, 4), []);
-    // same attack, weapon speed 1: window 4..6, tics=5 strictly inside; no row < 4 or > 6 to bound -> []
-    assert.deepEqual(computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 }, 1), []);
+    const q = mk([5, 6]); // spd 0: window 3..5, tics=5 inside -> bar
+    assert.deepEqual(computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 }), { kind: 'bar', firstId: 'r0', lastId: 'r0', minT: 3, maxT: 5, hasInside: true });
+    // same attack, weapon speed 4: window 7..9, nothing >= 7 -> gap bar
+    assert.deepEqual(computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 }, 4), { kind: 'bar', firstId: 'r1', lastId: 'r1', minT: 7, maxT: 9, hasInside: false });
+    // same attack, weapon speed 1: window 4..6, tics=5 (r0) and tics=6 (r1) both inside -> bar spans both
+    assert.deepEqual(computeTimingMarkers(q, { prepare_time: 3, prepare_time_range: 2 }, 1), { kind: 'bar', firstId: 'r0', lastId: 'r1', minT: 4, maxT: 6, hasInside: true });
   });
 });
 
