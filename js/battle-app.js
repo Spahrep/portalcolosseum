@@ -637,6 +637,12 @@ function renderMonsters(monsters) {
   });
   const list = monsters || [];
   if (list.length === 0) {
+    // No monsters in the new state — sweep any lingering death cards.
+    for (const entry of deathCards.values()) {
+      if (entry.timer) clearTimeout(entry.timer);
+      entry.el.remove();
+    }
+    deathCards.clear();
     appendNoMonsters(container);
     return;
   }
@@ -664,7 +670,8 @@ function renderMonsters(monsters) {
       container.appendChild(buildMonsterCard(m, false));
     }
   }
-  if (!list.some(m => !m.dead) && deathCards.size === 0) appendNoMonsters(container);
+  // "All dead with no death cards" edges into the fresh-battle clear above.
+  // finishDeath adds the placeholder when the last animation completes.
 }
 
 function buildMonsterCard(m, dying) {
@@ -709,16 +716,21 @@ function appendNoMonsters(container) {
 
 function finishDeath(key) {
   const entry = deathCards.get(key);
-  if (!entry) return; // animationend + timeout race — first caller wins
+  if (!entry || entry.finished) return; // first caller wins
   if (entry.timer) {
     clearTimeout(entry.timer);
     entry.timer = null;
   }
-  deathCards.delete(key);
-  entry.el.remove();
+  entry.finished = true;
+  // Keep the card in the DOM (invisible from animation-fill-mode: forwards).
+  // Do NOT delete from deathCards or remove the element — the engine keeps
+  // dead:true in its list, and renderMonsters' selective removal skips
+  // .monster-dying cards, so the death animation runs exactly once.
   // Last monster fell — restore the empty-arena placeholder.
   const container = document.getElementById('monsters');
-  if (container && container.children.length === 0) appendNoMonsters(container);
+  if (container && !Array.from(container.children).some(c =>
+    !c.classList.contains('monster-dying')
+  )) appendNoMonsters(container);
 }
 // While the roll plays, monster cards render invisible (laid out, opacity 0)
 // and materialize one at a time once the roll completes.
