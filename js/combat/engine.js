@@ -27,7 +27,6 @@ export function createEngine(rng = Math.random) {
 
   function log(msg) {
     state.feed.push(`tic ${state.tic} — ${msg}`);
-    if (state.feed.length > 10) state.feed.shift();
   }
 
   // PC-72: potion crit. Rolled ONLY when crit_chance > 0 so legacy potions and

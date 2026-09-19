@@ -784,7 +784,24 @@ function renderFeed(feed) {
   }
   // incremental: only type NEW lines (diff by feed count, not box children —
   // the box also holds panel/system lines that must not shift the feed diff)
-  if (currentLines.length <= renderedFeedLines) return;
+  if (currentLines.length <= renderedFeedLines) {
+    // Feed cap collision: engine once capped at 10 lines, so feed content can
+    // shift at the same length. Detect by comparing last lines — if different,
+    // reset and re-render the full feed.
+    if (currentLines.length > 0 && currentLines.length === renderedFeedLines) {
+      const lastShown = box.querySelector('.msg-line:last-child');
+      const lastFeed = currentLines[currentLines.length - 1];
+      if (!lastShown || lastShown.textContent !== lastFeed) {
+        // content shifted — clear and re-display everything
+        renderedFeedLines = 0;
+        // fall through to render all lines below
+      } else {
+        return; // genuinely nothing new
+      }
+    } else {
+      return;
+    }
+  }
   const newLines = currentLines.slice(renderedFeedLines);
   const preset = getBattleTextPreset();
   if (preset.charMs === 0) {
