@@ -193,7 +193,7 @@ async function renderAttacks(container) {
     <button class="btn" id="create-attack-btn">+ Create New Attack</button>
     <div id="attack-form-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Dmg Mult</th><th>Mult Rng</th><th>Prep</th><th>Prep Rng</th><th>CD</th><th>CD Rng</th><th>Multi?</th><th>Weight</th><th>Crit Factor</th><th>Crit ×</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Dmg Mult</th><th>Mult Range</th><th>Prep</th><th>Prep Range</th><th>CD</th><th>CD Range</th><th>Multi?</th><th>Weight</th><th>Crit Factor</th><th>Crit Mult</th><th>Actions</th></tr></thead>
       <tbody id="attacks-tbody"></tbody>
     </table>
   `;
