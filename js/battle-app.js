@@ -311,7 +311,7 @@ function triggerWindowShake() {
 
 function triggerMonsterHit(letter) {
   const card = document.querySelector(`.monster-card[data-letter="${letter}"]`);
-  if (!card) return;
+  if (!card || card.classList.contains('monster-dying')) return;
   const sprite = card.querySelector('.monster-sprite');
   const prior = cardHitTimers.get(card);
   if (prior) clearTimeout(prior);
@@ -341,7 +341,7 @@ function triggerCritWindowShake() {
 
 function triggerCritMonsterHit(letter) {
   const card = document.querySelector(`.monster-card[data-letter="${letter}"]`);
-  if (!card) return;
+  if (!card || card.classList.contains('monster-dying')) return;
   const sprite = card.querySelector('.monster-sprite');
   const prior = cardHitTimers.get(card);
   if (prior) clearTimeout(prior);
@@ -630,7 +630,11 @@ function renderMonsters(monsters) {
     }
     deathCards.clear();
   }
-  container.innerHTML = '';
+  // Remove only living monster cards — death cards stay in-place so their
+  // CSS animation (monster-death) never restarts from DOM re-insertion.
+  Array.from(container.children).forEach(child => {
+    if (!child.classList.contains('monster-dying')) child.remove();
+  });
   const list = monsters || [];
   if (list.length === 0) {
     appendNoMonsters(container);
@@ -643,7 +647,7 @@ function renderMonsters(monsters) {
       const key = m.id != null ? m.id : m.label;
       const existing = deathCards.get(key);
       if (existing) {
-        container.appendChild(existing.el); // still animating — don't restart it
+        // already in the DOM from selective removal — no re-append needed
         continue;
       }
       const card = buildMonsterCard(m, true);
