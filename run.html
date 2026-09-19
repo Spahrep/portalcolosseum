@@ -307,31 +307,15 @@
       overflow: hidden;
     }
 
-    /* ---- Enter animation ---- */
-    @keyframes queue-enter {
-      0%   { opacity: 0; transform: translateX(10px); }
-      100% { opacity: 1; transform: translateX(0); }
+    /* ---- Grow-in animation (PC-DEC-045) — new row expands from a seed at its queue position ---- */
+    @keyframes queue-grow-in {
+      0%   { opacity: 0; transform: scaleY(0.1) scaleX(0.4); background: rgba(255, 140, 26, 0.25); }
+      40%  { opacity: 0.8; transform: scaleY(0.7) scaleX(0.8); background: rgba(255, 140, 26, 0.08); }
+      70%  { opacity: 1; transform: scaleY(1.08) scaleX(1.02); }
+      100% { opacity: 1; transform: scaleY(1) scaleX(1); background: transparent; }
     }
     .queue-row-enter {
-      animation: queue-enter 0.3s ease-out;
-    }
-
-    /* ---- Attack fly label (confirm → queue swoosh) ---- */
-    .attack-fly-label {
-      position: fixed;
-      z-index: 9999;
-      background: #000;
-      border: 2px solid #ff8c1a;
-      color: #ff9a3c;
-      font-family: 'Pixeloid Mono', 'Courier New', monospace;
-      font-size: 13px;
-      padding: 4px 12px;
-      border-radius: 2px;
-      white-space: nowrap;
-      pointer-events: none;
-      box-shadow: 4px 4px 0 rgba(0,0,0,0.6);
-      opacity: 1;
-      transition: all 380ms cubic-bezier(0.22, 0.61, 0.36, 1);
+      animation: queue-grow-in 0.7s ease-out;
     }
     @keyframes queue-arrive-glow {
       0%   { box-shadow: 0 0 0 0 rgba(255, 204, 102, 0.6); }

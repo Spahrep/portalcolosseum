@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Option A — LH Expand</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, monospace;
+    background: #0d0f1a;
+    color: #c0c8d8;
+    display: flex; justify-content: center; align-items: center;
+    min-height: 100vh; padding: 10px;
+  }
+  .container { width: 620px; }
+
+  h2 { color: #7a9acc; font-size: 14px; margin-bottom: 4px; }
+  .subtitle { color: #5a7a9a; font-size: 11px; margin-bottom: 10px; }
+
+  .frame-block { margin-bottom: 16px; }
+  .frame-label {
+    color: #7a8aaa; font-size: 10px; text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .frame {
+    border: 1px solid #3a4a6a; background: #0d0f1a;
+  }
+
+  /* Header */
+  .hdr { display: flex; justify-content: space-between; padding: 5px 8px; border-bottom: 1px solid #2a3a5a; background: #11142a; font-size: 10px; }
+  .hdr-left { color: #7a9acc; }
+  .hdr-dice { color: #5a7a9a; }
+
+  /* 3-column middle */
+  .mid { display: grid; grid-template-columns: 1fr 1.3fr 1.3fr; border-bottom: 1px solid #2a3a5a; min-height: 120px; }
+  .col { padding: 6px 8px; border-right: 1px solid #2a3a5a; font-size: 10px; }
+  .col:last-child { border-right: none; }
+  .col-label { color: #5a7a9a; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+  .stat { margin: 2px 0; }
+  .stat .l { color: #7a8aaa; }
+  .mc { border: 1px solid #3a4a6a; padding: 4px 6px; margin-bottom: 3px; background: #12152a; display: flex; justify-content: space-between; font-size: 10px; }
+  .mc .hp { color: #8aaa7a; }
+  .aq { font-size: 10px; padding: 2px 0; border-bottom: 1px solid #1a2a3a; display: flex; justify-content: space-between; }
+
+  /* Message log */
+  .ml { padding: 5px 8px; border-bottom: 1px solid #2a3a5a; min-height: 30px; font-size: 10px; }
+  .ml .l { color: #5a7a9a; text-transform: uppercase; letter-spacing: 1px; }
+
+  /* Bottom band */
+  .btm { display: flex; min-height: 140px; }
+
+  /* LH panel common */
+  .lh { width: 270px; border: 1px solid #b87a3a; margin: 5px; background: #14182e; display: flex; flex-direction: column; }
+  .lh .tab { background: #b87a3a; color: #0d0f1a; font-size: 9px; font-weight: bold; padding: 2px 8px; display: inline-block; text-transform: uppercase; align-self: flex-start; }
+  .lh .items { padding: 5px 8px; font-size: 10px; }
+  .lh .items .it { padding: 2px 0; border-bottom: 1px solid #1e2a3e; }
+  .lh .items .sl { color: #7a8aaa; }
+  .lh .items .eq { color: #8aca6a; }
+
+  /* Dead art */
+  .dead { flex: 1; display: flex; align-items: center; justify-content: center; }
+  .dead span { color: #3a4a5a; font-size: 9px; font-style: italic; }
+
+  /* Attack detail section */
+  .lh .det { border-top: 1px solid #2a3a5a; padding: 6px 8px; background: #0f1124; font-size: 10px; }
+  .lh .det .tr { display: flex; justify-content: space-between; color: #8aaa7a; font-weight: bold; font-size: 11px; margin-bottom: 3px; }
+  .lh .det .tr .db { color: #5a8a4a; font-size: 9px; background: #1a2a1a; padding: 1px 4px; border: 1px solid #3a5a3a; border-radius: 2px; }
+  .lh .det .dr { display: flex; justify-content: space-between; margin: 2px 0; }
+  .lh .det .dl { color: #7a8aaa; }
+  .lh .det .dv { color: #d0d8e8; }
+  .lh .det .dv.g { color: #8aca6a; }
+  .lh .det .sp { color: #caba5a; font-style: italic; margin-top: 2px; }
+
+  /* Status panel (Option A) */
+  .status { flex: 1; padding: 5px; }
+  .status .sh { color: #5a7a9a; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 3px; }
+  .status .br { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 6px; }
+  .status .bp { background: #1a2240; border: 1px solid #3a4a6a; border-radius: 8px; padding: 1px 6px; font-size: 9px; color: #b0c0d8; }
+  .status .bp.on { border-color: #5a8a4a; color: #8aca6a; }
+  .status .pk { border: 1px solid #3a4a6a; padding: 5px; background: #12152a; font-size: 9px; }
+  .status .pk .pw { margin: 1px 0; display: flex; justify-content: space-between; }
+
+  /* Active highlight */
+  .active { background: #1a2240; border-left: 2px solid #8aca6a; padding-left: 5px; }
+
+  /* Highlights */
+  .hl-green { color: #8aca6a; }
+
+  .arrow { text-align: center; color: #5a7a9a; font-size: 16px; padding: 4px 0; }
+
+  .cards { display: flex; gap: 10px; margin-top: 8px; }
+  .card { flex: 1; background: #14182e; border: 1px solid #2a3a5a; padding: 8px; font-size: 10px; }
+  .card h3 { color: #b8c8e8; font-size: 11px; margin-bottom: 3px; }
+  .card ul { list-style: none; }
+  .card li { margin: 2px 0; padding-left: 8px; position: relative; }
+  .card li::before { content: "→"; position: absolute; left: 0; color: #5a7a9a; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h2>Option A — Expanded LH Panel</h2>
+<p class="subtitle">LH panel doubles. Attack detail lives in the lower half of the same box, near the attack list.</p>
+
+<!-- BEFORE -->
+<div class="frame-block">
+  <div class="frame-label">● Before (current)</div>
+  <div class="frame">
+    <div class="hdr"><span class="hdr-left">PORTAL · RUN 107</span><span class="hdr-dice">●●●●●●●●●●</span></div>
+    <div class="mid">
+      <div class="col"><div class="col-label">Player</div><div class="stat"><span class="l">HP:</span> 756</div><div class="stat"><span class="l">LH:</span> SSS</div><div class="stat"><span class="l">RH:</span> Wristblade</div></div>
+      <div class="col"><div class="col-label">Monsters</div><div class="mc"><span>Wolf</span><span class="hp">Injured</span></div><div class="mc"><span>Giant Rat</span><span class="hp">Injured</span></div><div class="mc"><span>Imp</span><span class="hp">Injured</span></div></div>
+      <div class="col"><div class="col-label">Queue</div><div class="aq"><span>A Attack</span><span>2</span></div><div class="aq"><span>C Attack</span><span>6</span></div><div class="aq"><span class="hl-green">↳ Quick Slash</span><span>18</span></div><div class="aq"><span>B Attack</span><span>24</span></div></div>
+    </div>
+    <div class="ml"><span class="l">Message Log</span> <span style="color:#3a4a5a;margin-left:4px;">— empty —</span></div>
+    <div class="btm">
+      <div class="lh">
+        <div class="tab">L.HAND</div>
+        <div class="items">
+          <div class="it"><span class="sl">⚔</span> <span class="eq">Attack</span></div>
+          <div class="it"><span class="sl">◆</span> Pouch A: empty</div>
+          <div class="it"><span class="sl">◆</span> Pouch B: empty</div>
+          <div class="it"><span class="sl">◈</span> Belt Loop: Quarterstaff</div>
+        </div>
+      </div>
+      <div class="dead"><span>portal art (bare)</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="arrow">▽</div>
+
+<!-- AFTER -->
+<div class="frame-block">
+  <div class="frame-label">● After (Option A)</div>
+  <div class="frame">
+    <div class="hdr"><span class="hdr-left">PORTAL · RUN 107</span><span class="hdr-dice">●●●●●●●●●●</span></div>
+    <div class="mid">
+      <div class="col"><div class="col-label">Player</div><div class="stat"><span class="l">HP:</span> 756</div><div class="stat"><span class="l">LH:</span> SSS</div><div class="stat"><span class="l">RH:</span> Wristblade</div></div>
+      <div class="col"><div class="col-label">Monsters</div><div class="mc"><span>Wolf</span><span class="hp">Injured</span></div><div class="mc"><span>Giant Rat</span><span class="hp">Injured</span></div><div class="mc"><span>Imp</span><span class="hp">Injured</span></div></div>
+      <div class="col"><div class="col-label">Queue</div><div class="aq"><span>A Attack</span><span>2</span></div><div class="aq"><span>C Attack</span><span>6</span></div><div class="aq"><span class="hl-green">↳ Quick Slash</span><span>18</span></div><div class="aq"><span>B Attack</span><span>24</span></div></div>
+    </div>
+    <div class="ml"><span class="l">Message Log</span> <span style="color:#3a4a5a;margin-left:4px;">— empty —</span></div>
+    <div class="btm">
+      <div class="lh">
+        <div class="tab">L.HAND</div>
+        <div class="items">
+          <div class="it active"><span class="sl">⚔</span> <span class="eq">Attack</span> <span style="color:#5a7a9a;font-size:9px;">← selected</span></div>
+          <div class="it"><span class="sl">◆</span> Pouch A: empty</div>
+          <div class="it"><span class="sl">◆</span> Pouch B: empty</div>
+          <div class="it"><span class="sl">◈</span> Belt Loop: Quarterstaff</div>
+        </div>
+        <div class="det">
+          <div class="tr"><span>Quick Slash</span><span class="db">⚄ G·Y Die</span></div>
+          <div class="dr"><span class="dl">Base DMG</span><span class="dv">18–28</span></div>
+          <div class="dr"><span class="dl">Dex Mod</span><span class="dv g">+0–3</span></div>
+          <div class="dr"><span class="dl">Armor Pen</span><span class="dv">2</span></div>
+          <div class="dr"><span class="dl">Initiative</span><span class="dv">18</span></div>
+          <div class="sp">Fast. High crit chance on green dice.</div>
+        </div>
+      </div>
+      <div class="status">
+        <div class="sh">Active Effects</div>
+        <div class="br">
+          <span class="bp on">✦ Berserk (2)</span>
+          <span class="bp">⚡ Haste</span>
+          <span class="bp">🛡 Fortify</span>
+        </div>
+        <div class="pk">
+          <div style="color:#7a8aaa;">Target: Imp</div>
+          <div class="pw"><span>HP</span><span>34 / 80</span></div>
+          <div class="pw"><span>Next</span><span>C Attack (6)</span></div>
+          <div class="pw"><span>Status</span><span style="color:#caba5a;">Burning (2)</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <h3>What changed</h3>
+    <ul>
+      <li>LH panel doubled in height</li>
+      <li>Attack detail lives in lower half of same box</li>
+      <li>Dead art replaced by status + target peek</li>
+      <li>Selection + info in one glance</li>
+    </ul>
+  </div>
+  <div class="card">
+    <h3>Trade-offs</h3>
+    <ul>
+      <li>+ Info below attack list — pick and read together</li>
+      <li>+ No popups, no occlusion</li>
+      <li>+ Dead space gets purpose</li>
+      <li>− Small strip of portal art lost (floor/stone)</li>
+    </ul>
+  </div>
+</div>
+
+</div>
+</body>
+</html>
