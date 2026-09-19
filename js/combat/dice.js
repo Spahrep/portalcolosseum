@@ -51,7 +51,7 @@ export function selectMonsterGroup(budget, mappings) {
 
     let picked;
     if (i === 4) {
-      // 5th monster: largest possible remaining value
+      // last monster: largest possible remaining value
       const maxCost = Math.max(...affordable.map(m => m.point_cost || 0));
       const maxAffordable = affordable.filter(m => (m.point_cost || 0) === maxCost);
       picked = maxAffordable[Math.floor(Math.random() * maxAffordable.length)];
