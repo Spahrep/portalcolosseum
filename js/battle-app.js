@@ -1153,6 +1153,40 @@ function showAdvanceUI(runId, state) {
   box.appendChild(adv);
 }
 
+// PC-DEC-045: flying attack label from confirm window to queue panel
+function flyAttackToQueue(label) {
+  const confirmWin = document.querySelector('.dw-window.top');
+  if (!confirmWin) return;
+  const fromRect = confirmWin.getBoundingClientRect();
+  const queuePanel = document.querySelector('.queue-panel');
+  if (!queuePanel) return;
+  const toRect = queuePanel.getBoundingClientRect();
+  const el = document.createElement('div');
+  el.className = 'attack-fly-label';
+  el.textContent = label;
+  const startX = fromRect.left + fromRect.width / 2;
+  const startY = fromRect.top + fromRect.height / 2;
+  el.style.left = startX + 'px';
+  el.style.top = startY + 'px';
+  document.body.appendChild(el);
+  requestAnimationFrame(() => {
+    const endX = toRect.left + toRect.width / 2;
+    const endY = toRect.top + 20;
+    el.style.left = endX + 'px';
+    el.style.top = endY + 'px';
+    el.style.opacity = '0.65';
+  });
+  setTimeout(() => {
+    el.remove();
+    // Flash the queue header as arrival signal
+    const qp = document.querySelector('.queue-panel');
+    if (qp) {
+      qp.classList.add('queue-arrived');
+      setTimeout(() => qp.classList.remove('queue-arrived'), 350);
+    }
+  }, 500);
+}
+
 async function doAttack(runId, hand, attackId, targetIds) {
   if (busy) return;
   setBusy(true);
@@ -1160,9 +1194,13 @@ async function doAttack(runId, hand, attackId, targetIds) {
     // Real mapped attack for the clicked hand (server validates the mapping).
     // CLI parity: ALWAYS target_ids: [] — engine auto-targets.
     const payload = { hand, attack_id: attackId, target_ids: targetIds || [] };
-    const data = await apiCall(`/runs/${runId}/commit`, 'POST', payload);
+    // Fly label — only when a cascade confirm window is visible (UI flow, not CLI)
     const w = (lastBs && lastBs.weapons && lastBs.weapons[hand === 'LH' ? 'hand_l' : 'hand_r']) || {};
     const attack = (w.attacks || []).find(a => a.id === attackId) || {};
+    if (document.querySelector('.dw-window.top')) {
+      flyAttackToQueue(attack.name || '#' + attackId);
+    }
+    const data = await apiCall(`/runs/${runId}/commit`, 'POST', payload);
     showMessage(`Attack committed (${hand} ${attack.name || '#' + attackId})`);
     pendingAttack = null;
     // Commit response is a minimal engine snapshot — re-render from the well-shaped GET.
@@ -1656,6 +1694,7 @@ async function loadBattle(runId) {
       document.body.classList.add('intro-pending', 'queue-filling');
     } else {
       renderActionMenu(bs);
+      renderFeed(bs.feed || []);
       // PC-56: resolve/enter animations (non-blocking setTimeout, rest of loadBattle continues)
       if (prevBs) {
         const diff = diffQueueForAnimation(prevBs, bs);

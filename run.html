@@ -316,6 +316,32 @@
       animation: queue-enter 0.3s ease-out;
     }
 
+    /* ---- Attack fly label (confirm → queue swoosh) ---- */
+    .attack-fly-label {
+      position: fixed;
+      z-index: 9999;
+      background: #000;
+      border: 2px solid #ff8c1a;
+      color: #ff9a3c;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 13px;
+      padding: 4px 12px;
+      border-radius: 2px;
+      white-space: nowrap;
+      pointer-events: none;
+      box-shadow: 4px 4px 0 rgba(0,0,0,0.6);
+      opacity: 1;
+      transition: all 380ms cubic-bezier(0.22, 0.61, 0.36, 1);
+    }
+    @keyframes queue-arrive-glow {
+      0%   { box-shadow: 0 0 0 0 rgba(255, 204, 102, 0.6); }
+      50%  { box-shadow: 0 0 0 6px rgba(255, 204, 102, 0.2); }
+      100% { box-shadow: 0 0 0 0 rgba(255, 204, 102, 0); }
+    }
+    .queue-arrived {
+      animation: queue-arrive-glow 0.35s ease-out;
+    }
+
     /* ---- Text speed & font size toggle area ---- */
     .queue-size-toggle {
       font-size: 12px;
