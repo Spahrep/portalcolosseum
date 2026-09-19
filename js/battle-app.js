@@ -1093,7 +1093,7 @@ function finishIntroSnap(bs, onDone) {
 
 function queueLabel(row) {
   if (row.label === 'LH') return 'L. Hand';
-  if (row.label === 'RH') return playerName + ' R. Hand';
+  if (row.label === 'RH') return 'R. Hand';
   // Monsters show as single-letter arena markers (A/B/C), like the mockups.
   return String(row.label || '?').replace(/^Monster\s*/i, '');
 }
