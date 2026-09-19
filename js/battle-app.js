@@ -1670,7 +1670,7 @@ async function loadBattle(runId) {
       document.body.classList.add('intro-pending', 'queue-filling');
     } else {
       renderActionMenu(bs);
-      renderFeed(bs.feed || []);
+      populateFeedInstantly(bs.feed);
       // PC-56: resolve/enter animations (non-blocking setTimeout, rest of loadBattle continues)
       if (prevBs) {
         const diff = diffQueueForAnimation(prevBs, bs);
