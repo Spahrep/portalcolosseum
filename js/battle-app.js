@@ -1218,7 +1218,6 @@ async function doAttack(runId, hand, attackId, targetIds) {
       flyAttackToQueue(attack.name || '#' + attackId);
     }
     const data = await apiCall(`/runs/${runId}/commit`, 'POST', payload);
-    showMessage(`Attack committed (${hand} ${attack.name || '#' + attackId})`);
     pendingAttack = null;
     // Commit response is a minimal engine snapshot — re-render from the well-shaped GET.
     if (data.state && data.state.battle_over) {
