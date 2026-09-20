@@ -13,8 +13,8 @@
  * (a whiff is a low-tension beat; feedback must not lie about impact).
  */
 const ARENA_LABEL = '(?:Monster #[0-9]+|Monster [A-Z]|[A-Z])';
-const MONSTER_HIT = new RegExp(`^tic \\d+ — (${ARENA_LABEL})(?: .*)? hits player for (\\d+)$`);
-const PLAYER_HIT = new RegExp(`^tic \\d+ — (LH|RH) .*? hits (${ARENA_LABEL}) for (\\d+)$`);
+const MONSTER_HIT = new RegExp(`^tic \\d+ — (${ARENA_LABEL})(?: .*)? hits player for (\\d+)(?: CRITICAL!)?$`);
+const PLAYER_HIT = new RegExp(`^tic \\d+ — (LH|RH) .*? hits (${ARENA_LABEL}) for (\\d+)(?: CRITICAL!)?$`);
 
 export function parseHitLine(line) {
   if (typeof line !== 'string') return null;
@@ -31,5 +31,5 @@ export function parseHitLine(line) {
 
 // "Monster A" → "A"; "Monster #12" → "#12"; "A" → "A". Mirrors queueLabel().
 export function arenaKey(label) {
-  return String(label || '').replace(/^Monster\s*/i, '');
+  return String(label || '').replace(/^Monster /i, '');
 }

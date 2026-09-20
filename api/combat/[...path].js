@@ -755,16 +755,60 @@ async function handle(request) {
         }
         if (run.current_battle < run.total_battles) {
           newBattle = run.current_battle + 1;
-          const { data: templates } = await admin.from('monster_template').select('id').order('id', { ascending: true }).limit(2);
+
+          // Draw + roll the next battle's die FIRST so the budget drives monster selection
+          let budget = null;
+          try {
+            const { data: tmpl } = await admin.from('portal_template').select('green_faces, yellow_faces, red_faces').eq('id', run.portal_template_id).single();
+            const { data: undrawn } = await admin.from('portal_run_dice').select('*').eq('portal_run_id', id).is('drawn_battle', null);
+            if (undrawn && undrawn.length > 0) {
+              const die = drawRandomDie(undrawn);
+              if (die) {
+                const facesByColor = { green: tmpl?.green_faces || [], yellow: tmpl?.yellow_faces || [], red: tmpl?.red_faces || [] };
+                const faceVal = rollDieFace(die.color, facesByColor);
+                await admin.from('portal_run_dice').update({ face: faceVal, drawn_battle: newBattle, rolled_value: faceVal }).eq('id', die.id);
+                budget = faceVal;
+              }
+            }
+          } catch (e) {
+            console.error('battle/end next-die draw error (non-fatal)', e);
+          }
+
+          // Budget-aware monster selection via selectMonsterGroup
           const monsters = [];
-          for (const t of (templates || [])) {
-            const { data: gen } = await admin.rpc('generate_monster', { p_template_id: t.id });
-            if (gen) monsters.push({ ...gen, label: `Monster ${String.fromCharCode(65 + monsters.length)}` });
+          try {
+            if (budget != null) {
+              const { data: mappings } = await admin.from('portal_monster_mapping')
+                .select('monster_template_id, point_cost, weight')
+                .eq('portal_template_id', run.portal_template_id);
+              const group = selectMonsterGroup(budget, mappings || []);
+              for (const gItem of group) {
+                const { data: gen } = await admin.rpc('generate_monster', { p_template_id: gItem.monster_template_id });
+                if (gen) monsters.push({ ...gen, label: `Monster ${String.fromCharCode(65 + monsters.length)}` });
+              }
+            }
+            // Fallback: cheapest single monster if generation produced nothing
+            if (monsters.length === 0) {
+              const { data: cheapest } = await admin.from('portal_monster_mapping')
+                .select('monster_template_id')
+                .eq('portal_template_id', run.portal_template_id)
+                .order('point_cost', { ascending: true })
+                .limit(1);
+              const fallbackId = (cheapest && cheapest[0]?.monster_template_id) || 1;
+              const { data: gen } = await admin.rpc('generate_monster', { p_template_id: fallbackId });
+              if (gen) monsters.push({ ...gen, label: 'Monster A' });
+            }
+            // Last-resort placeholder if everything failed
+            if (monsters.length === 0) {
+              monsters.push({ id: 10 + newBattle, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'Monster A' });
+            }
+          } catch (e) {
+            console.error('battle/end monster generation error', e);
+            if (monsters.length === 0) {
+              monsters.push({ id: 10 + newBattle, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'Monster A' });
+            }
           }
-          if (monsters.length === 0) {
-            monsters.push({ id: 10 + newBattle, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'Monster A' });
-            monsters.push({ id: 11 + newBattle, max_hp: 90, damage: 12, speed: 5, accuracy: 65, label: 'Monster B' });
-          }
+
           const potionLoadout = await buildPotionLoadout(run);
           const handSpeeds = await handApproachSpeeds(run.hand_l_weapon_id, run.hand_r_weapon_id);
           const participants = {
@@ -779,21 +823,6 @@ async function handle(request) {
           await admin.from('portal_run')
             .update({ battle_state: newBattleState, current_battle: newBattle, player_hp: carryHp })
             .eq('id', id).eq('user_id', user.id);
-          // PC-33 fix: draw + roll the next battle's die (mirrors run-new battle-1 / battle/start)
-          try {
-            const { data: tmpl } = await admin.from('portal_template').select('green_faces, yellow_faces, red_faces').eq('id', run.portal_template_id).single();
-            const { data: undrawn } = await admin.from('portal_run_dice').select('*').eq('portal_run_id', id).is('drawn_battle', null);
-            if (undrawn && undrawn.length > 0) {
-              const die = drawRandomDie(undrawn);
-              if (die) {
-                const facesByColor = { green: tmpl?.green_faces || [], yellow: tmpl?.yellow_faces || [], red: tmpl?.red_faces || [] };
-                const faceVal = rollDieFace(die.color, facesByColor);
-                await admin.from('portal_run_dice').update({ face: faceVal, drawn_battle: newBattle, rolled_value: faceVal }).eq('id', die.id);
-              }
-            }
-          } catch (e) {
-            console.error('battle/end next-die draw error (non-fatal)', e);
-          }
           return json({ status: 'active', current_battle: newBattle, battle_state: { participants: freshEngine.getState().participants } });
         } else {
           // only complete if monsters_dead on final battle

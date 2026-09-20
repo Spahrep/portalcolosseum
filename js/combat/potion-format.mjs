@@ -17,9 +17,9 @@ const HAND_WORD = { LH: 'left', RH: 'right' };
 // Engine feed line -> player-facing narration. Returns {text, matched}.
 export function mapPotionFeedLine(raw) {
   if (!raw) return { text: '', matched: false };
-  let m = raw.match(/^tic \d+ — (LH|RH) drinks (.+?) \((\d+) tics\)$/);
+  let m = raw.match(/^tic \d+ — (LH|RH) drinks (.+?)\.\.\.$/);
   if (m) {
-    return { text: `Your ${HAND_WORD[m[1]]} hand drinks ${m[2]} (${m[3]} tics)…`, matched: true };
+    return { text: `Your ${HAND_WORD[m[1]]} hand drinks ${m[2]}...`, matched: true };
   }
   m = raw.match(/^tic \d+ — (LH|RH) healed (\d+)$/);
   if (m) {

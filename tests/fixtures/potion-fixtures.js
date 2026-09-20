@@ -27,9 +27,10 @@ export const buffPotion = {
 };
 
 export const inBattleHealSnapshot = [
+  "tic 0 — mob A prepares an attack...",
   "tic 0 — LH Ready",
   "tic 0 — RH Ready",
-  "Your left hand drinks Heal Potion (0 tics)…",
+  "Your left hand drinks Heal Potion...",
   "Your left hand's potion restores 100 HP.",
   "Potion A used — in battle.  HP: 900/1000  buffs: none",
   "#1 Heal Potion Heal grade C (used)",
@@ -37,6 +38,7 @@ export const inBattleHealSnapshot = [
 ];
 
 export const betweenFightsHealSnapshot = [
+  "tic 0 — mob A prepares an attack...",
   "tic 0 — LH Ready",
   "tic 0 — RH Ready",
   "You drink potion a — healed 100.",
@@ -45,18 +47,21 @@ export const betweenFightsHealSnapshot = [
 ];
 
 export const overhealSnapshot = [
+  "tic 0 — mob A prepares an attack...",
   "tic 0 — LH Ready",
   "tic 0 — RH Ready",
-  "Your left hand drinks Heal Potion (0 tics)…",
+  "Your left hand drinks Heal Potion...",
   "Your left hand's potion restores 10 HP.",
   "Potion A used — in battle.  HP: 1000/1000  buffs: none"
 ];
 
 export const buffLandSnapshot = [
+  "tic 0 — mob A prepares an attack...",
   "tic 0 — LH Ready",
   "tic 0 — RH Ready",
-  "Your left hand drinks Dmg Potion (5 tics)…",
+  "Your left hand drinks Dmg Potion...",
   "tic 4 — A hits player for 7",
+  "tic 4 — mob A prepares an attack...",
   "Your left hand's potion grants damage +3 until tic 10.",
   "Potion A used — in battle.  HP: 993/1000  buffs: damage +3 until tic 10",
   "#2 Dmg Potion Dmg grade B (used)"
@@ -66,9 +71,10 @@ export const buffLandSnapshot = [
 // (endTic 3), hand recovers at tic 2, buff expires at tic 3 — full transcript
 // including the expiry narration and the 'buffs: none' summary.
 export const buffExpirySnapshot = [
+  "tic 0 — mob A prepares an attack...",
   "tic 0 — LH Ready",
   "tic 0 — RH Ready",
-  "Your left hand drinks Dmg Potion (1 tics)…",
+  "Your left hand drinks Dmg Potion...",
   "Your left hand's potion grants damage +3 until tic 3.",
   "tic 2 — LH Ready",
   "The Dmg Potion buff fades.",

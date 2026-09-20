@@ -239,6 +239,12 @@
     body.intro-pending .footer-info {
       display: none;
     }
+    /* PC-DEC-045: while the typewriter/action-queue animations are playing,
+       hide the LH/RH command input — `command-hidden` is toggled by the
+       typewriter in battle-app.js alongside setBusy. */
+    body.command-hidden .action-menu {
+      display: none;
+    }
     /* Timing track stays hidden until the monsters are in; released by
        finishBattleIntro() when the fill starts (rows then fade in one at a time). */
     body.queue-filling .queue-panel {

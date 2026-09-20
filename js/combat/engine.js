@@ -192,6 +192,7 @@ export function createEngine(rng = Math.random) {
     // Shared fire handler: process the row, then capture the intro-frame
     // for the GUI replay (if this advance is part of battle intro).
     const onFire = (row) => {
+      const feedBefore = state.feed.length;
       handleFire(row);
       if (captureFires) {
         const mon = state.monsters.find(m => m.label === row.label);
@@ -201,11 +202,15 @@ export function createEngine(rng = Math.random) {
         } else {
           after = null;
         }
+        // Capture the impact line (first new line from handleFire), not the recommit windup (last new line)
+        const impactLine = state.feed.length > feedBefore
+          ? state.feed[feedBefore]
+          : state.feed[state.feed.length - 1];
         captureFires.push({
           tic: state.tic,
           label: row.label,
           event: row.event,
-          line: state.feed[state.feed.length - 1],
+          line: impactLine,
           hp: state.player.hp,
           after
         });

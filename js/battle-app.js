@@ -147,6 +147,7 @@ function clearTyping() {
   typingInProgress = false;
   if (typingSetBusy) {
     setBusy(false);
+    document.body.classList.remove('command-hidden');
     typingSetBusy = false;
   }
 }
@@ -169,6 +170,7 @@ function typeFeedLines(lines, onComplete) {
   }
   typingInProgress = true;
   setBusy(true); // gate action menu during typing per spec
+  document.body.classList.add('command-hidden');
   typingSetBusy = true;
   feedPinned = true; // start pinned for this batch; scroll-up will unpin for remainder of batch
   let lineIndex = 0;
@@ -176,6 +178,7 @@ function typeFeedLines(lines, onComplete) {
     if (lineIndex >= lines.length) {
       typingInProgress = false;
       setBusy(false);
+      document.body.classList.remove('command-hidden');
       if (onComplete) onComplete();
       return;
     }
