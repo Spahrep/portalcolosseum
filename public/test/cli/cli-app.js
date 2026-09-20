@@ -953,6 +953,10 @@ async function cmdBattleEnd(args) {
         const letter = letterOf(m.label);
         printGreen(`monster ${m.name || m.label}${letter ? ' ' + letter : ''} - ${m.hp_word || 'Healthy'}`);
       });
+      if (data.prize_pool) {
+        const pp = data.prize_pool;
+        appendLine(`Loot this fight: ${pp.weapon_ids?.length || 0} items, ${pp.gold || 0}g (LP ${pp.lp_earned || 0})`, 'dim');
+      }
     } else if (choice === 'stop') {
       appendLine('You step back through the portal. The prize is yours — for now.');
     }
@@ -1662,9 +1666,17 @@ function updateSidePanelsFromRun(run) {
     }
   }
 
-  // LEFT: Run Loot (display only — no loot field in current state shape)
+  // LEFT: Run Loot (prize_pool from run state)
   if (runLootContent) {
-    runLootContent.innerHTML = '<div class="dim">— (no loot data)</div>';
+    const pp = run.prize_pool;
+    if (pp && (pp.lp_earned > 0 || pp.gold > 0 || (pp.weapon_ids && pp.weapon_ids.length > 0))) {
+      let html = '<div>LP earned: ' + (pp.lp_earned || 0) + '</div>';
+      html += '<div>Gold: ' + (pp.gold || 0) + '</div>';
+      html += '<div>Weapons: ' + (pp.weapon_ids?.length || 0) + '</div>';
+      runLootContent.innerHTML = html;
+    } else {
+      runLootContent.innerHTML = '<div class="dim">— (no loot data)</div>';
+    }
   }
 
   // RIGHT: Action/tic queue

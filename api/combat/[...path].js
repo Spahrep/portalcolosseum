@@ -11,6 +11,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createEngine, resumeEngine } from '../../js/combat/engine.js';
 import { getHpWord } from '../../js/combat/hp-words.js';
 import { drawRandomDie, rollDieFace, selectMonsterGroup } from '../../js/combat/dice.js';
+import { generateLoot } from '../../js/combat/loot.js';
 
 /**
  * rollStat(base, range)
@@ -747,8 +748,93 @@ async function handle(request) {
       }
       const s = engine ? engine.getState() : { player_dead: run.player_hp <= 0, monsters_dead: false };
 
+      // --- LOOT GENERATION ---
+      let prizePool = { weapon_ids: [], gold: 0, lp_earned: 0 };
+      if (run.prize_pool && typeof run.prize_pool === 'object') {
+        prizePool = { ...run.prize_pool };
+        if (!Array.isArray(prizePool.weapon_ids)) prizePool.weapon_ids = [];
+        if (typeof prizePool.gold !== 'number') prizePool.gold = 0;
+        if (typeof prizePool.lp_earned !== 'number') prizePool.lp_earned = 0;
+      }
+
+      try {
+        if (s.monsters_dead && !s.player_dead) {
+          const monsters = (persisted?.participants?.monsters || []).filter(m => m && !m.dead);
+          if (monsters.length > 0) {
+            const templateIds = [...new Set(monsters.map(m => m.template_id || m.id).filter(Boolean))];
+            // Fetch point_costs from portal_monster_mapping
+            const { data: monsterMappings } = await admin.from('portal_monster_mapping')
+              .select('monster_template_id, point_cost')
+              .eq('portal_template_id', run.portal_template_id)
+              .in('monster_template_id', templateIds);
+            const pointCostMap = {};
+            (monsterMappings || []).forEach(m => { pointCostMap[m.monster_template_id] = m.point_cost || 0; });
+            const depth = run.current_battle || 1;
+            const depthMult = [1.0, 1.1, 1.2, 1.3, 1.4][Math.min(depth - 1, 4)] || 1.0;
+            let lpBudget = 0;
+            let combinedMinGold = 0;
+            let combinedMaxGold = 0;
+            for (const m of monsters) {
+              const tId = m.template_id || m.id;
+              lpBudget += (pointCostMap[tId] || 0) * depthMult;
+              // Note: min/max_gold fetched below or assume from template later
+            }
+            // Fetch monster min/max gold (seed fixup makes them non-zero)
+            const { data: monTemplates } = await admin.from('monster_template')
+              .select('id, min_gold, max_gold')
+              .in('id', templateIds);
+            const goldMap = {};
+            (monTemplates || []).forEach(t => { goldMap[t.id] = { min: t.min_gold || 0, max: t.max_gold || 0 }; });
+            for (const m of monsters) {
+              const tId = m.template_id || m.id;
+              combinedMinGold += (goldMap[tId]?.min || 0);
+              combinedMaxGold += (goldMap[tId]?.max || 0);
+            }
+            // Combined loot table
+            const { data: portalLoot } = await admin.from('portal_loot_mapping')
+              .select('weapon_template_id, lp_cost, weight')
+              .eq('portal_template_id', run.portal_template_id);
+            let monsterLoot = [];
+            if (templateIds.length > 0) {
+              const { data: monLoot } = await admin.from('monster_loot_mapping')
+                .select('weapon_template_id, lp_cost, weight')
+                .in('monster_template_id', templateIds);
+              monsterLoot = monLoot || [];
+            }
+            const lootTable = [...(portalLoot || []), ...monsterLoot].filter(Boolean);
+            // Generate loot
+            const lootResult = generateLoot(Math.floor(lpBudget), lootTable, combinedMinGold, combinedMaxGold);
+            prizePool.lp_earned = (prizePool.lp_earned || 0) + Math.floor(lpBudget);
+            prizePool.gold = (prizePool.gold || 0) + (lootResult.gold || 0);
+            // Persist weapons via generate_weapon RPC (admin bypasses RLS)
+            for (const wtid of lootResult.weaponTemplateIds || []) {
+              try {
+                const { data: wInst } = await admin.rpc('generate_weapon', { p_template_id: wtid, p_user_id: user.id });
+                if (wInst && wInst.id) {
+                  prizePool.weapon_ids.push(wInst.id);
+                }
+              } catch (e) {
+                console.error('generate_weapon error (non-fatal)', e);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Loot generation error (non-fatal)', e);
+      }
+
       if (s.player_dead) {
         newStatus = 'dead';
+        // Forfeit loot on death: delete prize pool weapons
+        const killIds = (prizePool?.weapon_ids || []).filter(id => id != null);
+        if (killIds.length > 0) {
+          try {
+            await admin.from('weapon_instance').delete().in('id', killIds).eq('user_id', user.id);
+            prizePool.weapon_ids = [];
+          } catch (e) {
+            console.error('loot forfeit delete error (non-fatal)', e);
+          }
+        }
       } else if (choice === 'continue') {
         if (!s.monsters_dead) {
           return json({ error: 'Monsters not dead' }, 400);
@@ -835,9 +921,9 @@ async function handle(request) {
       }
 
       await admin.from('portal_run')
-        .update({ status: newStatus, current_battle: newBattle, battle_state: newBattleState })
+        .update({ status: newStatus, current_battle: newBattle, battle_state: newBattleState, prize_pool: prizePool })
         .eq('id', id).eq('user_id', user.id);
-      return json({ status: newStatus, current_battle: newBattle });
+      return json({ status: newStatus, current_battle: newBattle, prize_pool: prizePool });
     }
 
     // POST /api/combat/runs/:id/use-potion {slot: 'A'|'B'}  (PC-39: drink a potion)
