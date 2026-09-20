@@ -857,12 +857,15 @@ function populateFeedInstantly(feed) {
 }
 
 function renderPlayerHP(runOrState) {
-  const el = document.getElementById('player-hp');
-  if (!el) return;
+  // Update HP text via #hp-value span (does not blow away sibling bar element)
+  const valEl = document.getElementById('hp-value');
   // API exposes player_hp (numeric) only — no player hp_word. Design shows numbers.
   const hpVal = (runOrState && typeof runOrState.player_hp === 'number') ? runOrState.player_hp : null;
   const hpColor = hpVal === null ? '#66ff99' : (hpVal > 300 ? '#66ff99' : (hpVal > 100 ? '#ffcc66' : '#ff6666'));
-  el.innerHTML = `HP: <span style="color:${hpColor};">${hpVal === null ? '—' : hpVal}</span>`;
+  if (valEl) {
+    valEl.style.color = hpColor;
+    valEl.textContent = `HP: ${hpVal === null ? '—' : hpVal}`;
+  }
 
   // HP bar: red fill = current HP (width %), black bg = missing HP
   const fillEl = document.getElementById('hp-bar-fill');

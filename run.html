@@ -449,11 +449,10 @@
       margin-top: 8px;
     }
     .hp-bar-bg {
-      width: 100%;
       height: 8px;
       background: #000;
       border: 1px solid #444;
-      margin-top: 4px;
+      margin: 0 8px 8px;
       position: relative;
     }
     .hp-bar-fill {
@@ -681,7 +680,8 @@
       <!-- PLAYER -->
       <div class="player-panel">
         <div class="panel-title">PLAYER</div>
-        <div class="stat-block" id="player-hp">HP: <span style="color:#66ff99;">Healthy</span><div class="hp-bar-bg"><div class="hp-bar-fill" id="hp-bar-fill"></div></div></div>
+        <div class="stat-block" id="player-hp"><span style="color:#66ff99;" id="hp-value">HP: Healthy</span></div>
+        <div class="hp-bar-bg"><div class="hp-bar-fill" id="hp-bar-fill"></div></div>
         <div class="loadout-mini">
           LH: <span id="loadout-lh">—</span><br>
           RH: <span id="loadout-rh">—</span>
