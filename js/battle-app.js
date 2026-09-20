@@ -996,7 +996,16 @@ function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   div.dataset.tics = row.tics;
   const nameSpan = document.createElement('span');
   nameSpan.className = 'name';
-  nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+  // Monster attack rows: show "<Monster name>'s <Attack>" (e.g. "Imp's Bite")
+  const isMonster = row.event === 'attack' && row.label && row.label !== 'LH' && row.label !== 'RH';
+  if (isMonster) {
+    const mon = monsters.find(m => m.label === row.label);
+    const monName = (mon && mon.name) ? mon.name : (mon && mon.label) ? mon.label : queueLabel(row);
+    const atkName = queueEventName(row, monsters, bs);
+    nameSpan.textContent = `${monName}'s ${atkName}`;
+  } else {
+    nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+  }
   const ticSpan = document.createElement('span');
   ticSpan.className = 'tic';
   ticSpan.textContent = String(row.tics != null ? row.tics : 0);
