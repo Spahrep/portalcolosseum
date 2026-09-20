@@ -69,4 +69,10 @@ describe('arenaKey — PC-70 label normalization', () => {
     assert.equal(arenaKey('Monster #12'), '#12');
     assert.equal(arenaKey(undefined), '');
   });
+  it('extracts letter from name+letter label', () => {
+    assert.equal(arenaKey('Wolf A'), 'A');
+    assert.equal(arenaKey('Glimmerling B'), 'B');
+    assert.equal(arenaKey('Giant Rat C'), 'C');
+    assert.equal(arenaKey('Blue Slime D'), 'D');
+  });
 });

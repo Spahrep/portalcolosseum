@@ -90,7 +90,7 @@ async function handle(request) {
     async function generateOneMonster(templateId, usedLabels) {
       let tmpl;
       try {
-        const tRes = await admin.from('monster_template').select('id').eq('id', templateId).single();
+        const tRes = await admin.from('monster_template').select('id, name').eq('id', templateId).single();
         tmpl = tRes.data;
         if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
       } catch (e) {
@@ -117,7 +117,7 @@ async function handle(request) {
       const attacks = ['slot_0_attack', 'slot_1_attack', 'slot_2_attack', 'slot_3_attack', 'slot_4_attack']
         .map(k => gen[k])
         .filter(a => a && typeof a === 'object' && a.id);
-      return { ...gen, attacks, label };
+      return { ...gen, attacks, label, name: tmpl.name };
     }
 
     // POST /api/combat/runs  {portal_template_id, hand_l_weapon_id, hand_r_weapon_id, belt_weapon_id, consume_a, consume_b}

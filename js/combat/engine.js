@@ -148,13 +148,13 @@ export function createEngine(rng = Math.random) {
             crit = true;
           }
           applyDamage(state.player, dmg);
-          const monLabel = (mon.name || mon.template_name)
-            ? `${mon.name || mon.template_name} ${row.label.replace(/^Monster /i, '')}`
+          const monLabel = mon.name
+            ? `${mon.name} ${row.label.replace(/^Monster /i, '')}`
             : row.label;
           log(`${monLabel} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}${crit ? ' CRITICAL!' : ''}`);
         } else {
-          const monLabel = (mon.name || mon.template_name)
-            ? `${mon.name || mon.template_name} ${row.label.replace(/^Monster /i, '')}`
+          const monLabel = mon.name
+            ? `${mon.name} ${row.label.replace(/^Monster /i, '')}`
             : row.label;
           log(`${monLabel} ${atkName ? atkName + ' ' : ''}misses`);
         }
