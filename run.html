@@ -713,7 +713,10 @@
       <div id="action-choices" class="action-choices"></div>
     </div>
     <!-- FOOTER INFO BAR (hover/selection readout) -->
-    <div id="footer-info" class="footer-info">Select an attack to see details</div>
+    <div id="footer-info" class="footer-info">
+      <span style="flex:1">Select an attack to see details</span>
+      <span id="text-speed" onclick="if(window.cycleBattleTextSpeed)cycleBattleTextSpeed()" style="cursor:pointer;user-select:none;">TEXT SPEED: Normal</span>
+    </div>
 
     <!-- BOTTOM -->
   </div>

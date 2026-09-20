@@ -64,10 +64,10 @@ function bandClass(m) {
 
 // PC-DEC-044: typewriter battle log presets (charMs per char, lineDelayMs beat after line)
 const BATTLE_TEXT = {
-  slow:   { charMs: 45, lineDelayMs: 1800, label: 'Slow', windupEnabled: true },
-  normal: { charMs: 15, lineDelayMs: 1000, label: 'Normal', windupEnabled: true },  // DEFAULT
-  fast:   { charMs: 5,  lineDelayMs: 300,  label: 'Fast', windupEnabled: true },
-  instant: { charMs: 0,  lineDelayMs: 0,   label: 'Instant', windupEnabled: false }
+  slow:   { charMs: 45, lineDelayMs: 1800, label: 'Slow' },
+  normal: { charMs: 15, lineDelayMs: 1000, label: 'Normal' },
+  fast:   { charMs: 5,  lineDelayMs: 300,  label: 'Fast' },
+  instant: { charMs: 0,  lineDelayMs: 0,   label: 'Instant' }
 };
 let battleTextSpeedKey = localStorage.getItem('battleTextSpeed') || 'normal';
 if (!BATTLE_TEXT[battleTextSpeedKey]) battleTextSpeedKey = 'normal';
@@ -77,12 +77,13 @@ function getBattleTextPreset() {
 }
 
 function cycleBattleTextSpeed() {
-  const order = ['STANDARD', 'SLOW', 'INSTANT'];
+  const order = ['slow', 'normal', 'fast', 'instant'];
   const idx = order.indexOf(battleTextSpeedKey);
   battleTextSpeedKey = order[(idx + 1) % order.length];
-  localStorage.setItem('pc_battle_text_speed', battleTextSpeedKey);
+  localStorage.setItem('battleTextSpeed', battleTextSpeedKey);
   updateTextSpeedUI();
 }
+window.cycleBattleTextSpeed = cycleBattleTextSpeed;
 
 function updateTextSpeedUI() {
   const el = document.getElementById('text-speed');
@@ -1603,6 +1604,12 @@ function renderActionMenu(bs) {
   document.addEventListener('mousemove', () => { keyboardActive = false; }, { once: false });
 
   document.onkeydown = (e) => {
+    // PC-DEC-044: Enter during typewriter skips remaining chars + line pause
+    if (e.key === 'Enter' && typingInProgress) {
+      clearTyping();
+      e.preventDefault();
+      return;
+    }
     if (busy) return;
     if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
     const top = stack[stack.length - 1];
