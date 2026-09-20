@@ -1686,7 +1686,13 @@ async function loadBattle(runId) {
       document.body.classList.add('intro-pending', 'queue-filling');
     } else {
       renderActionMenu(bs);
-      populateFeedInstantly(bs.feed);
+      // PC-DEC-045c: fresh page load in a mid-battle run shows history instantly;
+      // incremental commit updates typewriter new lines.
+      if (renderedFeedLines === 0 && bs.feed && bs.feed.length > 0) {
+        populateFeedInstantly(bs.feed);
+      } else {
+        renderFeed(bs.feed || []);
+      }
       // PC-56: resolve/enter animations (non-blocking setTimeout, rest of loadBattle continues)
       if (prevBs) {
         const diff = diffQueueForAnimation(prevBs, bs);
