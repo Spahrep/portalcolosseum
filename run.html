@@ -442,26 +442,26 @@
       padding: 4px 8px;
       font-size: 14px;
       margin-bottom: 8px;
-    }
-    .loadout-mini {
-      font-size: 13px;
-      color: #a8c8ea;
-      margin-top: 8px;
-    }
-    .hp-bar-bg {
-      height: 8px;
-      background: #000;
-      border: 1px solid #444;
-      margin: 0 8px 8px;
       position: relative;
+      overflow: hidden;
     }
-    .hp-bar-fill {
+    .stat-block .hp-bar-fill {
       position: absolute;
       top: 0;
       left: 0;
       height: 100%;
       background: #ff3333;
       width: 100%;
+      z-index: 0;
+    }
+    .stat-block #hp-value {
+      position: relative;
+      z-index: 1;
+    }
+    .loadout-mini {
+      font-size: 13px;
+      color: #a8c8ea;
+      margin-top: 8px;
     }
     .message-box {
       background: #0a1a2e;
@@ -680,8 +680,7 @@
       <!-- PLAYER -->
       <div class="player-panel">
         <div class="panel-title">PLAYER</div>
-        <div class="stat-block" id="player-hp"><span style="color:#66ff99;" id="hp-value">HP: Healthy</span></div>
-        <div class="hp-bar-bg"><div class="hp-bar-fill" id="hp-bar-fill"></div></div>
+        <div class="stat-block" id="player-hp"><div class="hp-bar-fill" id="hp-bar-fill"></div><span style="color:#66ff99;" id="hp-value">HP: Healthy</span></div>
         <div class="loadout-mini">
           LH: <span id="loadout-lh">—</span><br>
           RH: <span id="loadout-rh">—</span>
