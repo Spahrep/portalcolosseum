@@ -540,16 +540,41 @@ async function handle(request) {
         console.error('battle/start dice error (legacy fallback)', e);
       }
 
-      // F9 legacy fallback if dice path yielded nothing
+      // F9 budget-aware fallback (replaces blind 2-monster hatch — was spawning Glimmerling+BlueSlime on 5-point rolls)
       if (monsters.length === 0) {
-        const { data: templates } = await admin.from('monster_template').select('id').order('id', { ascending: true }).limit(2);
-        for (const t of (templates || [])) {
-          const m = await generateOneMonster(t.id, []);
-          if (m && !m.error) monsters.push(m);
+        // Recover the budget from the die that was already drawn+updated, or use cheapest monster cost
+        let budget = null;
+        try {
+          const { data: drawnDie } = await admin.from('portal_run_dice')
+            .select('rolled_value')
+            .eq('portal_run_id', id)
+            .eq('drawn_battle', run.current_battle)
+            .single();
+          if (drawnDie && drawnDie.rolled_value != null) budget = drawnDie.rolled_value;
+        } catch (_) { /* fall through */ }
+        if (budget == null) {
+          const { data: cheapest } = await admin.from('portal_monster_mapping')
+            .select('point_cost')
+            .eq('portal_template_id', run.portal_template_id)
+            .order('point_cost', { ascending: true })
+            .limit(1);
+          budget = (cheapest && cheapest[0]?.point_cost) || 10;
         }
+        const { data: mappings } = await admin.from('portal_monster_mapping')
+          .select('monster_template_id, point_cost, weight')
+          .eq('portal_template_id', run.portal_template_id);
+        const group = selectMonsterGroup(budget, mappings || []);
+        const usedLabels = [];
+        for (const gItem of group) {
+          const m = await generateOneMonster(gItem.monster_template_id, usedLabels);
+          if (m && !m.error) {
+            usedLabels.push(m.label);
+            monsters.push(m);
+          }
+        }
+        // Last resort: single placeholder if even selectMonsterGroup yielded nothing
         if (monsters.length === 0) {
-          monsters.push({ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'Monster A' });
-          monsters.push({ id: 2, max_hp: 90, damage: 12, speed: 5, accuracy: 65, label: 'Monster B' });
+          monsters.push({ id: 1, max_hp: 100, damage: 10, speed: 6, accuracy: 70, label: 'Monster A' });
         }
       }
 
