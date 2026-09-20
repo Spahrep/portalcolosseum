@@ -1479,7 +1479,7 @@ function renderActionMenu(bs) {
         el.innerHTML = row.html;
         if (i === topIdx && !row.disabled) {
           el.onclick = () => { lvl.activeIdx = ri; renderStack(); selectTop(); };
-          el.onmouseenter = () => { if (lvl.activeIdx !== ri) { lvl.activeIdx = ri; renderStack(); } };
+          el.onmouseenter = () => { if (!keyboardActive && lvl.activeIdx !== ri) { lvl.activeIdx = ri; renderStack(); } };
         }
         win.appendChild(el);
       });
@@ -1580,12 +1580,18 @@ function renderActionMenu(bs) {
 
   // keyboard: Up/Down move the cursor (skips blank/disabled rows), Enter selects,
   // Esc backs one window (root: no-op). Only the top window responds.
+  let keyboardActive = false;
+
+  // When the mouse actually moves (not just sits), re-enable hover selection.
+  document.addEventListener('mousemove', () => { keyboardActive = false; }, { once: false });
+
   document.onkeydown = (e) => {
     if (busy) return;
     if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
     const top = stack[stack.length - 1];
     if (!top) return;
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+      keyboardActive = true;
       const selectable = [];
       top.rows.forEach((r, i) => { if (!r.blank && !r.disabled) selectable.push(i); });
       if (!selectable.length) return;
