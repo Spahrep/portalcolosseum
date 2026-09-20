@@ -148,7 +148,7 @@ function hideNotReadyModal() {
 // Player-adjustable settings: battle text speed, log out.
 const BATTLE_SPEED_LABELS = { STANDARD: 'Standard', SLOW: 'Slow', INSTANT: 'Instant' };
 const SPEED_CYCLE = ['STANDARD', 'SLOW', 'INSTANT'];
-/** Focusable items in the settings modal: 0-2 = speed buttons, 3 = Log Out */
+/** Focusable items in the settings modal: 0-2 = speed buttons, 3-5 = font size buttons, 6 = Log Out */
 let menuFocusIndex = 0;
 
 function isMenuSettingsOpen() {
@@ -163,8 +163,9 @@ function showMenuSettings() {
     const confirm = document.getElementById('logout-confirm-dialog');
     if (confirm) confirm.hidden = true;
     modal.hidden = false;
-    // Highlight the currently active speed button
+    // Highlight the currently active speed & font buttons
     highlightSpeedButtons();
+    highlightFontButtons();
     // Reset keyboard focus index to the first speed button
     menuFocusIndex = 0;
     updateMenuFocus();
@@ -183,20 +184,27 @@ function highlightSpeedButtons() {
   });
 }
 
+function highlightFontButtons() {
+  const current = localStorage.getItem('pc_queue_font_size') || 'M';
+  document.querySelectorAll('.font-opt').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.font === current);
+  });
+}
+
 /** Apply visual focus to the currently focused menu item index */
 function updateMenuFocus() {
   const items = document.querySelectorAll('.speed-opt');
   const logoutBtn = document.getElementById('menu-logout-btn');
-  items.forEach((btn, i) => btn.classList.toggle('menu-focused', i === menuFocusIndex && menuFocusIndex < 3));
-  if (logoutBtn) logoutBtn.classList.toggle('menu-focused', menuFocusIndex === 3);
+  items.forEach((btn, i) => btn.classList.toggle('menu-focused', i === menuFocusIndex && menuFocusIndex < 6));
+  if (logoutBtn) logoutBtn.classList.toggle('menu-focused', menuFocusIndex === 6);
 }
 
 /** Activate (click) whatever item is currently focused */
 function activateMenuFocus() {
   const items = document.querySelectorAll('.speed-opt');
-  if (menuFocusIndex < 3 && items[menuFocusIndex]) {
+  if (menuFocusIndex < 6 && items[menuFocusIndex]) {
     items[menuFocusIndex].click();
-  } else if (menuFocusIndex === 3) {
+  } else if (menuFocusIndex === 6) {
     const logoutBtn = document.getElementById('menu-logout-btn');
     if (logoutBtn) logoutBtn.click();
   }
@@ -230,10 +238,10 @@ function handleMenuKeydown(e) {
     case 'ArrowRight':
     case 'ArrowDown':
       e.preventDefault();
-      if (menuFocusIndex === 3) menuFocusIndex = 0;
+      if (menuFocusIndex === 6) menuFocusIndex = 0;
       else menuFocusIndex++;
-      // Clamp — speed buttons (0-2) don't wrap individually, but Down from Log Out wraps
-      if (menuFocusIndex > 3) menuFocusIndex = 3;
+      // Clamp — speed+font buttons (0-5) don't wrap individually, but Down from Log Out wraps
+      if (menuFocusIndex > 6) menuFocusIndex = 6;
       updateMenuFocus();
       return true;
     case 'Enter':
@@ -253,6 +261,12 @@ function setBattleTextSpeed(speedKey) {
   highlightSpeedButtons();
   // Sync to server (background — don't block UI on failure)
   syncSettings({ battle_text_speed: speedKey });
+}
+
+function setQueueFontSize(fontKey) {
+  if (!['S', 'M', 'L'].includes(fontKey)) return;
+  localStorage.setItem('pc_queue_font_size', fontKey);
+  highlightFontButtons();
 }
 
 /**
@@ -299,6 +313,13 @@ function initMenuSettings() {
   document.querySelectorAll('.speed-opt').forEach(btn => {
     btn.addEventListener('click', () => {
       setBattleTextSpeed(btn.dataset.speed);
+    });
+  });
+
+  // Font size option buttons
+  document.querySelectorAll('.font-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setQueueFontSize(btn.dataset.font);
     });
   });
 

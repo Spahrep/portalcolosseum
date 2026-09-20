@@ -959,6 +959,10 @@ async function cmdBattleEnd(args) {
       }
     } else if (choice === 'stop') {
       appendLine('You step back through the portal. The prize is yours — for now.');
+      if (data.prize_pool) {
+        const pp = data.prize_pool;
+        appendLine(`Total loot: ${pp.weapon_ids?.length || 0} items, ${pp.gold || 0}g (LP ${pp.lp_earned || 0})`, 'dim');
+      }
     }
     printGreen(`Battle ended: ${data.status} battle ${data.current_battle}`);
     await cmdState();

@@ -105,21 +105,7 @@ function getQueueFontSizePreset() {
   return QUEUE_FONT_SIZES[queueFontSizeKey] || QUEUE_FONT_SIZES.M;
 }
 
-function cycleQueueFontSize() {
-  const order = ['S', 'M', 'L'];
-  const idx = order.indexOf(queueFontSizeKey);
-  queueFontSizeKey = order[(idx + 1) % order.length];
-  localStorage.setItem('pc_queue_font_size', queueFontSizeKey);
-  updateQueueFontSizeUI();
-  // re-render to apply classes
-  if (lastBs) renderQueue(lastBs);
-}
-
 function updateQueueFontSizeUI() {
-  const el = document.getElementById('queue-font-size');
-  if (el) {
-    el.textContent = `FONT: ${queueFontSizeKey}`;
-  }
   // apply class to .queue-panel
   const panel = document.querySelector('.queue-panel');
   if (panel) {
@@ -1896,17 +1882,8 @@ async function init() {
     updateTextSpeedUI();
   }
 
-  // PC-56: wire FONT SIZE cycling control (next to TEXT SPEED)
-  const fontEl = document.getElementById('queue-font-size');
-  if (fontEl) {
-    fontEl.onclick = () => {
-      cycleQueueFontSize();
-    };
-    updateQueueFontSizeUI();
-  } else {
-    // fallback if element not present yet
-    updateQueueFontSizeUI();
-  }
+  // Initial render of queue font size UI (default M applied via CSS class)
+  updateQueueFontSizeUI();
 
   // PC-DEC-044: click message log to instantly complete pending typing
   const msgBox = document.getElementById('message-box');
