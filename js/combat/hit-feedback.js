@@ -5,14 +5,15 @@
  * Engine feed formats (js/combat/engine.js log() + api/combat/[...path].js):
  *   tic N — <monsterLabel> <attackName> hits player for <dmg>   (monster → player)
  *   tic N — LH|RH <attackName> hits <monsterLabel> for <dmg>    (player → monster)
- * Monster labels are "Monster A", "A", or the "Monster #<id>" fallback
+ * Monster labels have the format <name> <letter>, e.g. "Wolf A", "Glimmerling B",
+ * or bare "Monster A", "A", or the "Monster #<id>" fallback
  * (api/combat/[...path].js:110). `letter` is the normalized arena key:
- * "Monster A" → "A", bare "A" → "A", "Monster #12" → "#12" — the SAME
- * normalization the UI applies to monster cards (data-letter, queueLabel).
+ * "Wolf A" → "A", "Monster A" → "A", bare "A" → "A", "Monster #12" → "#12"
+ * — the SAME normalization the UI applies to monster cards (data-letter, queueLabel).
  * Miss/Ready/defeat/potion lines return null — misses get no feedback
  * (a whiff is a low-tension beat; feedback must not lie about impact).
  */
-const ARENA_LABEL = '(?:Monster #[0-9]+|Monster [A-Z]|[A-Z])';
+const ARENA_LABEL = '(?:Monster #[0-9]+|[A-Z]|[A-Za-z]+(?: [A-Za-z]+)* [A-Z])';
 const MONSTER_HIT = new RegExp(`^tic \\d+ — (${ARENA_LABEL})(?: .*)? hits player for (\\d+)(?: CRITICAL!)?$`);
 const PLAYER_HIT = new RegExp(`^tic \\d+ — (LH|RH) .*? hits (${ARENA_LABEL}) for (\\d+)(?: CRITICAL!)?$`);
 
@@ -29,7 +30,13 @@ export function parseHitLine(line) {
   return null;
 }
 
-// "Monster A" → "A"; "Monster #12" → "#12"; "A" → "A". Mirrors queueLabel().
+// "Wolf A" → "A", "Monster A" → "A", "A" → "A", "Monster #12" → "#12". Mirrors queueLabel().
 export function arenaKey(label) {
-  return String(label || '').replace(/^Monster /i, '');
+  const s = String(label || '');
+  // "Monster #12" → "#12"
+  const numMatch = s.match(/(#\d+)$/);
+  if (numMatch) return numMatch[1];
+  // Extract trailing capital letter (works for "Wolf A", "Monster A", and bare "A")
+  const letterMatch = s.match(/([A-Z])$/);
+  return letterMatch ? letterMatch[1] : s;
 }

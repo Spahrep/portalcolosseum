@@ -148,9 +148,15 @@ export function createEngine(rng = Math.random) {
             crit = true;
           }
           applyDamage(state.player, dmg);
-          log(`${row.label} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}${crit ? ' CRITICAL!' : ''}`);
+          const monLabel = (mon.name || mon.template_name)
+            ? `${mon.name || mon.template_name} ${row.label.replace(/^Monster /i, '')}`
+            : row.label;
+          log(`${monLabel} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}${crit ? ' CRITICAL!' : ''}`);
         } else {
-          log(`${row.label} ${atkName ? atkName + ' ' : ''}misses`);
+          const monLabel = (mon.name || mon.template_name)
+            ? `${mon.name || mon.template_name} ${row.label.replace(/^Monster /i, '')}`
+            : row.label;
+          log(`${monLabel} ${atkName ? atkName + ' ' : ''}misses`);
         }
         if (!isMonsterDead(mon)) {
           const nextAtk = pickMonsterAttack(mon, state.rng);
