@@ -267,6 +267,19 @@
     .queue-size-M .queue-row.top-row { font-size: 17px!important; }
 
     .queue-size-L .queue-row { font-size: 17px!important; }
+
+    /* PC-72 dramatic combat timing keyframes */
+    @keyframes queue-row-enter {
+      0% { opacity: 0; transform: translateX(20px); }
+      100% { opacity: 1; transform: translateX(0); }
+    }
+    .queue-row-enter { animation: queue-row-enter 250ms ease-out; }
+
+    @keyframes queue-row-exit {
+      0% { opacity: 1; transform: translateY(0); }
+      100% { opacity: 0; transform: translateY(-20px); }
+    }
+    .queue-row-exit { animation: queue-row-exit 200ms ease-in forwards; }
     .queue-size-L .queue-row .tic { font-size: 14px!important; }
     .queue-size-L .queue-row.top-row { font-size: 19px!important; }
 
@@ -428,6 +441,22 @@
       font-size: 13px;
       color: #a8c8ea;
       margin-top: 8px;
+    }
+    .hp-bar-bg {
+      width: 100%;
+      height: 8px;
+      background: #000;
+      border: 1px solid #444;
+      margin-top: 4px;
+      position: relative;
+    }
+    .hp-bar-fill {
+      position: absolute;
+      top: 0;
+      left: 0;
+      height: 100%;
+      background: #ff3333;
+      width: 100%;
     }
     .message-box {
       background: #0a1a2e;
@@ -646,7 +675,7 @@
       <!-- PLAYER -->
       <div class="player-panel">
         <div class="panel-title">PLAYER</div>
-        <div class="stat-block" id="player-hp">HP: <span style="color:#66ff99;">Healthy</span></div>
+        <div class="stat-block" id="player-hp">HP: <span style="color:#66ff99;">Healthy</span><div class="hp-bar-bg"><div class="hp-bar-fill" id="hp-bar-fill"></div></div></div>
         <div class="loadout-mini">
           LH: <span id="loadout-lh">—</span><br>
           RH: <span id="loadout-rh">—</span>

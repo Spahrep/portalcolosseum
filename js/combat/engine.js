@@ -29,6 +29,12 @@ export function createEngine(rng = Math.random) {
     state.feed.push(`tic ${state.tic} — ${msg}`);
   }
 
+  // PC-72: pick monster attack at commit time for windup text
+  function pickMonsterAttack(mon, rng) {
+    const atks = (mon.attacks||[]).filter(a => a && typeof a.name === 'string' && a.name);
+    return atks.length ? atks[Math.floor(rng()*atks.length)] : null;
+  }
+
   // PC-72: potion crit. Rolled ONLY when crit_chance > 0 so legacy potions and
   // pre-crit tests consume no extra RNG. On crit: heal amount and buff value
   // × critEffectMultiplier, buff duration × critDurationMultiplier (rounded).
@@ -126,19 +132,19 @@ export function createEngine(rng = Math.random) {
     } else {
       const mon = state.monsters.find(m => m.label === row.label);
       if (mon && !isMonsterDead(mon)) {
-        const atks = (mon.attacks||[]).filter(a => a && typeof a.name === 'string' && a.name);
-        const atk = atks.length ? atks[Math.floor(state.rng()*atks.length)] : null;
-        const atkName = atk ? atk.name : null;
+        // PC-72: use pre-selected attack from commit time (row.monsterAttackName)
+        const atkName = row.monsterAttackName || null;
         let dmg = rollDamage(mon.damage, 3, state.rng);
         if (checkHit(mon.accuracy, state.rng)) {
           // PC-72: monster crit — mon.critChance (from generate_monster payload)
           // × pickedAttack.crit_factor, same formula as the player side. Roll
           // only after a hit lands (misses can't crit) and only when the final
           // chance is > 0, so legacy states/tests consume no extra RNG.
-          const finalCritChance = (Number(mon.crit_chance ?? mon.critChance) || 0) * (Number(atk?.crit_factor) || 1);
+          const atkForCrit = (mon.attacks||[]).find(a => a && a.name === atkName);
+          const finalCritChance = (Number(mon.crit_chance ?? mon.critChance) || 0) * (Number(atkForCrit?.crit_factor) || 1);
           let crit = false;
           if (finalCritChance > 0 && state.rng() * 100 < finalCritChance) {
-            dmg = Math.round(dmg * (Number(atk?.crit_multiplier) || 2.0));
+            dmg = Math.round(dmg * (Number(atkForCrit?.crit_multiplier) || 2.0));
             crit = true;
           }
           applyDamage(state.player, dmg);
@@ -147,7 +153,10 @@ export function createEngine(rng = Math.random) {
           log(`${row.label} ${atkName ? atkName + ' ' : ''}misses`);
         }
         if (!isMonsterDead(mon)) {
-          commitNewRow(state.queue, row.label, 'attack', mon.speed);
+          const nextAtk = pickMonsterAttack(mon, state.rng);
+          const newRow = commitNewRow(state.queue, row.label, 'attack', mon.speed);
+          newRow.monsterAttackName = nextAtk?.name || null;
+          log(`${mon.name || mon.template_name || 'Monster'} ${row.label.replace('Monster ', '')} prepares ${nextAtk?.name ? `a ${nextAtk.name}` : 'an attack'}...`);
         }
       }
       const idx = state.queue.findIndex(r => r.id === row.id);
@@ -299,7 +308,7 @@ export function createEngine(rng = Math.random) {
     row.critMultiplier = playerCritMultiplier;
     state.player.hands[hand].state = 'winding';
     state.player.hands[hand].attackId = attackId;
-    log(`${hand} commits ${attackName ? attackName : `attack ${attackId}`} (cast ${castTicks})`);
+    log(`${hand} prepares ${attackName ? `a ${attackName}` : 'an attack'}...`);
     return advanceToNextDecision();
   }
 
@@ -329,7 +338,10 @@ export function createEngine(rng = Math.random) {
     };
     state.monsters.forEach(mon => {
       if (!isMonsterDead(mon)) {
-        commitNewRow(state.queue, mon.label, 'attack', mon.speed);
+        const atk = pickMonsterAttack(mon, state.rng);
+        const row = commitNewRow(state.queue, mon.label, 'attack', mon.speed);
+        row.monsterAttackName = atk?.name || null;
+        log(`${mon.name || mon.template_name || 'Monster'} ${mon.label.replace('Monster ', '')} prepares ${atk?.name ? `a ${atk.name}` : 'an attack'}...`);
       }
     });
     // PC-64: initial approach rows for hands at weapon instance speed (default 1 if missing)
@@ -443,7 +455,7 @@ export function createEngine(rng = Math.random) {
     const row = commitNewRow(state.queue, hand, 'drinking', pre);
     row.potionSlot = slot;
     row.postTicks = post;
-    log(`${hand} drinks ${potion.template_name || potion.effect_type} (${pre} tics)`);
+    log(`${hand} drinks ${potion.template_name || potion.effect_type}...`);
     // Action cost: hand locked for pre + post = weapon.speed + potion.rolled_speed total (contract §7)
     return advanceToNextDecision();
   }
