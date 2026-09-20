@@ -912,7 +912,7 @@ async function renderPortalTemplates(container) {
     <div id="pt-form-container"></div>
     <div id="pt-mapping-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Tier</th><th>Dice Pool</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Dice Pool</th><th>Actions</th></tr></thead>
       <tbody id="pt-tbody"></tbody>
     </table>
   `;
@@ -925,7 +925,6 @@ async function renderPortalTemplates(container) {
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${esc(t.name)}</td>
-      <td>${t.tier}</td>
       <td>G:${t.green_dice_count} Y:${t.yellow_dice_count} R:${t.red_dice_count}</td>
       <td>
         <button class="btn" data-edit="${t.id}">Edit</button>
@@ -961,8 +960,11 @@ function showPortalTemplateForm(id = null) {
       <div class="form-card">
         <h3>${id ? 'Edit Portal Template' : 'Create Portal Template'}</h3>
         <div class="form-group"><label>Name</label><input id="pt-name" value="${esc(t.name || '')}"></div>
-        <div class="form-group"><label>Tier</label><input id="pt-tier" type="number" value="${t.tier ?? 1}"></div>
         <div class="form-group"><label>Description</label><textarea id="pt-description" rows="2">${esc(t.description || '')}</textarea></div>
+        <div class="form-group"><label>Encounters (fights)</label><input id="pt-fights" type="number" value="${t.fights ?? 5}"></div>
+        <div class="form-group"><label>Max Enemies Per Encounter</label><input id="pt-max_enemies" type="number" value="${t.max_enemies ?? 5}"></div>
+        <div class="form-group"><label>AP Cost</label><input id="pt-ap_cost" type="number" value="${t.ap_cost ?? 0}"></div>
+        <div class="form-group"><label>Unlock Gold Cost</label><input id="pt-unlock_gold_cost" type="number" value="${t.unlock_gold_cost ?? 0}"></div>
         <div class="form-group"><label>Green Dice Count</label><input id="pt-green_dice_count" type="number" value="${t.green_dice_count ?? 4}"></div>
         <div class="form-group"><label>Yellow Dice Count</label><input id="pt-yellow_dice_count" type="number" value="${t.yellow_dice_count ?? 3}"></div>
         <div class="form-group"><label>Red Dice Count</label><input id="pt-red_dice_count" type="number" value="${t.red_dice_count ?? 3}"></div>
@@ -978,8 +980,11 @@ function showPortalTemplateForm(id = null) {
     document.getElementById('save-pt-btn').addEventListener('click', async () => {
       const body = {
         name: val('pt-name'),
-        tier: parseInt(val('pt-tier')),
         description: val('pt-description') || null,
+        fights: parseInt(val('pt-fights')),
+        max_enemies: parseInt(val('pt-max_enemies')),
+        ap_cost: parseInt(val('pt-ap_cost')),
+        unlock_gold_cost: parseInt(val('pt-unlock_gold_cost')),
         green_dice_count: parseInt(val('pt-green_dice_count')),
         yellow_dice_count: parseInt(val('pt-yellow_dice_count')),
         red_dice_count: parseInt(val('pt-red_dice_count')),
@@ -1026,7 +1031,7 @@ async function showPortalMonsterMappingEditor(templateId) {
     let html = `
       <div class="form-card mapping-editor">
         <h3>Monster Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Tier ${template.tier} · Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}</p>
+        <p class="muted">Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}</p>
         <table>
           <thead><tr><th>Monster Name</th><th>Point Cost</th><th>Weight</th><th>Actions</th></tr></thead>
           <tbody>
@@ -1146,7 +1151,7 @@ async function showPortalLootMappingEditor(templateId) {
     let html = `
       <div class="form-card mapping-editor">
         <h3>Loot Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Tier ${template.tier} · Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}</p>
+        <p class="muted">Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}</p>
         <table>
           <thead><tr><th>Weapon Template</th><th>LP Cost</th><th>Weight</th><th>Actions</th></tr></thead>
           <tbody>

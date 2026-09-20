@@ -429,7 +429,7 @@ async function handle(request, method) {
     const table = 'portal_template';
 
     if (method === 'GET' && !id) {
-      const { data, error } = await admin.from(table).select('*').order('tier').order('name');
+      const { data, error } = await admin.from(table).select('*').order('name');
       if (error) return json({ error: error.message }, 500);
       return json({ data });
     }

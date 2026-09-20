@@ -860,6 +860,19 @@ function renderPlayerHP(runOrState) {
   const hpVal = (runOrState && typeof runOrState.player_hp === 'number') ? runOrState.player_hp : null;
   const hpColor = hpVal === null ? '#66ff99' : (hpVal > 300 ? '#66ff99' : (hpVal > 100 ? '#ffcc66' : '#ff6666'));
   el.innerHTML = `HP: <span style="color:${hpColor};">${hpVal === null ? '—' : hpVal}</span>`;
+
+  // HP bar: red fill = current HP (width %), black bg = missing HP
+  const fillEl = document.getElementById('hp-bar-fill');
+  if (fillEl) {
+    let maxHp = runOrState && typeof runOrState.max_hp === 'number' ? runOrState.max_hp : null;
+    if (maxHp === null && runOrState && runOrState.battle_state && runOrState.battle_state.player) {
+      maxHp = runOrState.battle_state.player.max_hp;
+    }
+    const pct = (hpVal !== null && maxHp && maxHp > 0)
+      ? Math.min(100, Math.max(0, (hpVal / maxHp) * 100))
+      : 100;
+    fillEl.style.width = pct + '%';
+  }
 }
 
 function renderLoadout(bs) {
@@ -1035,7 +1048,7 @@ function playIntroCountdown(bs, intro, onDone) {
     const fires = (intro.fires || []).filter(f => f.tic === k - 1);
     for (const f of fires) {
       appendFeedLine(f.line);
-      renderPlayerHP({ player_hp: f.hp });
+      renderPlayerHP({ player_hp: f.hp, max_hp: bs.player.max_hp });
       if (f.after) {
         const row = ordered.find(r => r.label === f.label);
         if (row) row.tics = f.after.tics;

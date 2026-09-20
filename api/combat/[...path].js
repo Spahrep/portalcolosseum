@@ -486,7 +486,7 @@ async function handle(request) {
 
       const safeState = {
         queue: state.queue || [],
-        player: state.player ? { hp: state.player.hp, hands: state.player.hands } : null,
+        player: state.player ? { hp: state.player.hp, max_hp: state.player.max_hp, hands: state.player.hands } : null,
         feed: state.feed || [],
         tic: state.tic || 0,
         buffs: state.buffs || [],
