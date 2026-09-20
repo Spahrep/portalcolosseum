@@ -526,7 +526,15 @@ function printStateFromRun(run) {
   } else {
     lines.push('monsters: none');
   }
-  const queueLine = (bs.queue || []).slice(0, 4).map(q => `${q.tics ?? 0} - ${q.label || '?'}: ${QUEUE_ACTION_LABELS[q.event] || (q.event ? q.event[0].toUpperCase() + q.event.slice(1) : '?')}`).join(' | ');
+  const queueLine = (bs.queue || []).slice(0, 4).map(q => {
+    if (q.event === 'attack' && q.label) {
+      const mon = (bs.monsters || []).find(m => m.label === q.label);
+      const monName = mon ? (mon.name || mon.label) : q.label;
+      const atkName = q.monsterAttackName || 'Attack';
+      return `${q.tics ?? 0} - ${monName}'s ${atkName}`;
+    }
+    return `${q.tics ?? 0} - ${q.label || '?'}: ${QUEUE_ACTION_LABELS[q.event] || (q.event ? q.event[0].toUpperCase() + q.event.slice(1) : '?')}`;
+  }).join(' | ');
   lines.push(`queue: ${queueLine || 'empty'}`);
   lines.push(`feed: ${(bs.feed || []).slice(-3).join(' | ') || '—'}`);
   appendLines(lines, 'green');
@@ -1668,9 +1676,17 @@ function updateSidePanelsFromRun(run) {
     } else {
       let html = '';
       queue.slice(0, 8).forEach(q => {
-        const label = q.label || '?';
         const tics = q.tics ?? 0;
-        const ev = QUEUE_ACTION_LABELS[q.event] || (q.event ? q.event[0].toUpperCase() + q.event.slice(1) : '?');
+        let label, ev;
+        if (q.event === 'attack' && q.label) {
+          const mon = (bs.monsters || []).find(m => m.label === q.label);
+          const monName = mon ? (mon.name || mon.label) : q.label;
+          label = `${monName}'s ${q.monsterAttackName || 'Attack'}`;
+          ev = '';
+        } else {
+          label = q.label || '?';
+          ev = QUEUE_ACTION_LABELS[q.event] || (q.event ? q.event[0].toUpperCase() + q.event.slice(1) : '?');
+        }
         // PC-56: prediction bar — show | at the start and end of the bar range (no pin mode per design ref)
         let marker = '';
         if (menuAttack && menuAttack.queue === queue) {
@@ -1681,7 +1697,7 @@ function updateSidePanelsFromRun(run) {
             else marker = ' |';
           }
         }
-        html += `<div>${tics} - ${label}: ${ev}${marker}</div>`;
+        html += `<div>${tics} - ${label}${ev ? ': ' + ev : ''}${marker}</div>`;
       });
       actionQueueContent.innerHTML = html;
     }
