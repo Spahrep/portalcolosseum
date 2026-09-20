@@ -1688,7 +1688,8 @@ async function loadBattle(runId) {
       renderActionMenu(bs);
       // PC-DEC-045c: fresh page load in a mid-battle run shows history instantly;
       // incremental commit updates typewriter new lines.
-      if (renderedFeedLines === 0 && bs.feed && bs.feed.length > 0) {
+      // prevBs distinguishes: on fresh page prevBs is null, on commit it's set.
+      if (!prevBs && renderedFeedLines === 0 && bs.feed && bs.feed.length > 0) {
         populateFeedInstantly(bs.feed);
       } else {
         renderFeed(bs.feed || []);
