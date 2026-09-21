@@ -14,16 +14,21 @@ import { parseHitLine } from './combat/hit-feedback.js';
 import { getSpeedPreset, getFontSizePreset, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
 
 /**
- * BattleClock — strict FIFO state machine for post-commit animation sequencing.
- * Replaces the old onFeedDone callback chain with explicit phase transitions:
- *   SCHEDULED → (wait for feed narration) → ANIMATING → (resolve + insert) → IDLE
+ * BattleClock — orchestrates post-commit animation sequencing.
+ * Phase flow:
+ *   IDLE → SCHEDULED (wait for feed narration) → ANIMATING →
+ *     → resolve (flash+shrink on old DOM) → renderQueue(bs) → entry enter animations → IDLE
+ *
+ * CRITICAL: renderQueue runs IMMEDIATELY after resolve finishes, NOT after
+ * decorative animations. This prevents the "entries don't appear if user
+ * commits again during slow animation" bug.
+ *
  * Singleton — one instance per module, created at the bottom of this class block.
  */
 class BattleClock {
   constructor() {
     this.state = 'IDLE'; // IDLE | SCHEDULED | ANIMATING
     this._diff = null;
-    this._queueEl = null;
     this._newBs = null;
     this._onComplete = null;
     this._timer = null;
@@ -36,14 +41,13 @@ class BattleClock {
   }
 
   /** Begin the post-commit transition. Called from loadBattle after highlighting. */
-  start(diff, queueEl, newBs, onComplete) {
+  start(diff, newBs, onComplete) {
     this.abort();
     if (diff.resolved.length === 0 && diff.added.length === 0) {
       if (onComplete) onComplete();
       return;
     }
     this._diff = diff;
-    this._queueEl = queueEl;
     this._newBs = newBs;
     this._onComplete = onComplete;
     this.state = 'SCHEDULED';
@@ -58,12 +62,16 @@ class BattleClock {
 
   /** Phase 1: Resolve animation — flash + shrink on resolved entries. */
   _runResolve() {
-    const { _diff: diff, _queueEl: queueEl } = this;
+    const { _diff: diff } = this;
+    const queueEl = document.getElementById('queue');
+
     if (!queueEl || diff.resolved.length === 0) {
-      this._runInsert();
+      // No resolve needed — render new entries immediately
+      this._renderNew();
       return;
     }
-    // flash
+
+    // Flash
     diff.resolved.forEach(id => {
       const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
       if (rowEl) {
@@ -71,123 +79,50 @@ class BattleClock {
         rowEl.classList.add('queue-row-flash');
       }
     });
+
+    // Shrink, then render new queue
     this._timer = setTimeout(() => {
-      // shrink
       diff.resolved.forEach(id => {
         const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
         if (rowEl) rowEl.classList.add('queue-row-shrink');
       });
-      this._timer = setTimeout(() => this._runInsert(), 350);
+      this._timer = setTimeout(() => this._renderNew(), 350);
     }, 400);
   }
 
-  /** Phase 2: Insert new entries — push-down + re-render with entry animations. */
-  _runInsert() {
+  /** Phase 2: Render the updated queue, then apply entry-enter animations. */
+  _renderNew() {
     const { _diff: diff, _newBs: newBs } = this;
-    if (diff.added.length === 0) {
-      this._finish();
-      return;
-    }
-    this._stageInsertPreview(diff, newBs);
-  }
 
-  /**
-   * 5-stage insert animation per Spahrep's mockup (Discord #the-forge 1551586264245870632):
-   *   1. Thin yellow preview bar at insertion boundary
-   *   2. Rows below push down, gap opens
-   *   3. New bar grows left→right (queue-bar-wipe)
-   *   4. Flash once (queue-arrive-glow)
-   *   5. Settle — re-render with queue-row-enter
-   */
-  _stageInsertPreview(diff, newBs) {
-    const queueEl = this._queueEl;
-    if (!queueEl) { this._finish(); return; }
-
-    const newQueue = newBs.queue || [];
-    const oldRows = Array.from(queueEl.querySelectorAll('.queue-row'));
-    const firstAdded = diff.added[0];
-    const firstAddedId = firstAdded && firstAdded.id ? firstAdded.id : firstAdded;
-
-    // Find insertion index in the OLD queue
-    let insertAfterIndex = -1;
-    if (firstAddedId) {
-      const newIdx = newQueue.findIndex(r => r.id === firstAddedId);
-      if (newIdx > 0) {
-        const prevId = newQueue[newIdx - 1].id;
-        insertAfterIndex = diff.added.length === newQueue.length ? -1
-          : diff.resolved.findIndex(id => {
-              const rid = typeof id === 'object' ? (id.id || id) : id;
-              return rid === prevId;
-            });
-        if (insertAfterIndex < 0) {
-          insertAfterIndex = oldRows.findIndex(r => r.dataset.rowId === String(prevId));
-        }
-      }
-    }
-
-    const pushPx = diff.added.length * 24; // one queue-row height per added entry
-    const rowsToPush = insertAfterIndex >= 0 ? oldRows.slice(insertAfterIndex + 1) : oldRows;
-
-    // Stage 1: Thin yellow preview bar
-    let preview = queueEl.querySelector('.queue-insert-preview');
-    if (!preview) {
-      preview = document.createElement('div');
-      preview.className = 'queue-insert-preview';
-      queueEl.appendChild(preview);
-    }
-    if (insertAfterIndex >= 0 && insertAfterIndex < oldRows.length) {
-      const refRow = oldRows[insertAfterIndex];
-      preview.style.top = (refRow.offsetTop + refRow.offsetHeight) + 'px';
-    }
-    requestAnimationFrame(() => preview.classList.add('active'));
-
-    // Stage 2: Push rows down (after preview appears)
-    this._timer = setTimeout(() => {
-      rowsToPush.forEach(row => {
-        row.style.transition = 'transform 250ms ease-out';
-        row.style.transform = `translateY(${pushPx}px)`;
-      });
-
-      // Also push the prediction bar if present
-      const predBar = queueEl.querySelector('.prediction-bar');
-      if (predBar) {
-        const curH = parseFloat(predBar.style.height) || predBar.getBoundingClientRect().height || 4;
-        predBar.style.transition = 'height 250ms ease-out';
-        predBar.style.height = `${curH + pushPx}px`;
-      }
-
-      // Stages 3-5: After push completes, re-render with entry animations
-      this._timer = setTimeout(() => {
-        preview.remove();
-        this._finishInsert(diff, newBs);
-      }, 280);
-    }, 280);
-  }
-
-  /** Re-render queue and apply entry-enter animations. */
-  _finishInsert(diff, newBs) {
+    // Always render the full queue — this is where entries actually appear
     renderQueue(newBs);
-    const nqEl = document.getElementById('queue');
-    if (nqEl) {
-      diff.added.forEach(entry => {
-        const id = entry && entry.id ? entry.id : entry;
-        const rowEl = nqEl.querySelector(`[data-row-id="${id}"]`);
-        if (rowEl) {
-          if (entry && entry.isMonster) {
-            rowEl.classList.add('queue-row-monster-enter');
-            setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
-          } else {
-            rowEl.classList.add('queue-row-enter');
-            setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
+
+    // Cosmetic entry-enter animations on freshly rendered entries
+    if (diff.added.length > 0) {
+      const nqEl = document.getElementById('queue');
+      if (nqEl) {
+        diff.added.forEach(entry => {
+          const id = entry && entry.id ? entry.id : entry;
+          const rowEl = nqEl.querySelector(`[data-row-id="${id}"]`);
+          if (rowEl) {
+            if (entry && entry.isMonster) {
+              rowEl.classList.add('queue-row-monster-enter');
+              setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
+            } else {
+              rowEl.classList.add('queue-row-enter');
+              setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
+            }
           }
+        });
+        // Panel flash
+        const qp = document.querySelector('.queue-panel');
+        if (qp) {
+          qp.classList.add('queue-arrived');
+          setTimeout(() => qp.classList.remove('queue-arrived'), 350);
         }
-      });
-      const qp = document.querySelector('.queue-panel');
-      if (qp) {
-        qp.classList.add('queue-arrived');
-        setTimeout(() => qp.classList.remove('queue-arrived'), 350);
       }
     }
+
     this._finish();
   }
 
@@ -1938,8 +1873,8 @@ async function loadBattle(runId) {
           if (firstEl) firstEl.classList.add('queue-row-current');
         }
         // BattleClock handles the entire post-commit sequence:
-        //   feed narration → resolve animation → 5-stage insert → onComplete
-        battleClock.start(diff, queueEl, bs, () => {
+        //   highlight → feed narration → resolve flash+shrink → renderQueue → entry animations
+        battleClock.start(diff, bs, () => {
           renderQueue(bs);
         });
       }
