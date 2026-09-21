@@ -1850,7 +1850,7 @@ async function loadBattle(runId) {
               if (nqEl) {
                 added.forEach((entry) => {
                   const id = entry && entry.id ? entry.id : entry;
-                  const rowEl = nqEl.querySelector(`[data-row-id=\"${id}\"]`);
+                  const rowEl = nqEl.querySelector(`[data-row-id="${id}"]`);
                   if (rowEl) {
                     if (entry && entry.isMonster) {
                       rowEl.classList.add('queue-row-monster-enter');
@@ -1876,7 +1876,7 @@ async function loadBattle(runId) {
             if (nqEl) {
               added.forEach((entry) => {
                 const id = entry && entry.id ? entry.id : entry;
-                const rowEl = nqEl.querySelector(`[data-row-id=\"${id}\"]`);
+                const rowEl = nqEl.querySelector(`[data-row-id="${id}"]`);
                 if (rowEl) {
                   if (entry && entry.isMonster) {
                     rowEl.classList.add('queue-row-monster-enter');
