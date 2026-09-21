@@ -997,7 +997,10 @@ function diffQueueForAnimation(oldBs, newBs) {
   const newIds = new Set(newRows.map(r => r.id));
   return {
     resolved: oldRows.filter(r => !newIds.has(r.id)).map(r => r.id),
-    added: newRows.filter(r => !oldIds.has(r.id)).map(r => r.id)
+    added: newRows.filter(r => !oldIds.has(r.id)).map(r => ({
+      id: r.id,
+      isMonster: r.label !== 'LH' && r.label !== 'RH' && r.event === 'attack'
+    }))
   };
 }
 
@@ -1039,6 +1042,11 @@ function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   div.appendChild(nameSpan);
   div.appendChild(ticSpan);
+  if (!isMonster) {
+    const bar = document.createElement('div');
+    bar.className = 'queue-bar';
+    div.appendChild(bar);
+  }
   // PC-56: bar-only mode — no pin markers; the prediction bar is added by renderQueue
   return div;
 }
@@ -1808,15 +1816,75 @@ async function loadBattle(runId) {
           });
         }
         onFeedDone = () => {
+          // Phase A: push-down existing rows to create gap (250ms), then render + bar grow
+          const added = diff.added || [];
+          if (added.length > 0 && queueEl) {
+            const oldQueue = prevBs.queue || [];
+            const newQueue = bs.queue || [];
+            const firstAdded = added[0];
+            const firstAddedId = firstAdded && firstAdded.id ? firstAdded.id : firstAdded;
+            let insertAfterIndex = -1;
+            if (firstAddedId) {
+              const newIdx = newQueue.findIndex(r => r.id === firstAddedId);
+              if (newIdx > 0) {
+                const prevId = newQueue[newIdx - 1].id;
+                insertAfterIndex = oldQueue.findIndex(r => r.id === prevId);
+              }
+            }
+            const pushPx = added.length * 24;
+            const allOldRows = Array.from(queueEl.querySelectorAll('.queue-row'));
+            const rowsToPush = insertAfterIndex >= 0 ? allOldRows.slice(insertAfterIndex + 1) : allOldRows;
+            rowsToPush.forEach(row => {
+              row.style.transition = 'transform 250ms ease-out';
+              row.style.transform = `translateY(${pushPx}px)`;
+            });
+            const predBar = queueEl.querySelector('.prediction-bar');
+            if (predBar) {
+              const curH = parseFloat(predBar.style.height) || predBar.getBoundingClientRect().height || 4;
+              predBar.style.transition = 'height 250ms ease-out';
+              predBar.style.height = `${curH + pushPx}px`;
+            }
+            setTimeout(() => {
+              renderQueue(bs);
+              const nqEl = document.getElementById('queue');
+              if (nqEl) {
+                added.forEach((entry) => {
+                  const id = entry && entry.id ? entry.id : entry;
+                  const rowEl = nqEl.querySelector(`[data-row-id=\"${id}\"]`);
+                  if (rowEl) {
+                    if (entry && entry.isMonster) {
+                      rowEl.classList.add('queue-row-monster-enter');
+                      setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
+                    } else {
+                      rowEl.classList.add('queue-row-enter');
+                      setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
+                    }
+                  }
+                });
+                const qp = document.querySelector('.queue-panel');
+                if (qp) {
+                  qp.classList.add('queue-arrived');
+                  setTimeout(() => qp.classList.remove('queue-arrived'), 350);
+                }
+              }
+            }, 250);
+            return;
+          }
           renderQueue(bs);
-          if (diff.added.length > 0) {
+          if (added.length > 0) {
             const nqEl = document.getElementById('queue');
             if (nqEl) {
-              diff.added.forEach(id => {
-                const rowEl = nqEl.querySelector(`[data-row-id="${id}"]`);
+              added.forEach((entry) => {
+                const id = entry && entry.id ? entry.id : entry;
+                const rowEl = nqEl.querySelector(`[data-row-id=\"${id}\"]`);
                 if (rowEl) {
-                  rowEl.classList.add('queue-row-enter');
-                  setTimeout(() => rowEl.classList.remove('queue-row-enter'), 800);
+                  if (entry && entry.isMonster) {
+                    rowEl.classList.add('queue-row-monster-enter');
+                    setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
+                  } else {
+                    rowEl.classList.add('queue-row-enter');
+                    setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
+                  }
                 }
               });
               const qp = document.querySelector('.queue-panel');
