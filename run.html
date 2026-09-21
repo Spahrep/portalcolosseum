@@ -400,6 +400,35 @@
       animation: queue-arrive-glow 0.35s ease-out;
     }
 
+    /* Stage 1-2: Insert preview marker */
+    .queue-insert-preview {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 0;
+      background: rgba(255, 204, 102, 0.3);
+      border: 1px dashed #ffcc66;
+      transition: height 250ms ease-out;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .queue-insert-preview.active {
+      height: 24px; /* full slot height */
+    }
+
+    /* Stage 3: Left-to-right wipe */
+    .queue-row-inserting {
+      overflow: hidden;
+      position: relative;
+    }
+    .queue-row-inserting .queue-bar {
+      animation: queue-bar-wipe 300ms ease-out forwards;
+    }
+    @keyframes queue-bar-wipe {
+      0%   { width: 8px; opacity: 0.7; }
+      100% { width: 100%; opacity: 0.7; }
+    }
+
     /* PC-63 DW cascading command menu — three-window modal cascade per the
        locked spec (docs/battle-status-ui.md Cascading Window Spec;
        shared/CommandSelection.png). Orange frames/text, blue hand tab, green
