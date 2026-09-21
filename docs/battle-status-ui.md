@@ -237,9 +237,7 @@ attack cancelled — target already defeated"). Multi-target attacks survive par
 kills (cancel only when every queued target is dead); auto-target attacks (no explicit
 target) still redirect to the first living monster.
 
-**PMVP — Cancel on death (remainder):** whether a participant that dies on a tic still
-resolves its own in-flight attack (death-cancels vs attack-resolves-anyway). Parked;
-the current rule is draw-to-player on ties only. Revisit post-MVP.
+**Death-cancels-everything (PC-DEC-054, Spahrep 2026-09-21):** when a monster is killed, ALL of its queued attacks are removed from the queue immediately — no ticking down, no no-op at fire, no in-flight resolution. A dead monster never attacks again, even on the tic it died. Player-side kill-cancel unchanged: explicit-target hand attacks whose targets are all dead cancel into cooldown; auto-target attacks redirect to the first living monster. Decided by Spahrep, 2026-09-21.
 
 ## Monster HP — Words Only
 

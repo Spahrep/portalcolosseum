@@ -389,7 +389,7 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Speaker: DarkJester
   Verbatim: "If you send two attacks at the same enemy and the first one kills it the other hand should immediately start the moves cooldown time instead of being redirected or missing." + "Ok, please make it so that after the first move kills, the hand targeting it immediately goes on that moves cooldown"
   Status: DECIDED
-  Notes: Kill-cancel rule. When an attack impact kills a monster, any other hand still winding an attack whose targets are ALL dead is cancelled straight into its own move's cooldown at the kill tic — no finishing the cast, no corpse whiff, no redirect for explicit targets. Shipped 48ddd58 (engine.js): multi-target attacks survive partial kills (cancel only when every queued target is dead); auto-target attacks (no explicit target) still redirect to the first living monster; the cancelled hand pays its own move's cooldown (insurance tax — no free double-tap). Feed line: "RH attack cancelled — target already defeated". Partially resolves the parked "death-cancels-in-flight = PMVP" item: the player same-enemy double-tap case is ruled; whether a monster that dies on a tic still resolves its own in-flight attack stays PMVP. Applied to battle-status-ui.md + current-design-status.md.
+  Notes: Kill-cancel rule. When an attack impact kills a monster, any other hand still winding an attack whose targets are ALL dead is cancelled straight into its own move's cooldown at the kill tic — no finishing the cast, no corpse whiff, no redirect for explicit targets. Shipped 48ddd58 (engine.js): multi-target attacks survive partial kills (cancel only when every queued target is dead); auto-target attacks (no explicit target) still redirect to the first living monster; the cancelled hand pays its own move's cooldown (insurance tax — no free double-tap). Feed line: "RH attack cancelled — target already defeated". Partially resolves the parked "death-cancels-in-flight = PMVP" item; the remainder is resolved by PC-DEC-054 (Spahrep 2026-09-21): all attacks from a killed monster are removed from the queue — a dead monster never attacks again. Applied to battle-status-ui.md + current-design-status.md.
 
 - ID: PC-DEC-047
   Date: 2026-09-17
@@ -446,6 +446,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Verbatim: "F3 We want no hard coding, all things that are hard coded should move to the config table."
   Status: DECIDED
   Notes: Extends PC-DEC-035's no-hardcoding principle from \"no hard-coded values anywhere\" to a positive rule: anything hard-coded in the engine/UI must move to the configuration table (game_config). Applied to combat-engine-plan.md (HP now game_config.starting_hp per PC-DEC-045; crit system PC-DEC-050/051 synced into HP Tracking). Decided by Spahrep, 2026-09-21.
+
+- ID: PC-DEC-054
+  Date: 2026-09-21
+  Source: CLI session — F4 conflict review (docs/reviews/2026-09-21.md flag 4)
+  Speaker: Spahrep
+  Verbatim: "f4: When a monster is killed, all attacks from that monster need to be removed from the queue."
+  Status: DECIDED
+  Notes: Death-cancels-everything rule — resolves the last PMVP remainder of PC-DEC-046. When a monster dies, ALL of its queued attacks are removed from the queue immediately (no ticking down, no no-op at fire, no in-flight resolution). A dead monster never attacks again, even on the tic it died. Player-side kill-cancel (PC-DEC-046) is unchanged: explicit-target hand attacks whose targets are all dead cancel into cooldown; auto-target attacks redirect to the first living monster. Applied to current-design-status.md (kill-cancel bullet), battle-status-ui.md (death/queue section), combat-engine-plan.md (HP Tracking — Death). Decided by Spahrep, 2026-09-21.
 
 ## Open
 
