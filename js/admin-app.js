@@ -193,7 +193,7 @@ async function renderAttacks(container) {
     <button class="btn" id="create-attack-btn">+ Create New Attack</button>
     <div id="attack-form-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Dmg Mult</th><th>Mult Range</th><th>Prep</th><th>Prep Range</th><th>CD</th><th>CD Range</th><th>Multi?</th><th>Weight</th><th>Crit Factor</th><th>Crit Mult</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Dmg Mult</th><th>Mult Range</th><th>Prep</th><th>Prep Range</th><th>Cooldown</th><th>Cooldown Range</th><th>Multi?</th><th>Weight</th><th>Crit Factor</th><th>Crit Mult</th><th>Actions</th></tr></thead>
       <tbody id="attacks-tbody"></tbody>
     </table>
   `;
@@ -251,7 +251,7 @@ function showAttackForm(id = null) {
       <div class="form-group"><label>Prepare Time</label><input id="f-prepare_time" type="number" value="${attack.prepare_time ?? 10}"></div>
       <div class="form-group"><label>Prep Time Range (±)</label><input id="f-prepare_time_range" type="number" value="${attack.prepare_time_range ?? 0}"></div>
       <div class="form-group"><label>Cooldown Time</label><input id="f-cooldown_time" type="number" value="${attack.cooldown_time ?? 10}"></div>
-      <div class="form-group"><label>CD Time Range (±)</label><input id="f-cooldown_time_range" type="number" value="${attack.cooldown_time_range ?? 0}"></div>
+      <div class="form-group"><label>Cooldown Time Range (±)</label><input id="f-cooldown_time_range" type="number" value="${attack.cooldown_time_range ?? 0}"></div>
       <div class="form-group"><label><input id="f-is_multi_target" type="checkbox" ${attack.is_multi_target ? 'checked' : ''}> Multi Target</label></div>
       <div class="form-group"><label>Weight</label><input id="f-weight" type="number" step="0.1" value="${attack.weight ?? 1.0}"></div>
       <div class="form-group"><label>Crit Factor (× chance)</label><input id="f-crit_factor" type="number" step="0.1" value="${attack.crit_factor ?? 1.0}"></div>
@@ -464,7 +464,7 @@ async function showWeaponMappingEditor(templateId) {
     let html = `
       <div class="form-card mapping-editor">
         <h3>Attack Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Base stats: DMG ${template.base_damage}±${template.damage_range} · SPD ${template.base_speed}±${template.speed_range} · ACC ${template.base_accuracy}±${template.accuracy_range} · CRIT ${template.crit_base ?? 5}±${template.crit_range ?? 0}</p>
+        <p class="muted">Base stats: Damage ${template.base_damage}±${template.damage_range} · Speed ${template.base_speed}±${template.speed_range} · Accuracy ${template.base_accuracy}±${template.accuracy_range} · Crit ${template.crit_base ?? 5}±${template.crit_range ?? 0}</p>
         <p class="muted">Slot 0 (always): ${template.slot_0_attack?.name ? esc(template.slot_0_attack.name) : '—'} · S1: ${(template.slot_1_chance*100)}% · S2: ${(template.slot_2_chance*100)}% · S3: ${(template.slot_3_chance*100)}% · S4: ${(template.slot_4_chance*100)}%</p>
     `;
 
@@ -701,7 +701,7 @@ async function showMonsterMappingEditor(templateId) {
     let html = `
       <div class="form-card mapping-editor">
         <h3>Attack Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Base stats: DMG ${template.base_damage}±${template.damage_range} · SPD ${template.base_speed}±${template.speed_range} · ACC ${template.base_accuracy}±${template.accuracy_range} · CRIT ${template.crit_base ?? 5}±${template.crit_range ?? 0}</p>
+        <p class="muted">Base stats: Damage ${template.base_damage}±${template.damage_range} · Speed ${template.base_speed}±${template.speed_range} · Accuracy ${template.base_accuracy}±${template.accuracy_range} · Crit ${template.crit_base ?? 5}±${template.crit_range ?? 0}</p>
         <p class="muted">Slot 0 (always): ${template.slot_0_attack?.name ? esc(template.slot_0_attack.name) : '—'}</p>
     `;
 

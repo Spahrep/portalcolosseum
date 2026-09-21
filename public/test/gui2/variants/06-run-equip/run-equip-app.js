@@ -1,12 +1,12 @@
     // Game data
     const weaponData = {
-      'Wristblade': { type: 'WEAPON', stats: 'DMG 25±5 / SPD 18±2 / ACC 88±4', attacks: ['Quick Slash', 'Precision Strike'] },
-      'Short Sword': { type: 'WEAPON', stats: 'DMG 35±6 / SPD 27±3 / ACC 85±5', attacks: ['Heavy Chop', 'Cleave'] },
-      'Greatsword': { type: 'WEAPON', stats: 'DMG 55±8 / SPD 35±4 / ACC 82±6', attacks: ['Heavy Chop', 'Whirlwind'] },
-      'Hand Axe': { type: 'WEAPON', stats: 'DMG 32±5 / SPD 29±3 / ACC 84±5', attacks: ['Heavy Chop', 'Cleave'] },
-      'Battle Axe': { type: 'WEAPON', stats: 'DMG 50±7 / SPD 38±4 / ACC 80±6', attacks: ['Whirlwind', 'Power Attack'] },
-      'Quarterstaff': { type: 'WEAPON', stats: 'DMG 28±4 / SPD 24±2 / ACC 87±4', attacks: ['Attack'] },
-      'Warhammer': { type: 'WEAPON', stats: 'DMG 42±6 / SPD 33±3 / ACC 83±5', attacks: ['Heavy Chop'] }
+      'Wristblade': { type: 'WEAPON', stats: 'Damage: 25±5 · Speed: 18±2 · Accuracy: 88±4', attacks: ['Quick Slash', 'Precision Strike'] },
+      'Short Sword': { type: 'WEAPON', stats: 'Damage: 35±6 · Speed: 27±3 · Accuracy: 85±5', attacks: ['Heavy Chop', 'Cleave'] },
+      'Greatsword': { type: 'WEAPON', stats: 'Damage: 55±8 · Speed: 35±4 · Accuracy: 82±6', attacks: ['Heavy Chop', 'Whirlwind'] },
+      'Hand Axe': { type: 'WEAPON', stats: 'Damage: 32±5 · Speed: 29±3 · Accuracy: 84±5', attacks: ['Heavy Chop', 'Cleave'] },
+      'Battle Axe': { type: 'WEAPON', stats: 'Damage: 50±7 · Speed: 38±4 · Accuracy: 80±6', attacks: ['Whirlwind', 'Power Attack'] },
+      'Quarterstaff': { type: 'WEAPON', stats: 'Damage: 28±4 · Speed: 24±2 · Accuracy: 87±4', attacks: ['Attack'] },
+      'Warhammer': { type: 'WEAPON', stats: 'Damage: 42±6 · Speed: 33±3 · Accuracy: 83±5', attacks: ['Heavy Chop'] }
     };
     const consumableData = {
       'Health Potion': { type: 'CONSUMABLE', effect: 'Restores HP' },

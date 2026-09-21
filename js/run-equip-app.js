@@ -208,15 +208,15 @@ function buildPopupHtml(item) {
     const w = weaponsById[item.id];
     if (w) {
       html += `<div class="type">WEAPON</div>`;
-      html += `<div class="stat-line">DMG ${w.damage ?? '??'} · SPD ${w.speed ?? '??'} · ACC ${w.accuracy ?? '??'} · CRIT ${w.crit_chance ?? 5}%</div>`;
+      html += `<div class="stat-line">Damage: ${w.damage ?? '??'} · Speed: ${w.speed ?? '??'} · Accuracy: ${w.accuracy ?? '??'} · Crit: ${w.crit_chance ?? 5}%</div>`;
       if (w.attacks && w.attacks.length) {
         const rows = w.attacks.map(a => {
           const bits = [];
-          if (a.base_damage_multiplier != null) bits.push(`×${a.base_damage_multiplier} dmg`);
+          if (a.base_damage_multiplier != null) bits.push(`×${a.base_damage_multiplier} damage`);
           if (a.prepare_time != null) bits.push(`cast ${a.prepare_time}`);
-          if (a.cooldown_time != null) bits.push(`cd ${a.cooldown_time}`);
+          if (a.cooldown_time != null) bits.push(`cooldown ${a.cooldown_time}`);
           if (a.is_multi_target) bits.push('multi-target');
-          bits.push(`CRIT ${Math.round((w.crit_chance ?? 5) * (a.crit_factor ?? 1))}% ×${a.crit_multiplier ?? 2}`);
+          bits.push(`Crit ${Math.round((w.crit_chance ?? 5) * (a.crit_factor ?? 1))}% ×${a.crit_multiplier ?? 2}`);
           let row = `<div class="attack-row"><strong>${a.name}</strong>`;
           if (bits.length) row += ` <span style="color:#88aaff;">${bits.join(' · ')}</span>`;
           if (a.description) row += `<div style="color:#7a8ca6;margin-top:2px;">${a.description}</div>`;
@@ -384,7 +384,7 @@ function renderLoadout() {
       let stats = '';
       if (item.kind === 'weapon') {
         const w = weaponsById[item.id];
-        if (w) stats = `DMG ${w.damage ?? '??'}`;
+        if (w) stats = `Damage: ${w.damage ?? '??'}`;
       } else if (item.kind === 'consumable') {
         const c = consumablesById[item.id];
         if (c) stats = c.description || c.effect_label || c.template_name || 'Effect';

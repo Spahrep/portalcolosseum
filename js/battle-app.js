@@ -1338,8 +1338,6 @@ function renderActionMenu(bs) {
   }
 
   function showInfo(text) {
-    const fi = document.getElementById('footer-info');
-    if (fi) fi.innerHTML = text || 'Select a command to see details';
     const ar = document.getElementById('action-readout');
     if (ar) ar.innerHTML = text || '';
   }
@@ -1357,7 +1355,16 @@ function renderActionMenu(bs) {
     const cVar = a.cooldown_time_range || 0;
     const pText = pVar > 0 ? `${pBase}-${pBase + pVar}` : `${pBase}`;
     const cText = cVar > 0 ? `${cBase}-${cBase + cVar}` : `${cBase}`;
-    return `<strong>${escHtml(a.name)}</strong> DMG ${base}±${range} | Windup: ${pText}t | CD: ${cText}t${multi}${desc}`;
+    let h = `<div style="display:flex;flex-direction:column;gap:1px;width:100%;">`;
+    h += `<div style="color:#ffcc66;font-weight:bold;white-space:nowrap;">${escHtml(a.name)}${multi}</div>`;
+    h += `<div style="display:flex;flex-direction:column;gap:0;line-height:1.4;">`;
+    h += `<div><span style="color:#7a8ca6;">Damage:</span> ${base}±${range}</div>`;
+    h += `<div><span style="color:#7a8ca6;">Windup:</span> ${pText}t</div>`;
+    h += `<div><span style="color:#7a8ca6;">Cooldown:</span> ${cText}t</div>`;
+    h += `</div>`;
+    if (desc) h += `<div style="color:#556677;font-size:11px;margin-top:2px;">${desc}</div>`;
+    h += `</div>`;
+    return h;
   }
 
   function setMarkers(attack) {
@@ -1628,7 +1635,7 @@ function renderActionMenu(bs) {
   rootRows.push({
     html: `Belt Loop: <span class="${belt && belt.id ? 'dw-weapon' : 'dw-dim'}">${escHtml(belt && belt.id ? belt.name : 'none')}</span>`,
     info: belt && belt.id
-      ? `Belt swap (${hand}): swap ${escHtml(belt.name)} into hand · ${swapDelay} tics equip delay (flat cooldown)`
+      ? `Belt swap (${hand}): swap ${escHtml(belt.name)} into hand · ${swapDelay} tics equip delay`
       : 'No belt weapon equipped',
     disabled: !belt || !belt.id,
     beltSwap: true,
