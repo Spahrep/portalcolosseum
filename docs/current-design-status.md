@@ -161,7 +161,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 6. **Shop Numbers** — refresh timer, reroll base/multiplier, price curve exact values, whether reroll counter resets on shop refresh
 7. **Encounter System Open Questions** (see encounter-system.md)
    - Does the player see exact dice face values, or just colors?
-   - 5th monster absorption: pick closest-cost monster, or upgrade template to match remaining budget?
+   - 5th monster absorption: RULED (PC-DEC-052, Spahrep 2026-09-21) — programmatically pick the monster with the maximum cost ≤ remaining points; no template upgrade. No open remainder.
    - Dice pool size and composition per portal tier (database configuration)
    - Face value calibration (actual numbers, not the example 10/20/30)
    - Point-to-loot relationship: does higher point budget yield better loot? (Note: loot now uses LP budget system, separate from encounter point budget)
