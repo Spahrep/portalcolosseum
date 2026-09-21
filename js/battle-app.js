@@ -1696,6 +1696,7 @@ function renderActionMenu(bs) {
   stack.push({ kind: 'action', tab: handLineText, rows: rootRows, activeIdx: 0 });
 
   renderStack();
+  clearMarkers(); // PC-56: initial render shows action info but no prediction bar until user hovers/clicks
 
   // keyboard: Up/Down move the cursor (skips blank/disabled rows), Enter selects,
   // Esc backs one window (root: no-op). Only the top window responds.
