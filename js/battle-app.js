@@ -1350,10 +1350,13 @@ function renderActionMenu(bs) {
     const range = src.damage_range != null ? src.damage_range : 0;
     const multi = a.is_multi_target ? ' <span style="color:#ffaa66">[MULTI]</span>' : '';
     const desc = a.description ? ` — ${escHtml(a.description)}` : '';
+    const weaponSpeed = src.speed || 0;
+    const pBase = (a.prepare_time || 0) + weaponSpeed;
     const pVar = a.prepare_time_range || 0;
+    const cBase = (a.cooldown_time || 0) + weaponSpeed;
     const cVar = a.cooldown_time_range || 0;
-    const pText = pVar > 0 ? `${a.prepare_time}-${a.prepare_time + pVar}` : `${a.prepare_time}`;
-    const cText = cVar > 0 ? `${a.cooldown_time}-${a.cooldown_time + cVar}` : `${a.cooldown_time}`;
+    const pText = pVar > 0 ? `${pBase}-${pBase + pVar}` : `${pBase}`;
+    const cText = cVar > 0 ? `${cBase}-${cBase + cVar}` : `${cBase}`;
     return `<strong>${escHtml(a.name)}</strong> DMG ${base}±${range} | Windup: ${pText}t | CD: ${cText}t${multi}${desc}`;
   }
 
