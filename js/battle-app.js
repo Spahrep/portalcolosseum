@@ -973,7 +973,14 @@ function renderQueue(bs, fill = false, onDone = null) {
     }
     if (bottomBoundEl) {
       const rect = bottomBoundEl.getBoundingClientRect();
-      barBottom = Math.max(barBottom, rect.top - queueRect.top);
+      const lastLadderTic = ladder.length > 0 ? ladder[ladder.length - 1].tics : 0;
+      if (queueBarInfo.hasInside === false && maxT > lastLadderTic) {
+        // Attack lands after all visible queue rows — show as ~1 row height below the last row
+        const rowH = ladder.length > 0 ? ladder[ladder.length - 1].height : 20;
+        barBottom = rect.bottom - queueRect.top + rowH + gapPx;
+      } else {
+        barBottom = Math.max(barBottom, rect.top - queueRect.top);
+      }
     }
     bar.style.top = `${barTop}px`;
     bar.style.height = `${Math.max(4, barBottom - barTop + 3)}px`;
