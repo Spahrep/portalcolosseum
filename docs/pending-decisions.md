@@ -431,6 +431,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Follow-up clarifications to PC-DEC-050. (1) All current attacks → crit_multiplier ×2.0 (crit_factor stays 1.1). (2) Templates flat: crit_base 5, crit_range 0 on weapon_template and monster_template (backfill: instances at 5%, monsters at 5%). (3) Potion templates get crit rates (crit_base/range, rolled onto potion_instance) — mirrors weapons exactly, NOT a global config value. Existing potion instances backfilled at 5% (templates 5/0). (4) Instinct: fist_crit_chance in game_config (default 5%), ×2.0 — no attack path is crit-dead. (5) All weapon info screens/mouseovers updated to display crit; combat engine feed shows "CRITICAL!" tag; admin-gui-brief UI (crit_factor, crit_multiplier on attacks; crit_base/range on weapon/monster templates). (6) CLI is god mode: display and set crit on weapons/potions. Crit stays out of the item grade formula this pass (everything's flat 5% — a no-op). Shipped on main alongside PC-DEC-050 (migration 20260918120000_crit_strikes.sql, engine.js, api/combat/[...path].js, js/admin-app.js, js/run-equip-app.js, tests/crit-strikes.test.js). Applied to: weapon-generation.md, combat-system.md, current-design-status.md. Decided by Spahrep, 2026-09-18.
 
+- ID: PC-DEC-052
+  Date: 2026-09-21
+  Source: CLI session — F1 conflict review (docs/reviews/2026-09-20.md flag 1)
+  Speaker: Spahrep
+  Verbatim: "F1: If there are already 4 monsters generated and there are X points left, We select programtically the 5th monster where the monsters points are the maximum that are <=X."
+  Status: DECIDED
+  Notes: 5th monster selection rule (resolves the encounter-system.md internal contradiction flagged F1 since 2026-09-19). When 4 monsters are already generated and X points remain, the 5th monster is selected programmatically as the monster whose point cost is the maximum that is <= X (closest-cost pick from the mapping, NOT a template "upgrade" to match the budget exactly). Rule applied to encounter-system.md; open question #2 (closest-cost vs template upgrade) removed. Applied to docs/encounter-system.md. Decided by Spahrep, 2026-09-21.
+
 ## Open
 
 - ID: PC-DEC-004

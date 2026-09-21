@@ -81,7 +81,7 @@ Once a point budget is determined, the game selects a monster group:
 
 - **Max monsters per battle**: 5
 - **Min monsters per battle**: 1
-- **5th monster**: Takes the largest possible remaining value (absorbs remaining points).
+- **5th monster**: Takes the largest possible remaining value (absorbs remaining points). Programmatic selection (PC-DEC-052): when 4 monsters are already generated and X points remain, pick the monster whose point cost is the maximum that is <= X — closest-cost pick from the mapping, not a template upgrade.
 - **Edge case**: If rolled points are less than the cheapest monster's cost, select the cheapest possible monster anyway. (This should not happen with proper portal configuration — it's a fallback safety check.)
 - **Variable group size**: A combat can be any number of monsters from 1 to 5. A 50-point battle with 2×25-point monsters is just as valid as a 50-point battle with 5×10-point monsters.
 
@@ -95,10 +95,9 @@ Once a point budget is determined, the game selects a monster group:
 ## Open Questions
 
 1. **Face value visibility**: Does the player see exact face values on the dice, or just colors? (Colors-only = more surprise; full values = deeper strategy. TBD via playtesting.)
-2. **5th monster absorption**: When the 5th monster takes the largest possible remaining value — does it pick the closest-cost monster from the mapping, or does it "upgrade" a template to match the remaining budget exactly?
-3. **Dice pool size and composition per portal**: How many dice, what color mix per portal tier — needs to be defined per portal in the database.
-4. **Face value calibration**: Actual face values need to be determined (not the example 10/20/30).
-5. **Point-to-loot relationship**: Does a higher point budget battle yield better loot, or does loot scale purely by fight number within the run? (See `loot-prize-pool.md`.)
+2. **Dice pool size and composition per portal**: How many dice, what color mix per portal tier — needs to be defined per portal in the database.
+3. **Face value calibration**: Actual face values need to be determined (not the example 10/20/30).
+4. **Point-to-loot relationship**: Does a higher point budget battle yield better loot, or does loot scale purely by fight number within the run? (See `loot-prize-pool.md`.)
 
 ## Integration with Existing Systems
 
