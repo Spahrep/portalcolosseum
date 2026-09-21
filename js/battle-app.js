@@ -17,11 +17,11 @@ import { getSpeedPreset, getFontSizePreset, onSpeedChange, onFontSizeChange, set
  * BattleClock — orchestrates post-commit animation sequencing.
  * Phase flow:
  *   IDLE → SCHEDULED (wait for feed narration) → ANIMATING →
- *     → resolve (flash+shrink on old DOM) → renderQueue(bs) → entry enter animations → IDLE
+ *     → resolve (flash+shrink on old DOM) → push-down preview
+ *     → renderQueue(bs) → entry enter animations → IDLE
  *
- * CRITICAL: renderQueue runs IMMEDIATELY after resolve finishes, NOT after
- * decorative animations. This prevents the "entries don't appear if user
- * commits again during slow animation" bug.
+ * Busy is held for the entire duration (setBusy filters releases during clock activity),
+ * preventing race conditions from rapid commits.
  *
  * Singleton — one instance per module, created at the bottom of this class block.
  */
@@ -66,8 +66,7 @@ class BattleClock {
     const queueEl = document.getElementById('queue');
 
     if (!queueEl || diff.resolved.length === 0) {
-      // No resolve needed — render new entries immediately
-      this._renderNew();
+      this._runInsert();
       return;
     }
 
@@ -80,17 +79,55 @@ class BattleClock {
       }
     });
 
-    // Shrink, then render new queue
+    // Shrink, then insert
     this._timer = setTimeout(() => {
       diff.resolved.forEach(id => {
         const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
         if (rowEl) rowEl.classList.add('queue-row-shrink');
       });
-      this._timer = setTimeout(() => this._renderNew(), 350);
+      this._timer = setTimeout(() => this._runInsert(), 350);
     }, 400);
   }
 
-  /** Phase 2: Render the updated queue, then apply entry-enter animations. */
+  /**
+   * Phase 2: Insert preview — push-down via preview marker on the old DOM,
+   * then renderQueue replaces it with the new state.
+   */
+  _runInsert() {
+    const { _diff: diff } = this;
+    const queueEl = document.getElementById('queue');
+
+    if (!queueEl || diff.added.length === 0) {
+      this._renderNew();
+      return;
+    }
+
+    // Build a preview bar at the insertion boundary.  The OLD queue DOM is still
+    // intact (resolved entries might be shrunk but remain as placeholders).
+    // Create a dashed preview marker; its CSS transition animates height 0→slot,
+    // pushing remaining old rows downward to make room.
+    const preview = document.createElement('div');
+    preview.className = 'queue-insert-preview';
+    // Insert at the top of the OLD queue (new entries always go above existing
+    // pending rows in the sorted order, or at the top when the queue is empty).
+    const firstRow = queueEl.querySelector('.queue-row');
+    if (firstRow) {
+      queueEl.insertBefore(preview, firstRow);
+    } else {
+      queueEl.appendChild(preview);
+    }
+
+    // Activate — CSS transitions height from 0 to 24px over 250ms
+    requestAnimationFrame(() => preview.classList.add('active'));
+
+    // After push-down completes, render the new queue state
+    this._timer = setTimeout(() => {
+      preview.remove();
+      this._renderNew();
+    }, 300);
+  }
+
+  /** Phase 3: Render updated queue, then apply entry-enter animations. */
   _renderNew() {
     const { _diff: diff, _newBs: newBs } = this;
 
@@ -126,9 +163,10 @@ class BattleClock {
     this._finish();
   }
 
-  /** All done — call onComplete and return to IDLE. */
+  /** All done — release busy gate, call onComplete, return to IDLE. */
   _finish() {
     this.state = 'IDLE';
+    setBusy(false); // Release the gate (setBusy respects clock state)
     if (this._onComplete) {
       const cb = this._onComplete;
       this._onComplete = null;
@@ -333,6 +371,8 @@ function showErrorState(title, detail, showReturn = true) {
 }
 
 function setBusy(state) {
+  // Don't release busy if the clock is mid-transition — let _finish() handle it
+  if (!state && battleClock.state !== 'IDLE') return;
   busy = state;
   // Dynamic hand buttons + ITEM all live inside #action-menu; gate the whole row.
   document.querySelectorAll('#action-menu button').forEach(btn => {
