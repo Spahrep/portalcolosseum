@@ -260,22 +260,51 @@ function positionPopup(targetEl) {
   // (the old rect.left + 30 anchored to the item's LEFT edge, so the popup
   // overlapped ~75% of it). pointer-events:none on .info-popup is the
   // click-through backstop for any residual overlap.
-  let left = rect.right - contRect.left + GAP;
+  const cellLeft = rect.left - contRect.left;
+  const cellRight = rect.right - contRect.left;
+
+  // Try right side: a full gap clear of the item's right edge
+  let left = cellRight + GAP;
   if (left < minLeft) left = minLeft;
+
+  // Whether we fell back to vertical placement below the cell
+  let useVertical = false;
+
   // Overflowing the container's right edge: flip to the item's left side,
   // again a full gap clear of the item's left edge.
   if (left + popupW > contRect.width - 8) {
-    const flipped = rect.left - contRect.left - popupW - GAP - borderL;
-    // Flip to the item's left side, a full gap clear of its left edge. If even
-    // that doesn't fit (very narrow viewport), clamp to the backpack area's
-    // left edge — never slide the popup back right over the hovered item.
-    left = flipped >= minLeft ? flipped : minLeft;
+    const flipped = cellLeft - popupW - GAP - borderL;
+    if (flipped >= minLeft) {
+      // Left-side fit works — use it
+      left = flipped;
+    } else {
+      // Neither side fits without overlapping the cell (the clamp to minLeft
+      // would slide the popup right over the item). Place below the cell
+      // instead, with the popup's left edge at the cell's left edge or the
+      // loadout boundary, whichever is rightmost.
+      useVertical = true;
+      left = Math.max(minLeft, cellLeft);
+      if (left + popupW > contRect.width - 8) {
+        left = contRect.width - popupW - 8;
+      }
+      if (left < minLeft) left = minLeft;
+    }
   }
-  let top = rect.top - contRect.top - 6;
+
+  // Vertical position
+  let top;
+  if (useVertical) {
+    // Below the cell, a small gap from its bottom edge
+    top = rect.bottom - contRect.top + 4;
+  } else {
+    top = rect.top - contRect.top - 6;
+  }
+
+  // Clamp within vertical bounds
   if (top < 8) top = 8;
   if (top + popupH > contRect.height - 8) {
-    // Not enough room below (bottom row): flip upward, a full gap clear of the
-    // item, instead of dropping the popup over the bottom bar/ENTER button.
+    // Not enough room below: flip upward, a full gap clear of the item, instead
+    // of dropping the popup over the bottom bar/ENTER button.
     const above = rect.top - contRect.top - popupH - GAP - borderT;
     top = above >= 8 ? above : Math.max(8, contRect.height - popupH - 8);
   }
