@@ -946,23 +946,32 @@ function renderQueue(bs, fill = false, onDone = null) {
     const minT = Number(queueBarInfo.minT);
     const maxT = Number(queueBarInfo.maxT);
     let barTop = yAtTics(minT);
-    // Snap bar top flush with the bottom of the firstId row — prevents the bar
-    // from floating in the gap above the first referenced row. The -3 offset
-    // matches the +3 in the height calc, giving symmetrical overlap into both
-    // bounding row boxes.
-    const firstRowEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.firstId);
-    if (firstRowEl) {
-      const rect = firstRowEl.getBoundingClientRect();
+    // Find clamping boundary for the bar top.
+    // When the timing range contains a single row (firstId == lastId), the bar
+    // floats in the gap above that row because yAtTics interpolates well above
+    // it. Snapping to the inside row's own bottom does nothing. Instead, snap
+    // to the row ABOVE the inside row so the bar is flush with both bounding
+    // row boxes, not protruding into the upper gap.
+    let topBoundEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.firstId);
+    if (queueBarInfo.hasInside && queueBarInfo.firstId === queueBarInfo.lastId) {
+      const idx = rowEls.findIndex(r => r.dataset.rowId === queueBarInfo.firstId);
+      if (idx > 0) topBoundEl = rowEls[idx - 1];
+    }
+    if (topBoundEl) {
+      const rect = topBoundEl.getBoundingClientRect();
       barTop = Math.min(barTop, rect.bottom - queueRect.top - 3);
     }
     // When maxT lands exactly on a row's tics, bar bottom flushes with the box's bottom edge
     const exactRow = ladder.find(r => r.tics === maxT);
     let barBottom = exactRow ? exactRow.bottom : yAtTics(maxT);
-    // Snap bar bottom flush with the top of the lastId row — prevents the bar
-    // from floating in the gap below the last referenced row.
-    const lastRowEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.lastId);
-    if (lastRowEl) {
-      const rect = lastRowEl.getBoundingClientRect();
+    // Find clamping boundary for the bar bottom — mirrors the top-side logic.
+    let bottomBoundEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.lastId);
+    if (queueBarInfo.hasInside && queueBarInfo.firstId === queueBarInfo.lastId) {
+      const idx = rowEls.findIndex(r => r.dataset.rowId === queueBarInfo.lastId);
+      if (idx < rowEls.length - 1) bottomBoundEl = rowEls[idx + 1];
+    }
+    if (bottomBoundEl) {
+      const rect = bottomBoundEl.getBoundingClientRect();
       barBottom = Math.max(barBottom, rect.top - queueRect.top);
     }
     bar.style.top = `${barTop}px`;
