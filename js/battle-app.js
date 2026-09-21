@@ -1671,8 +1671,8 @@ function renderActionMenu(bs) {
     }
     rootRows.push({
       html: escHtml(p.template_name),
-      info: `Pouch ${slot}: ${escHtml(p.template_name)} · ${escHtml(p.effect_label || '')}`
-        + ` · Windup: ${potionPrePostTicks((w && w.speed) || 0, p.rolled_speed || 0)}t`,
+      info: `Pouch ${slot}: ${escHtml(p.template_name)} · ${escHtml(p.effect_label || '')}<br>`
+        + `<span style="color:#7a8ca6;">Windup:</span> ${potionPrePostTicks((w && w.speed) || 0, p.rolled_speed || 0)}t`,
       potionTiming: {
         prepare_time: potionPrePostTicks((w && w.speed) || 0, p.rolled_speed || 0),
         prepare_time_range: 0,
