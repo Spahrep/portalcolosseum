@@ -502,9 +502,11 @@ describe('PC-54 belt swap (swapHandWithBelt + engine wiring)', () => {
   it('engine wiring: swapHandWithBelt creates a cooldown row for the hand with delay tics', () => {
     const eng = createEngine(seededRNG(7));
     eng.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [] });
-    // A Ready hand has NO queue row after startBattle (rows exist only for
-    // committed actions) — the swap must CREATE the cooldown row itself.
-    assert.equal(eng.state.queue.find(r => r.label === 'LH'), undefined, 'no LH row before swap');
+    // A Ready hand now has a 'ready' placeholder row at tics=0 (top of queue).
+    // The swap must morph it to cooldown instead of creating a new row.
+    const pre = eng.state.queue.find(r => r.label === 'LH');
+    assert.ok(pre, 'LH ready placeholder row exists before swap');
+    assert.equal(pre.event, 'ready');
     const w = weapons({ id: 1, speed: 4 }, { id: 2, speed: 3 }, { id: 99, speed: 7 });
     const res = eng.swapHandWithBelt('LH', w);
     assert.equal(res.success, true);
@@ -647,7 +649,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.ok(fires[0].line.startsWith('tic 2 — A hits player for'));
     assert.ok(fires[0].hp < 1000);
     assert.deepEqual(fires[0].after, { event: 'attack', tics: 3 });
-    assert.ok(fires[1].tic === 3 && fires[1].label === 'LH' && fires[1].event === 'approach');
+    assert.ok(fires[1].tic === 3 && fires[1].label === 'LH' && fires[1].event === 'ready');
     assert.equal(fires[1].line, 'tic 3 — LH Ready');
     assert.equal(fires[1].hp, fires[0].hp);
     assert.equal(fires[1].after, null);

@@ -23,6 +23,9 @@ export function tick(queue, onFire, skip = 1) {
   const fired = [];
   for (const row of queue) {
     row.tics = Math.max(0, row.tics - skip);
+    if (row.tics === 0 && row.event === 'ready') {
+      continue; // Ready placeholder rows are never fired
+    }
     if (row.tics === 0) {
       fired.push(row);
     }

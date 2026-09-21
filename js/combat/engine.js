@@ -102,14 +102,12 @@ export function createEngine(rng = Math.random) {
       } else if (row.event === 'cooldown') {
         const handState = state.player.hands[row.label];
         if (handState) handState.state = 'Ready';
-        const idx = state.queue.findIndex(r => r.id === row.id);
-        if (idx !== -1) state.queue.splice(idx, 1);
+        morphHandRow(state.queue, row.label, 'ready', 0);
         log(`${row.label} Ready`);
       } else if (row.event === 'approach') {
         const handState = state.player.hands[row.label];
         if (handState) handState.state = 'Ready';
-        const idx = state.queue.findIndex(r => r.id === row.id);
-        if (idx !== -1) state.queue.splice(idx, 1);
+        morphHandRow(state.queue, row.label, 'ready', 0);
         log(`${row.label} Ready`);
       } else if (row.event === 'drinking') {
         const potion = state.potions?.[row.potionSlot];
@@ -125,8 +123,7 @@ export function createEngine(rng = Math.random) {
       } else if (row.event === 'recovery') {
         const handState = state.player.hands[row.label];
         if (handState) handState.state = 'Ready';
-        const idx = state.queue.findIndex(r => r.id === row.id);
-        if (idx !== -1) state.queue.splice(idx, 1);
+        morphHandRow(state.queue, row.label, 'ready', 0);
         log(`${row.label} Ready`);
       }
     } else {
@@ -296,6 +293,12 @@ export function createEngine(rng = Math.random) {
   function commitAttack(hand, attackId, targetIds = [], params = {}) {
     if (!state.player.hands[hand] || state.player.hands[hand].state !== 'Ready') {
       throw new Error('Hand not ready');
+    }
+    // If there's a 'ready' placeholder row, remove it before creating the winding row
+    const readyRow = state.queue.find(r => r.label === hand && r.event === 'ready');
+    if (readyRow) {
+      const idx = state.queue.indexOf(readyRow);
+      if (idx !== -1) state.queue.splice(idx, 1);
     }
     const dmgBuff = applyBuffs(state.buffs, state.tic, 'damage');
     const spdBuff = applyBuffs(state.buffs, state.tic, 'speed');

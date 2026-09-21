@@ -982,6 +982,16 @@ function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   div.dataset.tics = row.tics;
   const nameSpan = document.createElement('span');
   nameSpan.className = 'name';
+  // Ready placeholder rows: show the hand label and "Ready" — no tic countdown
+  if (row.event === 'ready') {
+    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    const ticSpan = document.createElement('span');
+    ticSpan.className = 'tic';
+    ticSpan.textContent = '—';
+    div.appendChild(nameSpan);
+    div.appendChild(ticSpan);
+    return div;
+  }
   // Monster attack rows: show "<Monster name>'s <Attack>" (e.g. "Imp's Bite")
   const isMonster = row.event === 'attack' && row.label && row.label !== 'LH' && row.label !== 'RH';
   if (isMonster) {
@@ -1515,6 +1525,13 @@ function renderActionMenu(bs) {
       win.style.top = (i * CASCADE_STEP_Y) + 'px';
     });
     paintReadout();
+    // Position the attack-info readout to the right of the cascade stack
+    const readout = document.getElementById('action-readout');
+    if (readout) {
+      const cascadeRight = 12 + (Math.max(0, stack.length - 1) * 96) + 316;
+      readout.style.left = (cascadeRight + 8) + 'px';
+      readout.style.top = '0px';
+    }
   }
 
   // Footer info + '>' timing markers track the TOP window's selection.

@@ -165,7 +165,7 @@ describe('Potion use (PC-39)', () => {
     const res = eng.commitPotion('A', { phase: 'between-fights' });
     assert.equal(res.potions.A.used, true);
     assert.ok(res.participants.player.hp > beforeHp);
-    assert.ok(!res.queue.some(r => r.label === 'LH' || r.label === 'RH')); // no player hand rows for potion
+    assert.ok(!res.queue.some(r => r.event === 'drinking')); // no hand locked for potion in between-fights
   });
 
   it('heal cap smoke: 990 + 50 -> 1000', () => {
