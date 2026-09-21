@@ -923,14 +923,14 @@ function renderQueue(bs, fill = false, onDone = null) {
       }
       // Virtual extension below last row (at most one row-height)
       if (t >= last.tics) {
-        if (t === last.tics) return last.top + last.height / 2;
+        if (t === last.tics) return last.bottom; // boundary, not center
         const stepTics = ladder.length > 1 ? last.tics - ladder[ladder.length - 2].tics : Math.max(last.tics, 1);
         const frac = Math.min((t - last.tics) / stepTics, 1);
         return last.bottom + frac * (last.height + gapPx);
       }
-      // Exact match on a row
+      // Exact match on a row — snap to row boundary (top edge)
       const exact = ladder.find(r => r.tics === t);
-      if (exact) return exact.top + exact.height / 2;
+      if (exact) return exact.top;
       // Between two rows — lerp across the gap
       let i = 0;
       while (i < ladder.length - 1 && ladder[i + 1].tics < t) i++;
