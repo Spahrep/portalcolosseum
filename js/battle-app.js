@@ -936,9 +936,6 @@ function renderQueue(bs, fill = false, onDone = null) {
         const frac = (t - last.tics) / stepTics;
         return last.bottom + frac * (last.height + gapPx);
       }
-      // Exact match on a row — snap to row boundary (top edge)
-      const exact = ladder.find(r => r.tics === t);
-      if (exact) return exact.top;
       // Between two rows — lerp across the gap
       let i = 0;
       while (i < ladder.length - 1 && ladder[i + 1].tics < t) i++;
@@ -949,9 +946,11 @@ function renderQueue(bs, fill = false, onDone = null) {
     const minT = Number(queueBarInfo.minT);
     const maxT = Number(queueBarInfo.maxT);
     const barTop = yAtTics(minT);
-    const barBottom = yAtTics(maxT);
+    // When maxT lands exactly on a row's tics, bar bottom flushes with the box's bottom edge
+    const exactRow = ladder.find(r => r.tics === maxT);
+    const barBottom = exactRow ? exactRow.bottom : yAtTics(maxT);
     bar.style.top = `${barTop}px`;
-    bar.style.height = `${Math.max(4, barBottom - barTop)}px`;
+    bar.style.height = `${Math.max(4, barBottom - barTop + 3)}px`;
     el.appendChild(bar);
   }
   if (fill) {
