@@ -774,7 +774,7 @@ function finishBattleIntro() {
   }
 }
 
-function renderFeed(feed) {
+function renderFeed(feed, onComplete) {
   const box = document.getElementById('message-box');
   if (!box) return;
   const currentLines = feed || [];
@@ -783,6 +783,7 @@ function renderFeed(feed) {
     box.innerHTML = '';
     renderedFeedLines = 0; // placeholder is a system line, not feed
     appendFeedLine('Battle begins...');
+    if (onComplete) onComplete();
     typingInProgress = false;
     typingSetBusy = false;
     typingTimeouts = [];
@@ -812,10 +813,11 @@ function renderFeed(feed) {
   const preset = getBattleTextPreset();
   if (preset.charMs === 0) {
     newLines.forEach(lineText => appendFeedLine(lineText));
+    if (onComplete) onComplete();
     renderedFeedLines = currentLines.length;
     return;
   }
-  typeFeedLines(newLines);
+  typeFeedLines(newLines, onComplete);
   renderedFeedLines = currentLines.length;
 }
 
@@ -885,10 +887,9 @@ function renderQueue(bs, fill = false, onDone = null) {
   const el = document.getElementById('queue');
   if (!el) return;
   el.innerHTML = '';
-  // Show current absolute tic in the panel title so countdowns make sense
   const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
   if (titleEl) {
-    titleEl.textContent = `Action Queue — TIC ${bs.tic ?? '?'}`;
+    titleEl.textContent = 'Action Queue';
   }
   const queue = bs.queue || [];
   if (fill && onDone) {
@@ -919,18 +920,18 @@ function renderQueue(bs, fill = false, onDone = null) {
     function yAtTics(t) {
       if (ladder.length === 0) return 0;
       const first = ladder[0], last = ladder[ladder.length - 1];
-      // Virtual extension above first row
+      // Virtual extension above first row — proportional to tic distance
       if (t <= first.tics) {
         if (t === first.tics) return first.top;
         const stepTics = ladder.length > 1 ? ladder[1].tics - first.tics : Math.max(first.tics, 1);
-        const frac = Math.min((first.tics - t) / stepTics, 1);
+        const frac = (first.tics - t) / stepTics;
         return first.top - frac * (last.height + gapPx);
       }
-      // Virtual extension below last row (at most one row-height)
+      // Virtual extension below last row — proportional to tic distance
       if (t >= last.tics) {
-        if (t === last.tics) return last.bottom; // boundary, not center
+        if (t === last.tics) return last.bottom;
         const stepTics = ladder.length > 1 ? last.tics - ladder[ladder.length - 2].tics : Math.max(last.tics, 1);
-        const frac = Math.min((t - last.tics) / stepTics, 1);
+        const frac = (t - last.tics) / stepTics;
         return last.bottom + frac * (last.height + gapPx);
       }
       // Exact match on a row — snap to row boundary (top edge)
@@ -1546,7 +1547,18 @@ function renderActionMenu(bs) {
     if (top.kind === 'action') {
       const row = top.rows[top.activeIdx];
       showInfo(row.info || '');
-      if (row.attack) setMarkers(row.attack); else clearMarkers();
+      if (row.attack) {
+        if (row.beltSwap) {
+          // Belt swap: flat delay, no weapon-speed offset
+          const q = (lastBs && lastBs.queue) || [];
+          queueBarInfo = computeTimingMarkers(q, row.attack, 0);
+          renderQueue(lastBs);
+        } else {
+          setMarkers(row.attack);
+        }
+      } else {
+        clearMarkers();
+      }
       return;
     }
     if (top.kind === 'target') {
@@ -1611,9 +1623,11 @@ function renderActionMenu(bs) {
   rootRows.push({
     html: `Belt Loop: <span class="${belt && belt.id ? 'dw-weapon' : 'dw-dim'}">${escHtml(belt && belt.id ? belt.name : 'none')}</span>`,
     info: belt && belt.id
-      ? `Belt swap (${hand}): swap ${escHtml(belt.name)} into hand · ${swapDelay} tics equip delay${swapDelay && swapDelay > 0 ? ' (flat cooldown)' : ''}`
+      ? `Belt swap (${hand}): swap ${escHtml(belt.name)} into hand · ${swapDelay} tics equip delay (flat cooldown)`
       : 'No belt weapon equipped',
     disabled: !belt || !belt.id,
+    beltSwap: true,
+    attack: belt && belt.id ? { prepare_time: swapDelay, prepare_time_range: 0, name: 'Belt Swap' } : null,
     enter() { if (belt && belt.id) pickEquip(); }
   });
   stack.push({ kind: 'action', tab: handLineText, rows: rootRows, activeIdx: 0 });
@@ -1737,15 +1751,15 @@ async function loadBattle(runId) {
       // PC-DEC-045c: fresh page load in a mid-battle run shows history instantly;
       // incremental commit updates typewriter new lines.
       // prevBs distinguishes: on fresh page prevBs is null, on commit it's set.
-      if (!prevBs && renderedFeedLines === 0 && bs.feed && bs.feed.length > 0) {
-        populateFeedInstantly(bs.feed);
-      } else {
-        renderFeed(bs.feed || []);
-      }
-      // PC-56: resolve/enter animations (non-blocking setTimeout, rest of loadBattle continues)
+      //
+      // For commit updates, the queue render is deferred until the typewriter
+      // finishes so the queue doesn't appear frozen at the end-state while the
+      // feed narrates events that led to that state.
+      let onFeedDone = null;
       if (prevBs) {
         const diff = diffQueueForAnimation(prevBs, bs);
         const queueEl = document.getElementById('queue');
+        // Resolve animation (flash+shrink) plays on the OLD queue immediately
         if (queueEl && diff.resolved.length > 0) {
           diff.resolved.forEach(id => {
             const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
@@ -1756,34 +1770,36 @@ async function loadBattle(runId) {
               }, 100);
             }
           });
-          setTimeout(() => {
-            renderQueue(bs);
-            // added rows enter anim after render
-            const newQueueEl = document.getElementById('queue');
-            if (newQueueEl && diff.added.length > 0) {
+        }
+        onFeedDone = () => {
+          renderQueue(bs);
+          if (diff.added.length > 0) {
+            const nqEl = document.getElementById('queue');
+            if (nqEl) {
               diff.added.forEach(id => {
-                const rowEl = newQueueEl.querySelector(`[data-row-id="${id}"]`);
+                const rowEl = nqEl.querySelector(`[data-row-id="${id}"]`);
                 if (rowEl) {
                   rowEl.classList.add('queue-row-enter');
-                  setTimeout(() => {
-                    rowEl.classList.remove('queue-row-enter');
-                    // PC-DEC-045: arrival glow on the queue panel after grow-in settles
-                    const qp = document.querySelector('.queue-panel');
-                    if (qp) {
-                      qp.classList.add('queue-arrived');
-                      setTimeout(() => qp.classList.remove('queue-arrived'), 350);
-                    }
-                  }, 800);
+                  setTimeout(() => rowEl.classList.remove('queue-row-enter'), 800);
                 }
               });
+              const qp = document.querySelector('.queue-panel');
+              if (qp) {
+                qp.classList.add('queue-arrived');
+                setTimeout(() => qp.classList.remove('queue-arrived'), 350);
+              }
             }
-          }, 500);
-        } else {
-          renderQueue(bs);
-        }
-      } else {
-        renderQueue(bs);
+          }
+        };
       }
+      if (!prevBs && renderedFeedLines === 0 && bs.feed && bs.feed.length > 0) {
+        populateFeedInstantly(bs.feed);
+        if (onFeedDone) onFeedDone();
+      } else {
+        renderFeed(bs.feed || [], onFeedDone);
+      }
+      // Queue rendered through onFeedDone for commits; fresh page / intro renders immediately
+      if (!prevBs) renderQueue(bs);
     }
 
 
