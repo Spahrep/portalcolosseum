@@ -958,7 +958,16 @@ function renderQueue(bs, fill = false, onDone = null) {
     }
     // When maxT lands exactly on a row's tics, bar bottom flushes with the box's bottom edge
     const exactRow = ladder.find(r => r.tics === maxT);
-    const barBottom = exactRow ? exactRow.bottom : yAtTics(maxT);
+    let barBottom = exactRow ? exactRow.bottom : yAtTics(maxT);
+    // Snap bar bottom flush with the top of the lastId row when the range
+    // falls between rows, mirroring the top-edge snap above.
+    if (!queueBarInfo.hasInside) {
+      const lastRowEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.lastId);
+      if (lastRowEl) {
+        const rect = lastRowEl.getBoundingClientRect();
+        barBottom = Math.max(barBottom, rect.top - queueRect.top);
+      }
+    }
     bar.style.top = `${barTop}px`;
     bar.style.height = `${Math.max(4, barBottom - barTop + 3)}px`;
     el.appendChild(bar);
