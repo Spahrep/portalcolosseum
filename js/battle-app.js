@@ -11,6 +11,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 import { computeTimingMarkers } from './combat/tic-queue.js';
 import { potionPrePostTicks } from './combat/potion-contract.js';
 import { parseHitLine } from './combat/hit-feedback.js';
+import { getSpeedPreset, getFontSizePreset, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
 
 const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
@@ -63,57 +64,7 @@ function bandClass(m) {
   return BAND_CLASS[word] || 'st-green';
 }
 
-// PC-DEC-044: typewriter battle log presets (charMs per char, lineDelayMs beat after line)
-const BATTLE_TEXT = {
-  slow:   { charMs: 45, lineDelayMs: 1800, label: 'Slow', windupEnabled: true },
-  normal: { charMs: 15, lineDelayMs: 1000, label: 'Normal', windupEnabled: true },  // DEFAULT
-  fast:   { charMs: 5,  lineDelayMs: 300,  label: 'Fast', windupEnabled: true },
-  instant: { charMs: 0,  lineDelayMs: 0,   label: 'Instant', windupEnabled: false }
-};
-let battleTextSpeedKey = localStorage.getItem('battleTextSpeed') || 'normal';
-if (!BATTLE_TEXT[battleTextSpeedKey]) battleTextSpeedKey = 'normal';
-
-function getBattleTextPreset() {
-  return BATTLE_TEXT[battleTextSpeedKey] || BATTLE_TEXT.normal;
-}
-
-function cycleBattleTextSpeed() {
-  const order = ['STANDARD', 'SLOW', 'INSTANT'];
-  const idx = order.indexOf(battleTextSpeedKey);
-  battleTextSpeedKey = order[(idx + 1) % order.length];
-  localStorage.setItem('pc_battle_text_speed', battleTextSpeedKey);
-  updateTextSpeedUI();
-}
-
-function updateTextSpeedUI() {
-  const el = document.getElementById('text-speed');
-  if (el) {
-    const p = getBattleTextPreset();
-    el.textContent = `TEXT SPEED: ${p.label}`;
-  }
-}
-
-// PC-56 Queue Font Size (exact pattern of BATTLE_TEXT/textSpeed)
-const QUEUE_FONT_SIZES = {
-  S: { scale: '0.85', label: 'Small' },
-  M: { scale: '1.0', label: 'Medium' },
-  L: { scale: '1.3', label: 'Large' }
-};
-let queueFontSizeKey = localStorage.getItem('pc_queue_font_size') || 'M';
-if (!QUEUE_FONT_SIZES[queueFontSizeKey]) queueFontSizeKey = 'M';
-
-function getQueueFontSizePreset() {
-  return QUEUE_FONT_SIZES[queueFontSizeKey] || QUEUE_FONT_SIZES.M;
-}
-
-function updateQueueFontSizeUI() {
-  // apply class to .queue-panel
-  const panel = document.querySelector('.queue-panel');
-  if (panel) {
-    panel.classList.remove('queue-size-S', 'queue-size-M', 'queue-size-L');
-    panel.classList.add(`queue-size-${queueFontSizeKey}`);
-  }
-}
+// Settings now live in ./settings-controller.js (single source of truth for speed + font size)
 
 // PC-DEC-044: typewriter state + helpers (only new lines type; appendFeedLine + system paths stay instant)
 let typingInProgress = false;
@@ -149,7 +100,7 @@ function typeFeedLines(lines, onComplete) {
     if (onComplete) onComplete();
     return;
   }
-  const preset = getBattleTextPreset();
+  const preset = getSpeedPreset();
   if (preset.charMs === 0 || lines.length === 0) {
     lines.forEach(l => appendFeedLine(l));
     if (onComplete) onComplete();
@@ -379,35 +330,6 @@ function handleHitLine(line) {
   }
 }
 
-// Generic battle-notice toast: a small on-screen message for ceremony
-// phases. Replaces the old roll-notice with one reusable element.
-// Positioned to overlay the message log area so it never covers monsters/Action Queue.
-function showNotice(text) {
-  let el = document.getElementById('battle-notice');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'battle-notice';
-    el.style.cssText = 'background:rgba(0,0,0,0.88);color:#fff;border:3px solid #4a90d9;padding:12px 14px;border-radius:4px;font-size:12px;letter-spacing:1px;z-index:60;pointer-events:none;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.5);white-space:nowrap;position:fixed;display:flex;align-items:center;justify-content:center;';
-    document.body.appendChild(el);
-  }
-  el.textContent = text;
-  // Position over the message box so ceremony notices cover that area
-  const msgBox = document.getElementById('message-box');
-  if (msgBox) {
-    const rect = msgBox.getBoundingClientRect();
-    el.style.left = rect.left + 'px';
-    el.style.top = rect.top + 'px';
-    el.style.width = rect.width + 'px';
-    el.style.height = rect.height + 'px';
-  }
-  el.style.display = 'flex';
-}
-
-function hideNotice() {
-  const el = document.getElementById('battle-notice');
-  if (el) el.style.display = 'none';
-}
-
 function renderDice(dice) {
   const tray = document.getElementById('dice-tray');
   const labels = document.getElementById('dice-labels');
@@ -452,7 +374,13 @@ function renderDice(dice) {
     if (current && current.color && current.face != null) {
       if (shouldAnimateDice) {
         shouldAnimateDice = false;
-        showNotice('Rolling for battle difficulty');
+        // Type the die result to message log (replaces showNotice overlay text)
+        const face = current.face != null ? current.face : '?';
+        if (current.rolled_value != null) {
+          appendFeedLine(`Rolling portal dice: ${face} (${current.color}) — ${current.rolled_value} points`);
+        } else {
+          appendFeedLine(`Rolling portal dice: ${face} (${current.color})`);
+        }
         curEl.style.display = 'none';
         // Stage 1 (selection): sweep row = remaining pool + the drawn die as an
         // extra box, so the roulette can land ON it. It shows the color marker
@@ -487,11 +415,10 @@ function renderDice(dice) {
         // and its highlight are cleared — final state = true post-draw.
         const selectAndRoll = (landedBox) => {
           rollDiceAnimation(landedBox, current, dice.faces, () => {
-            hideNotice(); // roll settled — the notice's job is done
             updateCurrentDie(curEl, current); // persistent slot lights up
-            showNotice('Populating Monsters');
+            appendFeedLine('Selecting Monsters...');
             revealMonsters(() => {
-              showNotice('Creating Action Queue');
+              appendFeedLine('Creating Action Queue...');
               finishBattleIntro();
             });
             setTimeout(() => renderDice(dice), 350);
@@ -758,16 +685,12 @@ function finishBattleIntro() {
   battleIntroPending = false;
   if (lastBs && lastBs.intro?.fires?.length > 0) {
     playIntroCountdown(lastBs, lastBs.intro, () => {
-      hideNotice();
       document.body.classList.remove('intro-pending');
       renderActionMenu(lastBs);
     });
   } else {
     document.body.classList.remove('queue-filling'); // timing track appears (rows still hidden)
     renderQueue(lastBs, true, () => {
-      hideNotice();
-      // Ceremony done: show first feed line ('Battle begins...') now that
-      // the message box is no longer reserved for ceremony notices.
       renderFeed([]);
       document.body.classList.remove('intro-pending'); // command window only after the track is full
       renderActionMenu(lastBs);
@@ -813,7 +736,7 @@ function renderFeed(feed, onComplete) {
     }
   }
   const newLines = currentLines.slice(renderedFeedLines);
-  const preset = getBattleTextPreset();
+  const preset = getSpeedPreset();
   if (preset.charMs === 0) {
     newLines.forEach(lineText => appendFeedLine(lineText));
     if (onComplete) onComplete();
@@ -1160,7 +1083,7 @@ function finishIntroSnap(bs, onDone) {
   // does not re-shake; only NEW lines react after the snap.
   suppressHitFeedback = true;
   const done = () => { suppressHitFeedback = false; if (onDone) onDone(); };
-  const preset = getBattleTextPreset();
+  const preset = getSpeedPreset();
   if (preset.charMs === 0) {
     renderFeed(feed);
     done();
@@ -1268,12 +1191,10 @@ async function doAttack(runId, hand, attackId, targetIds) {
     const payload = { hand, attack_id: attackId, target_ids: targetIds || [] };
     const data = await apiCall(`/runs/${runId}/commit`, 'POST', payload);
     pendingAttack = null;
-    // Commit response is a minimal engine snapshot — re-render from the well-shaped GET.
-    if (data.state && data.state.battle_over) {
-      showAdvanceUI(runId, data.state);
-    } else {
-      await loadBattle(runId);
-    }
+    // Commit response is a minimal engine snapshot — always re-render from the well-shaped GET.
+    // loadBattle fetches the full state, renders queue/feed/monsters cleanly, and detects
+    // allMonstersDead → showAdvanceUI internally (line 1933).
+    await loadBattle(runId);
   } catch (e) {
     const msg = String(e.message || e);
     if (msg.includes('Hand not ready')) {
@@ -1770,7 +1691,7 @@ async function loadBattle(runId) {
     queueBarInfo = null; // PC-56: fresh battle state — no selection, no markers
     // Capture BEFORE renderDice — the animation path clears the flag.
     // Ceremony-intro: the command window and timing track are part of the same
-    // ceremony — they stay hidden until every monster has faded in.
+    // ceremony — they stay hidden until the dice and monster typewriter finishes.
     const willRoll = shouldAnimateDice
       && !!(bs.dice && bs.dice.current && bs.dice.current.color && bs.dice.current.face != null);
     monstersPendingReveal = willRoll;
@@ -1795,7 +1716,7 @@ async function loadBattle(runId) {
       renderPlayerHP(run);
     }
     // If a ceremony intro is pending, force the message box completely empty
-    // so no old text bleeds through the ceremony overlay notices. Feed is
+    // so no old text bleeds through the ceremony phase. Feed is
     // populated later in finishBattleIntro (intro fires → playIntroCountdown;
     // no fires → renderFeed([])).
     if (battleIntroPending) {
@@ -2039,17 +1960,40 @@ async function init() {
   await loadBattle(runId);
   setupEndRunButton(runId);
 
-  // PC-DEC-044: wire TEXT SPEED cycling control
+  // PC-DEC-044: wire TEXT SPEED cycling control (now via controller)
   const speedEl = document.getElementById('text-speed');
   if (speedEl) {
+    const SPEED_CYCLE = ['normal', 'slow', 'instant'];
     speedEl.onclick = () => {
-      cycleBattleTextSpeed();
+      const current = getSpeedKey();
+      const idx = SPEED_CYCLE.indexOf(current);
+      const next = SPEED_CYCLE[(idx + 1) % SPEED_CYCLE.length] || 'normal';
+      setSpeed(next);
     };
-    updateTextSpeedUI();
+    // initial label
+    const p = getSpeedPreset();
+    speedEl.textContent = `TEXT SPEED: ${p.label}`;
   }
 
-  // Initial render of queue font size UI (default M applied via CSS class)
-  updateQueueFontSizeUI();
+  // Speed subscriber: update UI label on external changes
+  onSpeedChange((key) => {
+    const p = getSpeedPreset();
+    if (speedEl) speedEl.textContent = `TEXT SPEED: ${p.label}`;
+  });
+
+  // Font size subscriber + initial class on .queue-panel
+  onFontSizeChange((key) => {
+    const panel = document.querySelector('.queue-panel');
+    if (panel) {
+      panel.classList.remove('queue-size-S', 'queue-size-M', 'queue-size-L');
+      panel.classList.add(`queue-size-${key}`);
+    }
+  });
+  const panel = document.querySelector('.queue-panel');
+  if (panel) {
+    panel.classList.remove('queue-size-S', 'queue-size-M', 'queue-size-L');
+    panel.classList.add(`queue-size-${getFontSizeKey()}`);
+  }
 
   // PC-DEC-044: click message log to instantly complete pending typing
   const msgBox = document.getElementById('message-box');

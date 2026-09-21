@@ -16,6 +16,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { setSpeed, setFontSize, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeChange } from './settings-controller.js';
 
 // === SUPABASE CONFIGURATION ===
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
@@ -146,8 +147,6 @@ function hideNotReadyModal() {
 // === MENU / SETTINGS MODAL ===
 // Replaces the drunk-jester placeholder for the Menu (campfire) location.
 // Player-adjustable settings: battle text speed, log out.
-const BATTLE_SPEED_LABELS = { STANDARD: 'Standard', SLOW: 'Slow', INSTANT: 'Instant' };
-const SPEED_CYCLE = ['STANDARD', 'SLOW', 'INSTANT'];
 /** Focusable items in the settings modal: 0-2 = speed buttons, 3-5 = font size buttons, 6 = Log Out */
 let menuFocusIndex = 0;
 
@@ -178,14 +177,15 @@ function hideMenuSettings() {
 }
 
 function highlightSpeedButtons() {
-  const current = localStorage.getItem('pc_battle_text_speed') || 'STANDARD';
+  const current = getSpeedKey();
   document.querySelectorAll('.speed-opt').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.speed === current);
+    btn.classList.toggle('active', btn.dataset.speed.toLowerCase() === current ||
+      (btn.dataset.speed === 'STANDARD' && current === 'normal'));
   });
 }
 
 function highlightFontButtons() {
-  const current = localStorage.getItem('pc_queue_font_size') || 'M';
+  const current = getFontSizeKey();
   document.querySelectorAll('.font-opt').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.font === current);
   });
@@ -255,17 +255,14 @@ function handleMenuKeydown(e) {
   return false;
 }
 
-function setBattleTextSpeed(speedKey) {
-  if (!BATTLE_SPEED_LABELS[speedKey]) return;
-  localStorage.setItem('pc_battle_text_speed', speedKey);
+function setBattleTextSpeed(key) {
+  setSpeed(key);
   highlightSpeedButtons();
-  // Sync to server (background — don't block UI on failure)
-  syncSettings({ battle_text_speed: speedKey });
+  syncSettings({ battle_text_speed: key.toLowerCase() });
 }
 
-function setQueueFontSize(fontKey) {
-  if (!['S', 'M', 'L'].includes(fontKey)) return;
-  localStorage.setItem('pc_queue_font_size', fontKey);
+function setQueueFontSize(key) {
+  setFontSize(key);
   highlightFontButtons();
 }
 
@@ -322,6 +319,10 @@ function initMenuSettings() {
       setQueueFontSize(btn.dataset.font);
     });
   });
+
+  // Subscribe to external changes (e.g. from battle tab or other tab) to keep highlights in sync
+  onSpeedChange(() => highlightSpeedButtons());
+  onFontSizeChange(() => highlightFontButtons());
 
   // Logout button — shows the confirmation dialog
   const logoutBtn = document.getElementById('menu-logout-btn');
