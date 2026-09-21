@@ -9,6 +9,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 import { computeTimingMarkers } from './combat/tic-queue.js';
+import { potionPrePostTicks } from './combat/potion-contract.js';
 import { parseHitLine } from './combat/hit-feedback.js';
 
 const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
@@ -1600,6 +1601,11 @@ function renderActionMenu(bs) {
         } else {
           setMarkers(row.attack);
         }
+      } else if (row.potionTiming) {
+        // Potion: prepare_time already includes weapon speed via potionPrePostTicks
+        const q = (lastBs && lastBs.queue) || [];
+        queueBarInfo = computeTimingMarkers(q, row.potionTiming, 0);
+        renderQueue(lastBs);
       } else {
         clearMarkers();
       }
@@ -1658,7 +1664,13 @@ function renderActionMenu(bs) {
     }
     rootRows.push({
       html: escHtml(p.template_name),
-      info: `Pouch ${slot}: ${escHtml(p.template_name)} · ${escHtml(p.effect_label || '')}`,
+      info: `Pouch ${slot}: ${escHtml(p.template_name)} · ${escHtml(p.effect_label || '')}`
+        + ` · Windup: ${potionPrePostTicks((w && w.speed) || 0, p.rolled_speed || 0)}t`,
+      potionTiming: {
+        prepare_time: potionPrePostTicks((w && w.speed) || 0, p.rolled_speed || 0),
+        prepare_time_range: 0,
+        name: escHtml(p.template_name)
+      },
       enter() { pickPotion(slot, p); }
     });
   });

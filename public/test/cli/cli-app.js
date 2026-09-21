@@ -7,6 +7,7 @@
  */
 
 import { computeTimingMarkers } from '../../js/combat/tic-queue.js';
+import { potionPrePostTicks } from '../../js/combat/potion-contract.js';
 
 const outputEl = document.getElementById('output');
 const inputEl = document.getElementById('input');
@@ -870,6 +871,10 @@ async function cmdMenu(args = []) {
     const slot = row.kind === 'c1' ? 'A' : 'B';
     const potion = bs.potions && (row.kind === 'c1' ? (bs.potions.potion_a || bs.potions.A) : (bs.potions.potion_b || bs.potions.B));
     if (!potion) { appendLine('no potion in slot ' + slot, 'amber'); continue; }
+    // PC-56: prediction bar markers for potion timing
+    const ws = (weapons[hand === 'LH' ? 'hand_l' : 'hand_r']?.speed) || 0;
+    menuAttack = { attack: { prepare_time: potionPrePostTicks(ws, potion.rolled_speed || 0), prepare_time_range: 0 }, queue: bs.queue || [], weaponSpeed: 0 };
+    try { await refreshRunPanels(); } catch (_) {}
     const ok = (await promptUser(`use potion ${slot}? y/n> `)).toLowerCase();
     if (ok !== 'y') { appendLine('cancelled', 'amber'); continue; }
     try {
