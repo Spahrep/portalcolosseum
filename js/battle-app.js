@@ -946,27 +946,22 @@ function renderQueue(bs, fill = false, onDone = null) {
     const minT = Number(queueBarInfo.minT);
     const maxT = Number(queueBarInfo.maxT);
     let barTop = yAtTics(minT);
-    // Snap bar top flush with the bottom of the firstId row when the range
-    // falls between rows (no row inside the range), so the bar is anchored
-    // to the row box visually rather than floating in the gap.
-    if (!queueBarInfo.hasInside) {
-      const firstRowEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.firstId);
-      if (firstRowEl) {
-        const rect = firstRowEl.getBoundingClientRect();
-        barTop = Math.min(barTop, rect.bottom - queueRect.top);
-      }
+    // Snap bar top flush with the bottom of the firstId row — prevents the bar
+    // from floating in the gap above the first referenced row.
+    const firstRowEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.firstId);
+    if (firstRowEl) {
+      const rect = firstRowEl.getBoundingClientRect();
+      barTop = Math.min(barTop, rect.bottom - queueRect.top);
     }
     // When maxT lands exactly on a row's tics, bar bottom flushes with the box's bottom edge
     const exactRow = ladder.find(r => r.tics === maxT);
     let barBottom = exactRow ? exactRow.bottom : yAtTics(maxT);
-    // Snap bar bottom flush with the top of the lastId row when the range
-    // falls between rows, mirroring the top-edge snap above.
-    if (!queueBarInfo.hasInside) {
-      const lastRowEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.lastId);
-      if (lastRowEl) {
-        const rect = lastRowEl.getBoundingClientRect();
-        barBottom = Math.max(barBottom, rect.top - queueRect.top);
-      }
+    // Snap bar bottom flush with the top of the lastId row — prevents the bar
+    // from floating in the gap below the last referenced row.
+    const lastRowEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.lastId);
+    if (lastRowEl) {
+      const rect = lastRowEl.getBoundingClientRect();
+      barBottom = Math.max(barBottom, rect.top - queueRect.top);
     }
     bar.style.top = `${barTop}px`;
     bar.style.height = `${Math.max(4, barBottom - barTop + 3)}px`;
