@@ -1168,7 +1168,7 @@ async function handle(request) {
       let instances;
       try {
         const res = await admin.from('consumable_instance')
-          .select('id, rolled_floor, rolled_window, rolled_speed, grade, template_id, consumable_template: template_id (name, effect_type, duration_ticks, description)')
+          .select('id, rolled_floor, rolled_window, rolled_speed, crit_chance, grade, template_id, consumable_template: template_id (name, effect_type, duration_ticks, description)')
           .eq('user_id', user.id)
           .order('id');
         instances = res.data;
@@ -1191,6 +1191,7 @@ async function handle(request) {
           rolled_floor: inst.rolled_floor,
           window_top,
           drink_speed: inst.rolled_speed,
+          crit_chance: Number(inst.crit_chance) || 5,
           grade: inst.grade,
           duration_ticks: t.duration_ticks || null,
           description: t.description || null

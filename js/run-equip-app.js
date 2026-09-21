@@ -228,8 +228,14 @@ function buildPopupHtml(item) {
   } else if (item.kind === 'consumable') {
     const c = consumablesById[item.id];
     if (c) {
-      html += `<div class="type">CONSUMABLE</div>`;
-      html += `<div class="stat-line">${c.description || c.effect_label || c.template_name || 'Effect'}</div>`;
+      const typeTag = c.type_label || (c.effect_type ? c.effect_type.toUpperCase() : 'CONSUMABLE');
+      html += `<div class="type">${typeTag}</div>`;
+      html += `<div class="stat-line">${c.effect_label}</div>`;
+      const info = [];
+      if (c.drink_speed != null) info.push(`Speed: ${c.drink_speed}`);
+      if (c.duration_ticks != null) info.push(`Duration: ${c.duration_ticks} tics`);
+      if (c.crit_chance != null) info.push(`Crit: ${c.crit_chance}%`);
+      if (info.length) html += `<div class="info-line">${info.join(' · ')}</div>`;
     }
   }
   return html;
@@ -387,7 +393,7 @@ function renderLoadout() {
         if (w) stats = `Damage: ${w.damage ?? '??'}`;
       } else if (item.kind === 'consumable') {
         const c = consumablesById[item.id];
-        if (c) stats = c.description || c.effect_label || c.template_name || 'Effect';
+        if (c) stats = c.effect_label || 'Effect';
       }
       let nameHtml = item.name;
       if (item.grade) {
