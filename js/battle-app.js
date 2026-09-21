@@ -1743,49 +1743,70 @@ async function loadBattle(runId) {
       if (prevBs) {
         const diff = diffQueueForAnimation(prevBs, bs);
         const queueEl = document.getElementById('queue');
-        // Resolve animation (flash+shrink) plays on the OLD queue immediately
+        // Mark first resolved entry as "current" during narration — it stays
+        // at the top while the typewriter describes the action.
         if (queueEl && diff.resolved.length > 0) {
-          diff.resolved.forEach(id => {
-            const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
-            if (rowEl) {
-              rowEl.classList.add('queue-row-flash');
-              setTimeout(() => {
-                if (rowEl.parentNode) rowEl.classList.add('queue-row-shrink');
-              }, 100);
-            }
-          });
+          const firstEl = queueEl.querySelector(`[data-row-id="${diff.resolved[0]}"]`);
+          if (firstEl) firstEl.classList.add('queue-row-current');
         }
         onFeedDone = () => {
-          // Phase A: push-down existing rows to create gap (250ms), then render + bar grow
-          const added = diff.added || [];
-          if (added.length > 0 && queueEl) {
-            const oldQueue = prevBs.queue || [];
-            const newQueue = bs.queue || [];
-            const firstAdded = added[0];
-            const firstAddedId = firstAdded && firstAdded.id ? firstAdded.id : firstAdded;
-            let insertAfterIndex = -1;
-            if (firstAddedId) {
-              const newIdx = newQueue.findIndex(r => r.id === firstAddedId);
-              if (newIdx > 0) {
-                const prevId = newQueue[newIdx - 1].id;
-                insertAfterIndex = oldQueue.findIndex(r => r.id === prevId);
+          // Shared render helper: the existing push-down + re-render logic
+          function doQueueRender() {
+            const added = diff.added || [];
+            if (added.length > 0 && queueEl) {
+              const oldQueue = prevBs.queue || [];
+              const newQueue = bs.queue || [];
+              const firstAdded = added[0];
+              const firstAddedId = firstAdded && firstAdded.id ? firstAdded.id : firstAdded;
+              let insertAfterIndex = -1;
+              if (firstAddedId) {
+                const newIdx = newQueue.findIndex(r => r.id === firstAddedId);
+                if (newIdx > 0) {
+                  const prevId = newQueue[newIdx - 1].id;
+                  insertAfterIndex = oldQueue.findIndex(r => r.id === prevId);
+                }
               }
+              const pushPx = added.length * 24;
+              const allOldRows = Array.from(queueEl.querySelectorAll('.queue-row'));
+              const rowsToPush = insertAfterIndex >= 0 ? allOldRows.slice(insertAfterIndex + 1) : allOldRows;
+              rowsToPush.forEach(row => {
+                row.style.transition = 'transform 250ms ease-out';
+                row.style.transform = `translateY(${pushPx}px)`;
+              });
+              const predBar = queueEl.querySelector('.prediction-bar');
+              if (predBar) {
+                const curH = parseFloat(predBar.style.height) || predBar.getBoundingClientRect().height || 4;
+                predBar.style.transition = 'height 250ms ease-out';
+                predBar.style.height = `${curH + pushPx}px`;
+              }
+              setTimeout(() => {
+                renderQueue(bs);
+                const nqEl = document.getElementById('queue');
+                if (nqEl) {
+                  added.forEach((entry) => {
+                    const id = entry && entry.id ? entry.id : entry;
+                    const rowEl = nqEl.querySelector(`[data-row-id="${id}"]`);
+                    if (rowEl) {
+                      if (entry && entry.isMonster) {
+                        rowEl.classList.add('queue-row-monster-enter');
+                        setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
+                      } else {
+                        rowEl.classList.add('queue-row-enter');
+                        setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
+                      }
+                    }
+                  });
+                  const qp = document.querySelector('.queue-panel');
+                  if (qp) {
+                    qp.classList.add('queue-arrived');
+                    setTimeout(() => qp.classList.remove('queue-arrived'), 350);
+                  }
+                }
+              }, 250);
+              return;
             }
-            const pushPx = added.length * 24;
-            const allOldRows = Array.from(queueEl.querySelectorAll('.queue-row'));
-            const rowsToPush = insertAfterIndex >= 0 ? allOldRows.slice(insertAfterIndex + 1) : allOldRows;
-            rowsToPush.forEach(row => {
-              row.style.transition = 'transform 250ms ease-out';
-              row.style.transform = `translateY(${pushPx}px)`;
-            });
-            const predBar = queueEl.querySelector('.prediction-bar');
-            if (predBar) {
-              const curH = parseFloat(predBar.style.height) || predBar.getBoundingClientRect().height || 4;
-              predBar.style.transition = 'height 250ms ease-out';
-              predBar.style.height = `${curH + pushPx}px`;
-            }
-            setTimeout(() => {
-              renderQueue(bs);
+            renderQueue(bs);
+            if (added.length > 0) {
               const nqEl = document.getElementById('queue');
               if (nqEl) {
                 added.forEach((entry) => {
@@ -1807,33 +1828,30 @@ async function loadBattle(runId) {
                   setTimeout(() => qp.classList.remove('queue-arrived'), 350);
                 }
               }
-            }, 250);
-            return;
-          }
-          renderQueue(bs);
-          if (added.length > 0) {
-            const nqEl = document.getElementById('queue');
-            if (nqEl) {
-              added.forEach((entry) => {
-                const id = entry && entry.id ? entry.id : entry;
-                const rowEl = nqEl.querySelector(`[data-row-id="${id}"]`);
-                if (rowEl) {
-                  if (entry && entry.isMonster) {
-                    rowEl.classList.add('queue-row-monster-enter');
-                    setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
-                  } else {
-                    rowEl.classList.add('queue-row-enter');
-                    setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
-                  }
-                }
-              });
-              const qp = document.querySelector('.queue-panel');
-              if (qp) {
-                qp.classList.add('queue-arrived');
-                setTimeout(() => qp.classList.remove('queue-arrived'), 350);
-              }
             }
           }
+
+          // Phase 0: resolve animation — defers until AFTER feed narration so
+          // the entry stays visible at top while the typewriter describes it.
+          if (queueEl && diff.resolved.length > 0) {
+            diff.resolved.forEach(id => {
+              const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
+              if (rowEl) {
+                rowEl.classList.remove('queue-row-current');
+                rowEl.classList.add('queue-row-flash');
+              }
+            });
+            setTimeout(() => {
+              diff.resolved.forEach(id => {
+                const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
+                if (rowEl) rowEl.classList.add('queue-row-shrink');
+              });
+              setTimeout(() => doQueueRender(), 350);
+            }, 400);
+            return;
+          }
+          // No resolved entries — render directly
+          doQueueRender();
         };
       }
       if (!prevBs && renderedFeedLines === 0 && bs.feed && bs.feed.length > 0) {

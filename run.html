@@ -325,6 +325,12 @@
       z-index: 3;
     }
 
+    /* ---- Current action being narrated — golden glow highlight ---- */
+    .queue-row-current {
+      box-shadow: inset 0 0 10px rgba(255, 204, 102, 0.4), 0 0 6px rgba(255, 204, 102, 0.2);
+      background: rgba(255, 204, 102, 0.08);
+    }
+
     /* ---- Resolve animation (flash then shrink) ---- */
     @keyframes queue-flash {
       0%   { background: transparent; }
