@@ -945,7 +945,17 @@ function renderQueue(bs, fill = false, onDone = null) {
     }
     const minT = Number(queueBarInfo.minT);
     const maxT = Number(queueBarInfo.maxT);
-    const barTop = yAtTics(minT);
+    let barTop = yAtTics(minT);
+    // Snap bar top flush with the bottom of the firstId row when the range
+    // falls between rows (no row inside the range), so the bar is anchored
+    // to the row box visually rather than floating in the gap.
+    if (!queueBarInfo.hasInside) {
+      const firstRowEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.firstId);
+      if (firstRowEl) {
+        const rect = firstRowEl.getBoundingClientRect();
+        barTop = Math.min(barTop, rect.bottom - queueRect.top);
+      }
+    }
     // When maxT lands exactly on a row's tics, bar bottom flushes with the box's bottom edge
     const exactRow = ladder.find(r => r.tics === maxT);
     const barBottom = exactRow ? exactRow.bottom : yAtTics(maxT);
