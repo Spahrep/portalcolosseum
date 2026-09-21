@@ -885,6 +885,11 @@ function renderQueue(bs, fill = false, onDone = null) {
   const el = document.getElementById('queue');
   if (!el) return;
   el.innerHTML = '';
+  // Show current absolute tic in the panel title so countdowns make sense
+  const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
+  if (titleEl) {
+    titleEl.textContent = `Action Queue — TIC ${bs.tic ?? '?'}`;
+  }
   const queue = bs.queue || [];
   if (fill && onDone) {
     // Ceremony-intro: signal completion after the last row's fade lands, so the
@@ -1602,9 +1607,12 @@ function renderActionMenu(bs) {
     });
   });
   rootRows.push({ blank: true });
+  const swapDelay = belt && belt.id && w && w.id ? Math.max((w.speed || 2), (belt.speed || 2)) : null;
   rootRows.push({
     html: `Belt Loop: <span class="${belt && belt.id ? 'dw-weapon' : 'dw-dim'}">${escHtml(belt && belt.id ? belt.name : 'none')}</span>`,
-    info: belt && belt.id ? `Belt: ${escHtml(belt.name)}` : 'No belt weapon equipped',
+    info: belt && belt.id
+      ? `Belt swap (${hand}): swap ${escHtml(belt.name)} into hand · ${swapDelay} tics equip delay${swapDelay && swapDelay > 0 ? ' (flat cooldown)' : ''}`
+      : 'No belt weapon equipped',
     disabled: !belt || !belt.id,
     enter() { if (belt && belt.id) pickEquip(); }
   });
