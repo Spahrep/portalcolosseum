@@ -947,11 +947,13 @@ function renderQueue(bs, fill = false, onDone = null) {
     const maxT = Number(queueBarInfo.maxT);
     let barTop = yAtTics(minT);
     // Snap bar top flush with the bottom of the firstId row — prevents the bar
-    // from floating in the gap above the first referenced row.
+    // from floating in the gap above the first referenced row. The -3 offset
+    // matches the +3 in the height calc, giving symmetrical overlap into both
+    // bounding row boxes.
     const firstRowEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.firstId);
     if (firstRowEl) {
       const rect = firstRowEl.getBoundingClientRect();
-      barTop = Math.min(barTop, rect.bottom - queueRect.top);
+      barTop = Math.min(barTop, rect.bottom - queueRect.top - 3);
     }
     // When maxT lands exactly on a row's tics, bar bottom flushes with the box's bottom edge
     const exactRow = ladder.find(r => r.tics === maxT);
