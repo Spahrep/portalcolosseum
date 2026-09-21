@@ -1,7 +1,7 @@
 # Encounter System (Zombie-Dice Style)
 
 **Status:** Decided — mechanic is locked, numbers are TBD
-**Updated:** 2026-09-07
+**Updated:** 2026-09-21
 
 ## Overview
 

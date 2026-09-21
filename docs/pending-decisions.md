@@ -439,6 +439,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: 5th monster selection rule (resolves the encounter-system.md internal contradiction flagged F1 since 2026-09-19). When 4 monsters are already generated and X points remain, the 5th monster is selected programmatically as the monster whose point cost is the maximum that is <= X (closest-cost pick from the mapping, NOT a template "upgrade" to match the budget exactly). Rule applied to encounter-system.md; open question #2 (closest-cost vs template upgrade) removed. Applied to docs/encounter-system.md. Decided by Spahrep, 2026-09-21.
 
+- ID: PC-DEC-053
+  Date: 2026-09-21
+  Source: CLI session — F3 conflict review (docs/reviews/2026-09-20.md flag 3)
+  Speaker: Spahrep
+  Verbatim: "F3 We want no hard coding, all things that are hard coded should move to the config table."
+  Status: DECIDED
+  Notes: Extends PC-DEC-035's no-hardcoding principle from \"no hard-coded values anywhere\" to a positive rule: anything hard-coded in the engine/UI must move to the configuration table (game_config). Applied to combat-engine-plan.md (HP now game_config.starting_hp per PC-DEC-045; crit system PC-DEC-050/051 synced into HP Tracking). Decided by Spahrep, 2026-09-21.
+
 ## Open
 
 - ID: PC-DEC-004

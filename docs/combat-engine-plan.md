@@ -16,7 +16,7 @@ The project is already committed to server-owned combat state:
 
 ## Participants
 
-- **Player:** HP 1000 (constant; `portal_run.player_hp`), two hands LH/RH, each with a `weapon_instance` from the run loadout. Hand state machine: Ready → winding (prepare) → impact → cooldown → Ready. Attacks are **player-chosen** per hand from the equipped weapon's granted attack set (`weapon_template_attack_mapping`) — matches gui1/gui2 command boxes. Cast/cooldown deltas roll once at commit (the browse band is client display only).
+- **Player:** HP from `game_config.starting_hp`, carried on `portal_run.player_hp` (config-driven per PC-DEC-045 — no hard-coded 1000; `js/combat/participants.js` keeps 1000 only as offline engine fallback), two hands LH/RH, each with a `weapon_instance` from the run loadout. Hand state machine: Ready → winding (prepare) → impact → cooldown → Ready. Attacks are **player-chosen** per hand from the equipped weapon's granted attack set (`weapon_template_attack_mapping`) — matches gui1/gui2 command boxes. Cast/cooldown deltas roll once at commit (the browse band is client display only).
 - **Monsters:** 1–5 per battle (in `battle_state.participants`), created server-side via `generate_monster()` at battle start. Each has rolled max_hp (secret, uniform), damage range, speed (**ticks per attack cycle**), accuracy, and granted attack slots (slot_0 mandatory + mapping-weighted slots per the chance chain). Monster cycle: attack lands → next attack row spawns (weighted pick from granted slots). Multiple rows per monster down the queue is intended (the old tic bar's failure mode).
 
 ## Tic Queue
@@ -27,7 +27,7 @@ Sorted array of `{id, label, event, tics}`. Every tick: decrement all; fire even
 
 - **Player:** `portal_run.player_hp` (persisted, authoritative).
 - **Monsters:** rolled stats (max_hp = secret uniform roll via `uniform_int`; damage/speed/accuracy = Box-Muller `normal_int` bell curve) live in `battle_state.participants`; `current_hp` lives in `battle_state`. Server maps current/max → word: Healthy 100–76%, Injured 75–51%, Battered 50–26%, Critical 25–0%. Client receives words + damage numbers only.
-- **Damage:** base ± delta from the instance roll; accuracy check (MVP: roll vs accuracy → hit); multi-target attacks reduced per target; buffs flat/additive with separate end tics (engine primitives; no buff data exists yet).
+- **Damage:** base ± delta from the instance roll; accuracy check (MVP: roll vs accuracy → hit); multi-target attacks reduced per target; buffs flat/additive with separate end tics (engine primitives; no buff data exists yet). **Crit (PC-DEC-050/051):** weapon/monster/potion templates carry crit_base/range rolled onto the instance (default 5%, no floor/ceiling — "swings of outrageous fortune"); attack.crit_factor multiplies the instance chance, attack.crit_multiplier (×2.0) multiplies damage on crit; misses can't crit; multi-target rolls per target.
 - **Death:** all monsters dead → battle won; player HP ≤ 0 → run dead. In-flight events of dead participants are cancelled at fire (MVP rule; the PMVP death-cancel nuance stays parked). Ties: player resolves first — locked.
 
 ## portal_run Integration
