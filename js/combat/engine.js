@@ -463,7 +463,12 @@ export function createEngine(rng = Math.random) {
     const weaponSpeed = Number(params.weaponSpeed) || 0;
     const pre = potionPrePostTicks(weaponSpeed, potion.rolled_speed);
     const post = pre;
-    // lock hand
+    // lock hand — remove any ready placeholder row first to prevent duplicates
+    const readyRow = state.queue.find(r => r.label === hand && r.event === 'ready');
+    if (readyRow) {
+      const idx = state.queue.indexOf(readyRow);
+      if (idx !== -1) state.queue.splice(idx, 1);
+    }
     state.player.hands[hand].state = 'drinking';
     state.player.hands[hand].attackId = null;
     const row = commitNewRow(state.queue, hand, 'drinking', pre);
