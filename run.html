@@ -495,8 +495,28 @@
     .action-choices {
       display: flex;
       flex: 1;
-      gap: 8px;
       min-width: 0;
+    }
+    .action-readout {
+      width: 280px;
+      flex-shrink: 0;
+      margin-left: auto;
+      background: rgba(0,0,0,0.5);
+      border: 2px solid #334466;
+      border-radius: 2px;
+      padding: 8px 10px;
+      font-size: 12px;
+      color: #aaccff;
+      line-height: 1.45;
+      min-height: 22px;
+      display: flex;
+      align-items: center;
+      overflow-wrap: break-word;
+    }
+    .action-readout strong { color: #ffcc66; }
+    .action-readout:empty::before {
+      content: 'Select a command to see details';
+      color: #556677;
     }
     .action-choices .action-btn {
       flex: 1;
@@ -695,6 +715,7 @@
     <!-- ACTION MENU -->
     <div class="action-menu">
       <div id="action-choices" class="action-choices"></div>
+      <div id="action-readout" class="action-readout"></div>
     </div>
     <!-- FOOTER INFO BAR (hover/selection readout) -->
     <div id="footer-info" class="footer-info">Select an attack to see details</div>

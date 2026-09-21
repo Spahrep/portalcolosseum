@@ -1322,6 +1322,8 @@ function renderActionMenu(bs) {
   function showInfo(text) {
     const fi = document.getElementById('footer-info');
     if (fi) fi.innerHTML = text || 'Select a command to see details';
+    const ar = document.getElementById('action-readout');
+    if (ar) ar.innerHTML = text || '';
   }
 
   function attackInfo(a, weapon) {
