@@ -1474,11 +1474,10 @@ function renderActionMenu(bs) {
 
   function pickPotion(slot, p) {
     stack.push({
-      kind: 'target',
-      potion: p,
+      kind: 'confirm',
       slot,
-      info: `${slot}: ${escHtml(p.template_name)} · ${escHtml(p.effect_label || '')}`,
-      rows: [{ label: 'L.HAND', html: 'L.HAND' }, { label: 'R.HAND', html: 'R.HAND' }]
+      text: `Use <strong>${escHtml(p.template_name)}</strong> (${escHtml(p.effect_label || '')})?`,
+      rows: yesNoRows(() => usePotion(currentRunId, slot))
     });
     renderStack();
   }
