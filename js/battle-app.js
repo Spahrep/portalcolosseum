@@ -374,13 +374,7 @@ function renderDice(dice) {
     if (current && current.color && current.face != null) {
       if (shouldAnimateDice) {
         shouldAnimateDice = false;
-        // Type the die result to message log (replaces showNotice overlay text)
-        const face = current.face != null ? current.face : '?';
-        if (current.rolled_value != null) {
-          appendFeedLine(`Rolling portal dice: ${face} (${current.color}) — ${current.rolled_value} points`);
-        } else {
-          appendFeedLine(`Rolling portal dice: ${face} (${current.color})`);
-        }
+        appendFeedLine('Selecting portal difficulty...');
         curEl.style.display = 'none';
         // Stage 1 (selection): sweep row = remaining pool + the drawn die as an
         // extra box, so the roulette can land ON it. It shows the color marker
@@ -414,7 +408,11 @@ function renderDice(dice) {
         // After it lands, re-render the tray so the phantom drawn-die box
         // and its highlight are cleared — final state = true post-draw.
         const selectAndRoll = (landedBox) => {
+          const colorLabel = current.color.charAt(0).toUpperCase() + current.color.slice(1);
+          appendFeedLine(`${colorLabel} die selected`);
+          appendFeedLine('Rolling Portal Die...');
           rollDiceAnimation(landedBox, current, dice.faces, () => {
+            appendFeedLine(`${current.face} rolled`);
             updateCurrentDie(curEl, current); // persistent slot lights up
             appendFeedLine('Selecting Monsters...');
             revealMonsters(() => {
