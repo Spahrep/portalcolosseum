@@ -803,9 +803,11 @@ function renderFeed(feed, onComplete) {
         renderedFeedLines = 0;
         // fall through to render all lines below
       } else {
+        if (onComplete) onComplete();
         return; // genuinely nothing new
       }
     } else {
+      if (onComplete) onComplete();
       return;
     }
   }
