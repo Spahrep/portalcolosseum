@@ -186,8 +186,8 @@ export function createEngine(rng = Math.random) {
     }
   }
 
-  function stepOnce() {
-    const row = peekHead(state.queue);
+  function stepOnce(firedRow = null) {
+    const row = firedRow || peekHead(state.queue);
     if (!row) return null;
     const feedBefore = state.feed.length;
     handleFire(row);
@@ -249,13 +249,19 @@ export function createEngine(rng = Math.random) {
     for (const r of state.queue) {
       r.tics = Math.max(0, r.tics - ticOffset);
     }
-    const result = stepOnce();
+    // Remove the head row BEFORE firing so handleFire's addEvent/commitNewRow
+    // don't leave the original row duplicating in the queue
+    const removedRow = removeProcessedHead();
+    if (!removedRow) {
+      sortQueue(state.queue);
+      return getState();
+    }
+    const result = stepOnce(removedRow);
     if (!result) {
       sortQueue(state.queue);
       return getState();
     }
     const { row } = result;
-    removeProcessedHead();
     if (captureFires) {
       const mon = state.monsters.find(m => m.label === row.label);
       let after = null;
