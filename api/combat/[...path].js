@@ -264,6 +264,10 @@ async function handle(request) {
                 monsters.push(m);
               }
             }
+            if (monsters.length === 0) {
+              // Last resort fallback (mirrors /battle/start path) so battle 1 never starts with "No monsters present"
+              monsters.push({ id: 1, max_hp: 100, damage: 10, speed: 6, accuracy: 70, label: 'A', name: 'Glimmerling' });
+            }
             if (monsters.length > 0) {
               const potionLoadout = await buildPotionLoadout(run);
               const handSpeeds = await handApproachSpeeds(handL, handR);
