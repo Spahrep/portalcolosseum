@@ -39,7 +39,7 @@ export function createMonster(instance, templateName = 'mob') {
 }
 
 export function isPlayerDead(player) {
-  return player.hp <= 0;
+  return player.hp < 0;
 }
 
 export function isMonsterDead(monster) {

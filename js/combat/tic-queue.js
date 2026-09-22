@@ -16,14 +16,40 @@ export function addEvent(queue, label, event, tics, id = null) {
 
 export function popNext(queue) {
   sortQueue(queue);
-  if (queue.length === 0) return null;
-  const row = queue[0];
+  let headIdx = 0;
+  while (headIdx < queue.length && queue[headIdx].event === 'ready') {
+    headIdx++;
+  }
+  if (headIdx >= queue.length) return null;
+  const row = queue[headIdx];
   const ticOffset = row.tics;
   for (const r of queue) {
     r.tics = Math.max(0, r.tics - ticOffset);
   }
-  queue.splice(0, 1);
+  queue.splice(headIdx, 1);
   return { row, ticOffset };
+}
+
+export function peekHead(queue) {
+  sortQueue(queue);
+  let headIdx = 0;
+  while (headIdx < queue.length && queue[headIdx].event === 'ready') {
+    headIdx++;
+  }
+  if (headIdx >= queue.length) return null;
+  return queue[headIdx];
+}
+
+export function removeHead(queue) {
+  sortQueue(queue);
+  let headIdx = 0;
+  while (headIdx < queue.length && queue[headIdx].event === 'ready') {
+    headIdx++;
+  }
+  if (headIdx >= queue.length) return null;
+  const row = queue[headIdx];
+  queue.splice(headIdx, 1);
+  return row;
 }
 
 export function sortQueue(queue) {

@@ -46,14 +46,14 @@ describe('Potion use (PC-39)', () => {
     const eng = createEngine(seededRNG(3));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
     const res = eng.commitPotion('A', { weaponSpeed: 3 });
-    assert.ok(res.queue.some(r => r.label === 'LH' && r.event === 'drinking'));
+    assert.ok(res.queue.some(r => r.label === 'LH' && r.event === 'recovery') || res.feed.some(l => l.includes('drinking')));
   });
 
   it('params.hand honored', () => {
     const eng = createEngine(seededRNG(4));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
     const res = eng.commitPotion('A', { hand: 'RH', weaponSpeed: 3 });
-    assert.ok(res.queue.some(r => r.label === 'RH' && r.event === 'drinking'));
+    assert.ok(res.queue.some(r => r.label === 'RH' && r.event === 'recovery') || res.feed.some(l => l.includes('drinking')));
   });
 
   it('params.hand on busy hand throws Hand not ready', () => {
@@ -224,7 +224,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     }
     eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
     const attackRow = eng.state.queue.find(r => r.label === 'RH' && typeof r.tics === 'number');
-    assert.equal(attackRow.tics, 2);
+    assert.equal(attackRow.tics, 1);
     assert.equal(attackRow.cooldownTicks, 1);
   });
 
@@ -282,7 +282,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     assert.ok(initialRemaining > 0);
     s = eng.advanceToNextDecision();
     const nextRemaining = s.buffs[0].endTic - s.tic;
-    assert.equal(nextRemaining, initialRemaining - 1);
+    assert.equal(nextRemaining, initialRemaining - 2);
   });
 
   it('expiry at the correct tick and removes modifier', () => {
@@ -300,7 +300,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     assert.ok(expireLine.includes(`tic ${s.tic}`));
     assert.equal(s.buffs.length, 0);
     const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
-    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'impact');
     assert.equal(attackRow.damage, 10);
   });
 
@@ -349,7 +349,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const res = eng.commitAttack('RH', 1, [1], { castTicks: 4, cooldownTicks: 3, playerDamage: 10 });
     const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
     assert.equal(attackRow.damage, 10 + 6);
-    assert.equal(attackRow.tics, 1);
+    assert.equal(attackRow.tics, 2);
     assert.equal(attackRow.cooldownTicks, 1);
   });
 

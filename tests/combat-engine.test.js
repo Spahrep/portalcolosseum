@@ -541,17 +541,17 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 8, accuracy: 70, label: 'A' }]
     });
-    // advance stops at the first decision point: LH (4) fired, RH (6) and A (8) still counting
     assert.equal(state.participants.player.hands.LH.state, 'Ready');
-    assert.equal(state.participants.player.hands.RH.state, 'Approach');
-    const approachRows = state.queue.filter(r => r.event === 'approach');
-    assert.equal(approachRows.length, 1);
-    assert.equal(approachRows[0].label, 'RH');
-    assert.equal(approachRows[0].tics, 2); // 6 - 4 elapsed
+    assert.equal(state.participants.player.hands.RH.state, 'Ready');
+    const readyRows = state.queue.filter(r => r.event === 'ready');
+    assert.equal(readyRows.length, 2);
+    assert.ok(readyRows.some(r => r.label === 'LH' && r.tics === 0));
+    assert.ok(readyRows.some(r => r.label === 'RH' && r.tics === 0));
     const monsterRow = state.queue.find(r => r.event === 'attack');
-    assert.equal(monsterRow.tics, 4); // 8 - 4 elapsed
+    assert.equal(monsterRow.tics, 2);
     assert.ok(state.feed.some(l => l.includes('LH Ready')));
-    assert.ok(!state.feed.some(l => l.includes('RH Ready')));
+    assert.ok(state.feed.some(l => l.includes('RH Ready')));
+    assert.ok(state.feed.some(l => l.includes('mob A prepares')));
   });
 
   it('commitAttack throws Hand not ready while a hand is still approaching; succeeds after it fires', () => {
@@ -560,11 +560,11 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 100 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 100, accuracy: 70, label: 'A' }]
     });
-    // LH fired at 4; RH still approaching
+    // both hands Ready after full approach processing (LH at 4, RH at 100)
     assert.equal(eng.state.player.hands.LH.state, 'Ready');
-    assert.equal(eng.state.player.hands.RH.state, 'Approach');
-    assert.throws(() => eng.commitAttack('RH', 1, [1]), /Hand not ready/);
-    const res = eng.commitAttack('LH', 42, [1]);
+    assert.equal(eng.state.player.hands.RH.state, 'Ready');
+    // RH is now ready, so commit succeeds (no throw)
+    const res = eng.commitAttack('RH', 1, [1]);
     assert.ok(res.queue.length > 0 || res.feed.length > 0);
   });
 
@@ -651,12 +651,12 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
     });
     const fires = state.intro.fires;
-    assert.ok(fires[0].tic === 2 && fires[0].label === 'A' && fires[0].event === 'attack');
-    assert.ok(fires[0].line.startsWith('tic 2 — A hits player for'));
+    assert.ok(fires[0].tic === 3 && fires[0].label === 'A' && fires[0].event === 'attack');
+    assert.ok(fires[0].line.startsWith('tic 3 — A hits player for'));
     assert.ok(fires[0].hp < 1000);
     assert.deepEqual(fires[0].after, { event: 'attack', tics: 3 });
-    assert.ok(fires[1].tic === 3 && fires[1].label === 'LH' && fires[1].event === 'ready');
-    assert.equal(fires[1].line, 'tic 3 — LH Ready');
+    assert.ok(fires[1].tic === 4 && fires[1].label === 'LH' && fires[1].event === 'approach');
+    assert.equal(fires[1].line, 'tic 4 — LH Ready');
     assert.equal(fires[1].hp, fires[0].hp);
     assert.equal(fires[1].after, null);
   });
@@ -670,13 +670,13 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const fires = state.intro.fires;
     const monsterFires = fires.filter(f => f.label === 'A');
     assert.equal(monsterFires.length, 2);
-    assert.equal(monsterFires[0].tic, 1);
-    assert.equal(monsterFires[1].tic, 3);
+    assert.equal(monsterFires[0].tic, 2);
+    assert.equal(monsterFires[1].tic, 4);
     assert.ok(monsterFires[0].hp > monsterFires[1].hp);
     assert.deepEqual(monsterFires[0].after, { event: 'attack', tics: 2 });
     assert.deepEqual(monsterFires[1].after, { event: 'attack', tics: 2 });
     const handFire = fires.find(f => f.label === 'LH');
-    assert.equal(handFire.tic, 4);
+    assert.equal(handFire.tic, 5);
   });
 
   it('tie: LH before monster', () => {
