@@ -1,259 +1,240 @@
-# Action Visual Lifecycle
+# Action Visual Lifecycle (Master Clock Model)
 
-**Purpose:** Complete specification of what must happen visually when each type of action is processed by the engine. Covers every action type in the queue, from engine event through animation completion.
+**Purpose:** Complete specification of how the Master Clock drives the combat loop — one queue item at a time, with sub-actions that execute in sequence (or parallel where allowed).
 
-**Audience:** Developer implementing the UI animation pipeline. This is the bridge between engine events and what the player sees.
+**Audience:** Developer implementing the Master Clock and UI animation pipeline.
 
 ---
 
 ## Pipeline Architecture
 
-The engine and UI are decoupled. The engine resolves actions eagerly (fires everything up to the next decision point), produces structured data, and returns state. The UI plays it back visually, one action at a time, gating between them.
+A single Master Clock drives everything. No batches. No internal engine loops.
 
 ```
-Player clicks → POST /commit → engine fires everything → returns state
-                                                              ↓
-                                UI receives state, diffs against previous
-                                ↓
-                                BattleClock sequence (per batch):
-                                  1. Highlight "current" row (queue-row-current)
-                                  2. Typewriter narrates new feed lines
-                                  3. On narrate-done:
-                                     a. Resolved rows: flash → shrink
-                                     b. Insert preview: push-down animation
-                                     c. renderQueue with new state
-                                     d. New rows: entry-enter animations
-                                  4. Release busy gate → player can act again
+MasterClock.start():
+  loop:
+    result = engine.stepOnce()       // peek head, process it, return narrate
+    if (!result) break               // queue empty → battle over
+    
+    displayItem(result.item)          // pin item at top of UI Action Queue
+    
+    // Parallel (both must finish):
+    typewriter.print(result.narrate)  // character by character
+    animateItem(result.item)          // effects, health bar, shake, etc.
+    await both
+    
+    engine.removeHead()              // remove item from queue — done
+    
+    if (result.triggersDecision):    // player turn → show buttons, pause
+      showUI()
+      await playerChoice()           // master clock waits here
+      // choice inserts next items into queue
+    // otherwise → loop continues, next item surfaces
 ```
 
-**Rule:** The engine processes ALL actions up to the next decision point in one batch. The UI plays them as a sequence of resolved + added rows. The typewriter narrates what happened. The queue visually updates to show the new state.
+**Rule:** One item per iteration. No `advanceToNextDecision` loop. Engine never batches. 
+Each `stepOnce()` call processes exactly one queue item and returns.
 
 ---
 
 ## Action Type Reference
 
-| Event | Owner | Description | Engine fires | UI action |
-|---|---|---|---|---|
-| `approach` | Player hand | Hand entering battle (initial) | morph → `ready` | Resolves (no flash — initial setup) |
-| `winding` | Player hand | Attack windup completes | morph → `impact` (0 tics) | Resolves (flash) |
-| `impact` | Player hand | Attack lands / deals damage | morph → `cooldown` | Resolves (flash + shrink) |
-| `cooldown` | Player hand | Recovery after attack | morph → `ready` | Resolves (flash + shrink) |
-| `drinking` | Player hand | Consuming potion | morph → `recovery` | Resolves (flash) |
-| `recovery` | Player hand | Post-potion recovery | morph → `ready` | Resolves (flash + shrink) |
-| `ready` | Player hand | Hand available (placeholder) | never fires — placeholder | No animation |
-| `attack` | Monster | Monster windup → hit | pop row + commit new | Resolves (flash + shrink) |
-| Buff expiry | System | Buff wears off | feed line only | Typewriter narrates |
+| Event | Owner | Description | Sub-actions (in order) |
+|---|---|---|---|
+| `ready` | Player hand | Player's turn to act | Preview → Wait for commit → Narrate → Visuals → Insert winding → Remove |
+| `ready` | Monster | Monster's turn to act | AI picks attack → Narrate → Visuals → Insert winding → Remove |
+| `winding` | Any | Attack preparation | Narrate → Visuals → Insert impact → Remove |
+| `impact` | Any | Attack execution | Engine resolves → Narrate + Visuals (parallel) → Insert cooldown → Remove |
+| `cooldown` | Any | Recovery | Narrate → Visuals → Insert ready → Remove |
+| `drinking` | Player hand | Potion consumption | Narrate → Visuals → Apply effect → Insert recovery → Remove |
+| `recovery` | Player hand | Post-potion cooldown | Narrate → Visuals → Insert ready → Remove |
+| `attack` | Monster | Monster attack (immediate fire — no winding) | Engine resolves → Narrate + Visuals (parallel) → Insert next attack → Remove |
+| Buff expiry | System | Buff wears off | Typewriter only → Remove |
 
 ---
 
 ## 1. Player Attack Lifecycle
 
-The full visual sequence from when the player commits an attack to when the hand is Ready again.
+### Phase 1: Player Turn — "LH Ready" at top of queue
 
-### Phase 1: Player Selects (Preview — before commit)
+Item sits at top of UI Action Queue. Master Clock pauses — waiting for player decision.
 
-Trigger: Player hovers/clicks an attack in the command menu.
+**Sub-actions (sequential):**
 
-Queue onhover behavior (no engine state change):
-1. `computeTimingMarkers()` calculates the prediction bar range: `[weaponSpeed + prepare_time, weaponSpeed + prepare_time + prepare_time_range]`
-2. A prediction bar overlay appears on the queue spanning that tic range (continuous bar, not row-bound)
-3. Attack info (damage, windup, cooldown ranges) appears in the action readout
-4. Hovering another attack → prediction bar moves, info updates
-5. Hovering off → prediction bar disappears, info clears
+1. **Action bar preview:** Player sees weapon options. `computeTimingMarkers()` shows prediction bar on the queue — the tic range where the attack will land. Action readout shows damage, windup, cooldown ranges. No engine state change yet.
 
-### Phase 2: Player Commits
+2. **Player commits:** Player selects attack + target → clicks Attack.
 
-Trigger: Player confirms the attack (selects target + confirms, or the attack auto-targets).
+3. **Engine:** `commitAttack(hand, attackId, targets)` — validates hand is Ready, removes the `ready` placeholder row, inserts a `winding` row with attack data (castTicks, cooldownTicks, damage, accuracy, crit, targetIds). Returns immediately — NO advanceToNextDecision.
 
-Engine does:
-1. Removes the hand's `ready` placeholder row from the queue
-2. Calculates buffed damage, castTicks, cooldownTicks, accuracy, crit
-3. Commits a new `winding` row at the calculated castTicks position
-4. Sets hand state → `winding`
-5. Advances engine to next decision point (may fire zero or more actions)
-6. Returns new state with feed, queue, HP
+4. **Typewriter:** "LH prepares a Fire Bow..." (character by character)
 
-UI does (via BattleClock sequence):
-1. **Highlight:** The `ready` row (about to resolve) gets `queue-row-current` class — stays at the top while the typewriter narrates the commit line
-2. **Typewriter:** New feed line appears: `"LH prepares a Slash..."` — typed character by character at the configured text speed
-3. **Narrate-done triggers BattleClock Phase 1:**
-   - The old `ready` row (now resolved — disappeared from new queue since commit removed it) gets `queue-row-flash` class (400ms)
-   - Then `queue-row-shink` class shrinks it (350ms)
-4. **Phase 2 — Insert:** A dashed `queue-insert-preview` bar animates from height 0→24px (250ms), pushing remaining old rows down to make room for the new `winding` row
-5. **Phase 3 — Render + Enter:** `renderQueue(newState)` redraws the full queue. The newly committed `winding` row gets `queue-row-enter` class (1200ms fade-in). If it's a monster's attack row entering during this same batch, it gets `queue-row-monster-enter` (400ms). The queue panel flashes `queue-arrived` (350ms).
-6. Busy gate releases, player can act on the next ready hand when it arrives
+5. **Visuals:** The `winding` action card animates into the UI Action Queue at its sorted position. New row enters with fade-in / push-down animation.
 
-### Phase 3: Winding Countdown
+6. **Sub-actions complete → Remove** the `ready` item from the queue.
 
-The `winding` row sits in the queue with its tic counter ticking down. The row shows:
-- Label: `"L. Hand Slash"`
-- Tic count: counting down to 0
-- A timing bar that fills left-to-right as tics approach 0
-- Bar fill = (1 - tics / initialTics) × 100%
+7. **Master Clock ticks again** → next item surfaces (likely the `winding` row, which may be at tic=0 or higher).
 
-The queue is re-rendered on every commit batch. Between commits, the row's tics decrease incrementally per engine tick (visible only on the next render). The bar grows proportionally.
+### Phase 2: Winding — "LH: Winding (Fire Bow)" at top
 
-### Phase 4: Winding → Impact (Attack Lands)
+Item pinned at top. Row shows: label "L. Hand Fire Bow", tic count (counting down), timing bar filling left→right.
 
-Trigger: Winding countdown hits 0.
+**Sub-actions:**
 
-Engine does:
-1. `morphHandRow(queue, 'LH', 'impact', 0)` — same row, same ID, event changes to `impact`, tics set to 0
-2. On the NEXT tick (still same advanceToNextDecision), `impact` fires:
-   - Resolves damage to target(s)
-   - Rolls accuracy, damage, crit independently per target
-   - Logs hit/miss/crit/defeat lines to the feed
-   - Cancels queued attacks on now-dead targets (PC-68)
-   - Morphs to `cooldown` with the calculated cooldown ticks
-3. Continues advancing until the next decision point
+1. **(If tic > 0)** Visual wind-up animation plays — timing bar fills as progress approaches 0. The item stays at top during this. If tic=0, this step is instant.
 
-UI sees: the `winding` row resolves (removed — no `impact` row exists in the returned state, it was morphed to `cooldown` in the same engine pass). The `cooldown` row appears (same row ID, new event+tics).
+2. **(Parallel — both must finish):**
+   - **Typewriter:** "LH winds their bow..."
+   - **Visuals:** Wind-up animation completes, timing bar reaches full
 
-Visual sequence (same BattleClock flow):
-1. **Highlight:** The `winding` row gets `queue-row-current` — "this is what's happening now"
-2. **Typewriter:** Damage/defeat lines type out: `"LH Slash hits Imp A for 24"` (or `"misses"` or `"CRITICAL!"`)
-3. If a monster dies: `"Imp A is defeated"` typed after
-4. **Narrate-done:**
-   - The old `winding` row (resolved) flashes + shrinks
-   - Insert preview pushes down (or not — `cooldown` may land at a different position)
-   - `renderQueue` redraws; the `cooldown` row appears with a fresh timing bar (growing for the cooldown countdown)
-5. Busy releases
+3. **Engine inserts** `impact` row into queue with carried-over attack data.
 
-### Phase 5: Cooldown
+4. **Remove** the `winding` item from queue.
 
-The `cooldown` row counts down. Row shows:
-- Label: `"L. Hand Ready"`
-- Tic count: counting down
-- Timing bar: fills as cooldown progresses
+5. **Master Clock ticks** → next item surfaces (the `impact` row).
 
-### Phase 6: Cooldown → Ready
+### Phase 3: Impact — "LH: Fire Bow" at top
 
-Trigger: Cooldown countdown hits 0.
+**Sub-actions (1 is engine-only, 2-3 parallel):**
 
-Engine does:
-1. `morphHandRow(queue, 'LH', 'ready', 0)` — row becomes a placeholder
-2. Sets hand state → `Ready`
-3. Logs `"LH Ready"`
-4. advanceToNextDecision stops (a hand is Ready → decision point)
+1. **Engine resolves attack:**
+   - Rolls accuracy check
+   - If miss: narrate "misses", no damage
+   - If hit: rolls damage, applies to target
+   - Rolls crit if applicable
+   - If target dies: cancels other queued attacks on dead targets (PC-68)
 
-UI sees: the `cooldown` row resolves. A new `ready` placeholder row appears (or the engine stopped at this point, and the hand becomes actionable).
+2. **Typewriter:** "LH Fire Bow hits Giant Rat for 12 damage!" (or "misses", "CRITICAL!")
 
-Visual:
-1. `cooldown` row highlighted as current
-2. Typewriter: `"LH Ready"` 
-3. Row flashes, shrinks, `ready` placeholder appears (shown as `"L. Hand Ready"` with `—` instead of a tic count)
-4. Busy releases
-5. Command menu opens for the ready hand
+3. **Visuals:** Damage numbers, health bar depletion, screen shake/hit feedback. Both 2+3 run in parallel — typing can start while screen shakes, but neither is done until BOTH finish.
 
-### Phase 7: Hand Approach (Battle Start)
+4. **Engine inserts** `cooldown` row into queue.
 
-Trigger: `startBattle()` — initial hand entries at battle start.
+5. **Remove** the `impact` item from queue.
 
-Engine does:
-1. Commits LH and RH `approach` rows at weapon speed
-2. Sets hand state → `Approach`
-3. advanceToNextDecision → `approach` fires → sets hand to Ready → morphs to `ready` placeholder
-4. Logs `"LH Ready"` and `"RH Ready"`
+6. **Master Clock ticks** → next item surfaces (the `cooldown` row).
 
-UI sees (via playIntroCountdown):
-1. Queue rows appear at their tic positions via intro fill animation (one row at a time, top to bottom)
-2. Each tic decrements visually on the mirrored intro DOM
-3. When approach tics hit 0: the row's label updates to `"LH Ready"`, tic shows `—`
-4. After all fires play, `finishIntroSnap` renders the real state and opens the command window
+### Phase 4: Cooldown — "LH: Cooldown" at top
+
+Row shows: label "L. Hand Ready", tic count, timing bar filling.
+
+**Sub-actions:**
+
+1. **(If tic > 0)** Visual recovery animation plays, timing bar fills.
+
+2. **(Parallel — both must finish):**
+   - **Typewriter:** "LH recovers"
+   - **Visuals:** Recovery animation completes
+
+3. **Engine inserts** `ready` placeholder row into queue.
+
+4. **Remove** the `cooldown` item.
+
+5. **Master Clock ticks** → next item surfaces. If it's `ready` → player's turn again.
+
+### Phase 5: Approach (Battle Start)
+
+Trigger: `startBattle()` seeds initial `approach` rows for each hand + initial monster attacks.
+
+**Master Clock processes each approach row:**
+
+1. Item sits at top of queue. Row shows: label "L. Hand", tic count.
+
+2. **(If tic > 0)** Wind-up visual plays.
+
+3. **Typewriter:** "LH Ready" — typed character by character.
+
+4. **Visuals:** Approach animation.
+
+5. **Engine inserts** `ready` placeholder.
+
+6. **Remove** the `approach` item.
+
+7. **Master Clock ticks** → next approach row, then monster attacks, etc.
+
+When the first `ready` token surfaces → player's turn begins.
 
 ---
 
 ## 2. Monster Attack Lifecycle
 
-### Phase 1: Attack Committed (by engine)
+### Phase 1: Monster Turn — "Giant Rat Ready" at top
 
-Trigger: `startBattle()` or a monster's previous attack resolved and the monster is still alive.
+**Sub-actions (sequential):**
 
-Engine does:
-1. Picks a random attack from the monster's granted attack set
-2. Commits a new `attack` row at `mon.speed` tics
-3. Logs: `"Blue Slime A prepares a Tackle..."`
+1. **Monster AI** picks an attack by weighted random from the monster's template attacks (e.g., Bite 40%, Power Attack 30%, Toxic Fang 20%, Run Away 10%). Rolls.
 
-UI sees (if committed during the same batch as a pending render):
-- On the next loadBattle, the row appears with `queue-row-monster-enter` class (400ms fade-in)
-- Lightweight — monster rows have NO timing bar (no cooldown phase), just name + tic countdown
-- Row shows: `"Blue Slime's Tackle"` + tic count
+2. **Typewriter:** "Giant Rat prepares a Power Attack..." (character by character)
 
-### Phase 2: Attack Fires
+3. **Visuals:** The `winding` attack card animates into the UI Action Queue at its sorted position.
 
-Trigger: Monster's `attack` row tics hit 0.
+4. **Engine inserts** `winding` (or `attack`) row with selected attack's data.
 
-Engine does:
-1. Rolls damage (mon.damage ± 3, uniform), accuracy check
-2. On hit: applies damage to player, logs `"Blue Slime A Tackle hits player for 12"` (or `"CRITICAL!"`)
-3. On miss: logs `"Blue Slime A Tackle misses"`
-4. If still alive: commits a NEW attack row at `mon.speed`, picks next attack, logs the windup
-5. Removes the spent row from the queue (popped)
+5. **Remove** the `ready` item.
 
-UI sees (via BattleClock):
-1. **Highlight:** The fire row gets `queue-row-current`
-2. **Typewriter:** Hit/miss line types out
-3. If it was a hit: the HP bar updates (red fill shrinks), shake/hit feedback triggers
-4. **Narrate-done:**
-   - The old `attack` row (resolved) flashes + shrinks
-   - Insert preview if the new attack row lands at a higher position
-   - `renderQueue` redraws: old row gone, new attack row appears
-   - New row: `queue-row-monster-enter` (400ms)
+6. **Master Clock ticks** → next item.
+
+### Phase 2: Monster Attack Fires — "Giant Rat: Power Attack" at top
+
+If the monster uses a winding-delay model, same lifecycle as player phases 2-4 above (winding → impact → cooldown → ready).
+
+If the monster uses a direct-fire model (attack row with mon.speed delay):
+
+**Sub-actions:**
+
+1. **Engine resolves:**
+   - Rolls damage (±3)
+   - Checks accuracy
+   - If hit: applies to player HP
+   - If crit: doubles damage
+
+2. **(Parallel — both must finish):**
+   - **Typewriter:** "Giant Rat Power Attack hits player for 12 damage!" (or "misses" / "CRITICAL!")
+   - **Visuals:** Damage numbers on player, health bar depletion, shake/hit feedback
+
+3. If still alive: monster AI picks next attack and inserts it.
+
+4. **Remove** the current `attack` item.
+
+5. **Master Clock ticks** → next item.
 
 ### Phase 3: Monster Death
 
-Trigger: An attack brings the monster's HP to 0 or below.
+Trigger: An attack brings monster's HP to 0.
 
-Additional visuals (interleaved with the attack's impact animation):
-1. Monster's HP word transitions from current → defeated state
-2. Monster card: fade/slide/dim visual
-3. Any queued attacks from other monsters targeting this now-dead monster are NOT cancelled (PC-DEC-054 — the dead monster disappears, its remaining attacks evaporate as the engine removes them)
-4. Any player hands winding attacks whose TARGET_IDs are ALL now dead: cancel into cooldown with typewriter line: `"RH attack cancelled — target already defeated"` (PC-68)
+1. Damage narration + visuals execute as normal.
+2. Additional: monster card fades/slides out.
+3. No new attack row is inserted (monster dead).
+4. `cancelQueuedAttacksOnDeadTargets()`: player hands winding attacks on this monster → cancelled to cooldown.
+5. If all monsters dead → battle_over = true, Master Clock stops.
 
 ---
 
 ## 3. Potion Lifecycle
 
-### Phase 1: Player Commits Potion
+### Phase 1: Player Chooses Potion
 
-Trigger: Player selects a potion from the command menu and confirms.
+"LH Ready" at top → player chooses "Use Potion" → inserts `drinking` row → Master Clock processes it.
 
-Engine does:
-1. Finds the first Ready hand (or specified hand)
-2. Removes the hand's `ready` placeholder row
-3. Commits a `drinking` row at `pre` tics (weaponSpeed + potion.rolled_speed)
-4. Sets hand state → `drinking`
-5. Advances engine to next decision point
-6. Returns state
+### Phase 2: Drinking — "LH: Drinking (Health Potion)" at top
 
-UI sees: Same BattleClock flow as attack commit — `ready` row resolves, `drinking` row enters with timing bar.
+**Sub-actions:**
 
-Row shows: `"L. Hand Health Potion"` + tic count + timing bar
+1. **(If tic > 0)** Visual potion-drinking animation plays.
 
-### Phase 2: Drinking → Recovery
+2. **(Parallel — both must finish):**
+   - **Typewriter:** "LH drinks Health Potion..."
+   - **Visuals:** Drinking animation completes
 
-Trigger: `drinking` tics hit 0.
+3. **Engine:** Applies potion effect (heal / buff). If crit: " CRITICAL!".
 
-Engine does:
-1. Applies potion effect (heal or buff), marks potion as used
-2. Logs heal/buff with effect description: `"LH healed 30"` (or `"damage +5 until tic 14"`)
-3. On crit: appends `" CRITICAL!"` 
-4. Morphs to `recovery` at `post` tics
+4. **Engine inserts** `recovery` row.
 
-UI sees: BatteClock flow — drinking row resolves (flash + shrink), recovery row enters. Typewriter narrates the effect.
-
-Row shows: `"L. Hand Ready"` (recovery countdown) + tic + timing bar
+5. **Remove** the `drinking` item.
 
 ### Phase 3: Recovery → Ready
 
-Trigger: `recovery` tics hit 0.
-
-Engine does:
-1. Sets hand → `Ready`
-2. Morphs to `ready` placeholder
-3. Logs `"LH Ready"`
-
-UI sees: recovery row resolves, ready placeholder appears, hand available.
+Same as cooldown phase. Row shows label "L. Hand Ready" with recovery countdown.
 
 ---
 
@@ -261,61 +242,42 @@ UI sees: recovery row resolves, ready placeholder appears, hand available.
 
 ### Phase 1: Player Swaps
 
-Trigger: Player selects Belt Loop from command menu and confirms.
+"LH Ready" at top → player swaps weapon → inserts `cooldown` row (delay = max(old speed, new speed)).
 
-Engine does:
-1. Validates hand is Ready, swaps weapon instance in hand with belt weapon
-2. Calculates delay = max(old speed, new speed)
-3. Commits a `cooldown` row at `delay` tics (or morphs existing row)
-4. Hand state stays non-Ready during cooldown
+**Typewriter:** "Belt swap (LH) — cooldown 5 tics" (system message, instant)
 
-UI sees:
-1. Typewriter: `"Belt swap (LH) — cooldown 5 tics"` (system message, instant)
-2. Loadout display: RH weapon name updates
-3. `cooldown` row appears with timing bar
-4. On cooldown fire: morphs to Ready as usual
+### Phase 2: Cooldown
 
-Row shows: `"L. Hand Ready"` + tic count + timing bar
+Standard cooldown lifecycle. When done → ready token surfaces.
 
 ---
 
 ## 5. Buff Expiry
 
-Trigger: A buff's `endTic` reaches the current tic during advanceToNextDecision.
+Trigger: A buff's `endTic` reaches current tic.
 
-Engine does:
-1. Logs `"Vigor buff expired"`
-2. Removes the buff from state
-
-UI sees:
-- Typewriter types the expiry line
-- No queue visual change (buffs have no rows in the queue)
-- If the buff was affecting player stats, the relevant UI element updates on next render
+- **Typewriter:** "Vigor buff expired"
+- No queue visual change. Buff removed from state.
+- Next render updates any affected stats UI.
 
 ---
 
 ## 6. Timing Bar Visual Specification
 
-Every non-monster row (LH, RH — winding, cooldown, drinking, recovery, approach) has a timing bar. The bar visualizes countdown progress.
+Every non-ready, non-monster row has a timing bar that visualizes countdown progress.
 
-**Bar behavior by row event:**
-
-| Event | Bar start | Bar fill direction | At fire | After fire |
-|---|---|---|---|---|
-| `winding` | empty (0%) | fills left→right to 100% | bar full | row morphs → bar resets |
-| `cooldown` | empty (0%) | fills left→right to 100% | bar full | row morphs → bar resets |
-| `drinking` | empty (0%) | fills left→right to 100% | bar full | row morphs → bar resets |
-| `recovery` | empty (0%) | fills left→right to 100% | bar full | row morphs → bar resets |
-| `approach` | empty (0%) | fills left→right to 100% | bar full | row morphs → ready |
+| Event | Bar behavior |
+|---|---|
+| `winding` | Starts empty, fills left→right. At fire: full. |
+| `cooldown` | Same — fills from empty to full. |
+| `drinking` | Same — fills from empty to full. |
+| `recovery` | Same — fills from empty to full. |
+| `ready` | No bar — shows `—` instead of tic count. |
+| `attack` (monster) | No bar — tic count label only. |
 
 **Bar formula:** `width% = (1 - tics / initialTics) × 100`
 
-Where `initialTics` is the row's tics when it was first committed. On re-render, the bar width interpolates from the current tics.
-
-**Bar visual:**
-- Player hand rows: blue/cyan bar, filled proportionally
-- `ready` placeholder rows: no bar (show `—` instead of tic count)
-- Monster rows: no bar (no timing bar type — just a tic countdown label)
+**Bar visual:** Player rows: blue/cyan bar. Bar only updates on Master Clock ticks (when item is processed or when a new item surfaces and tics are recalculated).
 
 ---
 
@@ -323,111 +285,107 @@ Where `initialTics` is the row's tics when it was first committed. On re-render,
 
 | Event | Label format | Tic display | Bar |
 |---|---|---|---|
-| `approach` | `"L. Hand"` | tic count | Timing bar |
-| `winding` | `"L. Hand Slash"` | tic count | Timing bar |
-| `impact` | N/A — morphs same tick, not visible to UI | — | — |
-| `cooldown` | `"L. Hand Ready"` | tic count | Timing bar |
-| `drinking` | `"L. Hand Health Potion"` | tic count | Timing bar |
-| `recovery` | `"L. Hand Ready"` | tic count | Timing bar |
-| `ready` | `"L. Hand Ready"` | `—` (no countdown) | None |
-| `attack` (monster) | `"Blue Slime's Tackle"` | tic count | None |
+| `winding` | "L. Hand Fire Bow" | tic count | Timing bar |
+| `impact` | "L. Hand Fire Bow" | — | None (brief display) |
+| `cooldown` | "L. Hand Ready" | tic count | Timing bar |
+| `drinking` | "L. Hand Health Potion" | tic count | Timing bar |
+| `recovery` | "L. Hand Ready" | tic count | Timing bar |
+| `ready` | "L. Hand Ready" | — | None |
+| `attack` (monster) | "Giant Rat's Power Attack" | tic count | None |
 
-**Sort order:** Ascending by tics, player-first on ties (LH → RH → monsters A/B/C...).
+**Sort order:** Ascending by tics, player-first on ties (LH → RH → monsters).
 
 ---
 
-## 8. BattleClock Sequence Diagram
-
-For each commit batch:
+## 8. Master Clock Sequence Diagram
 
 ```
-loadBattle called with prevBs (previous state) and bs (new state)
+MasterClock.tick():
   │
-  ├─ diff = diffQueueForAnimation(prevBs, bs)
-  │   • resolved: rows in prevBs but not in bs (IDs)
-  │   • added: rows in bs but not in prevBs (IDs + isMonster flag)
+  ├─ engine.stepOnce()
+  │   • peekHead(queue) — look at top item WITHOUT removing
+  │   • handleFire(row) — process one item, return { narrate, changes }
+  │   • Returns null if queue empty → battle over
   │
-  ├─ Highlight first resolved row with queue-row-current
+  ├─ displayItem(item) — pin it at top of UI Action Queue
   │
-  ├─ renderFeed(bs.feed, onComplete=() => battleClock.onNarrateDone())
-  │   • Types NEW feed lines (slice from renderedFeedLines)
-  │   • onComplete fires after LAST line finishes typing
+  ├─ Parallel (Promise.all):
+  │   ├─ typewriter.print(narrate) — char by char, wait for finish
+  │   └─ animateItem(item) — effects, damage numbers, health bar, shake
+  │   → Await BOTH
   │
-  ├─ battleClock.onNarrateDone():
+  ├─ engine.removeHead() — remove the processed head from queue
+  │
+  ├─ Check triggers:
+  │   ├─ If hand is Ready → show command menu, PAUSE master clock
+  │   │   → resume when player commits (or monster AI runs for monster ready)
+  │   │   → commit inserts new queue items
   │   │
-  │   ├─ Phase 1 (Resolve):
-  │   │   • Flash: resolved rows → queue-row-flash (400ms)
-  │   │   • Shrink: resolved rows → queue-row-shrink (350ms)
-  │   │   • Wait 750ms total
-  │   │
-  │   ├─ Phase 2 (Insert):
-  │   │   • If added.length > 0:
-  │   │     Create queue-insert-preview div at insertion point
-  │   │     CSS transition: height 0→24px (250ms)
-  │   │     Wait 300ms
-  │   │     Remove preview
-  │   │
-  │   ├─ Phase 3 (Render + Enter):
-  │   │   • renderQueue(bs): full redraw
-  │   │   • Added rows animate:
-  │   │     - Monster rows: queue-row-monster-enter (400ms)
-  │   │     - Player rows: queue-row-enter (1200ms)
-  │   │   • Queue panel: queue-arrived (350ms flash)
-  │   │
-  │   └─ _finish():
-  │       • state → IDLE
-  │       • setBusy(false)
-  │       • onComplete callback
+  │   └─ If battle_over → stop
   │
-  └─ Player can act (command menu shown, busy gate released)
+  └─ Loop — tick() again
 ```
 
 ---
 
-## 9. Edge Cases
+## 9. Parallel Sub-Action Rules
 
-### Multiple rows resolve in one batch
-When the engine fires multiple actions in one advanceToNextDecision, the BattleClock treats ALL resolved rows as a single batch:
-- All resolved rows flash simultaneously
-- All shrink simultaneously
-- All added rows enter with their respective animations (staggered by renderQueue sorting order)
+Certain sub-actions can overlap. The Master Clock treats them as a group that all must complete before proceeding:
 
-### No changes (empty diff)
-If `diff.resolved.length === 0 && diff.added.length === 0`, the BattleClock skips directly to `_finish()` — no animations play, busy gate releases immediately. This happens on engagements where the engine didn't advance (e.g. error response).
+| Group | Actions | Allowed to overlap? |
+|---|---|---|
+| Engine processing | Always sequential (blocking) | No |
+| Typewriter + Impact visuals | Typewriter + damage numbers, shake, health bar | YES — both run, item stays pinned until last one finishes |
+| Typewriter + Insert visuals | Typewriter + row-entry animation | YES |
+| Item removal | Always the last step | No |
 
-### Dead monster — attacks evaporate
-When a monster dies mid-batch:
-- Its resolved attack row gets normal flash+shrink
-- Any separate "defeated" feed line types after the damage line
-- New attack row for that monster does NOT appear (monster dead → engine doesn't recommit)
-- Other monsters' attacks targeting the dead one: still fire at the player (auto-target to first living — engine handles this, visual is identical)
+**Visual style (Spahrep, 2026-09-22):** Typewriter text can start typing while screen shake / damage numbers play. Neither is "done" until both finish. The Master Clock waits for both promises to resolve.
+
+---
+
+## 10. Tic Handling
+
+**Tics are display values, not a timing mechanism.** Items in the queue are sorted by tic ascending. The Master Clock always processes the smallest-tic item. Tics are set when the item is inserted:
+- `winding` = castTicks (from weapon params)
+- `cooldown` = cooldownTicks (from weapon params)
+- `ready` = 0 (always surfaces immediately)
+- Monster `attack` = mon.speed
+
+**No global tic advancement.** No tic subtraction on remaining rows. Each item keeps its original tic. When it reaches the top of the queue (smallest remaining tic), it processes. Items with tic=0 always go to front.
+
+The timing bar formula uses `tics / initialTics` to show progress. Since tics don't decrement between processing, the bar reflects the item's position in the queue order.
+
+---
+
+## 11. Edge Cases
+
+### Multiple ready hands surface simultaneously
+If both LH and RH have `ready` rows at tic=0, LH (player-first sort) surfaces first. The Master Clock shows LH Ready, waits for player choice. After commit + sub-actions, the next Master Clock tick surfaces RH Ready.
+
+### Monster and player ready at same tic
+Player-first sort: player hand ready surfaces first. Monster ready waits.
+
+### Monster AI rolls when ready token surfaces
+The master clock, when it sees a monster's `ready` token at top, calls the AI sub-action (pick weighted random). This is a blocking sub-step before the typewriter/visuals.
 
 ### Cancel-into-cooldown (PC-68)
-When a player hand's winding attack is cancelled because all targets died (e.g. other hand killed them):
-- The winding row resolves and its flash plays
-- Typewriter: `"RH attack cancelled — target already defeated"`
-- A new `cooldown` row enters (same hand label, same phase as if the attack landed — hand recovers)
+When a player hand's winding attack is cancelled because all targets died: the `winding` item processes as normal (narrate "RH attack cancelled — target already defeated"), but instead of inserting an `impact` row, engine inserts a `cooldown` row. That cooldown is the next item to surface.
 
 ### Speed preset INSTANT
-Text speed preset "instant" (`charMs === 0`):
-- renderFeed appends all new lines at once (no typewriter)
-- onComplete fires immediately
-- BattleClock proceeds to resolve phase without waiting
+If text speed is "instant" (charMs=0): typewriter prints instantly and its promise resolves immediately. Master Clock doesn't wait for text animation.
 
 ### Mid-battle page reload (resume)
-- prevBs is null → no BattleClock sequence, no diff animation
-- populateFeedInstantly shows all past feed at once with hit feedback suppressed
-- renderQueue renders the current queue state immediately
-- Command menu opens on existing ready hands
+On reload, `loadState()` restores queue + state. Master Clock starts fresh. No previous animations to replay. Current queue top determines what the player sees first.
 
 ---
 
-## 10. Glossary
+## 12. Glossary
 
-- **Row:** A single entry in the action queue array. Has {id, label, event, tics}. Player hand rows keep the same id across morphs. Monster rows get a new id each cycle.
-- **Resolved:** A row that existed in the previous state but not in the new state (popped or morphed to a different id). Triggers flash+shrink animation.
-- **Added:** A row that exists in the new state but not in the previous state. Triggers entry-enter animation.
-- **Morphing:** Changing a row's `event` and `tics` in place, keeping the same id. Engine does this for hand rows. The UI sees the row resolve (old event gone) and a new row appear (new event) at the same id — the diff treats it as resolved-then-added.
-- **BattleClock:** Singleton class in battle-app.js that orchestrates the post-commit animation sequence: narrate → resolve → insert → render → enter → idle.
-- **Typewriter:** Character-by-character text reveal in the message box, paced by the text speed preset. Gated by `typingInProgress` flag.
-- **Busy gate (`setBusy`):** Prevents duplicate commits and hides the command menu during animation playback. Released by BattleClock._finish().
+- **Master Clock:** The loop in battle-app.js that drives the combat sequence. One tick = one queue item processed end-to-end.
+- **stepOnce():** Engine method that peeks the queue head, processes it, returns narrate text + state changes. Does NOT remove the head.
+- **removeHead():** Engine method that removes the processed item from queue after all sub-actions complete.
+- **Sub-action:** A single step within an item's processing (e.g., "typewriter narrates", "AI picks attack", "remove item"). Some can run in parallel.
+- **UI Action Queue:** The visual rendering of the engine's queue. Player sees items sorted by tic, with the top item as "currently happening" or "currently whose turn."
+- **Ready token:** A `ready` event row at tic=0. Indicates the hand/monster's turn. Surfaces when all lifecycle phases for the previous action complete.
+- **Tic:** Display-only countdown value. Determines queue sort order. Set at insertion time, never decremented.
+- **Typewriter:** Character-by-character text reveal in the message box, paced by text speed preset.
