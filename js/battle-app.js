@@ -11,7 +11,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 import { computeTimingMarkers } from './combat/tic-queue.js';
 import { potionPrePostTicks } from './combat/potion-contract.js';
 import { parseHitLine } from './combat/hit-feedback.js';
-import { getSpeedPreset, getFontSizePreset, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
+import { getSpeedPreset, getSpeedKey, getFontSizePreset, getFontSizeKey, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
 
 /**
  * BattleClock — orchestrates post-commit animation sequencing.
