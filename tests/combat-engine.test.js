@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getHpWord, HP_BANDS } from '../js/combat/hp-words.js';
-import { createQueue, commitNewRow, tick, sortQueue, computeTimingMarkers } from '../js/combat/tic-queue.js';
+import { createQueue, commitNewRow, popNext, sortQueue, computeTimingMarkers } from '../js/combat/tic-queue.js';
 import createEngine, { resumeEngine } from '../js/combat/engine.js';
 import { swapHandWithBelt } from '../js/combat/participants.js';
 
@@ -38,25 +38,31 @@ describe('Tic queue ordering + player-first ties', () => {
     assert.equal(q[2].label, 'M');
   });
 
-  it('tick fires player first on same-tic', () => {
+  it('popNext pops lowest tics and advances remaining', () => {
     const q = createQueue();
-    commitNewRow(q, 'M', 'attack', 1);
+    commitNewRow(q, 'M', 'attack', 5);
     commitNewRow(q, 'LH', 'impact', 1);
-    const fired = [];
-    tick(q, (r) => fired.push(r.label));
-    assert.deepEqual(fired, ['LH', 'M']); // player first
+    commitNewRow(q, 'RH', 'cooldown', 3);
+    const result = popNext(q);
+    assert.equal(result.row.label, 'LH');
+    assert.equal(result.ticOffset, 1);
+    assert.equal(q.length, 2);
+    assert.equal(q[0].label, 'RH');
+    assert.equal(q[0].tics, 2);
+    assert.equal(q[1].label, 'M');
+    assert.equal(q[1].tics, 4);
   });
 });
 
 describe('PC-66: event-driven time-skip', () => {
-  it('tick(skip) subtracts the gap from all rows and fires the due ones', () => {
+  it('popNext on multi-row advances correctly', () => {
     const q = createQueue();
     commitNewRow(q, 'M', 'attack', 5);
     commitNewRow(q, 'LH', 'impact', 1);
     commitNewRow(q, 'RH', 'cooldown', 9);
-    const fired = [];
-    tick(q, (r) => fired.push(r.label), 1); // next fire is 1 tic away
-    assert.deepEqual(fired, ['LH']);
+    const result = popNext(q);
+    assert.equal(result.row.label, 'LH');
+    assert.equal(result.ticOffset, 1);
     assert.equal(q.find(r => r.label === 'M').tics, 4);
     assert.equal(q.find(r => r.label === 'RH').tics, 8);
   });

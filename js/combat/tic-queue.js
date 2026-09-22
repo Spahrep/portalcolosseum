@@ -14,36 +14,16 @@ export function addEvent(queue, label, event, tics, id = null) {
   return entry;
 }
 
-export function tick(queue, onFire, skip = 1) {
-  // PC-66: time-skip — subtract `skip` (default 1 = old per-tic behavior) from
-  // every row at once and fire the rows that land on 0. Callers that jump a
-  // gap pass the gap; callers processing a single iteration pass 1. Rows are
-  // clamped at 0 so morphed 0-tic rows (winding → impact) fire every iteration
-  // until their handler moves them on — exactly the old per-tic behavior.
-  const fired = [];
-  for (const row of queue) {
-    row.tics = Math.max(0, row.tics - skip);
-    if (row.tics === 0 && row.event === 'ready') {
-      continue; // Ready placeholder rows are never fired
-    }
-    if (row.tics === 0) {
-      fired.push(row);
-    }
+export function popNext(queue) {
+  sortQueue(queue);
+  if (queue.length === 0) return null;
+  const row = queue[0];
+  const ticOffset = row.tics;
+  for (const r of queue) {
+    r.tics = Math.max(0, r.tics - ticOffset);
   }
-  // Fire in player-first order (LH/RH before monster labels)
-  fired.sort((a, b) => {
-    const aPlayer = a.label === 'LH' || a.label === 'RH' ? 0 : 1;
-    const bPlayer = b.label === 'LH' || b.label === 'RH' ? 0 : 1;
-    if (aPlayer !== bPlayer) return aPlayer - bPlayer;
-    return 0; // stable
-  });
-  for (const row of fired) {
-    onFire(row);
-  }
-  // F15: removed dead cleanup branch for never-emitted 'ready'/'*_land' events.
-  // Actual events ('winding','impact','cooldown','attack') are removed inside handleFire where appropriate.
-  // Rows with tics===0 after morph stay until their final handler removes them.
-  return fired;
+  queue.splice(0, 1);
+  return { row, ticOffset };
 }
 
 export function sortQueue(queue) {

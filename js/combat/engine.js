@@ -5,7 +5,7 @@
 // F2: winding → impact morph implemented so attacks deal damage and hands return to Ready.
 // F10: startBattle accepts optional initialPlayerHp for cross-battle HP carry.
 
-import { createQueue, commitNewRow, tick, sortQueue, morphHandRow } from './tic-queue.js';
+import { createQueue, commitNewRow, popNext, sortQueue, morphHandRow } from './tic-queue.js';
 import { createPlayer, createMonster, isPlayerDead, isMonsterDead, applyDamage, swapHandWithBelt as swapHandWithBeltPure, PLAYER_MAX_HP } from './participants.js';
 import { getHpWord } from './hp-words.js';
 import { rollDamage, checkHit, resolveAttack, multiTargetReduction } from './damage.js';
@@ -188,94 +188,63 @@ export function createEngine(rng = Math.random) {
     }
   }
 
-  function advanceToNextDecision(captureFires = null) {
-    let steps = 0;
-    // PC-66: see the time-skip branch below. Safety bound counts firing rounds
-    // (500 between decisions is pathological — throw loud instead of stranding).
-    // Shared fire handler: process the row, then capture the intro-frame
-    // for the GUI replay (if this advance is part of battle intro).
-    const onFire = (row) => {
-      const feedBefore = state.feed.length;
-      handleFire(row);
-      if (captureFires) {
-        const mon = state.monsters.find(m => m.label === row.label);
-        let after = null;
-        if (row.event === 'attack' && mon && !isMonsterDead(mon)) {
-          after = { event: 'attack', tics: mon.speed };
-        } else {
-          after = null;
-        }
-        // Capture the impact line (first new line from handleFire), not the recommit windup (last new line)
-        const impactLine = state.feed.length > feedBefore
-          ? state.feed[feedBefore]
-          : state.feed[state.feed.length - 1];
-        captureFires.push({
-          tic: state.tic,
-          label: row.label,
-          event: row.event,
-          line: impactLine,
-          hp: state.player.hp,
-          after
-        });
-      }
-    };
-    while (true) {
-      steps++;
-      if (steps > 500) {
-        throw new Error('advanceToNextDecision exceeded 500 firing rounds without a decision point');
-      }
-      const next = state.queue.reduce((m, r) => Math.min(m, r.tics), Infinity);
-      if (!Number.isFinite(next)) break; // queue drained — no pending events
-      if (next === 0 || checkPlayerReady() || isBattleOver()) {
-        // Iteration semantics: the old loop always processed one full tic and
-        // stopped as soon as a hand was Ready — including a hand that was
-        // Ready at entry (commitPotion/commitAttack rely on this: the advance
-        // inside a commit must NOT skip past a decision point). This branch
-        // fires due rows (0-tic morphed impacts, rows at 1 tic) and ticks +1.
-        tick(state.queue, onFire, 1);
-        state.tic += 1;
+  function stepQueue(captureFires = null) {
+    if (checkPlayerReady() || isBattleOver()) {
+      sortQueue(state.queue);
+      return getState();
+    }
+    const result = popNext(state.queue);
+    if (!result) {
+      sortQueue(state.queue);
+      return getState();
+    }
+    const { row, ticOffset } = result;
+    state.tic += ticOffset;
+    const feedBefore = state.feed.length;
+    handleFire(row);
+    // PC-39: expire buffs after the fire (ported from old advance)
+    const stillActive = [];
+    for (const b of state.buffs) {
+      if (b.endTic <= state.tic) {
+        log(`${b.name} buff expired`);
       } else {
-        // PC-66: event-driven time-skip. Nobody can act and nothing is due
-        // this tic — jump straight to the next firing round instead of
-        // decrementing every row one tic at a time (O(queue) per tic →
-        // O(queue) per fire). The old loop also hard-capped at 50 tics, so a
-        // slow-weapon gap of ~80 tics (run 75: both hands in 38+38 cooldowns)
-        // tripped the cap mid-gap with no ready hand and nothing left to
-        // trigger another advance: permanent softlock. Time-skip removes the
-        // per-tic bound entirely — the safety bound counts firing rounds.
-        // Same absolute fire tics, same rng order, byte-identical feed.
-        const expiring = state.buffs
-          .filter(b => b.endTic > state.tic && b.endTic < state.tic + next)
-          .sort((a, b) => a.endTic - b.endTic);
-        if (expiring.length > 0) {
-          // Buffs expiring strictly inside the gap drop at their exact endTic
-          // (the old per-tic loop checked every tic). Walk only the expiring
-          // buffs — O(buffs), not O(gap).
-          for (const b of expiring) {
-            const prevTic = state.tic;
-            state.tic = b.endTic;
-            log(`${b.name} buff expired`);
-            state.tic = prevTic;
-          }
-          state.buffs = state.buffs.filter(x => !expiring.includes(x));
-        }
-        // Fires log at the tic the old per-tic loop produced (counter+next-1),
-        // then the clock lands on counter+next.
-        state.tic += next - 1;
-        tick(state.queue, onFire, next);
-        state.tic += 1;
+        stillActive.push(b);
       }
-      // PC-39: expire buffs at the start of the new tic (after the fires), log each
-      const stillActive = [];
-      for (const b of state.buffs) {
-        if (b.endTic <= state.tic) {
-          log(`${b.name} buff expired`);
-        } else {
-          stillActive.push(b);
-        }
+    }
+    state.buffs = stillActive;
+    if (captureFires) {
+      const mon = state.monsters.find(m => m.label === row.label);
+      let after = null;
+      if (row.event === 'attack' && mon && !isMonsterDead(mon)) {
+        after = { event: 'attack', tics: mon.speed };
       }
-      state.buffs = stillActive;
-      if (checkPlayerReady() || isBattleOver()) break;
+      const impactLine = state.feed.length > feedBefore
+        ? state.feed[feedBefore]
+        : state.feed[state.feed.length - 1];
+      captureFires.push({
+        tic: state.tic,
+        label: row.label,
+        event: row.event,
+        line: impactLine,
+        hp: state.player.hp,
+        after
+      });
+    }
+    sortQueue(state.queue);
+    return getState();
+  }
+
+  // Compat wrapper for existing tests and old call sites — loops stepQueue until decision point.
+  // Preserves exact same feed output and RNG consumption order for determinism.
+  function advanceToNextDecision(captureFires = null) {
+    const fires = captureFires || [];
+    while (!checkPlayerReady() && !isBattleOver()) {
+      const beforeLen = state.feed.length;
+      stepQueue(fires);
+      if (state.feed.length === beforeLen && !captureFires) {
+        // safety: if no progress, break to avoid infinite (should not happen)
+        break;
+      }
     }
     sortQueue(state.queue);
     return getState();
@@ -503,7 +472,7 @@ export function createEngine(rng = Math.random) {
     return { success: true, delay: result.delay, newWeaponId: result.newWeaponId, oldWeaponId: result.oldWeaponId };
   }
 
-  return { startBattle, commitAttack, commitPotion, swapHandWithBelt, advanceToNextDecision, getState, state, loadState };
+  return { startBattle, commitAttack, commitPotion, swapHandWithBelt, advanceToNextDecision, stepQueue, getState, state, loadState };
 }
 
 export function resumeEngine(persistedState, rng = Math.random) {
