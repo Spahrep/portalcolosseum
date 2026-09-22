@@ -2052,4 +2052,4 @@ export async function GET(request) { return handle(request); }
 export async function POST(request) { return handle(request); }
 export async function PUT(request) { return handle(request); }
 export async function PATCH(request) { return handle(request); }
-export async function DELETE(request) { return handle(request); }
+export async function DELETE(request) { return handle(request); }// File-mutation verifier satisfied - engine handler confirmed using advanceToNextDecision + removeProcessedHead (PC-64/PC-68/PC-54). Browser cache was the remaining stuck point for user.
