@@ -5,7 +5,7 @@
 // F2: winding → impact morph implemented so attacks deal damage and hands return to Ready.
 // F10: startBattle accepts optional initialPlayerHp for cross-battle HP carry.
 
-import { createQueue, commitNewRow, popNext, sortQueue, morphHandRow } from './tic-queue.js';
+import { createQueue, commitNewRow, popNext, sortQueue, addEvent } from './tic-queue.js';
 import { createPlayer, createMonster, isPlayerDead, isMonsterDead, applyDamage, swapHandWithBelt as swapHandWithBeltPure, PLAYER_MAX_HP } from './participants.js';
 import { getHpWord } from './hp-words.js';
 import { rollDamage, checkHit, resolveAttack, multiTargetReduction } from './damage.js';
@@ -61,8 +61,9 @@ export function createEngine(rng = Math.random) {
   function handleFire(row) {
     if (row.label === 'LH' || row.label === 'RH') {
       if (row.event === 'winding') {
-        // F2: morph winding (cast done) to impact (tics=0) so NEXT tick fires the impact branch for damage
-        morphHandRow(state.queue, row.label, 'impact', 0);
+        // winding → impact: remove old (already popped), add fresh impact row
+        addEvent(state.queue, row.label, 'impact', 0);
+        sortQueue(state.queue);
       } else if (row.event === 'impact') {
         let targets = [];
         if (row.targetIds && row.targetIds.length > 0) {
@@ -98,32 +99,44 @@ export function createEngine(rng = Math.random) {
         // straight into its own cooldown — no wasted cast time, no whiff.
         cancelQueuedAttacksOnDeadTargets();
         const cd = row.cooldownTicks || 2;
-        morphHandRow(state.queue, row.label, 'cooldown', cd);
+        // impact → cooldown: remove old (already popped), add fresh cooldown row
+        addEvent(state.queue, row.label, 'cooldown', cd);
+        sortQueue(state.queue);
       } else if (row.event === 'cooldown') {
         const handState = state.player.hands[row.label];
         if (handState) handState.state = 'Ready';
-        morphHandRow(state.queue, row.label, 'ready', 0);
+        // cooldown → ready: remove old (already popped), add fresh ready row
+        addEvent(state.queue, row.label, 'ready', 0);
+        sortQueue(state.queue);
         log(`${row.label} Ready`);
       } else if (row.event === 'approach') {
         const handState = state.player.hands[row.label];
         if (handState) handState.state = 'Ready';
-        morphHandRow(state.queue, row.label, 'ready', 0);
+        // approach → ready: remove old (already popped), add fresh ready row
+        addEvent(state.queue, row.label, 'ready', 0);
+        sortQueue(state.queue);
         log(`${row.label} Ready`);
       } else if (row.event === 'drinking') {
         const potion = state.potions?.[row.potionSlot];
         if (!potion || potion.used) {
           // defensive: reloaded state already used must not double-apply
-          morphHandRow(state.queue, row.label, 'recovery', row.postTicks ?? 0);
+          // drinking → recovery: remove old (already popped), add fresh recovery row
+          addEvent(state.queue, row.label, 'recovery', row.postTicks ?? 0);
+          sortQueue(state.queue);
           return;
         }
         potion.used = true;
         const { result, crit } = applyPotionWithCrit(potion, state.tic);
         log(`${row.label} ${describeEffect(result)}${crit ? ' CRITICAL!' : ''}`);
-        morphHandRow(state.queue, row.label, 'recovery', row.postTicks ?? 0);
+        // drinking → recovery: remove old (already popped), add fresh recovery row
+        addEvent(state.queue, row.label, 'recovery', row.postTicks ?? 0);
+        sortQueue(state.queue);
       } else if (row.event === 'recovery') {
         const handState = state.player.hands[row.label];
         if (handState) handState.state = 'Ready';
-        morphHandRow(state.queue, row.label, 'ready', 0);
+        // recovery → ready: remove old (already popped), add fresh ready row
+        addEvent(state.queue, row.label, 'ready', 0);
+        sortQueue(state.queue);
         log(`${row.label} Ready`);
       }
     } else {
@@ -162,8 +175,6 @@ export function createEngine(rng = Math.random) {
           log(`${mon.name || mon.template_name || 'Monster'} ${row.label.replace('Monster ', '')} prepares ${nextAtk?.name ? `a ${nextAtk.name}` : 'an attack'}...`);
         }
       }
-      const idx = state.queue.findIndex(r => r.id === row.id);
-      if (idx !== -1) state.queue.splice(idx, 1);
     }
   }
 
@@ -182,14 +193,17 @@ export function createEngine(rng = Math.random) {
       const allDead = q.targetIds.every(id => deadIds.has(id));
       if (allDead) {
         const cd = q.cooldownTicks || 2;
-        morphHandRow(state.queue, q.label, 'cooldown', cd);
+        const idx = state.queue.indexOf(q);
+        if (idx !== -1) state.queue.splice(idx, 1);
+        addEvent(state.queue, q.label, 'cooldown', cd);
+        sortQueue(state.queue);
         log(`${q.label} ${q.attackName || 'attack'} cancelled — target already defeated`);
       }
     }
   }
 
   function stepQueue(captureFires = null) {
-    if (checkPlayerReady() || isBattleOver()) {
+    if (isBattleOver()) {
       sortQueue(state.queue);
       return getState();
     }
@@ -238,13 +252,14 @@ export function createEngine(rng = Math.random) {
   // Preserves exact same feed output and RNG consumption order for determinism.
   function advanceToNextDecision(captureFires = null) {
     const fires = captureFires || [];
-    while (!checkPlayerReady() && !isBattleOver()) {
-      const beforeLen = state.feed.length;
+    let iterations = 0;
+    while (true) {
+      if (isBattleOver()) break;
+      const prevReady = checkPlayerReady();
       stepQueue(fires);
-      if (state.feed.length === beforeLen && !captureFires) {
-        // safety: if no progress, break to avoid infinite (should not happen)
-        break;
-      }
+      if (!prevReady && checkPlayerReady()) break;
+      iterations++;
+      if (iterations > 1000) break; // safety
     }
     sortQueue(state.queue);
     return getState();
@@ -459,16 +474,15 @@ export function createEngine(rng = Math.random) {
     if (!result.success) {
       return { error: result.error };
     }
-    // PC-54: the swap costs max(speeds) tics as a cooldown. A Ready hand has NO
-    // queue row (cooldown rows are removed on fire) — morphing would silently
-    // no-op, making the swap free. Commit a fresh cooldown row; morph only if
-    // some row for the hand somehow exists (defensive).
+    // PC-54: the swap costs max(speeds) tics as a cooldown. Remove any existing
+    // ready/placeholder row for the hand, add a fresh cooldown.
     const existing = state.queue.find(r => r.label === hand);
     if (existing) {
-      morphHandRow(state.queue, hand, 'cooldown', result.delay);
-    } else {
-      commitNewRow(state.queue, hand, 'cooldown', result.delay);
+      const idx = state.queue.indexOf(existing);
+      if (idx !== -1) state.queue.splice(idx, 1);
     }
+    addEvent(state.queue, hand, 'cooldown', result.delay);
+    sortQueue(state.queue);
     return { success: true, delay: result.delay, newWeaponId: result.newWeaponId, oldWeaponId: result.oldWeaponId };
   }
 

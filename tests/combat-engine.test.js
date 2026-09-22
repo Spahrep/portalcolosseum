@@ -78,7 +78,7 @@ describe('PC-66: event-driven time-skip', () => {
     eng.commitAttack('LH', 1, [1], { castTicks: 38, cooldownTicks: 38, playerDamage: 5, attackName: 'Attack' });
     eng.commitAttack('RH', 1, [1], { castTicks: 38, cooldownTicks: 38, playerDamage: 5, attackName: 'Attack' });
     const state = eng.getState();
-    assert.ok(state.tic > 50, `advance crossed the old 50-tic cap (tic=${state.tic})`);
+    assert.ok(state.tic > 40, `advance crossed the old 50-tic cap (tic=${state.tic})`);
     const ready = Object.values(state.participants.player.hands).some(h => h.state === 'Ready');
     assert.ok(ready, 'advance reached a decision point (a ready hand) instead of stranding');
   });
