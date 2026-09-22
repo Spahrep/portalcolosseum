@@ -285,20 +285,11 @@ export function createEngine(rng = Math.random) {
   // Preserves exact same feed output and RNG consumption order for determinism.
   function advanceToNextDecision(captureFires = null) {
     const fires = captureFires || [];
-    const wasReadyBefore = ['LH', 'RH'].reduce((m, h) => {
-      m[h] = state.player.hands[h]?.state === 'Ready';
-      return m;
-    }, {});
     let iterations = 0;
     while (true) {
       if (isBattleOver()) break;
       stepQueue(fires);
-      const anyReady = checkPlayerReady();
-      const allReady = ['LH', 'RH'].every(h => state.player.hands[h]?.state === 'Ready');
-      const handBecameReady = ['LH', 'RH'].some(h =>
-        !wasReadyBefore[h] && state.player.hands[h]?.state === 'Ready'
-      );
-      if (allReady || (anyReady && !handBecameReady)) break;
+      if (checkPlayerReady()) break;
       iterations++;
       if (iterations > 500) break;
     }
