@@ -3,14 +3,13 @@
  * ==============
  * Vercel serverless endpoint for game-wide config.
  * Returns JSON with debug/feature flags from the game_config DB table.
- * No auth required — these are public client-side toggles.
+ * Direct fetch to Supabase REST API — avoids esm.sh import limitations.
  *
  * GET /api/config → { debug: true, ... }
  */
-
 const CORS = {
   'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': 'https://portalcolosseum.com',
+  'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
@@ -21,7 +20,6 @@ function json(body, status = 200) {
 
 export async function GET() {
   try {
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2.112.4');
     const supabaseUrl = process.env.SUPABASE_URL;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
@@ -29,18 +27,23 @@ export async function GET() {
       return json({ error: 'Server config missing' }, 500);
     }
 
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    const { data, error } = await supabase
-      .from('game_config')
-      .select('debug')
-      .eq('id', 1)
-      .single();
+    // Direct REST API call — no client library needed
+    const url = `${supabaseUrl}/rest/v1/game_config?id=eq.1&select=debug`;
+    const res = await fetch(url, {
+      headers: {
+        'apikey': supabaseKey,
+        'Authorization': `Bearer ${supabaseKey}`,
+        'Accept': 'application/json',
+      },
+    });
 
-    if (error) {
-      return json({ error: error.message }, 500);
+    if (!res.ok) {
+      return json({ error: `DB query failed: ${res.status}` }, 500);
     }
 
-    return json({ debug: data?.debug === true });
+    const data = await res.json();
+    const row = Array.isArray(data) ? data[0] : data;
+    return json({ debug: row?.debug === true });
   } catch (e) {
     return json({ error: e.message }, 500);
   }
