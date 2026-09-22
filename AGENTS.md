@@ -40,10 +40,14 @@ Working rules for AI agents in this repo (Hermes, Grok workers, Claude Code, and
   vercel.com/sso-api. NEVER verify, curl, or browse against them, and never try
   to work around the SSO gate. It is platform auth, not app code, and not the
   task.
-- Verify UI work on the live domain (https://portalcolosseum.com) or locally
-  against the worktree (plain static server). Hitting an auth wall during
-  verification is a STOP signal: switch to the known-good path or ask — don't
-  chase the wall.
+- Verify UI work ONLY on the live domain (https://portalcolosseum.com).
+  NEVER test against local/working-tree files when asked to test (Spahrep
+  2026-09-22). Local files can contain un-committed fixes that are NOT deployed
+  or in CI — a "local browser pass" does NOT prove the shipped game works and
+  has repeatedly produced false "it works" reports. When asked to test, the
+  only valid result is a pass against the LIVE site (commit + push first, then
+  verify live). Hitting an auth wall during verification is a STOP signal:
+  switch to the known-good path or ask — don't chase the wall.
 - A UI/feature task does not include Vercel, deployment, SSO, or auth work.
   If you don't know the verification path, ask Spahrep instead of improvising
   one.
