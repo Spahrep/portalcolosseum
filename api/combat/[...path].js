@@ -695,8 +695,11 @@ async function handle(request) {
       const fires = [];
       try {
         engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName, playerAccuracy, playerCritChance, playerCritMultiplier });
-        // advanceToNextDecision already uses the fixed stepOnce/removeProcessedHead path internally
-        engine.advanceToNextDecision(fires);
+        // After commit, if not at decision point, step until player is Ready or battle over.
+        // Uses the fixed stepOnce + removeProcessedHead path via advanceToNextDecision.
+        while (!engine.checkPlayerReady?.() && !engine.isBattleOver?.() && fires.length < 100) {
+          engine.advanceToNextDecision(fires);
+        }
       } catch (e) {
         if (e.message === 'Hand not ready' && engine.state && engine.state.queue && engine.state.queue.length > 0) {
           engine.advanceToNextDecision();
