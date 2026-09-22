@@ -3,6 +3,8 @@
  * Temporary diagnostic tool. Controlled by the `debug` flag in the
  * game_config Supabase table (set via /api/config endpoint).
  * Shows a scrollable feed box in the bottom-right corner.
+ * Also shows a small visual indicator when loaded so you can
+ * confirm the new code is live even when debug mode is off.
  * debugLog(tag, msg) inside any battle function marks execution flow.
  * Global flag: window.__PC_DEBUG = true/false
  *
@@ -10,6 +12,26 @@
  */
 
 (function () {
+  // Show a tiny marker so the user knows this file ran
+  const marker = document.createElement('div');
+  marker.id = 'pc-debug-marker';
+  marker.textContent = '■'; // filled square
+  Object.assign(marker.style, {
+    position: 'fixed',
+    bottom: '4px',
+    left: '4px',
+    width: '10px',
+    height: '10px',
+    background: '#0c0',
+    borderRadius: '50%',
+    zIndex: '99998',
+    fontSize: '8px',
+    lineHeight: '10px',
+    textAlign: 'center',
+    color: '#fff',
+  });
+  document.body.appendChild(marker);
+
   window.__PC_DEBUG = false;
   window.debugLog = function () {}; // no-op until config loads
 
@@ -20,14 +42,19 @@
       if (cfg.debug === true) {
         window.__PC_DEBUG = true;
         window.debugLog = createDebugLog();
+        marker.style.background = '#0c0'; // green = debug ON
         window.debugLog('debug', 'Debug overlay active — config says ON');
       } else {
         window.__PC_DEBUG = false;
+        marker.style.background = '#c00'; // red = debug OFF
       }
     })
-    .catch(err => {
-      // Silently degrade — debug box not critical
-      console.warn('🐛 Debug config fetch failed:', err.message);
+    .catch(() => {
+      // If config fetch fails, still show debug box so user can see
+      window.__PC_DEBUG = true;
+      window.debugLog = createDebugLog();
+      marker.style.background = '#fa0'; // orange = fallback
+      window.debugLog('debug', 'Debug overlay active — config fetch failed, fallback');
     });
 
   function createDebugLog() {

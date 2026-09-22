@@ -12,7 +12,7 @@ import { computeTimingMarkers } from './combat/tic-queue.js';
 import { potionPrePostTicks } from './combat/potion-contract.js';
 import { parseHitLine } from './combat/hit-feedback.js';
 import { getSpeedPreset, getSpeedKey, getFontSizePreset, getFontSizeKey, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
-import './battle-debug.js'; // debugLog(tag, msg) — toggled via ?debug=1 or localStorage pc_debug
+import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.debug in Supabase
 
 /**
  * BattleClock — orchestrates post-commit animation sequencing.
