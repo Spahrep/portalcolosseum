@@ -5,7 +5,7 @@
 // F2: winding → impact morph implemented so attacks deal damage and hands return to Ready.
 // F10: startBattle accepts optional initialPlayerHp for cross-battle HP carry.
 
-import { createQueue, commitNewRow, popNext, sortQueue, addEvent } from './tic-queue.js';
+import { createQueue, commitNewRow, popNext, sortQueue, addEvent, peekHead, removeHead } from './tic-queue.js';
 import { createPlayer, createMonster, isPlayerDead, isMonsterDead, applyDamage, swapHandWithBelt as swapHandWithBeltPure, PLAYER_MAX_HP } from './participants.js';
 import { getHpWord } from './hp-words.js';
 import { rollDamage, checkHit, resolveAttack, multiTargetReduction } from './damage.js';
@@ -61,8 +61,16 @@ export function createEngine(rng = Math.random) {
   function handleFire(row) {
     if (row.label === 'LH' || row.label === 'RH') {
       if (row.event === 'winding') {
-        // winding → impact: remove old (already popped), add fresh impact row
-        addEvent(state.queue, row.label, 'impact', 0);
+        // winding → impact: carry over attack data (damage, targets, etc.)
+        const impactRow = addEvent(state.queue, row.label, 'impact', 0);
+        impactRow.targetIds = row.targetIds;
+        impactRow.damage = row.damage;
+        impactRow.isMultiTarget = row.isMultiTarget;
+        impactRow.cooldownTicks = row.cooldownTicks;
+        impactRow.accuracy = row.accuracy;
+        impactRow.critChance = row.critChance;
+        impactRow.critMultiplier = row.critMultiplier;
+        impactRow.attackName = row.attackName;
         sortQueue(state.queue);
       } else if (row.event === 'impact') {
         let targets = [];
@@ -178,6 +186,30 @@ export function createEngine(rng = Math.random) {
     }
   }
 
+  function stepOnce() {
+    const row = peekHead(state.queue);
+    if (!row) return null;
+    const feedBefore = state.feed.length;
+    handleFire(row);
+    // expire buffs (same logic as stepQueue)
+    const stillActive = [];
+    for (const b of state.buffs) {
+      if (b.endTic <= state.tic) {
+        log(`${b.name} buff expired`);
+      } else {
+        stillActive.push(b);
+      }
+    }
+    state.buffs = stillActive;
+    sortQueue(state.queue);
+    const narrate = state.feed.length > feedBefore ? state.feed[feedBefore] : (state.feed[state.feed.length - 1] || '');
+    return { row, narrate };
+  }
+
+  function removeProcessedHead() {
+    return removeHead(state.queue);
+  }
+
   // PC-68: when an attack kills the last target of another hand's queued
   // attack, that queued attack is moot — cancel it straight into its own
   // cooldown so the hand isn't stuck winding at a corpse (then whiffing).
@@ -207,39 +239,34 @@ export function createEngine(rng = Math.random) {
       sortQueue(state.queue);
       return getState();
     }
-    const result = popNext(state.queue);
+    const rowHead = peekHead(state.queue);
+    if (!rowHead) {
+      sortQueue(state.queue);
+      return getState();
+    }
+    const ticOffset = rowHead.tics;
+    state.tic += ticOffset;
+    for (const r of state.queue) {
+      r.tics = Math.max(0, r.tics - ticOffset);
+    }
+    const result = stepOnce();
     if (!result) {
       sortQueue(state.queue);
       return getState();
     }
-    const { row, ticOffset } = result;
-    state.tic += ticOffset;
-    const feedBefore = state.feed.length;
-    handleFire(row);
-    // PC-39: expire buffs after the fire (ported from old advance)
-    const stillActive = [];
-    for (const b of state.buffs) {
-      if (b.endTic <= state.tic) {
-        log(`${b.name} buff expired`);
-      } else {
-        stillActive.push(b);
-      }
-    }
-    state.buffs = stillActive;
+    const { row } = result;
+    removeProcessedHead();
     if (captureFires) {
       const mon = state.monsters.find(m => m.label === row.label);
       let after = null;
       if (row.event === 'attack' && mon && !isMonsterDead(mon)) {
         after = { event: 'attack', tics: mon.speed };
       }
-      const impactLine = state.feed.length > feedBefore
-        ? state.feed[feedBefore]
-        : state.feed[state.feed.length - 1];
       captureFires.push({
         tic: state.tic,
         label: row.label,
         event: row.event,
-        line: impactLine,
+        line: result.narrate,
         hp: state.player.hp,
         after
       });
@@ -252,14 +279,22 @@ export function createEngine(rng = Math.random) {
   // Preserves exact same feed output and RNG consumption order for determinism.
   function advanceToNextDecision(captureFires = null) {
     const fires = captureFires || [];
+    const wasReadyBefore = ['LH', 'RH'].reduce((m, h) => {
+      m[h] = state.player.hands[h]?.state === 'Ready';
+      return m;
+    }, {});
     let iterations = 0;
     while (true) {
       if (isBattleOver()) break;
-      const prevReady = checkPlayerReady();
       stepQueue(fires);
-      if (!prevReady && checkPlayerReady()) break;
+      const anyReady = checkPlayerReady();
+      const allReady = ['LH', 'RH'].every(h => state.player.hands[h]?.state === 'Ready');
+      const handBecameReady = ['LH', 'RH'].some(h =>
+        !wasReadyBefore[h] && state.player.hands[h]?.state === 'Ready'
+      );
+      if (allReady || (anyReady && !handBecameReady)) break;
       iterations++;
-      if (iterations > 1000) break; // safety
+      if (iterations > 500) break;
     }
     sortQueue(state.queue);
     return getState();
@@ -486,7 +521,7 @@ export function createEngine(rng = Math.random) {
     return { success: true, delay: result.delay, newWeaponId: result.newWeaponId, oldWeaponId: result.oldWeaponId };
   }
 
-  return { startBattle, commitAttack, commitPotion, swapHandWithBelt, advanceToNextDecision, stepQueue, getState, state, loadState };
+  return { startBattle, commitAttack, commitPotion, swapHandWithBelt, advanceToNextDecision, stepQueue, getState, state, loadState, stepOnce, removeProcessedHead };
 }
 
 export function resumeEngine(persistedState, rng = Math.random) {
