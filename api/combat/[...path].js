@@ -694,12 +694,9 @@ async function handle(request) {
       // F11: advance-when-busy instead of 500 on unready hand
       const fires = [];
       try {
-        // commitAttack now uses internal advance (compat), but to support step animation we collect via stepQueue loop
         engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName, playerAccuracy, playerCritChance, playerCritMultiplier });
-        // After commit, if not at decision, step one by one collecting fires (new PC-76 behavior)
-        while (!engine.checkPlayerReady?.() && !engine.isBattleOver?.() && fires.length < 100) {
-          engine.stepQueue(fires);
-        }
+        // advanceToNextDecision already uses the fixed stepOnce/removeProcessedHead path internally
+        engine.advanceToNextDecision(fires);
       } catch (e) {
         if (e.message === 'Hand not ready' && engine.state && engine.state.queue && engine.state.queue.length > 0) {
           engine.advanceToNextDecision();
