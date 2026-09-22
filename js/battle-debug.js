@@ -63,7 +63,11 @@
     box.id = 'pc-debug-box';
     box.innerHTML = (
       '<div id="pc-debug-header">' +
-        '<strong>🐛 DEBUG</strong> <span id="pc-debug-count">0</span>' +
+        '<strong>🐛 DEBUG</strong>' +
+        '<span>' +
+          '<button id="pc-debug-copy" title="Copy log to clipboard" style="background:none;border:1px solid #ff0;color:#ff0;cursor:pointer;fontSize:10px;padding:0 4px;marginRight:6px">📋</button>' +
+          '<span id="pc-debug-count">0</span>' +
+        '</span>' +
       '</div>' +
       '<div id="pc-debug-body"></div>'
     );
@@ -106,9 +110,33 @@
 
     // Collapse toggle
     let collapsed = false;
-    header.onclick = () => {
+    header.onclick = (e) => {
+      if (e.target.id === 'pc-debug-copy') return;
       collapsed = !collapsed;
       body.style.display = collapsed ? 'none' : 'block';
+    };
+
+    // Copy log button
+    document.getElementById('pc-debug-copy').onclick = () => {
+      const lines = Array.from(body.children).map(el => el.textContent).join('\n');
+      navigator.clipboard.writeText(lines).then(() => {
+        const btn = document.getElementById('pc-debug-copy');
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = '📋'; }, 1500);
+      }).catch(() => {
+        // Fallback for insecure contexts — select text manually
+        const ta = document.createElement('textarea');
+        ta.value = lines;
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        const btn = document.getElementById('pc-debug-copy');
+        btn.textContent = '✓';
+        setTimeout(() => { btn.textContent = '📋'; }, 1500);
+      });
     };
 
     document.body.appendChild(box);
