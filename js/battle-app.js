@@ -12,6 +12,7 @@ import { computeTimingMarkers } from './combat/tic-queue.js';
 import { potionPrePostTicks } from './combat/potion-contract.js';
 import { parseHitLine } from './combat/hit-feedback.js';
 import { getSpeedPreset, getSpeedKey, getFontSizePreset, getFontSizeKey, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
+import './battle-debug.js'; // debugLog(tag, msg) — toggled via ?debug=1 or localStorage pc_debug
 
 /**
  * BattleClock — orchestrates post-commit animation sequencing.
@@ -497,6 +498,7 @@ function handleHitLine(line) {
 }
 
 function renderDice(dice) {
+  debugLog('renderDice', `remaining=${dice.remaining?.green || 0}g/${dice.remaining?.yellow || 0}y/${dice.remaining?.red || 0}r willRoll=${shouldAnimateDice}`);
   const tray = document.getElementById('dice-tray');
   const labels = document.getElementById('dice-labels');
   if (!tray || !labels || !dice) return;
@@ -578,10 +580,12 @@ function renderDice(dice) {
           appendFeedLine(`${colorLabel} die selected`);
           appendFeedLine('Rolling Portal Die...');
           rollDiceAnimation(landedBox, current, dice.faces, () => {
+            debugLog('ceremony', 'roll settled, starting reveal');
             appendFeedLine(`${current.face} rolled`);
             updateCurrentDie(curEl, current); // persistent slot lights up
             appendFeedLine('Selecting Monsters...');
             revealMonsters(() => {
+              debugLog('ceremony', 'reveal complete, calling finishBattleIntro');
               appendFeedLine('Creating Action Queue...');
               finishBattleIntro();
             });
@@ -669,6 +673,7 @@ function performSweepAnimation(diceEls, targetIndex, onLand) {
 // the number visibly rotates between rolls even when it stays the same.
 // Settles with pop; #current-die lights only after.
 function rollDiceAnimation(box, current, faces, onDone) {
+  debugLog('rollDiceAnimation', `color=${current.color} face=${current.face} n_faces=${faces?.[current.color]?.length || 'fallback'}`);
   // The box keeps its color and highlight — it is already the draw's die.
   const pool = (faces && faces[current.color] && faces[current.color].length > 0)
     ? faces[current.color]
@@ -687,6 +692,7 @@ function rollDiceAnimation(box, current, faces, onDone) {
       void box.offsetWidth; // force reflow so the pop animation restarts
       box.classList.add('rolled');
       onDone();
+      debugLog('rollDiceAnimation', `settled face=${current.face}`);
       return;
     }
     const face = document.createElement('span');
@@ -822,6 +828,7 @@ function hideForReveal(el) {
 }
 
 function revealMonsters(onDone) {
+  debugLog('revealMonsters', `monstersPendingReveal=${monstersPendingReveal} n_cards=${document.getElementById('monsters')?.children?.length || 0}`);
   if (!monstersPendingReveal) {
     if (onDone) onDone(); // no ceremony pending — nothing to wait for
     return;
@@ -845,14 +852,17 @@ function revealMonsters(onDone) {
 // First (next) to last; the command window appears only after the track is
 // full (the fill's onDone). Idempotent via the flag.
 function finishBattleIntro() {
+  debugLog('finishBattleIntro', `pending=${battleIntroPending} n_fires=${lastBs?.intro?.fires?.length || 0}`);
   if (!battleIntroPending) return;
   battleIntroPending = false;
   if (lastBs && lastBs.intro?.fires?.length > 0) {
+    debugLog('finishBattleIntro', 'playing intro fires countdown');
     playIntroCountdown(lastBs, lastBs.intro, () => {
       document.body.classList.remove('intro-pending');
       renderActionMenu(lastBs);
     });
   } else {
+    debugLog('finishBattleIntro', 'filling queue (no intro fires)');
     document.body.classList.remove('queue-filling'); // timing track appears (rows still hidden)
     renderQueue(lastBs, true, () => {
       renderFeed([]);
@@ -863,6 +873,7 @@ function finishBattleIntro() {
 }
 
 function renderFeed(feed, onComplete) {
+  debugLog('renderFeed', `n_lines=${feed?.length || 0} rendered=${renderedFeedLines}`);
   const box = document.getElementById('message-box');
   if (!box) return;
   const currentLines = feed || [];
@@ -974,6 +985,7 @@ function renderLoadout(bs) {
  * ("Ready"), a monster striking, a potion taking effect.
  */
 function renderQueue(bs, fill = false, onDone = null) {
+  debugLog('renderQueue', `fill=${fill} n_queue=${bs.queue?.length || 0} n_monsters=${bs.monsters?.length || 0}`);
   const el = document.getElementById('queue');
   if (!el) return;
   el.innerHTML = '';
@@ -1347,6 +1359,7 @@ function showAdvanceUI(runId, state) {
 }
 
 async function doAttack(runId, hand, attackId, targetIds) {
+  debugLog('doAttack', `hand=${hand} attack=${attackId} n_targets=${targetIds?.length || 0}`);
   if (busy) return;
   setBusy(true);
   try {
@@ -1371,6 +1384,7 @@ async function doAttack(runId, hand, attackId, targetIds) {
 }
 
 async function doSwap(runId, hand) {
+  debugLog('doSwap', `hand=${hand}`);
   if (busy) return;
   setBusy(true);
   try {
@@ -1413,6 +1427,7 @@ function escHtml(s) {
  * cursor, click selects (active/top window only — one modal stack).
  */
 function renderActionMenu(bs) {
+  debugLog('renderActionMenu', `n_hands=${Object.keys(bs.player?.hands || {}).length} n_monsters=${(bs.monsters||[]).filter(m=>!m.dead).length}`);
   const wrap = document.getElementById('action-choices');
   if (!wrap) return;
   wrap.innerHTML = '';
@@ -1832,6 +1847,7 @@ async function usePotion(runId, slot) {
 }
 
 async function loadBattle(runId) {
+  debugLog('loadBattle', `runId=${runId}`);
   currentRunId = runId;
   const box = document.getElementById('message-box');
   try {
@@ -1858,6 +1874,7 @@ async function loadBattle(runId) {
     // ceremony — they stay hidden until the dice and monster typewriter finishes.
     const willRoll = shouldAnimateDice
       && !!(bs.dice && bs.dice.current && bs.dice.current.color && bs.dice.current.face != null);
+    debugLog('loadBattle', `willRoll=${willRoll} shouldAnimateDice=${shouldAnimateDice} dice_current=${!!(bs.dice?.current)}`);
     monstersPendingReveal = willRoll;
     battleIntroPending = willRoll;
     if (!willRoll) shouldAnimateDice = false; // no roll playing — consume the flag
