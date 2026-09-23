@@ -2151,6 +2151,7 @@ async function tickLoop(runId) {
     const bs = {
       ...rich,
       queue: tickState.queue || rich.queue || [],
+      player: tickState.player || rich.player,
       feed: tickState.feed || rich.feed || [],
       tic: tickState.tic ?? rich.tic ?? 0,
       battle_over: tickState.battle_over,

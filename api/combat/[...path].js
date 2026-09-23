@@ -736,6 +736,7 @@ async function handle(request) {
         state: {
           queue: newState.queue,
           participants: newState.participants,
+          player: newState.player,
           feed: newState.feed,
           tic: newState.tic,
           battle_over: newState.battle_over,
