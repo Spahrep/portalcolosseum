@@ -2298,7 +2298,15 @@ async function init() {
 
 async function tickLoop(runId) {
   debugLog('tickLoop', `runId=${runId}`);
+  let oldQueue = lastBs?.queue ? [...lastBs.queue] : [];
   while (true) {
+    // Pacing delay between ticks so the player sees each event
+    const preset = getSpeedPreset();
+    if (preset.charMs > 0) {
+      const tickPacing = Math.min(500, Math.max(150, Math.round(preset.lineDelayMs / 3)));
+      await new Promise(r => setTimeout(r, tickPacing));
+    }
+
     // PC-DEC-045e: fetch full run state in parallel with tick so render
     // functions have monsters, player, weapons, dice, potions available.
     const [data, fullRun] = await Promise.all([
@@ -2324,8 +2332,36 @@ async function tickLoop(runId) {
     renderPlayerHP(bs);
     renderMonsters(bs.monsters || []);
     renderLoadout(bs);
-    // Queue: always render so the player sees rows being consumed and added.
+
+    // Queue: compute diff for exit animations before re-render
+    const newQueue = bs.queue || [];
+    const oldIds = new Set(oldQueue.map(r => r.id));
+    const newIds = new Set(newQueue.map(r => r.id));
+    const resolved = oldQueue.filter(r => !newIds.has(r.id));
+    resolved.forEach(id => markQueueRowExiting(id));
     renderQueue(bs);
+    // Entry animations for newly added rows
+    const added = newQueue.filter(r => !oldIds.has(r.id));
+    if (added.length > 0) {
+      const queueEl = document.getElementById('queue');
+      if (queueEl) {
+        added.forEach((entry, i) => {
+          const id = entry && entry.id ? entry.id : entry;
+          const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
+          if (rowEl) {
+            const isMon = entry.label !== 'LH' && entry.label !== 'RH' && entry.event === 'attack';
+            if (isMon) {
+              rowEl.classList.add('queue-row-monster-enter');
+              setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
+            } else {
+              rowEl.classList.add('queue-row-enter');
+              setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
+            }
+          }
+        });
+      }
+    }
+    oldQueue = [...newQueue];
 
     // One tick = one event processed = one new narration line.
     // Append it individually for clean typewriter animation.

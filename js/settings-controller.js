@@ -1,7 +1,7 @@
 // === Canonical enums ===
 const SPEEDS = {
   slow:   { charMs: 45, lineDelayMs: 1800, label: 'Slow', windupEnabled: true },
-  normal: { charMs: 15, lineDelayMs: 1000, label: 'Normal', windupEnabled: true },
+  normal: { charMs: 25, lineDelayMs: 1500, label: 'Normal', windupEnabled: true },
   fast:   { charMs: 5,  lineDelayMs: 300,  label: 'Fast', windupEnabled: true },
   instant: { charMs: 0, lineDelayMs: 0,    label: 'Instant', windupEnabled: false },
 };
