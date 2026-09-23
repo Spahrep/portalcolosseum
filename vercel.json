@@ -196,6 +196,15 @@
     {
       "src": "/api/(.*)",
       "dest": "/api/$1"
+    },
+    {
+      "src": "/fonts/(.*)",
+      "dest": "/public/fonts/$1"
+    },
+    {
+      "src": "/pictures/(.*)",
+      "dest": "/public/pictures/$1",
+      "continue": true
     }
   ]
 }
