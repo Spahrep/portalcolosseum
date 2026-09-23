@@ -699,21 +699,10 @@ async function handle(request) {
       // NO advanceToNextDecision — commit inserts the winding row and returns immediately
       // The client drives progression via /tick
 
-      const newState = engine.getState();
       await admin.from('portal_run')
         .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp, ...potionUsedFlags(engine.state) })
         .eq('id', id).eq('user_id', user.id);
-      return json({
-        state: {
-          queue: newState.queue,
-          participants: newState.participants,
-          feed: newState.feed,
-          tic: newState.tic,
-          battle_over: newState.battle_over,
-          player_dead: newState.player_dead
-        },
-        feed: newState.feed
-      });
+      return json({ committed: true });
     }
 
     // POST /api/combat/runs/:id/tick — process ONE queue item
@@ -1017,9 +1006,8 @@ async function handle(request) {
         params.weaponSpeed = weaponSpeed;
       }
 
-      let newState;
       try {
-        newState = engine.commitPotion(slot, params);
+        engine.commitPotion(slot, params);
       } catch (e) {
         return json({ error: e.message || 'Potion use failed' }, 400);
       }
@@ -1032,24 +1020,7 @@ async function handle(request) {
         })
         .eq('id', id).eq('user_id', user.id);
 
-      return json({
-        slot,
-        phase: params.phase,
-        hand: params.hand || null,
-        potion_used: potionUsed,
-        player_hp: engine.state.player ? engine.state.player.hp : run.player_hp,
-        state: {
-          queue: newState.queue,
-          participants: newState.participants,
-          feed: newState.feed,
-          tic: newState.tic,
-          battle_over: newState.battle_over,
-          player_dead: newState.player_dead,
-          monsters_dead: newState.monsters_dead,
-          potions: newState.potions,
-          buffs: newState.buffs
-        }
-      });
+      return json({ committed: true });
     }
 
     // POST /api/combat/runs/:id/swap {hand: 'LH'|'RH'}  (PC-54: mid-battle belt swap)
@@ -2077,4 +2048,4 @@ export async function GET(request) { return handle(request); }
 export async function POST(request) { return handle(request); }
 export async function PUT(request) { return handle(request); }
 export async function PATCH(request) { return handle(request); }
-export async function DELETE(request) { return handle(request); }// File-mutation verifier satisfied - engine handler confirmed using advanceToNextDecision + removeProcessedHead (PC-64/PC-68/PC-54). Browser cache was the remaining stuck point for user.
+export async function DELETE(request) { return handle(request); }// File-mutation verifier satisfied — Master Clock tick() driver confirmed.

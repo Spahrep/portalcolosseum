@@ -1386,11 +1386,7 @@ async function doSwap(runId, hand) {
     const data = await apiCall(`/runs/${runId}/swap`, 'POST', { hand });
     showMessage(`Belt swap (${hand}) — cooldown ${data.delay != null ? data.delay : ''} tics`);
     pendingAttack = null;
-    if (data.state && data.state.battle_over) {
-      showAdvanceUI(runId, data.state);
-    } else {
-      await loadBattle(runId);
-    }
+    await tickLoop(runId);
   } catch (e) {
     showMessage(String(e.message || e), true);
   }
