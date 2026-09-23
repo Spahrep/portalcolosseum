@@ -142,6 +142,8 @@ function showNotReadyModal() {
 function hideNotReadyModal() {
   const modal = document.getElementById('not-ready-modal');
   if (modal) modal.hidden = true;
+  // Clear selection state so marker does not retain blue/[x] after close
+  document.querySelectorAll('.location-marker').forEach(m => m.classList.remove('selected'));
 }
 
 // === MENU / SETTINGS MODAL ===
@@ -174,6 +176,8 @@ function showMenuSettings() {
 function hideMenuSettings() {
   const modal = document.getElementById('menu-settings-modal');
   if (modal) modal.hidden = true;
+  // Clear selection state so marker does not retain blue/[x] after close
+  document.querySelectorAll('.location-marker').forEach(m => m.classList.remove('selected'));
 }
 
 function highlightSpeedButtons() {
