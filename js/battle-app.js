@@ -1401,6 +1401,9 @@ async function doAttack(runId, hand, attackId, targetIds) {
     const payload = { hand, attack_id: attackId, target_ids: targetIds || [] };
     await apiCall(`/runs/${runId}/commit`, 'POST', payload); // returns {committed: true}
     pendingAttack = null;
+    // Hide the action menu — it will re-render on tickLoop break with fresh state
+    const menuWrap = document.getElementById('action-choices');
+    if (menuWrap) menuWrap.style.display = 'none';
     await tickLoop(runId);
   } catch (e) {
     const msg = String(e.message || e);
@@ -1421,6 +1424,8 @@ async function doSwap(runId, hand) {
     const data = await apiCall(`/runs/${runId}/swap`, 'POST', { hand });
     showMessage(`Belt swap (${hand}) — cooldown ${data.delay != null ? data.delay : ''} tics`);
     pendingAttack = null;
+    const menuWrap = document.getElementById('action-choices');
+    if (menuWrap) menuWrap.style.display = 'none';
     await tickLoop(runId);
   } catch (e) {
     showMessage(String(e.message || e), true);
@@ -2157,8 +2162,8 @@ async function tickLoop(runId) {
       battle_over: tickState.battle_over,
       player_dead: tickState.player_dead,
       // Top-level fields renderPlayerHP reads
-      player_hp: fullRun.player_hp ?? rich.player?.hp ?? 0,
-      max_hp: fullRun.max_hp ?? rich.player?.max_hp ?? 100
+      player_hp: tickState.player?.hp ?? fullRun.player_hp ?? rich.player?.hp ?? 0,
+      max_hp: tickState.player?.max_hp ?? fullRun.max_hp ?? rich.player?.max_hp ?? 100
     };
     lastBs = bs;
 
