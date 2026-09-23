@@ -23,7 +23,8 @@
   <title>Portal Colosseum - Arena</title>
   <link rel="icon" href="/favicon.png" type="image/png" sizes="128x128">
   <!-- Pixeloid Mono: pixel-perfect font for town UI markers (self-hosted; not on Google Fonts) -->
-  <link rel="stylesheet" href="/public/fonts/pixeloid-mono/pixeloid-mono.css">
+  <!-- Pixeloid Mono (self-hosted, inlined to avoid Vercel static-file MIME issues) -->
+  <style>@font-face{font-family:'Pixeloid Mono';src:url('/fonts/pixeloid-mono/pixeloid-mono-regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:swap}</style>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="/public/game.css">
   <!-- Environment configuration - loaded before module scripts -->
