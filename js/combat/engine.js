@@ -210,6 +210,51 @@ export function createEngine(rng = Math.random) {
     return removeHead(state.queue);
   }
 
+  function tick() {
+    const head = peekHead(state.queue);
+    if (!head) return { done: true };
+
+    // If head is a player "ready" row → signal for input, don't auto-process
+    if ((head.label === 'LH' || head.label === 'RH') && head.event === 'ready') {
+      return { needsInput: true, row: head };
+    }
+
+    const feedBefore = state.feed.length;
+    handleFire(head);
+
+    // expire buffs (same logic as existing stepOnce)
+    const stillActive = [];
+    for (const b of state.buffs) {
+      if (b.endTic <= state.tic) {
+        log(`${b.name} buff expired`);
+      } else {
+        stillActive.push(b);
+      }
+    }
+    state.buffs = stillActive;
+
+    sortQueue(state.queue);
+
+    // Capture ALL new feed lines (not just first)
+    const newFeed = state.feed.slice(feedBefore);
+    const narrate = newFeed.join('\n');
+
+    removeHead(state.queue);
+
+    const pd = isPlayerDead(state.player);
+    const allMonstersDead = state.monsters.length > 0 && state.monsters.every(isMonsterDead);
+    const battleOver = allMonstersDead || pd;
+
+    return {
+      narrate,
+      row: head,
+      feed: newFeed,
+      needsInput: false,
+      playerReady: Object.values(state.player?.hands || {}).some(h => h.state === 'Ready'),
+      battleOver
+    };
+  }
+
   // PC-68: when an attack kills the last target of another hand's queued
   // attack, that queued attack is moot — cancel it straight into its own
   // cooldown so the hand isn't stuck winding at a corpse (then whiffing).
@@ -346,7 +391,7 @@ export function createEngine(rng = Math.random) {
     state.player.hands[hand].state = 'winding';
     state.player.hands[hand].attackId = attackId;
     log(`${hand} prepares ${attackName ? `a ${attackName}` : 'an attack'}...`);
-    return advanceToNextDecision();
+    return { committed: true };
   }
 
   function startBattle(participants, seededRng, initialPlayerHp = null, maxPlayerHp = PLAYER_MAX_HP) {
@@ -499,7 +544,7 @@ export function createEngine(rng = Math.random) {
     row.postTicks = post;
     log(`${hand} drinks ${potion.template_name || potion.effect_type}...`);
     // Action cost: hand locked for pre + post = weapon.speed + potion.rolled_speed total (contract §7)
-    return advanceToNextDecision();
+    return { committed: true };
   }
 
   function swapHandWithBelt(hand, weapons) {
@@ -525,7 +570,7 @@ export function createEngine(rng = Math.random) {
     return { success: true, delay: result.delay, newWeaponId: result.newWeaponId, oldWeaponId: result.oldWeaponId };
   }
 
-  return { startBattle, commitAttack, commitPotion, swapHandWithBelt, advanceToNextDecision, stepQueue, getState, state, loadState, stepOnce, removeProcessedHead };
+  return { startBattle, commitAttack, commitPotion, swapHandWithBelt, advanceToNextDecision, stepQueue, getState, state, loadState, stepOnce, removeProcessedHead, tick };
 }
 
 export function resumeEngine(persistedState, rng = Math.random) {

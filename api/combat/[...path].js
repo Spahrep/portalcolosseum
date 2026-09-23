@@ -695,20 +695,9 @@ async function handle(request) {
         engine = createEngine();
       }
 
-      // F11: advance-when-busy instead of 500 on unready hand
-      const fires = [];
-      try {
-        engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName, playerAccuracy, playerCritChance, playerCritMultiplier });
-        // Single call: advanceToNextDecision already loops internally (stepQueue → process head → pop)
-        // until player Ready or battle over. Outer while was causing duplicate feed lines.
-        engine.advanceToNextDecision(fires);
-      } catch (e) {
-        if (e.message === 'Hand not ready' && engine.state && engine.state.queue && engine.state.queue.length > 0) {
-          engine.advanceToNextDecision();
-        } else {
-          throw e;
-        }
-      }
+      engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName, playerAccuracy, playerCritChance, playerCritMultiplier });
+      // NO advanceToNextDecision — commit inserts the winding row and returns immediately
+      // The client drives progression via /tick
 
       const newState = engine.getState();
       await admin.from('portal_run')
@@ -723,8 +712,46 @@ async function handle(request) {
           battle_over: newState.battle_over,
           player_dead: newState.player_dead
         },
-        feed: newState.feed,
-        fires
+        feed: newState.feed
+      });
+    }
+
+    // POST /api/combat/runs/:id/tick — process ONE queue item
+    if (path.includes('/tick') && method === 'POST') {
+      const idStr = path.split('/')[2];
+      const id = parseInt(idStr, 10);
+      if (isNaN(id)) return json({ error: 'Invalid run id' }, 400);
+
+      const { data: run } = await admin.from('portal_run').select('*, battle_state, player_hp, status').eq('id', id).eq('user_id', user.id).single();
+      if (!run) return json({ error: 'Not found' }, 404);
+      if (run.status !== 'active') return json({ error: 'Run not active' }, 400);
+
+      const persisted = run.battle_state || {};
+      let engine;
+      if (persisted && Array.isArray(persisted.queue) && persisted.queue.length > 0) {
+        engine = resumeEngine(persisted, Math.random);
+      } else {
+        return json({ error: 'No battle state', done: true }, 200);
+      }
+
+      const result = engine.tick();
+
+      // Persist state
+      const newState = engine.getState();
+      await admin.from('portal_run')
+        .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp })
+        .eq('id', id).eq('user_id', user.id);
+
+      return json({
+        result,
+        state: {
+          queue: newState.queue,
+          participants: newState.participants,
+          feed: newState.feed,
+          tic: newState.tic,
+          battle_over: newState.battle_over,
+          player_dead: newState.player_dead
+        }
       });
     }
 
