@@ -110,7 +110,7 @@ async function initGame() {
 
   // Button wiring
   document.getElementById('btn-portal')?.addEventListener('click', () => {
-    window.location.href = '/portal-select';
+    window.location.href = '/portal-select.html';
   });
   document.getElementById('btn-store')?.addEventListener('click', showNotReadyModal);
   document.getElementById('btn-wizard')?.addEventListener('click', showNotReadyModal);
