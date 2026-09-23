@@ -2117,19 +2117,22 @@ async function tickLoop(runId) {
     renderMonsters(bs.monsters || []);
     renderLoadout(bs);
     renderActionMenu(bs);
+    renderQueue(bs);
 
-    // Feed uses the renderedFeedLines diff pattern exactly as before
-    const preLen = renderedFeedLines;
-    if (data.feed && data.feed.length > preLen) {
-      renderFeed(data.feed, null);
-      renderedFeedLines = data.feed.length;
-    } else if (Array.isArray(data.fires) && data.fires.length > 0) {
-      data.fires.forEach(line => appendFeedLine(line));
-      renderedFeedLines = preLen + data.fires.length;
+    // One tick = one event processed = one new narration line.
+    // Append it individually for clean typewriter animation.
+    const narrate = data.result?.narrate;
+    if (narrate) {
+      appendFeedLine(narrate);
+      renderedFeedLines = (bs.feed || []).length;
+    } else if (bs.feed && bs.feed.length > renderedFeedLines) {
+      // Fallback: render full feed with diff
+      renderFeed(bs.feed, null);
+      renderedFeedLines = bs.feed.length;
     }
 
-    if (bs.playerReady || bs.battleOver || bs.battle_over) {
-      if (bs.battleOver || bs.battle_over) {
+    if (data.result?.playerReady || data.result?.battleOver || bs.battle_over) {
+      if (data.result?.battleOver || bs.battle_over) {
         showAdvanceUI(runId, bs);
       }
       break;
