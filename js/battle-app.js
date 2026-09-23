@@ -61,7 +61,7 @@ class BattleClock {
     this._runResolve();
   }
 
-  /** Phase 1: Resolve animation — flash + shrink on resolved entries. */
+  /** Phase 1: Resolve animation — exit slide-up/fade on resolved entries. */
   _runResolve() {
     const { _diff: diff } = this;
     const queueEl = document.getElementById('queue');
@@ -71,62 +71,18 @@ class BattleClock {
       return;
     }
 
-    // Flash
     diff.resolved.forEach(id => {
-      const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
-      if (rowEl) {
-        rowEl.classList.remove('queue-row-current');
-        rowEl.classList.add('queue-row-flash');
-      }
+      markQueueRowExiting(id);
     });
 
-    // Shrink, then insert
-    this._timer = setTimeout(() => {
-      diff.resolved.forEach(id => {
-        const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
-        if (rowEl) rowEl.classList.add('queue-row-shrink');
-      });
-      this._timer = setTimeout(() => this._runInsert(), 350);
-    }, 400);
+    this._timer = setTimeout(() => this._runInsert(), 250); // 200ms anim + 50ms buffer
   }
 
   /**
-   * Phase 2: Insert preview — push-down via preview marker on the old DOM,
-   * then renderQueue replaces it with the new state.
-   */
-  _runInsert() {
-    const { _diff: diff } = this;
-    const queueEl = document.getElementById('queue');
-
-    if (!queueEl || diff.added.length === 0) {
-      this._renderNew();
-      return;
-    }
-
-    // Build a preview bar at the insertion boundary.  The OLD queue DOM is still
-    // intact (resolved entries might be shrunk but remain as placeholders).
-    // Create a dashed preview marker; its CSS transition animates height 0→slot,
-    // pushing remaining old rows downward to make room.
-    const preview = document.createElement('div');
-    preview.className = 'queue-insert-preview';
-    // Insert at the top of the OLD queue (new entries always go above existing
-    // pending rows in the sorted order, or at the top when the queue is empty).
-    const firstRow = queueEl.querySelector('.queue-row');
-    if (firstRow) {
-      queueEl.insertBefore(preview, firstRow);
-    } else {
-      queueEl.appendChild(preview);
-    }
-
-    // Activate — CSS transitions height from 0 to 24px over 250ms
-    requestAnimationFrame(() => preview.classList.add('active'));
-
-    // After push-down completes, render the new queue state
-    this._timer = setTimeout(() => {
-      preview.remove();
-      this._renderNew();
-    }, 300);
-  }
+   /** Phase 2: Insert — go straight to render + entry animations (preview removed; entry anims cover the "new arrival" visual). */
+   _runInsert() {
+     this._renderNew();
+   }
 
   /** Phase 3: Render updated queue, then apply entry-enter animations. */
   _renderNew() {
@@ -204,6 +160,9 @@ let battleIntroPending = false;
 let introTimer = null; // PC-64: countdown interval for the battle-intro replay
 const QUEUE_FILL_STAGGER = 600; // ms between timing rows appearing (First → last, one at a time)
 const QUEUE_FILL_MS = 700;      // per-row fade
+
+// Bug 4 fix: persistent cache for exit-animating queue rows (like deathCards for monsters)
+const exitingQueueRows = new Map(); // rowId -> { element, finished }
 
 // Tuning constants for dice-selection roulette (client theater only).
 // Sweep: uniform left→right walk, stops on random same-color box (incl phantom).
@@ -988,7 +947,7 @@ function renderQueue(bs, fill = false, onDone = null) {
   debugLog('renderQueue', `fill=${fill} n_queue=${bs.queue?.length || 0} n_monsters=${bs.monsters?.length || 0}`);
   const el = document.getElementById('queue');
   if (!el) return;
-  el.innerHTML = '';
+  clearQueueDom();
   const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
   if (titleEl) {
     titleEl.textContent = 'Action Queue';
@@ -1004,7 +963,9 @@ function renderQueue(bs, fill = false, onDone = null) {
   const monsters = bs.monsters || [];
   const sorted = sortQueueRows(queue);
   sorted.forEach((row, index) => {
-    el.appendChild(buildQueueRow(row, monsters, bs, true, index));
+    if (!exitingQueueRows.has(row.id)) {
+      el.appendChild(buildQueueRow(row, monsters, bs, true, index));
+    }
   });
   // PC-56: Prediction bar — maps [minT, maxT] onto continuous tic → pixel interpolation
   if (queueBarInfo && queueBarInfo.kind === 'bar' && queueBarInfo.firstId && queueBarInfo.lastId) {
@@ -1109,6 +1070,44 @@ function diffQueueForAnimation(oldBs, newBs) {
       isMonster: r.label !== 'LH' && r.label !== 'RH' && r.event === 'attack'
     }))
   };
+}
+
+// Bug 4 helpers: preserve exit-animating rows across renders (robust cache + clear)
+function clearQueueDom() {
+  const el = document.getElementById('queue');
+  if (!el) return;
+  [...el.children].forEach(child => {
+    const id = child.dataset.rowId;
+    if (id && exitingQueueRows.has(id)) {
+      const entry = exitingQueueRows.get(id);
+      if (entry.finished) {
+        child.remove();
+        exitingQueueRows.delete(id);
+      }
+      // else keep it (still animating), do not remove or replace
+    } else if (!child.classList.contains('queue-insert-preview')) {
+      child.remove();
+    }
+  });
+}
+
+function markQueueRowExiting(rowId) {
+  const el = document.getElementById('queue');
+  if (!el) return;
+  const row = el.querySelector(`[data-row-id="${rowId}"]`);
+  if (!row) return;
+  row.classList.remove('queue-row-current');
+  row.classList.add('queue-row-exit');
+  if (!exitingQueueRows.has(rowId)) {
+    exitingQueueRows.set(rowId, { element: row, finished: false });
+  }
+  row.addEventListener('animationend', () => {
+    const entry = exitingQueueRows.get(rowId);
+    if (entry) entry.finished = true;
+    // removal happens on next clearQueueDom or immediately if finished
+    if (row.parentNode) row.parentNode.removeChild(row);
+    exitingQueueRows.delete(rowId);
+  }, { once: true });
 }
 
 // Shared rail-row builder: used by renderQueue and the PC-64 intro countdown so
@@ -1354,7 +1353,6 @@ function showAdvanceUI(runId, state) {
           {gold_pct: 0.60, sel_items: 1, rand_items: 2},
           {gold_pct: 0.80, sel_items: 2, rand_items: 2}
         ];
-      }
       const battleNum = runData ? (runData.current_battle || 1) : 1;
       const totalB = runData ? (runData.total_battles || 5) : 5;
       const idx = Math.max(0, Math.min(battleNum - 1, tiers.length - 1));
@@ -2113,6 +2111,24 @@ async function loadBattle(runId) {
       }
       // Queue rendered through battleClock for commits; fresh page / intro renders immediately
       if (!prevBs) renderQueue(bs);
+      // Bug 2: staggered entry animations on fresh page loads (cascade effect)
+      if (!prevBs) {
+        const nqEl = document.getElementById('queue');
+        if (nqEl) {
+          Array.from(nqEl.children).forEach((row, i) => {
+            setTimeout(() => {
+              const isMonRow = row.querySelector('.name')?.textContent?.includes("'s ");
+              if (isMonRow) {
+                row.classList.add('queue-row-monster-enter');
+                setTimeout(() => row.classList.remove('queue-row-monster-enter'), 400);
+              } else {
+                row.classList.add('queue-row-enter');
+                setTimeout(() => row.classList.remove('queue-row-enter'), 1200);
+              }
+            }, i * 100);
+          });
+        }
+      }
     }
 
 
