@@ -1,8 +1,20 @@
 # Action Visual Lifecycle (Master Clock Model)
 
-**Purpose:** Complete specification of how the Master Clock drives the combat loop — one queue item at a time, with sub-actions that execute in sequence (or parallel where allowed).
+**Purpose:** Complete specification of how the Master Clock drives the combat loop — one queue item at a time, with sub-actions that execute in sequence (or parallel where allowed). The combat system is a linked list of actions: you peek the front, process it (rolls, math, narration, visuals), then pop it off.
 
 **Audience:** Developer implementing the Master Clock and UI animation pipeline.
+
+---
+
+## Core Rules
+
+1. **Only one event is ever processed at a time.** The Master Clock peeks the front of the queue, processes that single item (all sub-actions, rolls, narration, visuals), pops it off, then moves to the next. No batching. No back-to-back processing before the first item is done.
+
+2. **Every event HAS UX.** Typewriter text, screen shake, health bar sparkles, damage numbers — nothing happens silently. Even buff expiry writes "X buff expired" on the typewriter.
+
+3. **An item must be 100% complete before removal.** All sub-actions (typewriter, visuals, animations) must finish before the item is popped and the next one surfaces.
+
+4. **Tics are display values, not a timing mechanism.** The queue is a linked list ordered at INSERTION time — no global sort, no re-ordering. Tics help the player read timing but do NOT drive processing.
 
 ---
 
@@ -13,27 +25,27 @@ A single Master Clock drives everything. No batches. No internal engine loops.
 ```
 MasterClock.start():
   loop:
-    result = engine.stepOnce()       // peek head, process it, return narrate
-    if (!result) break               // queue empty → battle over
+    peekHead(queue)                  // look at top item, do NOT remove
+    if (no item) break               // queue empty → battle over
     
-    displayItem(result.item)          // pin item at top of UI Action Queue
+    processItem(event, data)         // resolve rolls, math, state changes
+    typewriter.print(narration)      // character by character
+    animateItem(event)               // effects, health bar, shake, sparkles
+    await BOTH finish                // typewriter + visuals both must complete
     
-    // Parallel (both must finish):
-    typewriter.print(result.narrate)  // character by character
-    animateItem(result.item)          // effects, health bar, shake, etc.
-    await both
+    removeHead()                     // pop the processed item — done
     
-    engine.removeHead()              // remove item from queue — done
+    if (player hand is Ready):       // player's turn
+      showActionMenu()
+      await playerChoice()           // master clock pauses here
+      // commit inserts next items into queue (winding row, etc.)
+      // when player acts, loop continues
     
-    if (result.triggersDecision):    // player turn → show buttons, pause
-      showUI()
-      await playerChoice()           // master clock waits here
-      // choice inserts next items into queue
-    // otherwise → loop continues, next item surfaces
+    if (battle_over): stop
+    // otherwise → loop, next item at front of queue surfaces
 ```
 
-**Rule:** One item per iteration. No `advanceToNextDecision` loop. Engine never batches. 
-Each `stepOnce()` call processes exactly one queue item and returns.
+**Key rule:** peek → process (all sub-actions) → remove. Only then does the next item surface.
 
 ---
 
@@ -293,7 +305,11 @@ Every non-ready, non-monster row has a timing bar that visualizes countdown prog
 | `ready` | "L. Hand Ready" | — | None |
 | `attack` (monster) | "Giant Rat's Power Attack" | tic count | None |
 
-**Sort order:** Ascending by tics, player-first on ties (LH → RH → monsters).
+**Ordering:** The queue is ordered at INSERTION time — never globally re-sorted. Each item is placed at its correct position when added. For items at the same tic:
+1. Status effects / buffs / DOTs / expiries go first (inserted before anything else at that tic)
+2. `ready` tokens go last among items at that tic (inserted after all status/effect items)
+
+Player-first on ties within the same category (LH before RH before monsters at identical tic).
 
 ---
 
@@ -302,28 +318,30 @@ Every non-ready, non-monster row has a timing bar that visualizes countdown prog
 ```
 MasterClock.tick():
   │
-  ├─ engine.stepOnce()
-  │   • peekHead(queue) — look at top item WITHOUT removing
-  │   • handleFire(row) — process one item, return { narrate, changes }
-  │   • Returns null if queue empty → battle over
+  ├─ peekHead(queue) — look at front item WITHOUT removing
   │
-  ├─ displayItem(item) — pin it at top of UI Action Queue
+  ├─ processItem(item) — resolve rolls, math, state changes:
+  │   • For windup: insert impact row
+  │   • For impact: roll accuracy/damage/crit, apply to target HP
+  │   • For cooldown/recovery: insert ready token
+  │   • For monster ready: AI picks attack, insert winding row
+  │   • For buff expiry: remove buff from state
+  │   • For DOT: resolve damage tick, insert next DOT tick
   │
-  ├─ Parallel (Promise.all):
-  │   ├─ typewriter.print(narrate) — char by char, wait for finish
-  │   └─ animateItem(item) — effects, damage numbers, health bar, shake
-  │   → Await BOTH
+  ├─ typewriter.print(narration) — char by char + animateItem(effects)
+  │   → Await BOTH to complete
   │
-  ├─ engine.removeHead() — remove the processed head from queue
+  ├─ removeHead() — pop the processed item — done
   │
   ├─ Check triggers:
-  │   ├─ If hand is Ready → show command menu, PAUSE master clock
-  │   │   → resume when player commits (or monster AI runs for monster ready)
-  │   │   → commit inserts new queue items
+  │   ├─ If player hand is Ready → show command menu, PAUSE
+  │   │   → resume when player commits (inserts new items)
+  │   │
+  │   ├─ Monster ready → AI auto-picks, loop continues
   │   │
   │   └─ If battle_over → stop
   │
-  └─ Loop — tick() again
+  └─ Loop — process next item at front of queue
 ```
 
 ---
@@ -343,17 +361,19 @@ Certain sub-actions can overlap. The Master Clock treats them as a group that al
 
 ---
 
-## 10. Tic Handling
+## 10. Queue Order & Tic Display
 
-**Tics are display values, not a timing mechanism.** Items in the queue are sorted by tic ascending. The Master Clock always processes the smallest-tic item. Tics are set when the item is inserted:
+**The queue is a linked list, ordered at insertion time.** Each item is placed at the correct position when added — no global re-sort ever runs. The Master Clock always processes the item at the front (head) of the queue.
+
+Tics are set when the item is inserted:
 - `winding` = castTicks (from weapon params)
 - `cooldown` = cooldownTicks (from weapon params)
 - `ready` = 0 (always surfaces immediately)
 - Monster `attack` = mon.speed
 
-**No global tic advancement.** No tic subtraction on remaining rows. Each item keeps its original tic. When it reaches the top of the queue (smallest remaining tic), it processes. Items with tic=0 always go to front.
+**Tics are display values only.** They help the player read timing. They do NOT drive processing order — insertion order does. The timing bar formula uses `tics / initialTics` to show progress. The bar reflects the item's position in the queue order.
 
-The timing bar formula uses `tics / initialTics` to show progress. Since tics don't decrement between processing, the bar reflects the item's position in the queue order.
+**Important:** Buff expiry, DOT ticks, and other status effects are their own queue items. They sit in the queue alongside attacks and ready tokens. When they reach the front, they process (typewriter "X buff expired", resolve DOT damage), pop off, and the next item surfaces. They do NOT fire "at the same time" as anything else — the queue forces a linear sequence.
 
 ---
 
@@ -381,11 +401,12 @@ On reload, `loadState()` restores queue + state. Master Clock starts fresh. No p
 
 ## 12. Glossary
 
-- **Master Clock:** The loop in battle-app.js that drives the combat sequence. One tick = one queue item processed end-to-end.
-- **stepOnce():** Engine method that peeks the queue head, processes it, returns narrate text + state changes. Does NOT remove the head.
-- **removeHead():** Engine method that removes the processed item from queue after all sub-actions complete.
-- **Sub-action:** A single step within an item's processing (e.g., "typewriter narrates", "AI picks attack", "remove item"). Some can run in parallel.
-- **UI Action Queue:** The visual rendering of the engine's queue. Player sees items sorted by tic, with the top item as "currently happening" or "currently whose turn."
-- **Ready token:** A `ready` event row at tic=0. Indicates the hand/monster's turn. Surfaces when all lifecycle phases for the previous action complete.
-- **Tic:** Display-only countdown value. Determines queue sort order. Set at insertion time, never decremented.
+- **Master Clock:** The loop on the server that drives the combat sequence. One tick = one queue item processed end-to-end: peek → process (rolls, math, narration, visuals) → remove.
+- **peekHead:** Look at the item at the front of the queue without removing it. This is how the Master Clock sees what needs to process next.
+- **process:** Resolve the item's event type (roll accuracy, apply damage, pick monster attack, apply buff, etc.). Happens after peek, before removal.
+- **removeHead:** Pop the processed item off the front of the queue. Only called AFTER all sub-actions (narration, visuals) are complete.
+- **Sub-action:** A single step within an item's processing (e.g., "typewriter narrates", "AI picks attack", "remove item"). Some can run in parallel (typewriter + screen shake), some must be sequential.
+- **UI Action Queue:** The visual rendering of the engine's queue on screen. The front item is "currently happening" — its sub-actions are executing.
+- **Ready token:** A `ready` event row at the front of the queue. Indicates the hand/monster's turn. Surfaces when all lifecycle phases for the previous action complete.
+- **Tic:** Display-only countdown value. Helps the player read timing. Set at insertion time, never drives processing order.
 - **Typewriter:** Character-by-character text reveal in the message box, paced by text speed preset.
