@@ -2333,33 +2333,71 @@ async function tickLoop(runId) {
     renderMonsters(bs.monsters || []);
     renderLoadout(bs);
 
-    // Queue: compute diff for exit animations before re-render
+    // Queue: compute diff for exit+entry animations before re-render
     const newQueue = bs.queue || [];
     const oldIds = new Set(oldQueue.map(r => r.id));
     const newIds = new Set(newQueue.map(r => r.id));
     const resolved = oldQueue.filter(r => !newIds.has(r.id));
     resolved.forEach(id => markQueueRowExiting(id));
-    renderQueue(bs);
-    // Entry animations for newly added rows
     const added = newQueue.filter(r => !oldIds.has(r.id));
-    if (added.length > 0) {
-      const queueEl = document.getElementById('queue');
-      if (queueEl) {
-        added.forEach((entry, i) => {
-          const id = entry && entry.id ? entry.id : entry;
-          const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
-          if (rowEl) {
-            const isMon = entry.label !== 'LH' && entry.label !== 'RH' && entry.event === 'attack';
-            if (isMon) {
-              rowEl.classList.add('queue-row-monster-enter');
-              setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
-            } else {
-              rowEl.classList.add('queue-row-enter');
-              setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
-            }
+
+    // Stage 2: Space creation — insert preview markers at sorted positions so
+    // existing rows visibly push down before the new rows appear.
+    const queueEl = document.getElementById('queue');
+    if (added.length > 0 && queueEl && preset.charMs > 0) {
+      const sortedNew = sortQueueRows(added);
+      const domRows = Array.from(queueEl.children).filter(c =>
+        c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId)
+      );
+      const previews = [];
+      sortedNew.forEach(entry => {
+        let insertIdx = domRows.length;
+        for (let i = 0; i < domRows.length; i++) {
+          const curTics = Number(domRows[i].dataset.tics ?? 0);
+          const newTics = entry.tics ?? 0;
+          if (newTics < curTics || (newTics === curTics && (entry.label === 'LH' || entry.label === 'RH'))) {
+            insertIdx = i;
+            break;
           }
-        });
-      }
+        }
+        const preview = document.createElement('div');
+        preview.className = 'queue-insert-preview';
+        const refChild = domRows[insertIdx] || null;
+        if (refChild) {
+          queueEl.insertBefore(preview, refChild);
+          domRows.splice(insertIdx, 0, preview);
+        } else {
+          queueEl.appendChild(preview);
+          domRows.push(preview);
+        }
+        previews.push(preview);
+      });
+      requestAnimationFrame(() => {
+        previews.forEach(p => p.classList.add('active'));
+      });
+      await new Promise(r => setTimeout(r, 300));
+      previews.forEach(p => p.remove());
+    }
+
+    renderQueue(bs);
+
+    // Entry animations for newly added rows (Stages 4-5: bar grows, flashes)
+    if (added.length > 0 && queueEl) {
+      added.forEach((entry) => {
+        const id = entry && entry.id ? entry.id : entry;
+        const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
+        if (rowEl) {
+          const isMon = entry.label !== 'LH' && entry.label !== 'RH' && entry.event === 'attack';
+          if (isMon) {
+            rowEl.classList.add('queue-row-monster-enter');
+            setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
+          } else {
+            rowEl.classList.add('queue-row-enter');
+            // queue-bar-entry animation covers Stages 3-4: bar grows left-to-right, flashes
+            setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
+          }
+        }
+      });
     }
     oldQueue = [...newQueue];
 
