@@ -29,6 +29,16 @@ function initSupabase() {
 }
 
 /**
+ * Return the correct town URL for the current device.
+ */
+function getTownUrl() {
+  var ua = navigator.userAgent;
+  var isPhone = /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  var isSmall = window.innerWidth < 768;
+  return (isPhone || isSmall) ? '/mobile' : '/game';
+}
+
+/**
  * Check if the user already has an active session.
  * If a session exists, redirect to the game page automatically.
  * This prevents showing the login page to authenticated users.
@@ -51,7 +61,7 @@ async function checkExistingSession() {
           console.error('Failed to persist session cookie:', err);
         }
       }
-      window.location.href = '/game';
+      window.location.href = getTownUrl();
     }
   } catch (error) {
     console.error('Session check error:', error);
@@ -92,7 +102,7 @@ async function signInWithProvider(provider) {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: provider,
       options: {
-        redirectTo: window.location.origin + '/game',
+        redirectTo: window.location.origin + getTownUrl(),
       }
     });
 
@@ -153,7 +163,7 @@ async function signInWithEmail() {
           console.error('Failed to persist session cookie:', err);
         }
       }
-      window.location.href = '/game';
+      window.location.href = getTownUrl();
     }
   } catch (err) {
     console.error('Login exception:', err);

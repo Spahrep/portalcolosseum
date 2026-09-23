@@ -24,7 +24,9 @@
   var isPhone = /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
   var isSmall = window.innerWidth < 768;
   if (isPhone || isSmall) {
-    window.location.replace('/mobile');
+    // Preserve query string (PKCE callback params) when redirecting,
+    // otherwise the auth code exchange is lost and the user loops back to login.
+    window.location.replace('/mobile' + window.location.search);
   }
 })();
 </script>
