@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Battle • Cockpit</title>
+<style>
+  @font-face { font-family:'Pixeloid Mono'; src:url('/fonts/pixeloid-mono/pixeloid-mono-regular.ttf') format('truetype'); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Pixeloid Mono', 'Courier New', monospace;
+    background: #0a0a1a;
+    color: #e0e0ff;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+    image-rendering: pixelated;
+    -webkit-font-smoothing: none;
+  }
+
+  /* ═══ TOP: run header ═══ */
+  .top-bar {
+    flex-shrink: 0;
+    background: rgba(10, 26, 46, 0.97);
+    border-bottom: 2px solid #4a90d9;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .run-title { font-size: 12px; color: #66ccff; letter-spacing: 1px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .run-title .sub { color: #4a90d9; font-size: 9px; display: block; letter-spacing: 0.5px; }
+  .dice-tray { display: flex; gap: 4px; align-items: center; }
+  .die {
+    width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: bold; color: #000; border: 2px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+  }
+  .die.green { background: #66ff99; }
+  .die.yellow { background: #ffcc66; }
+  .die.red { background: #ff6666; }
+  .hud-spacer { flex-shrink: 0; font-size: 10px; color: #ffcc66; }
+
+  /* ═══ BATTLEFIELD: monsters grid ═══ */
+  .battlefield {
+    flex: 3;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    gap: 8px;
+    background: rgba(0,0,0,0.4);
+  }
+  .facing-label {
+    font-size: 10px;
+    color: #88aaff;
+    letter-spacing: 2px;
+    text-align: center;
+    padding: 2px 0 0;
+  }
+  .monster-grid {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    overflow-y: auto;
+    min-height: 0;
+  }
+  .monster-card {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: rgba(0, 0, 0, 0.65);
+    border: 2px solid #4a90d9;
+    padding: 6px 8px;
+  }
+  .monster-card.dying { border-color: #ff4444; opacity: 0.6; }
+  .sprite-box {
+    width: 46px; height: 46px; flex-shrink: 0;
+    background: #112233;
+    border: 1px solid #334466;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; color: #88aaff; font-weight: bold;
+  }
+  .m-info { flex: 1; min-width: 0; }
+  .m-name { font-size: 11px; color: #ccddff; letter-spacing: 1px; margin-bottom: 3px; }
+  .m-hp-track { height: 12px; background: #000; border: 1px solid #334466; position: relative; overflow: hidden; }
+  .m-hp-track .fill { position: absolute; inset: 0; background: #ff4444; transition: width 0.35s ease; }
+  .m-hp-track .fill.warn { background: #ffcc66; }
+  .m-hp-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; text-shadow: 1px 1px 0 #000; }
+  .m-next { font-size: 9px; color: #6688aa; margin-top: 2px; }
+  .m-next .tic { color: #ffcc66; }
+  .m-focus { flex-shrink: 0; font-size: 9px; color: #556677; }
+
+  /* Player bar at bottom of battlefield */
+  .player-bar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(10, 26, 46, 0.85);
+    border: 2px solid #334466;
+    padding: 5px 8px;
+  }
+  .player-bar .who { font-size: 10px; color: #88aaff; width: 44px; flex-shrink: 0; }
+  .player-bar .hp-track { flex: 1; height: 13px; background: #000; border: 1px solid #334466; position: relative; overflow: hidden; }
+  .player-bar .hp-track .fill { position: absolute; inset: 0; background: #66ff99; transition: width 0.4s ease; }
+  .player-bar .hp-track .fill.low { background: #ff3333; }
+  .player-bar .hp-track .fill.mid { background: #ffcc66; }
+  .player-bar .hp-num { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 9px; color: #fff; text-shadow: 1px 1px 0 #000, -1px 1px 0 #000, 1px -1px 0 #000, -1px -1px 0 #000; }
+
+  /* ═══ LOG panel (below battlefield) ═══ */
+  .log-panel {
+    flex: 2;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background: rgba(0,0,0,0.55);
+    border-top: 2px solid #334466;
+  }
+  .log-head {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 3px 10px;
+    background: rgba(10,26,46,0.8);
+    border-bottom: 1px solid #26334d;
+    font-size: 10px;
+    color: #88aaff;
+    letter-spacing: 1px;
+  }
+  .log-scroll { flex: 1; overflow-y: auto; padding: 6px 10px; }
+  .msg { font-size: 11.5px; line-height: 1.5; margin-bottom: 5px; border-left: 2px solid #26334d; padding-left: 8px; }
+  .msg.player { border-left-color: #66ccff; color: #e8f0ff; }
+  .msg.monster { border-left-color: #ff6666; color: #ffccd0; }
+  .msg.narration { border-left-color: #ffcc66; color: #ffe9b8; }
+  .msg .dmg { font-weight: bold; color: #fff; }
+  .msg .crit { color: #ffcc00; font-weight: bold; }
+
+  /* ═══ ACTION DECK ═══ */
+  .action-deck {
+    flex-shrink: 0;
+    display: flex;
+    gap: 8px;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+    background: rgba(10, 26, 46, 0.98);
+    border-top: 2px solid #4a90d9;
+  }
+  .hand-btn {
+    flex: 1;
+    background: #0a1a2e;
+    border: 2px solid #3a3a8c;
+    padding: 8px 8px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .hand-btn .h-label { font-size: 9px; letter-spacing: 1px; color: #8a8aff; display: block; }
+  .hand-btn.ready .h-label { color: #66ff99; }
+  .hand-btn .w-name { font-size: 12px; color: #ccddff; display: block; }
+  .hand-btn .w-dmg { font-size: 9px; color: #66ff99; display: block; }
+  .hand-btn.busy { opacity: 0.55; }
+  .attack-bar {
+    flex-shrink: 0;
+    display: flex;
+    gap: 6px;
+    padding: 6px 10px 8px;
+    background: rgba(10, 26, 46, 0.98);
+    border-top: 1px solid #26334d;
+  }
+  .atk-btn {
+    flex: 1;
+    background: #1a3a1a;
+    color: #66ff99;
+    border: 2px solid #66ff99;
+    padding: 10px 4px;
+    font-size: 12px;
+    text-align: center;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  .atk-btn:active { background: #2a5a2a; }
+  .atk-btn.guard { background: #3a2a1a; color: #ffcc66; border-color: #ffcc66; }
+  .atk-btn:disabled { opacity: 0.4; cursor: default; }
+</style>
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="run-title">
+      PORTAL · RUN — 3
+      <span class="sub">BATTLE 2 / 5 — WOLF PACK</span>
+    </div>
+    <div class="dice-tray">
+      <div class="die green">4</div>
+      <div class="die yellow">7</div>
+      <div class="die red">11</div>
+    </div>
+    <div class="hud-spacer">1,240gc</div>
+  </div>
+
+  <!-- BATTLEFIELD -->
+  <div class="battlefield">
+    <div class="facing-label">— FACING —</div>
+    <div class="monster-grid" id="monster-grid">
+      <div class="monster-card" id="mon-A">
+        <div class="sprite-box">A</div>
+        <div class="m-info">
+          <div class="m-name">WOLF A</div>
+          <div class="m-hp-track"><div class="fill warn" style="width:60%"></div><div class="m-hp-num">30/50</div></div>
+          <div class="m-next">next at <span class="tic">t6</span> · focuses YOU</div>
+        </div>
+        <div class="m-focus">◉</div>
+      </div>
+      <div class="monster-card" id="mon-B">
+        <div class="sprite-box">B</div>
+        <div class="m-info">
+          <div class="m-name">WOLF B</div>
+          <div class="m-hp-track"><div class="fill" style="width:92%"></div><div class="m-hp-num">46/50</div></div>
+          <div class="m-next">next at <span class="tic">t9</span> · circles left</div>
+        </div>
+      </div>
+      <div class="monster-card" id="mon-C">
+        <div class="sprite-box">C</div>
+        <div class="m-info">
+          <div class="m-name">GIANT RAT</div>
+          <div class="m-hp-track"><div class="fill warn" style="width:34%"></div><div class="m-hp-num">17/50</div></div>
+          <div class="m-next">next at <span class="tic">t11</span> · harries</div>
+        </div>
+      </div>
+    </div>
+    <div class="player-bar">
+      <span class="who">VARG</span>
+      <div class="hp-track"><div class="fill mid" style="width:78%"></div><div class="hp-num">780 / 1000</div></div>
+      <span class="who" style="width:auto; color:#66ccff;">AP 24/30</span>
+    </div>
+  </div>
+
+  <!-- LOG -->
+  <div class="log-panel">
+    <div class="log-head"><span>MESSAGE LOG</span><span>auto-scroll ▾</span></div>
+    <div class="log-scroll" id="log-scroll">
+      <div class="msg narration">Two wolves and a giant rat block the path.</div>
+      <div class="msg monster">Wolf A lunges at you for <span class="dmg">12</span> damage.</div>
+      <div class="msg player">You swing your Rusty Sword at Wolf A — <span class="dmg">24</span> damage.</div>
+      <div class="msg player">You drive your Rusty Sword into Wolf A — <span class="dmg">31</span> <span class="crit">CRITICAL!</span></div>
+    </div>
+  </div>
+
+  <!-- ACTIONS -->
+  <div class="attack-bar" id="attack-bar">
+    <button class="atk-btn" id="atk-swing">SWING<br><span style="font-size:9px;">16–28 dmg</span></button>
+    <button class="atk-btn" id="atk-thrust">THRUST<br><span style="font-size:9px;">crit-focused</span></button>
+    <button class="atk-btn guard" id="atk-guard">GUARD<br><span style="font-size:9px;">−50% dmg</span></button>
+  </div>
+  <div class="action-deck">
+    <button class="hand-btn ready"><span class="h-label">LH · READY</span><span class="w-name">⚔ Rusty Sword</span><span class="w-dmg">16–28</span></button>
+    <button class="hand-btn busy"><span class="h-label">RH · 3 TICKS</span><span class="w-name">🛡 Buckler</span><span class="w-dmg">guard only</span></button>
+  </div>
+
+<script>
+const logEl = document.getElementById('log-scroll');
+const monHp = { A: 30, B: 46, C: 17 };
+let playerHp = 780;
+
+function appendMsg(cls, html) {
+  const m = document.createElement('div');
+  m.className = 'msg ' + cls;
+  m.innerHTML = html;
+  logEl.appendChild(m);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+function rollDie() {
+  const dice = document.querySelectorAll('.die');
+  dice.forEach(d => {
+    d.textContent = 1 + Math.floor(Math.random() * 12);
+    d.style.transform = 'scale(1.25)';
+    setTimeout(() => d.style.transform = 'scale(1)', 150);
+  });
+}
+
+function attackMonster(target, key, label) {
+  rollDie();
+  const crit = Math.random() < 0.18;
+  const dealt = Math.round((crit ? 2 : 1) * (16 + Math.random() * 12));
+  if (monHp[key] !== undefined) {
+    monHp[key] = Math.max(0, monHp[key] - dealt);
+    const card = document.getElementById('mon-' + key);
+    const fill = card.querySelector('.fill');
+    const pct = Math.max(0, monHp[key] / 50 * 100);
+    fill.style.width = pct + '%';
+    if (pct < 40) fill.classList.add('warn');
+    if (monHp[key] === 0) card.classList.add('dying');
+    card.querySelector('.m-hp-num').textContent = monHp[key] + '/50';
+  }
+  appendMsg('player', 'You ' + label + ' at <b>' + target + '</b> — <span class="dmg">' + dealt + '</span>' + (crit ? ' <span class="crit">CRITICAL!</span>' : '') + '.');
+  retaliate();
+}
+
+function retaliate() {
+  playerHp = Math.max(0, playerHp - (5 + Math.floor(Math.random() * 10)));
+  const bar = document.querySelector('.player-bar .fill');
+  const num = document.querySelector('.player-bar .hp-num');
+  const pct = playerHp / 10;
+  bar.style.width = pct + '%';
+  bar.className = 'fill ' + (pct > 70 ? '' : pct > 35 ? 'mid' : 'low');
+  num.textContent = playerHp + ' / 1000';
+  const who = ['Wolf B', 'Giant Rat', 'Wolf A'][Math.floor(Math.random() * 3)];
+  appendMsg('monster', who + ' hits you for <span class="dmg">' + (5 + Math.floor(Math.random() * 10)) + '</span>.');
+}
+
+document.getElementById('atk-swing').addEventListener('click', () => attackMonster('Wolf A', 'A', 'swing your Rusty Sword at'));
+document.getElementById('atk-thrust').addEventListener('click', () => attackMonster('Wolf B', 'B', 'thrust your Rusty Sword into'));
+document.getElementById('atk-guard').addEventListener('click', () => {
+  rollDie();
+  appendMsg('narration', 'You raise your buckler — damage halved this tick.');
+});
+</script>
+</body>
+</html>

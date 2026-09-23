@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Battle • Terminal</title>
+<style>
+  @font-face { font-family:'Pixeloid Mono'; src:url('/fonts/pixeloid-mono/pixeloid-mono-regular.ttf') format('truetype'); }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: 'Pixeloid Mono', 'Courier New', monospace;
+    background: #0a0a1a;
+    color: #e0e0ff;
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    overflow: hidden;
+    image-rendering: pixelated;
+    -webkit-font-smoothing: none;
+  }
+
+  /* ═══ TOP: run header ═══ */
+  .top-bar {
+    flex-shrink: 0;
+    background: rgba(10, 26, 46, 0.97);
+    border-bottom: 2px solid #4a90d9;
+    padding: 6px 10px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .run-title { font-size: 12px; color: #66ccff; letter-spacing: 1px; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .run-title .sub { color: #4a90d9; font-size: 9px; display: block; letter-spacing: 0.5px; }
+  .dice-tray { display: flex; gap: 4px; align-items: center; }
+  .die {
+    width: 22px; height: 22px; display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: bold; color: #000; border: 2px solid #000;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+    transition: transform 0.15s ease;
+  }
+  .die.green { background: #66ff99; }
+  .die.yellow { background: #ffcc66; }
+  .die.red { background: #ff6666; }
+  .hud-spacer { flex-shrink: 0; display: flex; gap: 8px; font-size: 10px; }
+  .hud-ap { color: #66ccff; }
+  .hud-gold { color: #ffcc66; }
+
+  /* ═══ SCROLL AREA (combat log readout) ═══ */
+  .terminal {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    padding: 10px 12px;
+    background: rgba(0,0,0,0.6);
+    font-size: 12.5px;
+    line-height: 1.6;
+    scroll-behavior: smooth;
+  }
+  .t-row { margin-bottom: 7px; white-space: pre-wrap; word-break: break-word; animation: t-in 0.15s ease-out; }
+  @keyframes t-in { 0% { opacity: 0; } 100% { opacity: 1; } }
+  .t-narration { color: #ffcc66; }
+  .t-monster { color: #ff9999; }
+  .t-player { color: #ccffff; }
+  .t-system { color: #667788; }
+  .t-turn { color: #4a90d9; font-size: 10px; letter-spacing: 2px; margin: 10px 0 4px; }
+  .t-monster-chip {
+    display: inline-block;
+    font-size: 9px;
+    color: #ff9999;
+    border: 1px solid #663333;
+    padding: 0 4px;
+  }
+  .t-you-chip {
+    display: inline-block;
+    font-size: 9px;
+    color: #66ccff;
+    border: 1px solid #335566;
+    padding: 0 4px;
+  }
+  .t-stat {
+    display: inline-block;
+    font-size: 9px;
+    color: #88aa88;
+    border: 1px solid #335533;
+    padding: 0 4px;
+  }
+
+  /* ═══ QUEUE TIMELINE ═══ */
+  .timeline {
+    flex-shrink: 0;
+    background: rgba(8, 15, 30, 0.98);
+    border-top: 1px solid #26334d;
+    padding: 6px 10px;
+  }
+  .timeline-label { font-size: 9px; color: #88aaff; letter-spacing: 2px; margin-bottom: 4px; }
+  .tl-track { position: relative; height: 26px; background: #000; border: 1px solid #26334d; overflow: hidden; }
+  .tl-track .tick {
+    position: absolute; top: 0; bottom: 0;
+    width: 2px; background: rgba(100,150,220,0.2);
+  }
+  .tl-track .zone {
+    position: absolute; top: 0; bottom: 0;
+    background: rgba(255, 204, 102, 0.08);
+  }
+  .tl-unit {
+    position: absolute; top: 0; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px;
+    transform: translateX(-50%);
+    white-space: nowrap;
+  }
+  .tl-unit.you { color: #66ccff; }
+  .tl-unit.mon { color: #ff9999; }
+  .tl-unit .mark {
+    width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center;
+    border: 1px solid currentColor; background: rgba(0,0,0,0.7);
+    margin-right: 2px;
+  }
+  .tl-now {
+    position: absolute; top: -2px; bottom: -2px; width: 2px;
+    background: #ffcc66; box-shadow: 0 0 6px rgba(255,204,102,0.8);
+  }
+
+  /* ═══ ACTION MENU ═══ */
+  .action-menu {
+    flex-shrink: 0;
+    background: rgba(10, 26, 46, 0.98);
+    border-top: 2px solid #4a90d9;
+    padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+  }
+  .hand-tabs { display: flex; gap: 6px; margin-bottom: 6px; }
+  .hand-tab {
+    flex: 1;
+    background: #0a1a2e;
+    border: 2px solid #3a3a8c;
+    color: #8a8aff;
+    font-size: 11px;
+    padding: 6px 4px;
+    cursor: pointer;
+    letter-spacing: 1px;
+  }
+  .hand-tab.active { border-color: #ffcc66; color: #ffcc66; background: #241d0a; }
+  .hand-tab .hand-name { display: block; font-size: 9px; opacity: 0.8; }
+  .cmd-list { display: flex; flex-direction: column; gap: 5px; }
+  .cmd {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #101c30;
+    border: 1px solid #334466;
+    padding: 7px 8px;
+    cursor: pointer;
+    font-size: 11px;
+  }
+  .cmd:active { background: #1a3a5e; }
+  .cmd .cmd-name { flex: 1; color: #ccddff; }
+  .cmd .cmd-dmg { color: #66ff99; font-size: 10px; }
+  .cmd .cmd-wait { color: #ffcc66; font-size: 10px; }
+  .cmd .cmd-cost { color: #ff6666; font-size: 9px; }
+  .cmd.disabled { opacity: 0.4; }
+  .cmd.selected { border-color: #66ff99; background: #0f2415; }
+  .confirm-row { display: flex; gap: 6px; margin-top: 6px; }
+  .confirm-btn {
+    flex: 1;
+    background: #66ff99;
+    color: #000;
+    font-size: 12px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    border: 2px solid #66ff99;
+    padding: 10px 4px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+  .confirm-btn:active { background: #44cc77; }
+  .confirm-btn:disabled { opacity: 0.4; }
+  .cancel-btn {
+    flex-shrink: 0;
+    background: #2a1a1a;
+    color: #ff6666;
+    font-size: 11px;
+    border: 2px solid #ff6666;
+    padding: 10px 12px;
+    cursor: pointer;
+    font-family: inherit;
+  }
+</style>
+</head>
+<body>
+
+  <!-- TOP BAR -->
+  <div class="top-bar">
+    <div class="run-title">
+      PORTAL · RUN — 3
+      <span class="sub">BATTLE 2 / 5 — WOLF PACK</span>
+    </div>
+    <div class="dice-tray">
+      <div class="die green">4</div>
+      <div class="die yellow">7</div>
+      <div class="die red">11</div>
+    </div>
+    <div class="hud-spacer">
+      <span class="hud-ap">AP 24</span>
+      <span class="hud-gold">1,240gc</span>
+    </div>
+  </div>
+
+  <!-- TERMINAL READOUT -->
+  <div class="terminal" id="terminal">
+    <div class="t-turn">— TURN 7 —</div>
+    <div class="t-row t-narration">Two wolves and a giant rat block the path. Dust rises as they circle.</div>
+    <div class="t-row t-monster">[<span class="t-monster-chip">WOLF A · 30/50</span>] lunges at you for <b>12</b>.
+      <span class="t-you-chip">VARG</span> <span class="t-stat">780/1000</span></div>
+    <div class="t-row t-player">You swing your <b>Rusty Sword</b> at <span class="t-monster-chip">WOLF A</span> — <b>24</b> dmg.
+      <span class="t-stat">AP -6</span></div>
+    <div class="t-row t-narration">The wolf staggers but stays on its feet.</div>
+    <div class="t-row t-monster">[<span class="t-monster-chip">GIANT RAT · 17/50</span>] nips at your heels for <b>5</b>.
+      <span class="t-you-chip">VARG</span> <span class="t-stat">775/1000</span></div>
+    <div class="t-row t-player">You drive your <b>Rusty Sword</b> into <span class="t-monster-chip">WOLF A</span> — <b>31</b> <span style="color:#ffcc00;font-weight:bold;">CRITICAL!</span>
+      <span class="t-stat">AP -6</span></div>
+    <div class="t-row t-narration">Wolf A howls and reels back, one ear shredded.</div>
+    <div class="t-row t-system">» Right hand gains <b>3 tics</b> of momentum (Swift Wound).</div>
+    <div class="t-row t-monster">[<span class="t-monster-chip">WOLF B · 46/50</span>] snaps at you — <b>9</b>.
+      <span class="t-you-chip">VARG</span> <span class="t-stat">766/1000</span></div>
+    <div class="t-row t-narration">They are closing in. Choose your attack.</div>
+  </div>
+
+  <!-- TIMELINE -->
+  <div class="timeline">
+    <div class="timeline-label">TIMING TRACK — T0 → T16</div>
+    <div class="tl-track" id="tl-track">
+      <div class="zone" style="left:0%; width:12%;"></div>
+      <div class="tl-now" style="left:30%;"></div>
+      <div class="tl-unit you" style="left:30%;"><span class="mark">▸</span>YOU</div>
+      <div class="tl-unit mon" style="left:12%;"><span class="mark">B</span>WOLF B</div>
+      <div class="tl-unit mon" style="left:48%;"><span class="mark">C</span>RAT</div>
+      <div class="tl-unit mon" style="left:70%;"><span class="mark">A</span>WOLF A</div>
+    </div>
+  </div>
+
+  <!-- ACTION MENU -->
+  <div class="action-menu">
+    <div class="hand-tabs">
+      <button class="hand-tab active" id="tab-lh" onclick="switchHand('lh')">⚔ LH<span class="hand-name">Rusty Sword</span></button>
+      <button class="hand-tab" id="tab-rh" onclick="switchHand('rh')">🛡 RH<span class="hand-name">Buckler</span></button>
+    </div>
+    <div class="cmd-list" id="cmd-list">
+      <div class="cmd selected" onclick="selectCmd(this)">
+        <span class="cmd-name">Cut Down</span>
+        <span class="cmd-dmg">16–28 dmg</span>
+        <span class="cmd-wait">3 tics</span>
+      </div>
+      <div class="cmd" onclick="selectCmd(this)">
+        <span class="cmd-name">Thrust</span>
+        <span class="cmd-dmg">crit ×2</span>
+        <span class="cmd-wait">4 tics</span>
+      </div>
+      <div class="cmd" onclick="selectCmd(this)">
+        <span class="cmd-name">Feint</span>
+        <span class="cmd-dmg">0 dmg</span>
+        <span class="cmd-wait">2 tics</span>
+        <span class="cmd-cost">AP 4 · opens guard</span>
+      </div>
+      <div class="cmd disabled">
+        <span class="cmd-name">Whirlwind</span>
+        <span class="cmd-dmg">28–40 · all</span>
+        <span class="cmd-wait">8 tics</span>
+        <span class="cmd-cost">LOCKED Lv.2</span>
+      </div>
+    </div>
+    <div class="confirm-row">
+      <button class="confirm-btn" onclick="confirmAtk()">CONFIRM ⚔</button>
+      <button class="cancel-btn" onclick="cancelAtk()">✕</button>
+    </div>
+  </div>
+
+<script>
+const term = document.getElementById('terminal');
+let selectedCmd = 'Cut Down';
+
+function addRow(cls, html) {
+  const r = document.createElement('div');
+  r.className = 't-row ' + cls;
+  r.innerHTML = html;
+  term.appendChild(r);
+  term.scrollTop = term.scrollHeight;
+}
+
+function switchHand(hand) {
+  document.getElementById('tab-lh').classList.toggle('active', hand === 'lh');
+  document.getElementById('tab-rh').classList.toggle('active', hand === 'rh');
+  const list = document.getElementById('cmd-list');
+  list.innerHTML = hand === 'lh'
+    ? cmdHTML('Cut Down', '16–28 dmg', '3 tics', '', true) + cmdHTML('Thrust', 'crit ×2', '4 tics', '', false) + cmdHTML('Feint', '0 dmg', '2 tics', 'AP 4 · opens guard', false) + cmdDisabled()
+    : cmdHTML('Brace', 'guard', '1 tic', 'AP 2', true) + cmdHTML('Riposte', 'counter', '5 tics', '', false) + cmdHTML('Shield Bash', '8–14 dmg', '6 tics', '', false);
+  document.querySelectorAll('.cmd').forEach(c => c.addEventListener('click', () => selectCmd(c)));
+  selectedCmd = 'None';
+}
+
+function cmdHTML(name, dmg, wait, cost, sel) {
+  return '<div class="cmd' + (sel ? ' selected' : '') + '"><span class="cmd-name">' + name + '</span><span class="cmd-dmg">' + dmg + '</span><span class="cmd-wait">' + wait + '</span>' + (cost ? '<span class="cmd-cost">' + cost + '</span>' : '') + '</div>';
+}
+function cmdDisabled() {
+  return '<div class="cmd disabled"><span class="cmd-name">Whirlwind</span><span class="cmd-dmg">28–40 · all</span><span class="cmd-wait">8 tics</span><span class="cmd-cost">LOCKED Lv.2</span></div>';
+}
+
+function selectCmd(el) {
+  document.querySelectorAll('.cmd').forEach(c => c.classList.remove('selected'));
+  el.classList.toggle('selected', !el.classList.contains('disabled'));
+}
+
+function confirmAtk() {
+  // roll dice
+  document.querySelectorAll('.die').forEach(d => {
+    d.textContent = 1 + Math.floor(Math.random() * 12);
+    d.style.transform = 'scale(1.25)';
+    setTimeout(() => d.style.transform = 'scale(1)', 150);
+  });
+  const crit = Math.random() < 0.18;
+  const dealt = Math.round((crit ? 2 : 1) * (16 + Math.random() * 12));
+  const you = Math.max(0, 766 - (4 + Math.floor(Math.random() * 8)));
+  addRow('t-player', 'You execute <b>' + selectedCmd + '</b> on WOLF A — <b>' + dealt + '</b>' + (crit ? ' <span style="color:#ffcc00;font-weight:bold;">CRITICAL!</span>' : '') + ' dmg. <span class="t-stat">AP -6</span>');
+  addRow('t-monster', '[<span class="t-monster-chip">WOLF B · 41/50</span>] snaps at you — <b>' + (4 + Math.floor(Math.random() * 8)) + '</b>. <span class="t-you-chip">VARG</span> <span class="t-stat">' + you + '/1000</span>');
+}
+
+function cancelAtk() {
+  addRow('t-system', '» Attack cancelled. Timing unchanged.');
+}
+</script>
+</body>
+</html>
