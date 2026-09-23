@@ -230,11 +230,10 @@ export function createEngine(rng = Math.random) {
   }
 
   function tick() {
-    // PC-82: remove head BEFORE processing (not after), matching stepQueue/stepOnce
-    // pattern so handleFire doesn't add new rows that shift which row gets removed.
-    // Fixes infinite loop where winding→impact adds a tic=0 row that sorts ahead
-    // of the original winding row, causing removeHead (called on the WRONG row) to
-    // leave the winding row in the queue for re-processing on every subsequent tick.
+    // PC-82: remove head BEFORE processing and advance tics so every entry
+    // converges toward 0 — matching popNext / stepOnce semantics.
+    // Without this, monster entries at tic=5+ never reach tic=0 because
+    // player entries (ready=0, winding=3, cooldown=cd) always sort first.
     const removedRow = removeHead(state.queue);
     if (!removedRow) {
       // No non-ready rows. Player needs to act or battle is over.
@@ -243,6 +242,15 @@ export function createEngine(rng = Math.random) {
       return { done: true };
     }
     const head = removedRow;
+    // Advance tics by the consumed row's value — every non-ready entry
+    // gets closer to the front. handleFire runs *after* advancement so
+    // any newly-added entries use the updated tic baseline.
+    const ticCost = head.tics;
+    if (ticCost > 0) {
+      for (const r of state.queue) {
+        if (r.event !== 'ready') r.tics = Math.max(0, r.tics - ticCost);
+      }
+    }
     const feedBefore = state.feed.length;
     handleFire(head);
     sortQueue(state.queue);

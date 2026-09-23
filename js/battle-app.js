@@ -2164,7 +2164,7 @@ async function tickLoop(runId) {
     renderPlayerHP(bs);
     renderMonsters(bs.monsters || []);
     renderLoadout(bs);
-    renderActionMenu(bs);
+    // Queue: always render so the player sees rows being consumed and added.
     renderQueue(bs);
 
     // One tick = one event processed = one new narration line.
@@ -2180,6 +2180,9 @@ async function tickLoop(runId) {
     }
 
     if (data.result?.playerReady || data.result?.needsInput || data.result?.done || data.result?.battleOver || bs.battle_over) {
+      // Render action menu ONLY on break — avoids flicker during intermediate ticks
+      // (monster attacks, cooldowns resolving) where the player cannot interact.
+      renderActionMenu(bs);
       if (data.result?.battleOver || bs.battle_over) {
         showAdvanceUI(runId, bs);
       }
