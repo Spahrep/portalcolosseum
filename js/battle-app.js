@@ -1364,50 +1364,9 @@ async function doAttack(runId, hand, attackId, targetIds) {
   setBusy(true);
   try {
     const payload = { hand, attack_id: attackId, target_ids: targetIds || [] };
-    const data = await apiCall(`/runs/${runId}/commit`, 'POST', payload);
+    await apiCall(`/runs/${runId}/commit`, 'POST', payload); // returns {committed: true}
     pendingAttack = null;
-
-    // Use commit response directly (state + feed + fires). No re-fetch.
-    // feed = full accumulated; fires = the new step results from this commit only.
-    const bs = data.state || {};
-    const prevBsForDiff = lastBs;
-    lastBs = bs;
-
-    // Update UI incrementally from commit payload
-    renderPlayerHP(bs);
-    renderMonsters(bs.monsters || []);
-    renderLoadout(bs);
-    renderActionMenu(bs);
-
-    // Feed: renderFeed already does delta via renderedFeedLines.
-    // Capture pre-commit count so only NEW lines (from this commit's fires/feed delta) are typed.
-    const preLen = renderedFeedLines;
-    if (data.feed && data.feed.length > preLen) {
-      renderFeed(data.feed, null);
-      renderedFeedLines = data.feed.length;
-    } else if (Array.isArray(data.fires) && data.fires.length > 0) {
-      // Fallback: append fires directly as new lines
-      data.fires.forEach(line => appendFeedLine(line));
-      renderedFeedLines = preLen + data.fires.length;
-    }
-
-    // Queue + battle clock for post-commit animation (uses prev lastBs)
-    const diff = diffQueueForAnimation(prevBsForDiff || {}, bs);
-    const queueEl = document.getElementById('queue');
-    if (queueEl && diff.resolved.length > 0) {
-      const firstEl = queueEl.querySelector(`[data-row-id="${diff.resolved[0]}"]`);
-      if (firstEl) firstEl.classList.add('queue-row-current');
-    }
-    battleClock.start(diff, bs, () => {
-      renderQueue(bs);
-    });
-
-    // Battle over check
-    const monsterList = bs.monsters || [];
-    const allMonstersDead = monsterList.length > 0 && monsterList.every(m => m.dead);
-    if (allMonstersDead || bs.battle_over) {
-      showAdvanceUI(runId, bs);
-    }
+    await tickLoop(runId);
   } catch (e) {
     const msg = String(e.message || e);
     if (msg.includes('Hand not ready')) {
@@ -1875,7 +1834,7 @@ async function usePotion(runId, slot) {
     const payload = { slot };
     await apiCall(`/runs/${runId}/use-potion`, 'POST', payload);
     showMessage(`Potion ${slot} used`);
-    await loadBattle(runId);
+    await tickLoop(runId);
   } catch (e) {
     showMessage(e.message, true);
   }
@@ -2144,6 +2103,40 @@ async function init() {
       const atBottom = msgBox.scrollTop + msgBox.clientHeight >= msgBox.scrollHeight - 8;
       feedPinned = atBottom;
     });
+  }
+}
+
+async function tickLoop(runId) {
+  debugLog('tickLoop', `runId=${runId}`);
+  while (true) {
+    const data = await apiCall(`/runs/${runId}/tick`, 'POST');
+    const bs = data.state || {};
+    lastBs = bs;
+
+    renderPlayerHP(bs);
+    renderMonsters(bs.monsters || []);
+    renderLoadout(bs);
+    renderActionMenu(bs);
+    renderQueue(bs);
+
+    // One tick = one event processed = one new narration line.
+    // Append it individually for clean typewriter animation.
+    const narrate = data.result?.narrate;
+    if (narrate) {
+      appendFeedLine(narrate);
+      renderedFeedLines = (bs.feed || []).length;
+    } else if (bs.feed && bs.feed.length > renderedFeedLines) {
+      // Fallback: render full feed with diff
+      renderFeed(bs.feed, null);
+      renderedFeedLines = bs.feed.length;
+    }
+
+    if (data.result?.playerReady || data.result?.battleOver || bs.battle_over) {
+      if (data.result?.battleOver || bs.battle_over) {
+        showAdvanceUI(runId, bs);
+      }
+      break;
+    }
   }
 }
 
