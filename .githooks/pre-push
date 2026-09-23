@@ -1,0 +1,29 @@
+#!/bin/sh
+# pre-push hook — Portal Colosseum (installed to enforce commit-before-push)
+# Blocks a push if there are uncommitted (or truncated/staged-without-commit)
+# tracked-file changes in the working tree. Motivating failure (2026-09-22):
+# a Discord agent's engine fix sat uncommitted; CI checks out HEAD, which lacked
+# the fix, so every push went red and spammed the inbox.
+#
+# Uncommitted UNIVERSAL (pre-push) prevent CSpam: do not let a push go out while
+# a tracked file differs from index/HEAD — that means local-only work that CI
+# will never see, or a half-committed state.
+set -u
+
+# Ignore untracked files (new files not yet added) — those don't break CI unless
+# a tracked module references them; block on tracked-file mutations only.
+tracked_changes=$(git status --porcelain | awk '$1 != "??" {print}' | head -200)
+
+if [ -n "$tracked_changes" ]; then
+  echo "pre-push hook: BLOCKED — uncommitted tracked-file changes exist." >&2
+  echo "CI checks out HEAD (your latest commit), NOT your working tree." >&2
+  echo "Push without committing these changes => CI runs old HEAD => build fails." >&2
+  echo "" >&2
+  echo "$tracked_changes" >&2
+  echo "" >&2
+  echo "Commit or stash them first, then push again:" >&2
+  echo "  git add <files> && git commit -m '...'   (then) git push" >&2
+  exit 1
+fi
+
+exit 0

@@ -5,7 +5,7 @@
       "src": "/$",
       "dest": "/index.html",
       "headers": {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
@@ -15,7 +15,7 @@
       "src": "/login",
       "dest": "/login.html",
       "headers": {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
@@ -25,7 +25,7 @@
       "src": "/signup",
       "dest": "/signup.html",
       "headers": {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
@@ -35,7 +35,7 @@
       "src": "/passwords",
       "dest": "/passwords.html",
       "headers": {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
@@ -45,7 +45,7 @@
       "src": "/reset-password",
       "dest": "/reset-password.html",
       "headers": {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
@@ -55,7 +55,7 @@
       "src": "/admin",
       "dest": "/admin.html",
       "headers": {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
@@ -65,7 +65,7 @@
       "src": "/game",
       "dest": "/game.html",
       "headers": {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
@@ -75,7 +75,7 @@
       "src": "/run",
       "dest": "/run.html",
       "headers": {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
@@ -85,7 +85,7 @@
       "src": "/run-equip",
       "dest": "/run-equip.html",
       "headers": {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"
@@ -201,7 +201,7 @@
       "src": "/(.*)",
       "dest": "/$1",
       "headers": {
-        "Content-Security-Policy": "default-src 'self'; script-src 'self' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+        "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' esm.sh https://*.supabase.co; connect-src 'self' https://*.supabase.co https://esm.sh; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
         "X-Content-Type-Options": "nosniff",
         "Referrer-Policy": "strict-origin-when-cross-origin",
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload"

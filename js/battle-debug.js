@@ -108,6 +108,32 @@
       flex: '1',
     });
 
+    document.body.appendChild(box);
+
+    // Copy log button (find button within box — it's now in DOM)
+    const copyBtn = box.querySelector('#pc-debug-copy');
+    if (copyBtn) {
+      copyBtn.onclick = () => {
+        const lines = Array.from(body.children).map(el => el.textContent).join('\n');
+        navigator.clipboard.writeText(lines).then(() => {
+          copyBtn.textContent = '✓';
+          setTimeout(() => { copyBtn.textContent = '📋'; }, 1500);
+        }).catch(() => {
+          // Fallback for insecure contexts — select text manually
+          const ta = document.createElement('textarea');
+          ta.value = lines;
+          ta.style.position = 'fixed';
+          ta.style.left = '-9999px';
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand('copy');
+          document.body.removeChild(ta);
+          copyBtn.textContent = '✓';
+          setTimeout(() => { copyBtn.textContent = '📋'; }, 1500);
+        });
+      };
+    }
+
     // Collapse toggle
     let collapsed = false;
     header.onclick = (e) => {
@@ -115,31 +141,6 @@
       collapsed = !collapsed;
       body.style.display = collapsed ? 'none' : 'block';
     };
-
-    // Copy log button
-    document.getElementById('pc-debug-copy').onclick = () => {
-      const lines = Array.from(body.children).map(el => el.textContent).join('\n');
-      navigator.clipboard.writeText(lines).then(() => {
-        const btn = document.getElementById('pc-debug-copy');
-        btn.textContent = '✓';
-        setTimeout(() => { btn.textContent = '📋'; }, 1500);
-      }).catch(() => {
-        // Fallback for insecure contexts — select text manually
-        const ta = document.createElement('textarea');
-        ta.value = lines;
-        ta.style.position = 'fixed';
-        ta.style.left = '-9999px';
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-        const btn = document.getElementById('pc-debug-copy');
-        btn.textContent = '✓';
-        setTimeout(() => { btn.textContent = '📋'; }, 1500);
-      });
-    };
-
-    document.body.appendChild(box);
 
     // Entry ring buffer (last 100)
     const MAX_ENTRIES = 100;
