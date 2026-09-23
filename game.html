@@ -18,6 +18,16 @@
 -->
 <html lang="en">
 <head>
+<script>
+(function() {
+  var ua = navigator.userAgent;
+  var isPhone = /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+  var isSmall = window.innerWidth < 768;
+  if (isPhone || isSmall) {
+    window.location.replace('/mobile');
+  }
+})();
+</script>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Portal Colosseum - Arena</title>
