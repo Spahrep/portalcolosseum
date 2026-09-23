@@ -80,13 +80,19 @@ class BattleClock {
 
   /**
    /** Phase 2: Insert — go straight to render + entry animations (preview removed; entry anims cover the "new arrival" visual). */
-   _runInsert() {
-     this._renderNew();
+   async _runInsert() {
+     await this._renderNew();
    }
 
   /** Phase 3: Render updated queue, then apply entry-enter animations. */
-  _renderNew() {
+  async _renderNew() {
     const { _diff: diff, _newBs: newBs } = this;
+
+    const preset = getSpeedPreset();
+    const queueEl = document.getElementById('queue');
+    if (diff.added.length > 0 && queueEl) {
+      await animateQueueSpaceCreation(diff.added, queueEl, preset);
+    }
 
     // Always render the full queue — this is where entries actually appear
     renderQueue(newBs);
@@ -1166,6 +1172,43 @@ function sortQueueRows(queue) {
     const bPlayer = b.label === 'LH' || b.label === 'RH' ? 0 : 1;
     return aPlayer - bPlayer;
   });
+}
+
+async function animateQueueSpaceCreation(added, queueEl, preset) {
+  if (added.length > 0 && queueEl && preset.charMs > 0) {
+    const sortedNew = sortQueueRows(added);
+    const domRows = Array.from(queueEl.children).filter(c =>
+      c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId)
+    );
+    const previews = [];
+    sortedNew.forEach(entry => {
+      let insertIdx = domRows.length;
+      for (let i = 0; i < domRows.length; i++) {
+        const curTics = Number(domRows[i].dataset.tics ?? 0);
+        const newTics = entry.tics ?? 0;
+        if (newTics < curTics || (newTics === curTics && (entry.label === 'LH' || entry.label === 'RH'))) {
+          insertIdx = i;
+          break;
+        }
+      }
+      const preview = document.createElement('div');
+      preview.className = 'queue-insert-preview';
+      const refChild = domRows[insertIdx] || null;
+      if (refChild) {
+        queueEl.insertBefore(preview, refChild);
+        domRows.splice(insertIdx, 0, preview);
+      } else {
+        queueEl.appendChild(preview);
+        domRows.push(preview);
+      }
+      previews.push(preview);
+    });
+    requestAnimationFrame(() => {
+      previews.forEach(p => p.classList.add('active'));
+    });
+    await new Promise(r => setTimeout(r, 300));
+    previews.forEach(p => p.remove());
+  }
 }
 
 // PC-64: tic-0 countdown to the first decision point — theater over the
