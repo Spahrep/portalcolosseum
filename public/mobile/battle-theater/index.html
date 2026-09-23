@@ -129,8 +129,11 @@
     display: flex;
     align-items: center;
     gap: 6px;
-    overflow: hidden;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scrollbar-width: none;
   }
+  .queue-ticker::-webkit-scrollbar { display: none; }
   .queue-ticker .q-label { font-size: 9px; color: #88aaff; letter-spacing: 1px; flex-shrink: 0; }
   .q-row {
     flex-shrink: 0;

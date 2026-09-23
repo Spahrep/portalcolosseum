@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Portal Colosseum • Mobile Town</title>
+  <style>
+    @font-face {
+      font-family: 'Pixeloid Mono';
+      src: url('/fonts/pixeloid-mono/pixeloid-mono-regular.ttf') format('truetype');
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      background: #0a0a1a;
+      color: #e0e0ff;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      image-rendering: pixelated;
+      -webkit-font-smoothing: none;
+    }
+
+    /* Top HUD: thin AP / Gold bars */
+    .hud {
+      flex-shrink: 0;
+      background: rgba(10, 26, 46, 0.97);
+      border-bottom: 2px solid #ffcc66;
+      padding: 8px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 12px;
+    }
+    .hud .name { color: #88aaff; }
+    .hud .ap {
+      color: #66ccff;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .hud .ap .bar {
+      width: 44px;
+      height: 8px;
+      background: #1a2a3a;
+      border: 1px solid #334466;
+      border-radius: 2px;
+      overflow: hidden;
+      display: inline-block;
+    }
+    .hud .ap .bar .fill {
+      height: 100%;
+      width: 80%;
+      background: linear-gradient(90deg, #4488cc, #66ccff);
+    }
+    .hud .gold { color: #ffcc66; }
+
+    /* Scrollable card area */
+    .cards {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 12px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    /* Shared card style */
+    .card {
+      background: rgba(15, 22, 40, 0.9);
+      border: 2px solid #334466;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.1s;
+    }
+    .card:active {
+      transform: scale(0.97);
+    }
+
+    /* Portal card — bigger, distinct */
+    .card.portal-card {
+      border-color: #4488cc;
+      background: linear-gradient(135deg, rgba(15, 22, 40, 0.95) 0%, rgba(20, 35, 65, 0.95) 100%);
+      margin-bottom: 4px;
+      padding: 16px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      grid-template-rows: auto auto auto;
+      gap: 4px 10px;
+    }
+    .card.portal-card .portal-label {
+      grid-column: 1;
+      grid-row: 1;
+      font-size: 16px;
+      color: #aaccff;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      align-self: end;
+    }
+    .card.portal-card .portal-icon {
+      grid-column: 2;
+      grid-row: 1 / 3;
+      font-size: 36px;
+      align-self: center;
+      filter: drop-shadow(0 0 8px rgba(102, 170, 255, 0.3));
+    }
+    .card.portal-card .portal-sub {
+      grid-column: 1;
+      grid-row: 2;
+      font-size: 10px;
+      color: #6688aa;
+    }
+    .card.portal-card .portal-costs {
+      grid-column: 1 / 3;
+      grid-row: 3;
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .card.portal-card .portal-costs .cost {
+      flex: 1;
+      background: rgba(0, 0, 0, 0.4);
+      border: 1px solid #334466;
+      border-radius: 4px;
+      padding: 5px;
+      text-align: center;
+      font-size: 11px;
+    }
+    .card.portal-card .portal-costs .cost.ap-cost { color: #66ccff; }
+    .card.portal-card .portal-costs .cost.gold-cost { color: #ffcc66; }
+
+    /* Standard town cards */
+    .card.town-card {
+      padding: 14px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .card.town-card .icon {
+      font-size: 18px;
+      width: 28px;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .card.town-card .info {
+      flex: 1;
+      min-width: 0;
+    }
+    .card.town-card .info .card-label {
+      font-size: 14px;
+      color: #ccd;
+    }
+    .card.town-card .info .card-sub {
+      font-size: 10px;
+      color: #556;
+      margin-top: 1px;
+    }
+    .card.town-card .chevron {
+      color: #445577;
+      font-size: 16px;
+    }
+
+    /* Logout — tiny text, no button */
+    .footer {
+      flex-shrink: 0;
+      text-align: center;
+      padding: 6px 0 10px;
+    }
+    .footer span {
+      font-size: 9px;
+      color: #333;
+      cursor: pointer;
+    }
+    .footer span:active { color: #665544; }
+
+    /* Landscape / tablet adjustments */
+    @media (min-width: 500px) {
+      .cards { padding: 16px 15%; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Top HUD -->
+  <div class="hud">
+    <span class="name">SPAHREP</span>
+    <span class="ap">
+      AP <span class="bar"><span class="fill"></span></span>
+      24/30
+    </span>
+    <span class="gold">◉ 1,240gc</span>
+  </div>
+
+  <!-- Card stack -->
+  <div class="cards">
+
+    <!-- Portal card with costs -->
+    <div class="card portal-card" onclick="alert('Selecting a portal...')">
+      <div class="portal-label">Enter The Portal</div>
+      <div class="portal-icon">◈</div>
+      <div class="portal-sub">Choose your arena</div>
+      <div class="portal-costs">
+        <div class="cost ap-cost">✦ 3 AP</div>
+        <div class="cost gold-cost">◉ 100 gc</div>
+      </div>
+    </div>
+
+    <!-- Town options -->
+    <div class="card town-card" onclick="alert('Store')">
+      <span class="icon">🛒</span>
+      <div class="info">
+        <div class="card-label">Store</div>
+        <div class="card-sub">Browse wares and equipment</div>
+      </div>
+      <span class="chevron">›</span>
+    </div>
+    <div class="card town-card" onclick="alert('Wizard Hut')">
+      <span class="icon">🔮</span>
+      <div class="info">
+        <div class="card-label">Wizard Hut</div>
+        <div class="card-sub">Upgrade and enchant</div>
+      </div>
+      <span class="chevron">›</span>
+    </div>
+    <div class="card town-card" onclick="alert('Leaderboards')">
+      <span class="icon">🏆</span>
+      <div class="info">
+        <div class="card-label">Leaderboards</div>
+        <div class="card-sub">Rankings and records</div>
+      </div>
+      <span class="chevron">›</span>
+    </div>
+    <div class="card town-card" onclick="alert('Settings')">
+      <span class="icon">⚙</span>
+      <div class="info">
+        <div class="card-label">Menu</div>
+        <div class="card-sub">Settings &amp; logout</div>
+      </div>
+      <span class="chevron">›</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span onclick="alert('Leave the realm?')">Leave the realm</span>
+  </div>
+</body>
+</html>
