@@ -283,13 +283,20 @@ export function createEngine(rng = Math.random) {
 
   // Compat wrapper for existing tests and old call sites — loops stepQueue until decision point.
   // Preserves exact same feed output and RNG consumption order for determinism.
+  function hasApproachingHand() {
+    return Object.values(state.player?.hands || {}).some(h => h.state === 'Approach');
+  }
+
   function advanceToNextDecision(captureFires = null) {
     const fires = captureFires || [];
     let iterations = 0;
     while (true) {
       if (isBattleOver()) break;
       stepQueue(fires);
-      if (checkPlayerReady()) break;
+      // Keep stepping past approach rows so ALL hands complete their initial approach
+      // (checkPlayerReady using .some() returns on the first Ready hand, but during
+      // startBattle both approach rows must fire before the player can choose a hand)
+      if (!hasApproachingHand() && checkPlayerReady()) break;
       iterations++;
       if (iterations > 500) break;
     }
