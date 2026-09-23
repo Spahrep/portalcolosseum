@@ -1307,10 +1307,16 @@ function showAdvanceUI(runId, state) {
   const box = document.getElementById('message-box');
   if (!box) return;
   box.innerHTML = '';
-  renderedFeedLines = 0; // the panel is not feed — next battle's log starts fresh
-  // No more actions to pick — clear the action row.
+  renderedFeedLines = 0;
   const actionWrap = document.getElementById('action-choices');
   if (actionWrap) actionWrap.innerHTML = '';
+
+  // PC-XX: loss screen when player is dead
+  if (state.player_dead) {
+    showLossScreen(runId, state);
+    return;
+  }
+
   const adv = document.createElement('div');
   adv.className = 'msg-line';
   const monstersDead = state.monsters_dead ?? (Array.isArray(state.monsters) && state.monsters.length > 0 && state.monsters.every(m => m.dead));
@@ -1320,13 +1326,11 @@ function showAdvanceUI(runId, state) {
   contBtn.className = 'action-btn';
   contBtn.style.marginTop = '8px';
   contBtn.onclick = async () => {
-    if (busy) return; // also covers typing-gate: the panel buttons are not disabled by setBusy
+    if (busy) return;
     setBusy(true);
-    contBtn.disabled = true; // double-click would double-advance the run server-side
+    contBtn.disabled = true;
     try {
       await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'continue' });
-      // New battle starts with a clean log: the battle-complete panel must
-      // never survive into the next battle (it obscures the fresh feed).
       const box = document.getElementById('message-box');
       if (box) box.innerHTML = '';
       renderedFeedLines = 0;
@@ -1356,6 +1360,37 @@ function showAdvanceUI(runId, state) {
   adv.appendChild(contBtn);
   adv.appendChild(stopBtn);
   box.appendChild(adv);
+}
+
+/**
+ * PC-XX: Loss/defeat screen shown when the player dies in battle.
+ * Calls battle/end (stop) server-side to finalize the run with 'dead' status,
+ * then shows defeat message + Return to Town link.
+ */
+function showLossScreen(runId, state) {
+  const box = document.getElementById('message-box');
+  if (!box) return;
+  box.innerHTML = '';
+
+  const panel = document.createElement('div');
+  panel.className = 'msg-line loss-panel';
+  panel.innerHTML = `<strong style="color:#ff4444;">You have been defeated.</strong><br>
+    <span style="color:#999;">The run is over. No loot is earned.</span>`;
+
+  const returnBtn = document.createElement('button');
+  returnBtn.textContent = 'Return to Town';
+  returnBtn.className = 'action-btn';
+  returnBtn.style.marginTop = '12px';
+  returnBtn.onclick = () => {
+    window.location.href = '/game.html';
+  };
+
+  panel.appendChild(returnBtn);
+  box.appendChild(panel);
+
+  // Fire-and-forget: end the run server-side in the background.
+  // The button navigates away regardless, so silence any errors.
+  apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'stop' }).catch(() => {});
 }
 
 async function doAttack(runId, hand, attackId, targetIds) {
