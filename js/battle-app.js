@@ -1363,15 +1363,51 @@ async function doAttack(runId, hand, attackId, targetIds) {
   if (busy) return;
   setBusy(true);
   try {
-    // Real mapped attack for the clicked hand (server validates the mapping).
-    // CLI parity: ALWAYS target_ids: [] — engine auto-targets.
     const payload = { hand, attack_id: attackId, target_ids: targetIds || [] };
     const data = await apiCall(`/runs/${runId}/commit`, 'POST', payload);
     pendingAttack = null;
-    // Commit response is a minimal engine snapshot — always re-render from the well-shaped GET.
-    // loadBattle fetches the full state, renders queue/feed/monsters cleanly, and detects
-    // allMonstersDead → showAdvanceUI internally (line 1933).
-    await loadBattle(runId);
+
+    // Use commit response directly (state + feed + fires). No re-fetch.
+    // feed = full accumulated; fires = the new step results from this commit only.
+    const bs = data.state || {};
+    const prevBsForDiff = lastBs;
+    lastBs = bs;
+
+    // Update UI incrementally from commit payload
+    renderPlayerHP(bs);
+    renderMonsters(bs.monsters || []);
+    renderLoadout(bs);
+    renderActionMenu(bs);
+
+    // Feed: renderFeed already does delta via renderedFeedLines.
+    // Capture pre-commit count so only NEW lines (from this commit's fires/feed delta) are typed.
+    const preLen = renderedFeedLines;
+    if (data.feed && data.feed.length > preLen) {
+      renderFeed(data.feed, null);
+      renderedFeedLines = data.feed.length;
+    } else if (Array.isArray(data.fires) && data.fires.length > 0) {
+      // Fallback: append fires directly as new lines
+      data.fires.forEach(line => appendFeedLine(line));
+      renderedFeedLines = preLen + data.fires.length;
+    }
+
+    // Queue + battle clock for post-commit animation (uses prev lastBs)
+    const diff = diffQueueForAnimation(prevBsForDiff || {}, bs);
+    const queueEl = document.getElementById('queue');
+    if (queueEl && diff.resolved.length > 0) {
+      const firstEl = queueEl.querySelector(`[data-row-id="${diff.resolved[0]}"]`);
+      if (firstEl) firstEl.classList.add('queue-row-current');
+    }
+    battleClock.start(diff, bs, () => {
+      renderQueue(bs);
+    });
+
+    // Battle over check
+    const monsterList = bs.monsters || [];
+    const allMonstersDead = monsterList.length > 0 && monsterList.every(m => m.dead);
+    if (allMonstersDead || bs.battle_over) {
+      showAdvanceUI(runId, bs);
+    }
   } catch (e) {
     const msg = String(e.message || e);
     if (msg.includes('Hand not ready')) {
