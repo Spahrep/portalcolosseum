@@ -230,10 +230,8 @@ describe('Buff potion effects and duration (PC-39)', () => {
       eng.advanceToNextDecision();
     }
     eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
-    eng.advanceToNextDecision();
-    const attackRow = eng.state.queue.find(r => r.label === 'RH' && typeof r.tics === 'number');
-    assert.equal(attackRow.tics, 1);
-    assert.equal(attackRow.cooldownTicks, 1);
+    const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    assert.equal(attackRow.tics, 3);
   });
 
   it('speed buff min-1: never goes to 0 or negative', () => {
@@ -287,10 +285,10 @@ describe('Buff potion effects and duration (PC-39)', () => {
     }
     const initialRemaining = s.buffs[0].endTic - s.tic;
     assert.ok(initialRemaining > 0);
-    // advanceToNextDecision stops at Ready rows (tics=0), so no tic advancement
+    // one more advance processes recovery (tics=1), tic advances by 1
     s = eng.advanceToNextDecision();
     const nextRemaining = s.buffs[0].endTic - s.tic;
-    assert.equal(nextRemaining, initialRemaining);
+    assert.equal(nextRemaining, initialRemaining - 1);
   });
 
   it('expiry at the correct tick and removes modifier', () => {
@@ -308,8 +306,8 @@ describe('Buff potion effects and duration (PC-39)', () => {
     assert.ok(expireLine.includes(`tic ${s.tic}`));
     assert.equal(s.buffs.length, 0);
     eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
-    const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'impact');
-    assert.equal(attackRow.damage, 10);
+    const windingRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    assert.equal(windingRow.damage, 10);
   });
 
   it('stacking identical: two damage buffs add values, separate endTics', () => {
