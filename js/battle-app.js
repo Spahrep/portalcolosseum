@@ -2105,8 +2105,25 @@ async function init() {
 async function tickLoop(runId) {
   debugLog('tickLoop', `runId=${runId}`);
   while (true) {
-    const data = await apiCall(`/runs/${runId}/tick`, 'POST');
-    const bs = data.state || {};
+    // PC-DEC-045e: fetch full run state in parallel with tick so render
+    // functions have monsters, player, weapons, dice, potions available.
+    const [data, fullRun] = await Promise.all([
+      apiCall(`/runs/${runId}/tick`, 'POST'),
+      apiCall(`/runs/${runId}`, 'GET')
+    ]);
+    const tickState = data.state || {};
+    const rich = (fullRun.run && fullRun.run.battle_state) || fullRun.battle_state || {};
+    const bs = {
+      ...rich,
+      queue: tickState.queue || rich.queue || [],
+      feed: tickState.feed || rich.feed || [],
+      tic: tickState.tic ?? rich.tic ?? 0,
+      battle_over: tickState.battle_over,
+      player_dead: tickState.player_dead,
+      // Top-level fields renderPlayerHP reads
+      player_hp: fullRun.player_hp ?? rich.player?.hp ?? 0,
+      max_hp: fullRun.max_hp ?? rich.player?.max_hp ?? 100
+    };
     lastBs = bs;
 
     renderPlayerHP(bs);
