@@ -37,23 +37,26 @@ describe('Potion use (PC-39)', () => {
     const p = makeParticipants({ effect_type: 'heal', rolled_floor: 30, rolled_speed: 2, template_name: 'Heal' });
     eng.startBattle(p);
     eng.commitAttack('LH', 1, [1], { castTicks: 10, cooldownTicks: 2, playerDamage: 10 });
-    const res = eng.commitPotion('A', { weaponSpeed: 3 });
+    eng.commitPotion('A', { weaponSpeed: 3 });
+    eng.advanceToNextDecision();
     // potion used on the free hand (RH)
-    assert.equal(res.potions.A.used, true);
+    assert.equal(eng.state.potions.A.used, true);
   });
 
   it('both Ready picks LH deterministically', () => {
     const eng = createEngine(seededRNG(3));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
-    const res = eng.commitPotion('A', { weaponSpeed: 3 });
-    assert.ok(res.queue.some(r => r.label === 'LH' && r.event === 'recovery') || res.feed.some(l => l.includes('drinking')));
+    eng.commitPotion('A', { weaponSpeed: 3 });
+    eng.advanceToNextDecision();
+    assert.ok(eng.state.queue.some(r => r.label === 'LH' && r.event === 'recovery') || eng.state.feed.some(l => l.includes('drinking')));
   });
 
   it('params.hand honored', () => {
     const eng = createEngine(seededRNG(4));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
-    const res = eng.commitPotion('A', { hand: 'RH', weaponSpeed: 3 });
-    assert.ok(res.queue.some(r => r.label === 'RH' && r.event === 'recovery') || res.feed.some(l => l.includes('drinking')));
+    eng.commitPotion('A', { hand: 'RH', weaponSpeed: 3 });
+    eng.advanceToNextDecision();
+    assert.ok(eng.state.queue.some(r => r.label === 'RH' && r.event === 'recovery') || eng.state.feed.some(l => l.includes('drinking')));
   });
 
   it('params.hand on busy hand throws Hand not ready', () => {
@@ -150,9 +153,9 @@ describe('Potion use (PC-39)', () => {
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 10, rolled_speed: 2, template_name: 'Heal' }));
     eng.commitPotion('A', { hand: 'LH', weaponSpeed: 0 });
     // RH should still be able to attack immediately
-    const res = eng.commitAttack('RH', 99, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10 });
-    assert.ok(res);
-    assert.ok(!res.feed.some(f => f.includes('Hand not ready')));
+    eng.commitAttack('RH', 99, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10 });
+    eng.advanceToNextDecision();
+    assert.ok(!eng.state.feed.some(f => f.includes('Hand not ready')));
   });
 
   it('between-fights phase: instant apply, no queue rows, used set', () => {
@@ -162,10 +165,10 @@ describe('Potion use (PC-39)', () => {
     eng.state.player.hp = 900;
     eng.state.monsters[0].current_hp = 0;
     const beforeHp = eng.state.player.hp;
-    const res = eng.commitPotion('A', { phase: 'between-fights' });
-    assert.equal(res.potions.A.used, true);
-    assert.ok(res.participants.player.hp > beforeHp);
-    assert.ok(!res.queue.some(r => r.event === 'drinking')); // no hand locked for potion in between-fights
+    eng.commitPotion('A', { phase: 'between-fights' });
+    assert.equal(eng.state.potions.A.used, true);
+    assert.ok(eng.state.participants.player.hp > beforeHp);
+    assert.ok(!eng.state.queue.some(r => r.event === 'drinking')); // no hand locked for potion in between-fights
   });
 
   it('heal cap smoke: 990 + 50 -> 1000', () => {
@@ -207,8 +210,8 @@ describe('Buff potion effects and duration (PC-39)', () => {
       s = eng.advanceToNextDecision();
       if (s.feed.some(l => l.includes('damage +8'))) break;
     }
-    const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
-    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'winding');
     assert.equal(attackRow.damage, 10 + 8);
   });
 
@@ -222,7 +225,12 @@ describe('Buff potion effects and duration (PC-39)', () => {
       s = eng.advanceToNextDecision();
       if (s.feed.some(l => l.includes('speed +2'))) break;
     }
+    for (let i = 0; i < 20; i++) {
+      if (eng.state.player.hands.RH.state === 'Ready') break;
+      eng.advanceToNextDecision();
+    }
     eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
+    eng.advanceToNextDecision();
     const attackRow = eng.state.queue.find(r => r.label === 'RH' && typeof r.tics === 'number');
     assert.equal(attackRow.tics, 1);
     assert.equal(attackRow.cooldownTicks, 1);
@@ -238,19 +246,18 @@ describe('Buff potion effects and duration (PC-39)', () => {
       s = eng.advanceToNextDecision();
       if (s.feed.some(l => l.includes('speed +10'))) break;
     }
-    const res = eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
+    eng.commitAttack('RH', 1, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 10 });
     // cast 5-10 -> clamped to 1, so the attack fires inside commitAttack's own advance and the
-    // impact row (tics 0) resolves on the NEXT advance — the hit is not yet in res.feed.
+    // impact row (tics 0) resolves on the NEXT advance — the hit is not yet in feed.
     // Advance bounded until RH reaches cooldown: cooldown 3-10 -> clamped to 1 (tics===1 proves
     // the min-1 clamp; a 0/negative clamp could not produce a cooldown row with tics 1).
-    s = res;
     for (let i = 0; i < 10; i++) {
-      if (s.queue.some(r => r.label === 'RH' && r.event === 'cooldown' && r.tics === 1)) break;
-      s = eng.advanceToNextDecision();
+      if (eng.state.queue.some(r => r.label === 'RH' && r.event === 'cooldown' && r.tics === 1)) break;
+      eng.advanceToNextDecision();
     }
-    const cdRow = s.queue.find(r => r.label === 'RH' && r.event === 'cooldown');
+    const cdRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'cooldown');
     assert.ok(cdRow && cdRow.tics === 1);
-    assert.ok(s.feed.some(l => /RH (?:attack )?hits .+ for 10/.test(l)), 'hit for base damage 10');
+    assert.ok(eng.state.feed.some(l => /RH (?:attack )?hits .+ for 10/.test(l)), 'hit for base damage 10');
   });
 
   it('accuracy buff: row.accuracy set to 100 + value', () => {
@@ -263,8 +270,8 @@ describe('Buff potion effects and duration (PC-39)', () => {
       s = eng.advanceToNextDecision();
       if (s.feed.some(l => l.includes('accuracy +15'))) break;
     }
-    const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
-    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'winding');
     assert.equal(attackRow.accuracy, 100 + 15);
   });
 
@@ -299,8 +306,8 @@ describe('Buff potion effects and duration (PC-39)', () => {
     assert.ok(expireLine);
     assert.ok(expireLine.includes(`tic ${s.tic}`));
     assert.equal(s.buffs.length, 0);
-    const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
-    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'impact');
+    eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'impact');
     assert.equal(attackRow.damage, 10);
   });
 
@@ -322,8 +329,8 @@ describe('Buff potion effects and duration (PC-39)', () => {
       if (s.feed.some(l => l.includes('damage +7'))) break;
     }
     assert.equal(s.buffs.length, 2);
-    const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
-    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'winding');
     assert.equal(attackRow.damage, 10 + 5 + 7);
     const ends = s.buffs.map(b => b.endTic).sort();
     assert.ok(ends[0] !== ends[1]);
@@ -346,8 +353,14 @@ describe('Buff potion effects and duration (PC-39)', () => {
       s = eng.advanceToNextDecision();
       if (s.feed.some(l => l.includes('damage +6'))) break;
     }
-    const res = eng.commitAttack('RH', 1, [1], { castTicks: 4, cooldownTicks: 3, playerDamage: 10 });
-    const attackRow = res.queue.find(r => r.label === 'RH' && r.event === 'winding');
+    // advance until hand ready per critical buff test order
+    for (let i = 0; i < 20; i++) {
+      if (eng.state.player.hands.RH.state === 'Ready') break;
+      eng.advanceToNextDecision();
+    }
+    eng.commitAttack('RH', 1, [1], { castTicks: 4, cooldownTicks: 3, playerDamage: 10 });
+    eng.advanceToNextDecision();
+    const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'winding');
     assert.equal(attackRow.damage, 10 + 6);
     assert.equal(attackRow.tics, 2);
     assert.equal(attackRow.cooldownTicks, 1);
@@ -384,9 +397,10 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const p = makeParticipants({ effect_type: 'damage', rolled_floor: 8, rolled_speed: 6, duration_ticks: 5, template_name: 'Dmg' });
     eng.startBattle(p);
     eng.commitPotion('A', { weaponSpeed: 4 });
-    const res = eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
+    eng.advanceToNextDecision();
     // pre>0 means buff lands after commit; damage frozen at base 10 (observable in feed, not winding row)
-    const hitLine = res.feed.find(l => /RH (?:attack )?hits .+ for 10/.test(l));
+    const hitLine = eng.state.feed.find(l => /RH (?:attack )?hits .+ for 10/.test(l));
     assert.ok(hitLine, 'expected base damage hit (no buff)');
     assert.equal(eng.state.monsters[0].current_hp, 90, 'monster took exactly base 10 (no buff)');
   });

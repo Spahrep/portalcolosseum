@@ -77,6 +77,7 @@ describe('PC-66: event-driven time-skip', () => {
     // weapons). The old per-tic loop capped at 50 tics mid-gap and stranded.
     eng.commitAttack('LH', 1, [1], { castTicks: 38, cooldownTicks: 38, playerDamage: 5, attackName: 'Attack' });
     eng.commitAttack('RH', 1, [1], { castTicks: 38, cooldownTicks: 38, playerDamage: 5, attackName: 'Attack' });
+    eng.advanceToNextDecision();
     const state = eng.getState();
     assert.ok(state.tic > 40, `advance crossed the old 50-tic cap (tic=${state.tic})`);
     const ready = Object.values(state.participants.player.hands).some(h => h.state === 'Ready');
@@ -98,9 +99,9 @@ describe('Engine core (deterministic seeded)', () => {
   it('commitAttack advances and produces feed', () => {
     const eng = createEngine(seededRNG(99));
     eng.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A' }] });
-    const res = eng.commitAttack('LH', 42, [1]);
-    assert.ok(res.feed.length > 0 || res.queue.length > 0);
-    assert.ok(res.tic >= 0);
+    eng.commitAttack('LH', 42, [1]);
+    eng.advanceToNextDecision();
+    assert.ok(eng.state.feed.length > 0 || eng.state.queue.length > 0);
   });
 
   it('death cancels in-flight (MVP rule)', () => {
@@ -138,8 +139,8 @@ describe('Data-driven engine parameterization', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
     });
-    const res = eng.commitAttack('LH', 99, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 25, isMultiTarget: false });
-    const row = res.queue.find(r => r.label === 'LH');
+    eng.commitAttack('LH', 99, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 25, isMultiTarget: false });
+    const row = eng.state.queue.find(r => r.label === 'LH');
     assert.ok(row && (row.tics === 5 || row.tics === 4 || row.event === 'winding'));
   });
 
@@ -149,8 +150,8 @@ describe('Data-driven engine parameterization', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
     });
-    const res = eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 42, isMultiTarget: false });
-    const row = res.queue.find(r => r.label === 'LH');
+    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 42, isMultiTarget: false });
+    const row = eng.state.queue.find(r => r.label === 'LH');
     assert.ok(row && row.damage === 42);
     const after = eng.getState();
     assert.ok(after);
@@ -165,9 +166,9 @@ describe('Data-driven engine parameterization', () => {
         { id: 2, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'B' }
       ]
     });
-    const res = eng.commitAttack('RH', 7, [1, 2], { castTicks: 2, cooldownTicks: 1, playerDamage: 30, isMultiTarget: true });
-    assert.ok(res.queue.length > 0);
-    const row = res.queue.find(r => r.label === 'RH');
+    eng.commitAttack('RH', 7, [1, 2], { castTicks: 2, cooldownTicks: 1, playerDamage: 30, isMultiTarget: true });
+    assert.ok(eng.state.queue.length > 0);
+    const row = eng.state.queue.find(r => r.label === 'RH');
     assert.ok(row && row.isMultiTarget === true);
   });
 
@@ -300,8 +301,9 @@ describe('F16 end-to-end attack lifecycle + security', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A', attacks: [{id:5, name:'quick attack'}] }]
     });
-    const res1 = eng.commitAttack('LH', 42, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 12, isMultiTarget: false, attackName: 'Quick Jab' });
-    assert.ok(res1.feed.some(l => l.includes('Quick Jab')), 'player attack name in feed');
+    eng.commitAttack('LH', 42, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 12, isMultiTarget: false, attackName: 'Quick Jab' });
+    eng.advanceToNextDecision();
+    assert.ok(eng.state.feed.some(l => l.includes('Quick Jab')), 'player attack name in feed');
     // advance until monster attacks to test real monster attack name
     for (let i = 0; i < 30; i++) {
       eng.advanceToNextDecision();
@@ -564,8 +566,8 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.equal(eng.state.player.hands.LH.state, 'Ready');
     assert.equal(eng.state.player.hands.RH.state, 'Ready');
     // RH is now ready, so commit succeeds (no throw)
-    const res = eng.commitAttack('RH', 1, [1]);
-    assert.ok(res.queue.length > 0 || res.feed.length > 0);
+    eng.commitAttack('RH', 1, [1]);
+    assert.ok(eng.state.queue.length > 0 || eng.state.feed.length > 0);
   });
 
   it('monster-first: a monster faster than both hands acts before the player', () => {
@@ -718,14 +720,15 @@ describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
     });
     // RH commits first with a slow cast; LH then commits a fast one-shot kill.
     eng.commitAttack('RH', 2, [1], { castTicks: 8, cooldownTicks: 3, playerDamage: 100 });
-    const after = eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
-    const rh = after.queue.find(r => r.label === 'RH');
+    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
+    eng.advanceToNextDecision();
+    const rh = eng.state.queue.find(r => r.label === 'RH');
     assert.ok(rh, 'RH row exists');
     assert.equal(rh.event, 'cooldown', 'RH cancelled straight into cooldown, not winding/impact');
     assert.equal(rh.tics, 3, 'RH cooldown uses its own cooldownTicks');
     assert.equal(eng.state.monsters[0].current_hp, 0, 'monster dead from LH kill');
-    assert.ok(after.feed.some(l => l.includes('RH attack cancelled')), 'feed explains the cancel');
-    assert.ok(after.feed.some(l => l.includes('A is defeated')), 'feed shows the kill');
+    assert.ok(eng.state.feed.some(l => l.includes('RH attack cancelled')), 'feed explains the cancel');
+    assert.ok(eng.state.feed.some(l => l.includes('A is defeated')), 'feed shows the kill');
   });
 
   it('queued attack with a living target is NOT cancelled (no false cancel)', () => {
@@ -738,9 +741,10 @@ describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
       ]
     });
     eng.commitAttack('RH', 2, [2], { castTicks: 3, cooldownTicks: 3, playerDamage: 100 });
-    const after = eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
-    assert.ok(after.feed.some(l => l.includes('RH attack hits B')), 'RH still lands on its living target');
-    assert.ok(!after.feed.some(l => l.includes('RH attack cancelled')), 'no false cancellation');
+    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
+    eng.advanceToNextDecision();
+    assert.ok(eng.state.feed.some(l => l.includes('RH attack hits B')), 'RH still lands on its living target');
+    assert.ok(!eng.state.feed.some(l => l.includes('RH attack cancelled')), 'no false cancellation');
     assert.equal(eng.state.monsters[0].current_hp, 0, 'A killed by LH');
     assert.ok(eng.state.monsters[1].current_hp > 0, 'B survives');
   });
@@ -755,9 +759,10 @@ describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
       ]
     });
     eng.commitAttack('RH', 2, [1, 2], { castTicks: 3, cooldownTicks: 3, playerDamage: 100, isMultiTarget: true });
-    const after = eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
+    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
+    eng.advanceToNextDecision();
     // A dies to LH, but RH's multi-target still has B alive → not cancelled.
-    assert.ok(after.feed.some(l => l.includes('RH attack hits B')), 'RH multi-target still hits living B');
-    assert.ok(!after.feed.some(l => l.includes('RH attack cancelled')), 'no cancellation while a target lives');
+    assert.ok(eng.state.feed.some(l => l.includes('RH attack hits B')), 'RH multi-target still hits living B');
+    assert.ok(!eng.state.feed.some(l => l.includes('RH attack cancelled')), 'no cancellation while a target lives');
   });
 });
