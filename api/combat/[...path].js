@@ -50,6 +50,22 @@ async function startingHp(admin) {
   }
 }
 
+function computeStopShare(battleNum, totalBattles, prizePool, tiers) {
+  if (battleNum >= totalBattles) {
+    return { gold: prizePool.gold || 0, weapon_ids: [...(prizePool.weapon_ids || [])], forfeited_weapon_ids: [] };
+  }
+  const idx = Math.max(0, Math.min(battleNum - 1, tiers.length - 1));
+  const tier = tiers[idx] || { gold_pct: 0.2, sel_items: 0, rand_items: 0 };
+  const weapons = prizePool.weapon_ids || [];
+  const totalWeapons = weapons.length;
+  return {
+    gold_pct: tier.gold_pct,
+    sel_items: tier.sel_items,
+    rand_items: tier.rand_items,
+    total_weapons: totalWeapons
+  };
+}
+
 function getAdminClient() {
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -867,7 +883,7 @@ async function handle(request) {
           // Draw + roll the next battle's die FIRST so the budget drives monster selection
           let budget = null;
           try {
-            const { data: tmpl } = await admin.from('portal_template').select('green_faces, yellow_faces, red_faces').eq('id', run.portal_template_id).single();
+            const { data: tmpl } = await admin.from('portal_template').select('green_faces, yellow_faces, red_faces, stop_share_tiers').eq('id', run.portal_template_id).single();
             const { data: undrawn } = await admin.from('portal_run_dice').select('*').eq('portal_run_id', id).is('drawn_battle', null);
             if (undrawn && undrawn.length > 0) {
               const die = drawRandomDie(undrawn);
@@ -940,6 +956,48 @@ async function handle(request) {
         }
       } else if (choice === 'stop') {
         newStatus = 'abandoned';
+        // Tiered extraction logic
+        const bodySel = Array.isArray(body.selected_weapon_ids) ? body.selected_weapon_ids.filter(n => Number.isInteger(n)) : [];
+        let { data: tmpl } = await admin.from('portal_template').select('stop_share_tiers').eq('id', run.portal_template_id).single();
+        const tiers = tmpl?.stop_share_tiers || [];
+        const share = computeStopShare(run.current_battle || 1, run.total_battles || 5, prizePool, tiers);
+        let awardedWeaponIds = [];
+        let forfeitedWeaponIds = [];
+        if (share.weapon_ids && share.weapon_ids.length > 0) {
+          // full payout case (last battle)
+          awardedWeaponIds = [...share.weapon_ids];
+        } else {
+          const selCount = Math.max(0, share.sel_items || 0);
+          const randCount = Math.max(0, share.rand_items || 0);
+          const selected = bodySel.slice(0, selCount);
+          const remaining = (prizePool.weapon_ids || []).filter(id => !selected.includes(id));
+          // random pick randCount from remaining
+          const shuffled = [...remaining].sort(() => Math.random() - 0.5);
+          const randomPicks = shuffled.slice(0, randCount);
+          awardedWeaponIds = [...selected, ...randomPicks];
+          forfeitedWeaponIds = (prizePool.weapon_ids || []).filter(id => !awardedWeaponIds.includes(id));
+        }
+        // Delete forfeited weapon_instances
+        if (forfeitedWeaponIds.length > 0) {
+          try {
+            await admin.from('weapon_instance').delete().in('id', forfeitedWeaponIds).eq('user_id', user.id);
+          } catch (e) {
+            console.error('forfeit delete error (non-fatal)', e);
+          }
+        }
+        const goldPct = share.gold_pct != null ? share.gold_pct : 1.0;
+        const awardedGold = Math.floor((prizePool.gold || 0) * goldPct);
+        const awardedLp = Math.floor((prizePool.lp_earned || 0) * goldPct);
+        const awardedPool = {
+          weapon_ids: awardedWeaponIds,
+          gold: awardedGold,
+          lp_earned: awardedLp
+        };
+        // update run with awarded_pool (note: prize_pool left as-is for history)
+        await admin.from('portal_run')
+          .update({ status: newStatus, current_battle: newBattle, battle_state: newBattleState, awarded_pool: awardedPool })
+          .eq('id', id).eq('user_id', user.id);
+        return json({ status: newStatus, awarded_pool: awardedPool, prize_pool: prizePool });
       }
 
       await admin.from('portal_run')

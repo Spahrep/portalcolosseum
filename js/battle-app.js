@@ -1307,55 +1307,207 @@ function showAdvanceUI(runId, state) {
   const box = document.getElementById('message-box');
   if (!box) return;
   box.innerHTML = '';
-  renderedFeedLines = 0; // the panel is not feed — next battle's log starts fresh
-  // No more actions to pick — clear the action row.
+  renderedFeedLines = 0;
   const actionWrap = document.getElementById('action-choices');
   if (actionWrap) actionWrap.innerHTML = '';
-  const adv = document.createElement('div');
-  adv.className = 'msg-line';
-  const monstersDead = state.monsters_dead ?? (Array.isArray(state.monsters) && state.monsters.length > 0 && state.monsters.every(m => m.dead));
-  adv.innerHTML = `<strong>Battle complete.</strong> ${monstersDead ? 'Monsters defeated.' : ''}`;
-  const contBtn = document.createElement('button');
-  contBtn.textContent = 'Continue to next battle';
-  contBtn.className = 'action-btn';
-  contBtn.style.marginTop = '8px';
-  contBtn.onclick = async () => {
-    if (busy) return; // also covers typing-gate: the panel buttons are not disabled by setBusy
-    setBusy(true);
-    contBtn.disabled = true; // double-click would double-advance the run server-side
+
+  // Full-screen overlay modal
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:1000;font-family:"Pixeloid Mono","Courier New",monospace;';
+
+  const panel = document.createElement('div');
+  panel.style.cssText = 'background:#0a1a2e;border:2px solid #4a90d9;border-radius:4px;padding:20px;max-width:520px;width:90%;color:#e0f0ff;box-shadow:0 0 20px rgba(74,144,217,0.3);';
+
+  // Header
+  const header = document.createElement('div');
+  header.style.cssText = 'text-align:center;margin-bottom:12px;font-size:14px;letter-spacing:1px;';
+  header.innerHTML = `⚔ BATTLE ${state.current_battle || '?'} OF ${state.total_battles || '?'} COMPLETE ⚔<br>HP: ${state.player_hp || 0}/1000`;
+  panel.appendChild(header);
+
+  // Fetch run for prize_pool + tiers (async populate)
+  let runData = null;
+  let tiers = [];
+  let currentTier = null;
+
+  const content = document.createElement('div');
+  content.innerHTML = '<div style="text-align:center;color:#88aadd;">Loading loot pool...</div>';
+  panel.appendChild(content);
+
+  // Fetch run and template
+  (async () => {
     try {
-      await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'continue' });
-      // New battle starts with a clean log: the battle-complete panel must
-      // never survive into the next battle (it obscures the fresh feed).
-      const box = document.getElementById('message-box');
-      if (box) box.innerHTML = '';
-      renderedFeedLines = 0;
-      showMessage('Advancing to next battle...');
-      shouldAnimateDice = true;
-      await loadBattle(runId);
+      const runRes = await fetch(`/api/combat/runs/${runId}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` } });
+      if (runRes.ok) {
+        const runJson = await runRes.json();
+        runData = runJson.run || runJson;
+      }
+      if (runData && runData.portal_template_id) {
+        const tRes = await fetch(`/api/combat/portal-templates/${runData.portal_template_id}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` } }).catch(() => null);
+        if (tRes && tRes.ok) {
+          const tJson = await tRes.json();
+          tiers = tJson.stop_share_tiers || [];
+        }
+      }
+      if (!tiers.length) {
+        tiers = [
+          {"gold_pct": 0.20, "sel_items": 0, "rand_items": 0},
+          {"gold_pct": 0.20, "sel_items": 1, "rand_items": 0},
+          {"gold_pct": 0.30, "sel_items": 1, "rand_items": 1},
+          {"gold_pct": 0.60, "sel_items": 1, "rand_items": 2},
+          {"gold_pct": 0.80, "sel_items": 2, "rand_items": 2}
+        ];
+      }
+      const battleNum = runData ? (runData.current_battle || 1) : 1;
+      const totalB = runData ? (runData.total_battles || 5) : 5;
+      const idx = Math.max(0, Math.min(battleNum - 1, tiers.length - 1));
+      currentTier = tiers[idx] || tiers[tiers.length-1];
+      renderLootUI();
     } catch (e) {
-      showMessage(e.message, true);
+      content.innerHTML = '<div style="color:#ff6666;">Failed to load loot data</div>';
     }
-    setBusy(false);
-    contBtn.disabled = false;
-  };
-  const stopBtn = document.createElement('button');
-  stopBtn.textContent = 'Stop run';
-  stopBtn.className = 'action-btn';
-  stopBtn.style.marginTop = '8px';
-  stopBtn.onclick = async () => {
-    setBusy(true);
-    try {
-      await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'stop' });
-      showErrorState('Run stopped', 'You abandoned the run.', true);
-    } catch (e) {
-      showMessage(e.message, true);
+  })();
+
+  function renderLootUI() {
+    if (!runData) return;
+    const pp = runData.prize_pool || { gold: 0, weapon_ids: [], lp_earned: 0 };
+    const goldPct = currentTier ? currentTier.gold_pct : 0.2;
+    const sel = currentTier ? currentTier.sel_items : 0;
+    const rand = currentTier ? currentTier.rand_items : 0;
+    const isLast = (runData.current_battle || 1) >= (runData.total_battles || 5);
+
+    content.innerHTML = `
+      <div style="border-top:1px solid #4a90d9;border-bottom:1px solid #4a90d9;padding:10px 0;margin:10px 0;font-size:13px;">
+        <div style="margin-bottom:6px;color:#aaddff;">─── LOOT POOL ───</div>
+        <div>Gold: <span style="color:#ffcc66;">${pp.gold || 0}</span></div>
+        <div>Weapons: <span style="color:#aaddff;">${(pp.weapon_ids || []).length}</span></div>
+        <div>LP Earned: <span style="color:#88ffaa;">${pp.lp_earned || 0}</span></div>
+      </div>
+      <div style="margin:10px 0;font-size:13px;">
+        If you extract now:<br>
+        Take: <span style="color:#ffcc66;">${Math.floor((pp.gold||0)*goldPct)} gold</span> (${Math.round(goldPct*100)}%)<br>
+        Weapons: ${sel + rand}<br>
+        <span style="color:#88aadd;font-size:11px;">(Battle ${runData.current_battle || 1} — ${isLast ? 'full extraction' : 'tiered extraction'})</span>
+      </div>
+      <div style="margin:10px 0;color:#ffaa66;font-size:12px;">──── OR ────<br>Risk it all for the full pool</div>
+    `;
+
+    // Weapon selection if sel_items > 0
+    let selectedIds = [];
+    const weaponsDiv = document.createElement('div');
+    weaponsDiv.style.cssText = 'margin:8px 0;';
+    if (sel > 0 && Array.isArray(pp.weapon_ids) && pp.weapon_ids.length > 0) {
+      weaponsDiv.innerHTML = `<div style="color:#aaddff;margin-bottom:4px;">Select up to ${sel} weapons:</div>`;
+      pp.weapon_ids.forEach(wid => {
+        const wEl = document.createElement('div');
+        wEl.textContent = `Weapon #${wid}`;
+        wEl.style.cssText = 'display:inline-block;margin:2px 4px;padding:2px 8px;border:1px solid #4a90d9;cursor:pointer;font-size:12px;';
+        wEl.onclick = () => {
+          if (selectedIds.includes(wid)) {
+            selectedIds = selectedIds.filter(id => id !== wid);
+            wEl.style.border = '1px solid #4a90d9';
+            wEl.style.background = 'transparent';
+          } else if (selectedIds.length < sel) {
+            selectedIds.push(wid);
+            wEl.style.border = '2px solid #66ff99';
+            wEl.style.background = '#112a44';
+          }
+          updateExtractBtn();
+        };
+        weaponsDiv.appendChild(wEl);
+      });
+      content.appendChild(weaponsDiv);
     }
-    setBusy(false);
-  };
-  adv.appendChild(contBtn);
-  adv.appendChild(stopBtn);
-  box.appendChild(adv);
+
+    // Buttons
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex;gap:12px;justify-content:center;margin-top:16px;';
+
+    const extractBtn = document.createElement('button');
+    extractBtn.textContent = 'EXTRACT & LEAVE';
+    extractBtn.className = 'action-btn';
+    extractBtn.style.cssText = 'background:#1a5a1a;color:#66ff99;border-color:#66ff99;';
+    extractBtn.disabled = (sel > 0);
+    extractBtn.onclick = async () => {
+      if (busy) return;
+      setBusy(true);
+      extractBtn.disabled = true;
+      try {
+        const payload = { choice: 'stop', selected_weapon_ids: selectedIds };
+        const res = await apiCall(`/runs/${runId}/battle/end`, 'POST', payload);
+        // Show extraction summary
+        content.innerHTML = `
+          <div style="text-align:center;color:#66ff99;margin:12px 0;">You extracted with:</div>
+          <div style="border:1px solid #4a90d9;padding:8px;margin:8px 0;font-size:13px;">
+            Gold: ${res.awarded_pool?.gold || 0}<br>
+            Weapons: ${(res.awarded_pool?.weapon_ids || []).length}<br>
+            LP: ${res.awarded_pool?.lp_earned || 0}
+          </div>
+        `;
+        const townBtn = document.createElement('button');
+        townBtn.textContent = 'Return to town';
+        townBtn.className = 'action-btn';
+        townBtn.style.cssText = 'background:#1a3a5a;color:#88ccff;';
+        townBtn.onclick = () => { window.location.href = '/game.html'; };
+        content.appendChild(townBtn);
+        // hide fight on
+        if (fightBtn.parentNode) fightBtn.parentNode.removeChild(fightBtn);
+      } catch (e) {
+        showMessage(e.message, true);
+        setBusy(false);
+        extractBtn.disabled = false;
+      }
+    };
+
+    const fightBtn = document.createElement('button');
+    fightBtn.textContent = 'FIGHT ON';
+    fightBtn.className = 'action-btn';
+    fightBtn.style.cssText = 'background:#5a1a1a;color:#ff6666;border-color:#ff6666;';
+    fightBtn.onclick = async () => {
+      if (busy) return;
+      setBusy(true);
+      fightBtn.disabled = true;
+      try {
+        await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'continue' });
+        overlay.remove();
+        const mbox = document.getElementById('message-box');
+        if (mbox) mbox.innerHTML = '';
+        renderedFeedLines = 0;
+        showMessage('Advancing to next battle...');
+        shouldAnimateDice = true;
+        await loadBattle(runId);
+      } catch (e) {
+        showMessage(e.message, true);
+      }
+      setBusy(false);
+    };
+
+    function updateExtractBtn() {
+      if (sel > 0) {
+        extractBtn.disabled = selectedIds.length !== sel; // require exact? or <= , spec says up to
+      }
+    }
+    // allow <= sel
+    if (sel > 0) {
+      extractBtn.disabled = false; // start enabled, selection optional up to sel
+    }
+
+    btnRow.appendChild(extractBtn);
+    btnRow.appendChild(fightBtn);
+    content.appendChild(btnRow);
+
+    // footer note
+    const note = document.createElement('div');
+    note.style.cssText = 'margin-top:12px;font-size:10px;color:#6688aa;text-align:center;';
+    note.textContent = '(Extract = stop & keep share) (Die = lose everything)';
+    content.appendChild(note);
+  }
+
+  overlay.appendChild(panel);
+  // Append overlay to body so it is truly full screen above everything
+  document.body.appendChild(overlay);
+
+  // Also keep message-box clean
+  box.appendChild(document.createElement('div')); // placeholder
 }
 
 async function doAttack(runId, hand, attackId, targetIds) {

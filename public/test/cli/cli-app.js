@@ -97,7 +97,7 @@ function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax, isFirs
   if (potionHint) {
     lines.push(`Type "use ${potionHint}" to drink your remaining potion first, "continue" to risk the next fight, or "stop" to claim your current share and end the run.`);
   } else {
-    lines.push('Type "continue" to risk the next fight, or "stop" to claim your current share and end the run.');
+    lines.push('Type "continue" to risk the next fight, or "stop" to claim your current share and end the run. (e.g. 20% of gold, 0 items)');
   }
   return lines.join('\n');
 }
@@ -964,9 +964,14 @@ async function cmdBattleEnd(args) {
       }
     } else if (choice === 'stop') {
       appendLine('You step back through the portal. The prize is yours — for now.');
+      if (data.awarded_pool) {
+        const ap = data.awarded_pool;
+        appendLine(`Awarded: ${ap.weapon_ids?.length || 0} weapons, ${ap.gold || 0}g (LP ${ap.lp_earned || 0})`, 'dim');
+      }
       if (data.prize_pool) {
         const pp = data.prize_pool;
-        appendLine(`Total loot: ${pp.weapon_ids?.length || 0} items, ${pp.gold || 0}g (LP ${pp.lp_earned || 0})`, 'dim');
+        const forfeited = (pp.weapon_ids || []).length - ((data.awarded_pool && data.awarded_pool.weapon_ids) || []).length;
+        appendLine(`Forfeited: ~${Math.max(0, forfeited)} weapons`, 'dim');
       }
     }
     printGreen(`Battle ended: ${data.status} battle ${data.current_battle}`);
