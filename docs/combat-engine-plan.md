@@ -1,6 +1,6 @@
 # Combat Engine — Plan (Slice 1: Engine Core + Combat API)
 
-**Status:** Plan of record, 2026-09-10. Dispatch #1 → Grok (grok-4.3). Client UI wiring = Slice 2. Dice-pool battle generation = Slice 3 (needs portal dice config tables + point-cost balance pass).
+**Status:** Plan of record, 2026-09-23 (updated during sweep). Dispatch #1 → Grok (grok-4.3). Client UI wiring = Slice 2. Dice-pool battle generation = Slice 3 (needs portal dice config tables + point-cost balance pass).
 
 ## Architecture: Server-Authoritative (decided from existing design)
 
