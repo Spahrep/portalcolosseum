@@ -1318,10 +1318,10 @@ function showAdvanceUI(runId, state) {
   const panel = document.createElement('div');
   panel.style.cssText = 'background:#0a1a2e;border:2px solid #4a90d9;border-radius:4px;padding:20px;max-width:520px;width:90%;color:#e0f0ff;box-shadow:0 0 20px rgba(74,144,217,0.3);';
 
-  // Header
+  // Header (populated with real values once the run is fetched)
   const header = document.createElement('div');
   header.style.cssText = 'text-align:center;margin-bottom:12px;font-size:14px;letter-spacing:1px;';
-  header.innerHTML = `⚔ BATTLE ${state.current_battle || '?'} OF ${state.total_battles || '?'} COMPLETE ⚔<br>HP: ${state.player_hp || 0}/1000`;
+  header.innerHTML = '⚔ BATTLE COMPLETE ⚔';
   panel.appendChild(header);
 
   // Fetch run for prize_pool + tiers (async populate)
@@ -1336,25 +1336,17 @@ function showAdvanceUI(runId, state) {
   // Fetch run and template
   (async () => {
     try {
-      const runRes = await fetch(`/api/combat/runs/${runId}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` } });
-      if (runRes.ok) {
-        const runJson = await runRes.json();
-        runData = runJson.run || runJson;
-      }
-      if (runData && runData.portal_template_id) {
-        const tRes = await fetch(`/api/combat/portal-templates/${runData.portal_template_id}`, { headers: { Authorization: `Bearer ${localStorage.getItem('token') || ''}` } }).catch(() => null);
-        if (tRes && tRes.ok) {
-          const tJson = await tRes.json();
-          tiers = tJson.stop_share_tiers || [];
-        }
-      }
-      if (!tiers.length) {
-        tiers = [
-          {"gold_pct": 0.20, "sel_items": 0, "rand_items": 0},
-          {"gold_pct": 0.20, "sel_items": 1, "rand_items": 0},
-          {"gold_pct": 0.30, "sel_items": 1, "rand_items": 1},
-          {"gold_pct": 0.60, "sel_items": 1, "rand_items": 2},
-          {"gold_pct": 0.80, "sel_items": 2, "rand_items": 2}
+      const runJson = await apiCall(`/runs/${runId}`);
+      runData = runJson.run || runJson;
+      header.innerHTML = `⚔ BATTLE ${runData.current_battle || '?'} OF ${runData.total_battles || '?'} COMPLETE ⚔<br>HP: ${runData.player_hp ?? state.player?.hp ?? 0}/${runData.max_hp ?? state.player?.max_hp ?? 1000}`;
+      tiers = (runData.stop_share_tiers && Array.isArray(runData.stop_share_tiers) && runData.stop_share_tiers.length > 0)
+        ? runData.stop_share_tiers
+        : [
+          {gold_pct: 0.20, sel_items: 0, rand_items: 0},
+          {gold_pct: 0.20, sel_items: 0, rand_items: 1},
+          {gold_pct: 0.30, sel_items: 1, rand_items: 1},
+          {gold_pct: 0.60, sel_items: 1, rand_items: 2},
+          {gold_pct: 0.80, sel_items: 2, rand_items: 2}
         ];
       }
       const battleNum = runData ? (runData.current_battle || 1) : 1;
@@ -1396,22 +1388,27 @@ function showAdvanceUI(runId, state) {
     const weaponsDiv = document.createElement('div');
     weaponsDiv.style.cssText = 'margin:8px 0;';
     if (sel > 0 && Array.isArray(pp.weapon_ids) && pp.weapon_ids.length > 0) {
+      // Build id -> weapon-name map from prize_weapons (fall back to #id)
+      const nameById = {};
+      (runData.prize_weapons || []).forEach(w => { nameById[w.id] = w.name; });
       weaponsDiv.innerHTML = `<div style="color:#aaddff;margin-bottom:4px;">Select up to ${sel} weapons:</div>`;
       pp.weapon_ids.forEach(wid => {
         const wEl = document.createElement('div');
-        wEl.textContent = `Weapon #${wid}`;
-        wEl.style.cssText = 'display:inline-block;margin:2px 4px;padding:2px 8px;border:1px solid #4a90d9;cursor:pointer;font-size:12px;';
+        wEl.textContent = nameById[wid] || `Weapon #${wid}`;
+        wEl.style.cssText = 'display:block;margin:3px 0;padding:4px 8px;border:1px solid #4a90d9;cursor:pointer;font-size:12px;border-radius:2px;';
         wEl.onclick = () => {
-          if (selectedIds.includes(wid)) {
+          const isSel = selectedIds.includes(wid);
+          if (isSel) {
             selectedIds = selectedIds.filter(id => id !== wid);
             wEl.style.border = '1px solid #4a90d9';
             wEl.style.background = 'transparent';
+            wEl.style.boxShadow = 'none';
           } else if (selectedIds.length < sel) {
             selectedIds.push(wid);
             wEl.style.border = '2px solid #66ff99';
             wEl.style.background = '#112a44';
+            wEl.style.boxShadow = '0 0 6px rgba(102,255,153,0.3)';
           }
-          updateExtractBtn();
         };
         weaponsDiv.appendChild(wEl);
       });
@@ -1426,7 +1423,6 @@ function showAdvanceUI(runId, state) {
     extractBtn.textContent = 'EXTRACT & LEAVE';
     extractBtn.className = 'action-btn';
     extractBtn.style.cssText = 'background:#1a5a1a;color:#66ff99;border-color:#66ff99;';
-    extractBtn.disabled = (sel > 0);
     extractBtn.onclick = async () => {
       if (busy) return;
       setBusy(true);
@@ -1449,8 +1445,6 @@ function showAdvanceUI(runId, state) {
         townBtn.style.cssText = 'background:#1a3a5a;color:#88ccff;';
         townBtn.onclick = () => { window.location.href = '/game.html'; };
         content.appendChild(townBtn);
-        // hide fight on
-        if (fightBtn.parentNode) fightBtn.parentNode.removeChild(fightBtn);
       } catch (e) {
         showMessage(e.message, true);
         setBusy(false);
@@ -1480,16 +1474,6 @@ function showAdvanceUI(runId, state) {
       }
       setBusy(false);
     };
-
-    function updateExtractBtn() {
-      if (sel > 0) {
-        extractBtn.disabled = selectedIds.length !== sel; // require exact? or <= , spec says up to
-      }
-    }
-    // allow <= sel
-    if (sel > 0) {
-      extractBtn.disabled = false; // start enabled, selection optional up to sel
-    }
 
     btnRow.appendChild(extractBtn);
     btnRow.appendChild(fightBtn);

@@ -505,6 +505,30 @@ async function handle(request) {
         potionInfo(run.consume_b_id, !!run.consume_b_used)
       ]);
 
+      // --- stop_share_tiers from portal template (loot extraction config) ---
+      let stopShareTiers = null;
+      if (run.portal_template_id) {
+        const { data: tmplStop } = await admin.from('portal_template')
+          .select('stop_share_tiers')
+          .eq('id', run.portal_template_id)
+          .maybeSingle();
+        stopShareTiers = (tmplStop && tmplStop.stop_share_tiers) || null;
+      }
+
+      // --- prize pool weapon names (for the between-fights extraction UI) ---
+      let prizeWeapons = [];
+      const poolIds = (run.prize_pool && Array.isArray(run.prize_pool.weapon_ids)) ? run.prize_pool.weapon_ids.filter(Boolean) : [];
+      if (poolIds.length > 0) {
+        const { data: poolRows } = await admin.from('weapon_instance')
+          .select('id, template_id, weapon_template:template_id (name)')
+          .in('id', poolIds);
+        prizeWeapons = (poolRows || []).map(w => ({
+          id: w.id,
+          name: w.weapon_template?.name || `Weapon #${w.id}`,
+          template_id: w.template_id
+        }));
+      }
+
       const safeState = {
         queue: state.queue || [],
         player: state.player ? { hp: state.player.hp, max_hp: state.player.max_hp, hands: state.player.hands } : null,
@@ -516,7 +540,7 @@ async function handle(request) {
         monsters,
         dice
       };
-      return json({ run: { ...run, potion_a: potionA, potion_b: potionB, battle_state: safeState } });
+      return json({ run: { ...run, stop_share_tiers: stopShareTiers, prize_weapons: prizeWeapons, potion_a: potionA, potion_b: potionB, battle_state: safeState } });
     }
 
     // POST /api/combat/runs/:id/battle/start  (for battle 2+ and legacy; F3 gate kept)
