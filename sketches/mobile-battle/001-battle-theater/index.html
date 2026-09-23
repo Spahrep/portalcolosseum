@@ -120,32 +120,49 @@
   .msg .crit { color: #ffcc00; text-shadow: 0 0 6px rgba(255, 204, 0, 0.7); font-weight: bold; }
   .msg .monster-name { color: #ff8888; font-weight: bold; }
 
-  /* ═══ QUEUE ticker ═══ */
-  .queue-ticker {
+  /* ═══ QUEUE panel ═══ */
+  .queue-panel {
     flex-shrink: 0;
-    background: rgba(5, 10, 20, 0.95);
+    background: rgba(5, 10, 20, 0.97);
     border-top: 1px solid #334466;
-    padding: 5px 10px;
+    padding: 5px 10px 6px;
+  }
+  .queue-panel .q-head {
     display: flex;
     align-items: center;
-    gap: 6px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    justify-content: space-between;
+    font-size: 9px;
+    color: #88aaff;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .q-list {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    max-height: 118px;
+    overflow-y: auto;
     scrollbar-width: none;
   }
-  .queue-ticker::-webkit-scrollbar { display: none; }
-  .queue-ticker .q-label { font-size: 9px; color: #88aaff; letter-spacing: 1px; flex-shrink: 0; }
-  .q-row {
-    flex-shrink: 0;
+  .q-list::-webkit-scrollbar { display: none; }
+  .q-entry {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     font-size: 11px;
-    padding: 2px 8px;
-    border: 1px solid #2a3a55;
+    padding: 3px 6px;
+    border-left: 3px solid #2a3a55;
+    background: rgba(0,0,0,0.35);
     color: #aaccff;
     white-space: nowrap;
   }
-  .q-row.next { background: rgba(255, 204, 102, 0.15); border-color: #ffcc66; color: #ffeedd; font-weight: bold; }
-  .q-row.monster { border-color: #553333; }
-  .q-row .tic { color: #6688aa; font-size: 10px; }
+  .q-entry .q-tic { width: 30px; flex-shrink: 0; color: #ffcc66; font-size: 10px; letter-spacing: 0.5px; }
+  .q-entry .q-who { flex-shrink: 0; font-weight: bold; }
+  .q-entry .q-who.you { color: #66ccff; }
+  .q-entry .q-who.mon { color: #ff9999; }
+  .q-entry .q-act { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; color: #8899bb; }
+  .q-entry.next { border-left-color: #ffcc66; background: rgba(255, 204, 102, 0.12); color: #ffeedd; }
+  .q-entry.next .q-act { color: #ccddff; }
 
   /* ═══ ACTION DECK — fixed bottom ═══ */
   .action-deck {
@@ -260,13 +277,16 @@
     <div class="msg narration">Wolf A howls and reels back, one ear shredded.</div>
   </div>
 
-  <!-- QUEUE TICKER -->
-  <div class="queue-ticker">
-    <span class="q-label">NEXT:</span>
-    <span class="q-row next">YOU · Rusty Sword <span class="tic">t0</span></span>
-    <span class="q-row monster">Wolf B <span class="tic">t6</span></span>
-    <span class="q-row monster">Giant Rat <span class="tic">t9</span></span>
-    <span class="q-row">Wolf A <span class="tic">t14</span></span>
+  <!-- QUEUE PANEL -->
+  <div class="queue-panel">
+    <div class="q-head"><span>ACTION QUEUE</span><span id="q-count">5 entries · t0 → t22</span></div>
+    <div class="q-list" id="q-list">
+      <div class="q-entry next"><span class="q-tic">t0</span><span class="q-who you">YOU</span><span class="q-act">Cut Down · Wolf A</span></div>
+      <div class="q-entry"><span class="q-tic">t6</span><span class="q-who mon">Wolf B</span><span class="q-act">Snap · You</span></div>
+      <div class="q-entry"><span class="q-tic">t9</span><span class="q-who mon">Giant Rat</span><span class="q-act">Nip · You</span></div>
+      <div class="q-entry"><span class="q-tic">t14</span><span class="q-who mon">Wolf A</span><span class="q-act">Lunge · You</span></div>
+      <div class="q-entry"><span class="q-tic">t22</span><span class="q-who you">YOU</span><span class="q-act">Thrust · Wolf B</span></div>
+    </div>
   </div>
 
   <!-- ATTACK OPTIONS (slides up) -->
@@ -353,6 +373,7 @@ function swing(target, dmg, isCrit) {
   handOpen = false;
   atkOpts.classList.remove('open');
   lhBtn.classList.remove('selecting');
+  advanceQueue('Cut Down', target);
 }
 
 function guard() {
@@ -360,6 +381,20 @@ function guard() {
   handOpen = false;
   atkOpts.classList.remove('open');
   lhBtn.classList.remove('selecting');
+}
+
+function advanceQueue(actionName, targetName) {
+  const list = document.getElementById('q-list');
+  const entry = document.createElement('div');
+  entry.className = 'q-entry';
+  entry.innerHTML = '<span class="q-tic">t' + (6 + Math.floor(Math.random() * 14)) + '</span><span class="q-who you">YOU</span><span class="q-act">' + actionName + ' · ' + targetName + '</span>';
+  const first = list.querySelector('.q-entry');
+  if (first) first.classList.remove('next');
+  list.appendChild(entry);
+  const count = document.getElementById('q-count');
+  const n = list.children.length;
+  count.textContent = n + ' entries';
+  list.scrollTop = list.scrollHeight;
 }
 </script>
 </body>
