@@ -65,7 +65,7 @@ export function createEngine(rng = Math.random) {
       if (idx !== -1) {
         state.buffs.splice(idx, 1);
         state.buffs.expired = (state.buffs.expired || 0) + 1;
-        log(`${row.buffName} expired`);
+        log(`${row.buffName} buff expired`);
       }
       return;
     }

@@ -185,8 +185,9 @@ describe('Potion E2E parity (PC-39)', () => {
     const eng = createEngine(seededRNG(106));
     const p = makeParticipants({ ...buffPotion, rolled_speed: 2, duration_ticks: 2 });
     eng.startBattle(p);
-    // pre = ceil((0+2)/2) = 1 -> lands at tic 1 with endTic 1 + 2 = 3
-    const landed = eng.commitPotion('A', { weaponSpeed: 0 });
+    // pre = ceil((0+2)/2) = 1 -> lands at tic 2 with endTic 2 + 2 = 4
+    eng.commitPotion('A', { weaponSpeed: 0 });
+    const landed = advanceUntilUsed(eng);
     assert.equal(landed.buffs.length, 1);
     assert.equal(landed.buffs[0].endTic, 4);
     assert.equal(formatBuffs(landed.buffs), 'damage +3 until tic 4');

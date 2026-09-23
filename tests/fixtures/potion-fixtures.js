@@ -74,8 +74,6 @@ export const buffExpirySnapshot = [
   "Your left hand drinks Dmg Potion...",
   "Your left hand's potion grants damage +3 until tic 4.",
   "tic 3 — LH Ready",
-  "tic 5 — A misses",
-  "tic 5 — mob A prepares an attack...",
   "The Dmg Potion buff fades.",
   "Potion A used — in battle.  HP: 1000/1000  buffs: none"
 ];
