@@ -176,6 +176,225 @@
         min-height: 40px;
       }
     }
+
+    /* "Not yet ready" modal — DrunkJester image in a bordered frame,
+       overlay text. Click anywhere or tap X to dismiss. */
+    .not-ready-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 9998;
+      background: rgba(0, 0, 0, 0.75);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+    .not-ready-modal[hidden] {
+      display: none;
+    }
+    .not-ready-frame {
+      position: relative;
+      padding: 8px;
+      background: #1a1a2e;
+      border: 6px double #ffcc66;
+      outline: 3px solid #000;
+      box-shadow: 0 0 40px rgba(255, 204, 102, 0.35);
+      max-width: 94vw;
+    }
+    .not-ready-close {
+      position: absolute;
+      top: -14px;
+      right: -14px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 2px solid #ffcc66;
+      background: #1a1a2e;
+      color: #ffcc66;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1;
+    }
+    .not-ready-close:active {
+      background: #ffcc66;
+      color: #1a1a2e;
+    }
+    .not-ready-image {
+      display: block;
+      max-width: min(88vw, 110vh);
+      max-height: 74vh;
+      width: auto;
+      height: auto;
+    }
+    .not-ready-text {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: clamp(14px, 4.2vw, 24px);
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.78);
+      border: 2px solid #ffcc66;
+      padding: 8px 14px;
+      white-space: nowrap;
+      text-shadow:
+        2px 0 0 #000,
+        -2px 0 0 #000,
+        0 2px 0 #000,
+        0 -2px 0 #000;
+      pointer-events: none;
+    }
+
+    /* Menu / Settings modal */
+    .menu-settings-modal {
+      cursor: default;
+    }
+    .menu-settings-frame {
+      min-width: 0;
+      max-width: min(92vw, 420px);
+      padding: 0;
+      overflow: visible;
+    }
+    .menu-settings-body {
+      padding: 20px 18px 16px;
+    }
+    .settings-header {
+      text-align: center;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 3px;
+      color: #ffcc66;
+      margin-bottom: 18px;
+      text-shadow: 0 0 12px rgba(255, 204, 102, 0.5);
+    }
+    .settings-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .settings-label {
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 13px;
+      color: #88aaff;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .setting-options {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .speed-opt {
+      background: #0a1a2e;
+      color: #88aaff;
+      border: 2px solid #334466;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 12px;
+      padding: 6px 10px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      letter-spacing: 0.5px;
+    }
+    .speed-opt:active {
+      background: #1a3a5e;
+      border-color: #66ccff;
+      color: #ccddff;
+    }
+    .speed-opt.active {
+      background: #1a3a1a;
+      border-color: #66ff99;
+      color: #66ff99;
+      box-shadow: 0 0 6px rgba(102, 255, 153, 0.3);
+    }
+    .settings-divider {
+      height: 1px;
+      background: #334466;
+      margin: 14px 0;
+    }
+    .logout-row {
+      margin-bottom: 0;
+    }
+    .settings-logout {
+      background: #2a0a0a;
+      color: #ff6666;
+      border: 2px solid #5c1a1a;
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 13px;
+      padding: 6px 18px;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      letter-spacing: 1px;
+    }
+    .settings-logout:active {
+      background: #4a1a1a;
+      border-color: #ff6666;
+      color: #ff8888;
+    }
+
+    /* Logout confirmation mini-dialog (inside settings modal) */
+    .logout-confirm-dialog {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+    .logout-confirm-dialog[hidden] {
+      display: none;
+    }
+    .logout-confirm-body {
+      background: #1a1a2e;
+      border: 2px solid #ff6666;
+      padding: 18px 24px;
+      text-align: center;
+      box-shadow: 0 0 30px rgba(255, 102, 102, 0.25);
+      max-width: 88vw;
+    }
+    .logout-confirm-text {
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 14px;
+      color: #ffcc66;
+      margin-bottom: 14px;
+      letter-spacing: 1px;
+    }
+    .logout-confirm-actions {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+    }
+    .logout-confirm-actions button {
+      font-family: 'Pixeloid Mono', 'Courier New', monospace;
+      font-size: 13px;
+      padding: 6px 20px;
+      cursor: pointer;
+      letter-spacing: 0.5px;
+      transition: all 0.15s ease;
+    }
+    #logout-confirm-yes {
+      background: #3a0a0a;
+      color: #ff6666;
+      border: 2px solid #5c1a1a;
+    }
+    #logout-confirm-no {
+      background: #0a1a2e;
+      color: #88aaff;
+      border: 2px solid #334466;
+    }
   </style>
 </head>
 <body>
