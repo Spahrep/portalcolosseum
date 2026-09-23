@@ -10,6 +10,14 @@
 # will never see, or a half-committed state.
 set -u
 
+# Run tests before push — catches failures locally before CI and stops the
+# spam of GitHub failure emails. Tests are fast (~100ms), negligible overhead.
+echo "pre-push hook: running npm test..." >&2
+npm test 2>&1 || {
+  echo "pre-push hook: BLOCKED — tests failed. Fix them first, then push again." >&2
+  exit 1
+}
+
 # Ignore untracked files (new files not yet added) — those don't break CI unless
 # a tracked module references them; block on tracked-file mutations only.
 tracked_changes=$(git status --porcelain | awk '$1 != "??" {print}' | head -200)
