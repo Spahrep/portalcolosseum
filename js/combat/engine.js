@@ -230,17 +230,24 @@ export function createEngine(rng = Math.random) {
   }
 
   function tick() {
-    const head = peekHead(state.queue);
-    if (!head) return { done: true };
-    if ((head.label === 'LH' || head.label === 'RH') && head.event === 'ready') {
-      return { needsInput: true, row: head };
+    // PC-82: remove head BEFORE processing (not after), matching stepQueue/stepOnce
+    // pattern so handleFire doesn't add new rows that shift which row gets removed.
+    // Fixes infinite loop where winding→impact adds a tic=0 row that sorts ahead
+    // of the original winding row, causing removeHead (called on the WRONG row) to
+    // leave the winding row in the queue for re-processing on every subsequent tick.
+    const removedRow = removeHead(state.queue);
+    if (!removedRow) {
+      // No non-ready rows. Player needs to act or battle is over.
+      const hasReadyHand = Object.values(state.player?.hands || {}).some(h => h.state === 'Ready');
+      if (hasReadyHand) return { needsInput: true, row: null };
+      return { done: true };
     }
+    const head = removedRow;
     const feedBefore = state.feed.length;
     handleFire(head);
     sortQueue(state.queue);
     const newFeed = state.feed.slice(feedBefore);
     const narrate = newFeed.join('\n');
-    removeHead(state.queue);
     const pd = isPlayerDead(state.player);
     const allMonstersDead = state.monsters.length > 0 && state.monsters.every(isMonsterDead);
     const battleOver = allMonstersDead || pd;

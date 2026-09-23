@@ -2179,7 +2179,7 @@ async function tickLoop(runId) {
       renderedFeedLines = bs.feed.length;
     }
 
-    if (data.result?.playerReady || data.result?.battleOver || bs.battle_over) {
+    if (data.result?.playerReady || data.result?.needsInput || data.result?.done || data.result?.battleOver || bs.battle_over) {
       if (data.result?.battleOver || bs.battle_over) {
         showAdvanceUI(runId, bs);
       }
