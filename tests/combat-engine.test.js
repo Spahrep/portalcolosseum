@@ -742,7 +742,11 @@ describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
     });
     eng.commitAttack('RH', 2, [2], { castTicks: 3, cooldownTicks: 3, playerDamage: 100 });
     eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
-    eng.advanceToNextDecision();
+    // commitAttack no longer auto-processes — advance until RH fires
+    while (!eng.state.feed.some(l => l.includes('RH attack hits B'))) {
+      if (eng.state.feed.some(l => l.includes('All monsters are dead'))) break;
+      eng.advanceToNextDecision();
+    }
     assert.ok(eng.state.feed.some(l => l.includes('RH attack hits B')), 'RH still lands on its living target');
     assert.ok(!eng.state.feed.some(l => l.includes('RH attack cancelled')), 'no false cancellation');
     assert.equal(eng.state.monsters[0].current_hp, 0, 'A killed by LH');
@@ -760,8 +764,11 @@ describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
     });
     eng.commitAttack('RH', 2, [1, 2], { castTicks: 3, cooldownTicks: 3, playerDamage: 100, isMultiTarget: true });
     eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
-    eng.advanceToNextDecision();
-    // A dies to LH, but RH's multi-target still has B alive → not cancelled.
+    // commitAttack no longer auto-processes — advance until RH fires
+    while (!eng.state.feed.some(l => l.includes('RH attack hits B'))) {
+      if (eng.state.feed.some(l => l.includes('All monsters are dead'))) break;
+      eng.advanceToNextDecision();
+    }
     assert.ok(eng.state.feed.some(l => l.includes('RH attack hits B')), 'RH multi-target still hits living B');
     assert.ok(!eng.state.feed.some(l => l.includes('RH attack cancelled')), 'no cancellation while a target lives');
   });

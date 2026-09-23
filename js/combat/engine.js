@@ -59,6 +59,16 @@ export function createEngine(rng = Math.random) {
   }
 
   function handleFire(row) {
+    if (row.event === 'buff_expiry') {
+      // Remove the expired buff from state.buffs
+      const idx = state.buffs.findIndex(b => b.name === row.buffName);
+      if (idx !== -1) {
+        state.buffs.splice(idx, 1);
+        state.buffs.expired = (state.buffs.expired || 0) + 1;
+        log(`${row.buffName} expired`);
+      }
+      return;
+    }
     if (row.label === 'LH' || row.label === 'RH') {
       if (row.event === 'winding') {
         // winding → impact: carry over attack data (damage, targets, etc.)
@@ -136,6 +146,15 @@ export function createEngine(rng = Math.random) {
         potion.used = true;
         const { result, crit } = applyPotionWithCrit(potion, state.tic);
         log(`${row.label} ${describeEffect(result)}${crit ? ' CRITICAL!' : ''}`);
+        // Insert buff expiry event for when this buff wears off
+        if (result.kind === 'buff' && result.buff && result.buff.endTic > state.tic) {
+          const remainingTics = result.buff.endTic - state.tic;
+          if (remainingTics > 0) {
+            const expRow = addEvent(state.queue, null, 'buff_expiry', remainingTics);
+            expRow.buffName = result.buff.name;
+            sortQueue(state.queue);
+          }
+        }
         // drinking → recovery: remove old (already popped), add fresh recovery row
         addEvent(state.queue, row.label, 'recovery', row.postTicks ?? 0);
         sortQueue(state.queue);
@@ -213,46 +232,20 @@ export function createEngine(rng = Math.random) {
   function tick() {
     const head = peekHead(state.queue);
     if (!head) return { done: true };
-
-    // If head is a player "ready" row → signal for input, don't auto-process
     if ((head.label === 'LH' || head.label === 'RH') && head.event === 'ready') {
       return { needsInput: true, row: head };
     }
-
     const feedBefore = state.feed.length;
     handleFire(head);
-
-    // expire buffs (same logic as existing stepOnce)
-    const stillActive = [];
-    for (const b of state.buffs) {
-      if (b.endTic <= state.tic) {
-        log(`${b.name} buff expired`);
-      } else {
-        stillActive.push(b);
-      }
-    }
-    state.buffs = stillActive;
-
     sortQueue(state.queue);
-
-    // Capture ALL new feed lines (not just first)
     const newFeed = state.feed.slice(feedBefore);
     const narrate = newFeed.join('\n');
-
     removeHead(state.queue);
-
     const pd = isPlayerDead(state.player);
     const allMonstersDead = state.monsters.length > 0 && state.monsters.every(isMonsterDead);
     const battleOver = allMonstersDead || pd;
-
-    return {
-      narrate,
-      row: head,
-      feed: newFeed,
-      needsInput: false,
-      playerReady: Object.values(state.player?.hands || {}).some(h => h.state === 'Ready'),
-      battleOver
-    };
+    return { narrate, row: head, feed: newFeed, needsInput: false,
+      playerReady: Object.values(state.player?.hands || {}).some(h => h.state === 'Ready'), battleOver };
   }
 
   // PC-68: when an attack kills the last target of another hand's queued

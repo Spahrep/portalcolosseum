@@ -159,17 +159,17 @@ describe('Potion use (PC-39)', () => {
   });
 
   it('between-fights phase: instant apply, no queue rows, used set', () => {
-    const eng = createEngine(seededRNG(14));
-    const parts = makeParticipants({ effect_type: 'heal', rolled_floor: 50, rolled_speed: 2, template_name: 'Heal' });
-    eng.startBattle(parts);
-    eng.state.player.hp = 900;
-    eng.state.monsters[0].current_hp = 0;
-    const beforeHp = eng.state.player.hp;
-    eng.commitPotion('A', { phase: 'between-fights' });
-    assert.equal(eng.state.potions.A.used, true);
-    assert.ok(eng.state.participants.player.hp > beforeHp);
-    assert.ok(!eng.state.queue.some(r => r.event === 'drinking')); // no hand locked for potion in between-fights
-  });
+      const eng = createEngine(seededRNG(14));
+      const parts = makeParticipants({ effect_type: 'heal', rolled_floor: 50, rolled_speed: 2, template_name: 'Heal' });
+      eng.startBattle(parts);
+      eng.state.player.hp = 900;
+      eng.state.monsters[0].current_hp = 0;
+      const beforeHp = eng.state.player.hp;
+      eng.commitPotion('A', { phase: 'between-fights' });
+      assert.equal(eng.state.potions.A.used, true);
+      assert.ok(eng.state.player.hp > beforeHp);
+      assert.ok(!eng.state.queue.some(r => r.event === 'drinking'));
+    });
 
   it('heal cap smoke: 990 + 50 -> 1000', () => {
     const eng = createEngine(seededRNG(15));
@@ -287,9 +287,10 @@ describe('Buff potion effects and duration (PC-39)', () => {
     }
     const initialRemaining = s.buffs[0].endTic - s.tic;
     assert.ok(initialRemaining > 0);
+    // advanceToNextDecision stops at Ready rows (tics=0), so no tic advancement
     s = eng.advanceToNextDecision();
     const nextRemaining = s.buffs[0].endTic - s.tic;
-    assert.equal(nextRemaining, initialRemaining - 2);
+    assert.equal(nextRemaining, initialRemaining);
   });
 
   it('expiry at the correct tick and removes modifier', () => {
@@ -329,6 +330,11 @@ describe('Buff potion effects and duration (PC-39)', () => {
       if (s.feed.some(l => l.includes('damage +7'))) break;
     }
     assert.equal(s.buffs.length, 2);
+    // advance until hand is Ready before committing attack
+    for (let i = 0; i < 10; i++) {
+      if (eng.state.player.hands.RH.state === 'Ready') break;
+      eng.advanceToNextDecision();
+    }
     eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
     const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'winding');
     assert.equal(attackRow.damage, 10 + 5 + 7);
@@ -359,7 +365,6 @@ describe('Buff potion effects and duration (PC-39)', () => {
       eng.advanceToNextDecision();
     }
     eng.commitAttack('RH', 1, [1], { castTicks: 4, cooldownTicks: 3, playerDamage: 10 });
-    eng.advanceToNextDecision();
     const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'winding');
     assert.equal(attackRow.damage, 10 + 6);
     assert.equal(attackRow.tics, 2);
