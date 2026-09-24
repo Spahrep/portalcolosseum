@@ -292,10 +292,10 @@
     .queue-row-slide-in { animation: queue-row-slide-in 300ms ease-out forwards; }
 
     @keyframes queue-row-exit {
-      0% { opacity: 1; transform: translateY(0); }
-      100% { opacity: 0; transform: translateY(-20px); }
+      0% { opacity: 1; max-height: 42px; transform: translateY(0); }
+      100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; transform: translateY(-10px); }
     }
-    .queue-row-exit { animation: queue-row-exit 200ms ease-in forwards; }
+    .queue-row-exit { animation: queue-row-exit 280ms ease-in forwards; overflow: hidden; }
     .queue-size-L .queue-row .tic { font-size: 14px!important; }
     .queue-size-L .queue-row.top-row { font-size: 19px!important; }
 
