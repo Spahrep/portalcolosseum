@@ -2462,7 +2462,10 @@ async function tickLoop(runId) {
     const oldIds = new Set(oldQueue.map(r => r.id));
     const newIds = new Set(newQueue.map(r => r.id));
     const resolved = oldQueue.filter(r => !newIds.has(r.id));
-    resolved.forEach(id => markQueueRowExiting(id));
+    resolved.forEach(r => markQueueRowExiting(r.id));
+    if (resolved.length > 0) {
+      await new Promise(r => setTimeout(r, QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS));
+    }
     const added = newQueue.filter(r => !oldIds.has(r.id));
 
     // Space creation — empty-slot push-down dotted preview. Runs on inserts,
