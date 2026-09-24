@@ -1160,9 +1160,9 @@ function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
     div.appendChild(ticSpan);
     return div;
   }
-  // Approach rows: show "L. Hand Approach" with tic count, no timing bar (like ready)
+  // Approach rows: show "L. Hand Ready" with tic count (approach still fires)
   if (row.event === 'approach') {
-    nameSpan.textContent = `${queueLabel(row)} Approach`;
+    nameSpan.textContent = `${queueLabel(row)} Ready`;
     const ticSpan = document.createElement('span');
     ticSpan.className = 'tic';
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
