@@ -22,27 +22,9 @@ The prediction bar (`#prediction-bar`) is already visible on the queue while the
 
 ---
 
-### Stage 2: Space Creation
+### Stage 2: Space Creation — REMOVED (2026-09-24)
 
-After the action is confirmed, the space where the new row will land needs to grow. All boxes below that position get pushed down with animated empty space created.
-
-**Mechanism:**
-1. Determine the target insertion index in the queue DOM.
-2. Insert a temporary `queue-row-spacer` element at that position with `height: 0` and `overflow: hidden`.
-3. Animate the spacer's height from `0` to the row height (e.g. `40px`), pushing subsequent rows down.
-4. Duration: `200ms`, easing: `ease-out`.
-
-**CSS:**
-```css
-.queue-row-spacer {
-  height: 0;
-  overflow: hidden;
-  transition: height 200ms ease-out;
-}
-.queue-row-spacer.open {
-  height: 40px; /* match .queue-row height */
-}
-```
+~~After the action is confirmed, the space where the new row will land needs to grow...~~ **Removed.** The empty push-down preview (a dashed yellow `queue-insert-preview` box that pushed the below rows down) was scrapped because it collided with the top-item exit: on a tick that both removes the top row and admits a new one, the premature preview shoved the current top row *down* before it slid out — exactly the "yellow box pushes the top item down" artifact Spahrep reported. The dotted box is gone from both `battleClock._renderNew` and `tickLoop`. Arrivals now appear directly via `renderQueue` + the Stage 3/4 entry animations (bar grows + flash); no open-space preview.
 
 ---
 

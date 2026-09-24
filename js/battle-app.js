@@ -78,21 +78,17 @@ class BattleClock {
     this._timer = setTimeout(() => this._runInsert(), QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS); // exit anim (slide-out + siblings slide-up) runs fully before the queue rebuilds
   }
 
-  /**
-   /** Phase 2: Insert — go straight to render + entry animations (preview removed; entry anims cover the "new arrival" visual). */
-   async _runInsert() {
-     await this._renderNew();
-   }
+  /** Phase 2: Insert — go straight to render + entry animations. The space-creation
+   *   push-down preview is gone: arrivals appear via renderQueue + the
+   *   queue-row-enter / queue-row-monster-enter entry animations below, so nothing
+   *   shoves existing rows down around a removal. */
+  async _runInsert() {
+    await this._renderNew();
+  }
 
   /** Phase 3: Render updated queue, then apply entry-enter animations. */
   async _renderNew() {
     const { _diff: diff, _newBs: newBs } = this;
-
-    const preset = getSpeedPreset();
-    const queueEl = document.getElementById('queue');
-    if (diff.added.length > 0 && queueEl) {
-      await animateQueueSpaceCreation(diff.added, queueEl, preset);
-    }
 
     // Always render the full queue — this is where entries actually appear
     renderQueue(newBs);
@@ -1118,7 +1114,7 @@ function clearQueueDom() {
         exitingQueueRows.delete(id);
       }
       // else keep it (still animating), do not remove or replace
-    } else if (!child.classList.contains('queue-insert-preview')) {
+    } else {
       child.remove();
     }
   });
@@ -1150,7 +1146,6 @@ function markQueueRowExiting(rowId) {
   // translateY and Play it back to 0 next frame → they glide up into the slot.
   const siblings = [];
   for (let s = row.nextElementSibling; s; s = s.nextElementSibling) {
-    if (s.classList.contains('queue-insert-preview')) continue;
     siblings.push(s);
   }
   const firstTops = siblings.map(s => s.getBoundingClientRect().top);
@@ -1249,43 +1244,6 @@ function sortQueueRows(queue) {
     const bPlayer = b.label === 'LH' || b.label === 'RH' ? 0 : 1;
     return aPlayer - bPlayer;
   });
-}
-
-async function animateQueueSpaceCreation(added, queueEl, preset) {
-  if (added.length > 0 && queueEl && preset.charMs > 0) {
-    const sortedNew = sortQueueRows(added);
-    const domRows = Array.from(queueEl.children).filter(c =>
-      c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId)
-    );
-    const previews = [];
-    sortedNew.forEach(entry => {
-      let insertIdx = domRows.length;
-      for (let i = 0; i < domRows.length; i++) {
-        const curTics = Number(domRows[i].dataset.tics ?? 0);
-        const newTics = entry.tics ?? 0;
-        if (newTics < curTics || (newTics === curTics && (entry.label === 'LH' || entry.label === 'RH'))) {
-          insertIdx = i;
-          break;
-        }
-      }
-      const preview = document.createElement('div');
-      preview.className = 'queue-insert-preview';
-      const refChild = domRows[insertIdx] || null;
-      if (refChild) {
-        queueEl.insertBefore(preview, refChild);
-        domRows.splice(insertIdx, 0, preview);
-      } else {
-        queueEl.appendChild(preview);
-        domRows.push(preview);
-      }
-      previews.push(preview);
-    });
-    requestAnimationFrame(() => {
-      previews.forEach(p => p.classList.add('active'));
-    });
-    await new Promise(r => setTimeout(r, 300));
-    previews.forEach(p => p.remove());
-  }
 }
 
 // PC-64: tic-0 countdown to the first decision point — theater over the
@@ -2461,43 +2419,7 @@ async function tickLoop(runId) {
     resolved.forEach(id => markQueueRowExiting(id));
     const added = newQueue.filter(r => !oldIds.has(r.id));
 
-    // Stage 2: Space creation — insert preview markers at sorted positions so
-    // existing rows visibly push down before the new rows appear.
     const queueEl = document.getElementById('queue');
-    if (added.length > 0 && queueEl && preset.charMs > 0) {
-      const sortedNew = sortQueueRows(added);
-      const domRows = Array.from(queueEl.children).filter(c =>
-        c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId)
-      );
-      const previews = [];
-      sortedNew.forEach(entry => {
-        let insertIdx = domRows.length;
-        for (let i = 0; i < domRows.length; i++) {
-          const curTics = Number(domRows[i].dataset.tics ?? 0);
-          const newTics = entry.tics ?? 0;
-          if (newTics < curTics || (newTics === curTics && (entry.label === 'LH' || entry.label === 'RH'))) {
-            insertIdx = i;
-            break;
-          }
-        }
-        const preview = document.createElement('div');
-        preview.className = 'queue-insert-preview';
-        const refChild = domRows[insertIdx] || null;
-        if (refChild) {
-          queueEl.insertBefore(preview, refChild);
-          domRows.splice(insertIdx, 0, preview);
-        } else {
-          queueEl.appendChild(preview);
-          domRows.push(preview);
-        }
-        previews.push(preview);
-      });
-      requestAnimationFrame(() => {
-        previews.forEach(p => p.classList.add('active'));
-      });
-      await new Promise(r => setTimeout(r, 300));
-      previews.forEach(p => p.remove());
-    }
 
     renderQueue(bs);
 
