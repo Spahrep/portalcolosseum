@@ -817,24 +817,38 @@ function revealMonsters(onDone) {
 // First (next) to last; the command window appears only after the track is
 // full (the fill's onDone). Idempotent via the flag.
 function finishBattleIntro() {
-  debugLog('finishBattleIntro', `pending=${battleIntroPending} n_fires=${lastBs?.intro?.fires?.length || 0}`);
+  debugLog('finishBattleIntro', `pending=${battleIntroPending}`);
   if (!battleIntroPending) return;
   battleIntroPending = false;
-  if (lastBs && lastBs.intro?.fires?.length > 0) {
-    debugLog('finishBattleIntro', 'playing intro fires countdown');
-    playIntroCountdown(lastBs, lastBs.intro, () => {
-      document.body.classList.remove('intro-pending');
-      renderActionMenu(lastBs);
-    });
-  } else {
-    debugLog('finishBattleIntro', 'filling queue (no intro fires)');
-    document.body.classList.remove('queue-filling'); // timing track appears (rows still hidden)
-    renderQueue(lastBs, true, () => {
-      renderFeed([]);
-      document.body.classList.remove('intro-pending'); // command window only after the track is full
-      renderActionMenu(lastBs);
-    });
-  }
+
+  const battleLabel = document.getElementById('battle-label');
+  if (battleLabel) battleLabel.textContent = 'Setting up action queue';
+
+  document.body.classList.remove('queue-filling');
+  document.body.classList.remove('intro-pending');
+
+  const el = document.getElementById('queue');
+  if (el) el.innerHTML = '';
+
+  const queue = lastBs ? lastBs.queue || [] : [];
+  const sorted = sortQueueRows(queue);
+  const monsters = lastBs ? lastBs.monsters || [] : [];
+
+  sorted.forEach((row, i) => {
+    setTimeout(() => {
+      if (el) {
+        const rowEl = buildQueueRow(row, monsters, lastBs, false);
+        rowEl.classList.add('queue-row-slide-in');
+        el.appendChild(rowEl);
+      }
+    }, i * 200);
+  });
+
+  const totalDelay = (sorted.length * 200) + 350;
+  setTimeout(() => {
+    renderFeed([]);
+    renderActionMenu(lastBs);
+  }, totalDelay);
 }
 
 function renderFeed(feed, onComplete) {
@@ -1135,6 +1149,16 @@ function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
     const ticSpan = document.createElement('span');
     ticSpan.className = 'tic';
     ticSpan.textContent = '—';
+    div.appendChild(nameSpan);
+    div.appendChild(ticSpan);
+    return div;
+  }
+  // Approach rows: show "L. Hand Approach" with tic count, no timing bar (like ready)
+  if (row.event === 'approach') {
+    nameSpan.textContent = `${queueLabel(row)} Approach`;
+    const ticSpan = document.createElement('span');
+    ticSpan.className = 'tic';
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
     div.appendChild(nameSpan);
     div.appendChild(ticSpan);
     return div;
