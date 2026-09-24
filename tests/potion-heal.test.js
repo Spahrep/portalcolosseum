@@ -85,6 +85,7 @@ describe('Heal effects (PC-39)', () => {
     const eng = createEngine(seededRNG(201));
     eng.startBattle(makeParticipants(healPotion(100)));
     eng.state.player.hp = 900;
+    eng.advanceToNextDecision();
     const res = eng.commitPotion('A', { phase: 'between-fights' });
     assert.equal(eng.state.player.hp, 1000);
     assert.equal(res.potions.A.used, true);
@@ -95,6 +96,7 @@ describe('Heal effects (PC-39)', () => {
     const eng = createEngine(seededRNG(202));
     eng.startBattle(makeParticipants(healPotion(50)));
     eng.state.player.hp = 990;
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 }); // pre = ceil((0+2)/2) = 1
     const s = eng.advanceToNextDecision(); // effect lands here
     assert.equal(eng.state.player.hp, 1000);
@@ -108,6 +110,7 @@ describe('Heal effects (PC-39)', () => {
     const eng = createEngine(seededRNG(203));
     eng.startBattle(makeParticipants(healPotion(100)));
     eng.state.player.hp = 0;
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     const s = eng.advanceToNextDecision();
     assert.equal(eng.state.player.hp, 100);

@@ -441,9 +441,6 @@ export function createEngine(rng = Math.random) {
     state.player.hands.RH.state = 'Approach';
     commitNewRow(state.queue, 'LH', 'approach', handLSpeed);
     commitNewRow(state.queue, 'RH', 'approach', handRSpeed);
-    const intro = { rows: state.queue.map(r => ({ label: r.label, event: r.event, tics: r.tics })), hpStart: state.player.hp, fires: [] };
-    advanceToNextDecision(intro.fires);
-    state.intro = intro;
     return getState();
   }
 

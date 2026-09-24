@@ -96,6 +96,7 @@ describe('Potion E2E parity (PC-39)', () => {
     const p = makeParticipants({ ...healPotion });
     eng.startBattle(p);
     eng.state.player.hp = 800;
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     const state = advanceUntilUsed(eng);
     assertParity(state, 900, null, true, 'none');
@@ -110,6 +111,7 @@ describe('Potion E2E parity (PC-39)', () => {
     const p = makeParticipants({ ...healPotion });
     eng.startBattle(p);
     eng.state.player.hp = 800;
+    eng.advanceToNextDecision();
     const state = eng.commitPotion('A', { phase: 'between-fights' });
     assertParity(state, 900, null, true, 'none');
     const meta = { slot: 'A', phase: 'between-fights', potion_used: true, player_hp: state.participants.player.hp, state };
@@ -123,6 +125,7 @@ describe('Potion E2E parity (PC-39)', () => {
     const p = makeParticipants({ ...healPotion, rolled_floor: 50 });
     eng.startBattle(p);
     eng.state.player.hp = 990;
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     const state = advanceUntilUsed(eng);
     assert.equal(state.participants.player.hp, 1000);
@@ -135,6 +138,7 @@ describe('Potion E2E parity (PC-39)', () => {
     const eng = createEngine(seededRNG(103));
     const p = makeParticipants({ ...buffPotion });
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 4 });
     const state = advanceUntilUsed(eng);
     assert.equal(state.buffs.length, 1);
@@ -150,6 +154,7 @@ describe('Potion E2E parity (PC-39)', () => {
     const eng = createEngine(seededRNG(104));
     const p = makeParticipants({ ...healPotion });
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { phase: 'between-fights' });
     const persisted = eng.getState();
     const eng2 = resumeEngine(persisted, seededRNG(104));
@@ -162,6 +167,7 @@ describe('Potion E2E parity (PC-39)', () => {
   it('empty slot classify error with period', () => {
     const eng = createEngine(seededRNG(105));
     eng.startBattle(makeParticipants(null, null));
+    eng.advanceToNextDecision();
     assert.throws(() => eng.commitPotion('A'), /No potion in slot A/);
     const err = classifyPotionError('No potion in slot A');
     assert.equal(err.level, 'error');
@@ -186,6 +192,7 @@ describe('Potion E2E parity (PC-39)', () => {
     const p = makeParticipants({ ...buffPotion, rolled_speed: 2, duration_ticks: 2 });
     eng.startBattle(p);
     // pre = ceil((0+2)/2) = 1 -> lands at tic 2 with endTic 2 + 2 = 4
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     const landed = advanceUntilUsed(eng);
     assert.equal(landed.buffs.length, 1);
