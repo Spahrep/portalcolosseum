@@ -22,9 +22,9 @@ The prediction bar (`#prediction-bar`) is already visible on the queue while the
 
 ---
 
-### Stage 2: Space Creation (every insert, 2026-09-24)
+### Stage 2: Space Creation (inserts; suppressed when a removal happens in the same tick, 2026-09-24)
 
-After the action is confirmed, the space where the new row will land grows: a dashed-yellow `queue-insert-preview` box (`animateQueueSpaceCreation` in `battle-app.js`) opens a slot and pushes the rows below down. Runs on **every** insert. Events advance atomically — a transition is either a removal or an insert, never both — so inserts are never suppressed and never collide with an exit. The removal path (top row slide-out + siblings slide-up) does not run space-creation at all.
+After the action is confirmed, the space where the new row will land grows: a dashed-yellow `queue-insert-preview` box (`animateQueueSpaceCreation` in `battle-app.js`) opens a slot and pushes the rows below down. Runs on inserts, **but is suppressed whenever the same tick also removes a row** (`diff.resolved.length === 0` / `resolved.length === 0`). A hand-ready commit is a remove + insert in one tick (the ready row leaves, the attack row lands), so the preview must not fire there — otherwise the dotted box shoves rows down mid-exit. On a removal tick the exit slide-out/slide-up owns the motion and arrivals appear via `renderQueue` + the Stage 3/4 entry animations.
 
 ---
 

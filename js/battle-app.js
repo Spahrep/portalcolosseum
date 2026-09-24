@@ -78,26 +78,28 @@ class BattleClock {
     this._timer = setTimeout(() => this._runInsert(), QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS); // exit anim (slide-out + siblings slide-up) runs fully before the queue rebuilds
   }
 
-  /** Phase 2: Insert — space-creation push-down preview runs on every insert.
-   *   Events advance atomically (a transition is either a removal or an insert,
-   *   never both), so no removal-awareness is needed here. */
-  async _runInsert() {
-    await this._renderNew();
-  }
-
-  /** Phase 3: Render updated queue, then apply entry-enter animations. */
-  async _renderNew() {
-    const { _diff: diff, _newBs: newBs } = this;
-
-    const preset = getSpeedPreset();
-    const queueEl = document.getElementById('queue');
-    // Space-creation push-down — fires on every insert.
-    if (diff.added.length > 0 && queueEl) {
-      await animateQueueSpaceCreation(diff.added, queueEl, preset);
+  /** Phase 2: Insert — space-creation push-down preview. Runs on inserts, but
+     *   is suppressed when the same tick also removes a row (a hand-ready commit
+     *   removes the ready row AND adds the attack row in one tick). When a
+     *   removal is happening, the exit slide-out/slide-up owns the motion and a
+     *   preview would shove rows down mid-exit. */
+    async _runInsert() {
+      await this._renderNew();
     }
 
-    // Always render the full queue — this is where entries actually appear
-    renderQueue(newBs);
+    /** Phase 3: Render updated queue, then apply entry-enter animations. */
+    async _renderNew() {
+      const { _diff: diff, _newBs: newBs } = this;
+
+      const preset = getSpeedPreset();
+      const queueEl = document.getElementById('queue');
+      // Space-creation push-down — only when nothing is removed this tick.
+      if (diff.resolved.length === 0 && diff.added.length > 0 && queueEl) {
+        await animateQueueSpaceCreation(diff.added, queueEl, preset);
+      }
+
+      // Always render the full queue — this is where entries actually appear
+      renderQueue(newBs);
 
     // Cosmetic entry-enter animations on freshly rendered entries
     if (diff.added.length > 0) {
@@ -2463,11 +2465,13 @@ async function tickLoop(runId) {
     resolved.forEach(id => markQueueRowExiting(id));
     const added = newQueue.filter(r => !oldIds.has(r.id));
 
-    // Space creation — empty-slot push-down dotted preview. Fires on every
-    // insert: events advance atomically, so an insert tick never coincides
-    // with a removal and no removal-guard is needed.
+    // Space creation — empty-slot push-down dotted preview. Runs on inserts,
+    // but suppressed when this tick also removes a row (a hand-ready commit
+    // removes the ready row AND adds the attack row in one tick). When a
+    // removal is happening, the exit slide-out/slide-up owns the motion and a
+    // preview would shove rows down mid-exit.
     const queueEl = document.getElementById('queue');
-    if (added.length > 0 && queueEl && preset.charMs > 0) {
+    if (resolved.length === 0 && added.length > 0 && queueEl && preset.charMs > 0) {
       const sortedNew = sortQueueRows(added);
       const domRows = Array.from(queueEl.children).filter(c =>
         c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId)
