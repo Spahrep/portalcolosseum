@@ -36,6 +36,7 @@ describe('Potion use (PC-39)', () => {
     const eng = createEngine(seededRNG(2));
     const p = makeParticipants({ effect_type: 'heal', rolled_floor: 30, rolled_speed: 2, template_name: 'Heal' });
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 1, [1], { castTicks: 10, cooldownTicks: 2, playerDamage: 10 });
     eng.commitPotion('A', { weaponSpeed: 3 });
     eng.advanceToNextDecision();
@@ -46,6 +47,7 @@ describe('Potion use (PC-39)', () => {
   it('both Ready picks LH deterministically', () => {
     const eng = createEngine(seededRNG(3));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 3 });
     eng.advanceToNextDecision();
     assert.ok(eng.state.queue.some(r => r.label === 'LH' && r.event === 'recovery') || eng.state.feed.some(l => l.includes('drinking')));
@@ -54,6 +56,7 @@ describe('Potion use (PC-39)', () => {
   it('params.hand honored', () => {
     const eng = createEngine(seededRNG(4));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { hand: 'RH', weaponSpeed: 3 });
     eng.advanceToNextDecision();
     assert.ok(eng.state.queue.some(r => r.label === 'RH' && r.event === 'recovery') || eng.state.feed.some(l => l.includes('drinking')));
@@ -62,6 +65,7 @@ describe('Potion use (PC-39)', () => {
   it('params.hand on busy hand throws Hand not ready', () => {
     const eng = createEngine(seededRNG(5));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
+    eng.advanceToNextDecision();
     eng.commitAttack('RH', 1, [1], { castTicks: 10, cooldownTicks: 2, playerDamage: 10 });
     assert.throws(() => eng.commitPotion('A', { hand: 'RH', weaponSpeed: 3 }), /Hand not ready/);
   });
@@ -69,12 +73,14 @@ describe('Potion use (PC-39)', () => {
   it('validate: empty slot throws No potion in slot', () => {
     const eng = createEngine(seededRNG(6));
     eng.startBattle(makeParticipants(null, null));
+    eng.advanceToNextDecision();
     assert.throws(() => eng.commitPotion('A'), /No potion in slot A/);
   });
 
   it('validate: used slot throws Potion already used', () => {
     const eng = createEngine(seededRNG(7));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal', used: false }));
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { phase: 'between-fights' });
     assert.throws(() => eng.commitPotion('A'), /Potion already used/);
   });
@@ -83,12 +89,14 @@ describe('Potion use (PC-39)', () => {
     const eng = createEngine(seededRNG(8));
     const bad = makeParticipants({ effect_type: 'fireball', rolled_floor: 99, rolled_speed: 1, template_name: 'Bad' });
     eng.startBattle(bad);
+    eng.advanceToNextDecision();
     assert.throws(() => eng.commitPotion('A'), /Not a potion: fireball/);
   });
 
   it('consume on success: used flag set after in-battle resolve, second use rejected', () => {
     const eng = createEngine(seededRNG(9));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     // advance to effect
     let s = eng.advanceToNextDecision();
@@ -100,6 +108,7 @@ describe('Potion use (PC-39)', () => {
     const eng = createEngine(seededRNG(10));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 40, rolled_speed: 2, template_name: 'Heal' }));
     eng.state.player.hp = 900;
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     const afterPre = eng.advanceToNextDecision();
     // effect should have fired
@@ -111,6 +120,7 @@ describe('Potion use (PC-39)', () => {
   it('buff potion: endTic computed at effect-land time (pre>0 case)', () => {
     const eng = createEngine(seededRNG(11));
     eng.startBattle(makeParticipants({ effect_type: 'speed', rolled_floor: 5, rolled_speed: 6, duration_ticks: 8, template_name: 'Speed' }));
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 4 });
     // pre = ceil((4+6)/2) = 5, so land tic != commit tic
     let s;
@@ -132,6 +142,7 @@ describe('Potion use (PC-39)', () => {
   it('action cost: pre/post with weaponSpeed 4 rolled_speed 6 -> 5 tics each, hand returns Ready after total', () => {
     const eng = createEngine(seededRNG(12));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 10, rolled_speed: 6, template_name: 'Heal' }));
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 4 });
     let s = eng.getState();
     assert.notEqual(s.participants.player.hands.LH.state, 'Ready');
@@ -151,6 +162,7 @@ describe('Potion use (PC-39)', () => {
   it('other hand keeps attacking while drinking', () => {
     const eng = createEngine(seededRNG(13));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 10, rolled_speed: 2, template_name: 'Heal' }));
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { hand: 'LH', weaponSpeed: 0 });
     // RH should still be able to attack immediately
     eng.commitAttack('RH', 99, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10 });
@@ -165,6 +177,7 @@ describe('Potion use (PC-39)', () => {
       eng.state.player.hp = 900;
       eng.state.monsters[0].current_hp = 0;
       const beforeHp = eng.state.player.hp;
+      eng.advanceToNextDecision();
       eng.commitPotion('A', { phase: 'between-fights' });
       assert.equal(eng.state.potions.A.used, true);
       assert.ok(eng.state.player.hp > beforeHp);
@@ -175,6 +188,7 @@ describe('Potion use (PC-39)', () => {
     const eng = createEngine(seededRNG(15));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 50, rolled_speed: 2, template_name: 'Heal' }));
     eng.state.player.hp = 990;
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { phase: 'between-fights' });
     assert.equal(eng.state.player.hp, 1000);
   });
@@ -183,14 +197,16 @@ describe('Potion use (PC-39)', () => {
     const eng = createEngine(seededRNG(16));
     eng.startBattle(makeParticipants({ effect_type: 'damage', rolled_floor: 8, rolled_speed: 2, duration_ticks: 8, template_name: 'Dmg' }));
     const ticBefore = eng.state.tic;
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { phase: 'between-fights' });
     assert.equal(eng.state.buffs.length, 1);
-    assert.equal(eng.state.buffs[0].endTic, ticBefore + 8);
+    assert.equal(eng.state.buffs[0].endTic, eng.state.tic + 8);
   });
 
   it('loadState round-trip preserves potions + used flags', () => {
     const eng = createEngine(seededRNG(17));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { phase: 'between-fights' });
     const persisted = JSON.parse(JSON.stringify(eng.state));
     const eng2 = resumeEngine(persisted, seededRNG(17));
@@ -204,6 +220,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const eng = createEngine(seededRNG(100));
     const p = makeParticipants({ effect_type: 'damage', rolled_floor: 8, rolled_speed: 2, duration_ticks: 5, template_name: 'Dmg' });
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     let s;
     for (let i = 0; i < 10; i++) {
@@ -219,6 +236,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const eng = createEngine(seededRNG(101));
     const p = makeParticipants({ effect_type: 'speed', rolled_floor: 2, rolled_speed: 2, duration_ticks: 5, template_name: 'Spd' });
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     let s;
     for (let i = 0; i < 10; i++) {
@@ -238,6 +256,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const eng = createEngine(seededRNG(102));
     const p = makeParticipants({ effect_type: 'speed', rolled_floor: 10, rolled_speed: 2, duration_ticks: 5, template_name: 'Spd' });
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     let s;
     for (let i = 0; i < 10; i++) {
@@ -262,6 +281,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const eng = createEngine(seededRNG(103));
     const p = makeParticipants({ effect_type: 'accuracy', rolled_floor: 15, rolled_speed: 2, duration_ticks: 5, template_name: 'Acc' });
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     let s;
     for (let i = 0; i < 10; i++) {
@@ -277,6 +297,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const eng = createEngine(seededRNG(104));
     const p = makeParticipants({ effect_type: 'damage', rolled_floor: 5, rolled_speed: 2, duration_ticks: 4, template_name: 'Dmg' });
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     let s;
     for (let i = 0; i < 10; i++) {
@@ -295,6 +316,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const eng = createEngine(seededRNG(105));
     const p = makeParticipants({ effect_type: 'damage', rolled_floor: 8, rolled_speed: 2, duration_ticks: 3, template_name: 'Dmg' });
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     let s;
     for (let i = 0; i < 20; i++) {
@@ -316,6 +338,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const dmgB = { effect_type: 'damage', rolled_floor: 7, rolled_speed: 2, duration_ticks: 6, template_name: 'DmgB' };
     const p = makeParticipants(dmgA, dmgB);
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     let s;
     for (let i = 0; i < 10; i++) {
@@ -346,6 +369,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const dmg = { effect_type: 'damage', rolled_floor: 6, rolled_speed: 2, duration_ticks: 5, template_name: 'Dmg' };
     const p = makeParticipants(spd, dmg);
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     let s;
     for (let i = 0; i < 10; i++) {
@@ -375,6 +399,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const long = { effect_type: 'damage', rolled_floor: 9, rolled_speed: 2, duration_ticks: 6, template_name: 'Long' };
     const p = makeParticipants(short, long);
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     let s;
     for (let i = 0; i < 10; i++) {
@@ -399,6 +424,7 @@ describe('Buff potion effects and duration (PC-39)', () => {
     const eng = createEngine(seededRNG(109));
     const p = makeParticipants({ effect_type: 'damage', rolled_floor: 8, rolled_speed: 6, duration_ticks: 5, template_name: 'Dmg' });
     eng.startBattle(p);
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 4 });
     eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
     eng.advanceToNextDecision();

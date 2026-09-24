@@ -113,6 +113,7 @@ describe('PC-72: player attack crit through the engine (feed marker)', () => {
   it('player crit: damage doubled and feed line carries exactly " CRITICAL!"', () => {
     const eng = createEngine(() => 0.001); // hit + crit both pass
     eng.startBattle(makeParticipants());
+    eng.advanceToNextDecision();
     const hpBefore = eng.state.monsters[0].current_hp;
     eng.commitAttack('LH', 1, [1], {
       castTicks: 1, cooldownTicks: 1, playerDamage: 10,
@@ -129,6 +130,7 @@ describe('PC-72: player attack crit through the engine (feed marker)', () => {
   it('player crit 0 → no CRITICAL! marker even with crit-favorable RNG', () => {
     const eng = createEngine(() => 0.001);
     eng.startBattle(makeParticipants());
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 1, [1], {
       castTicks: 1, cooldownTicks: 1, playerDamage: 10,
       playerAccuracy: 100, playerCritChance: 0, playerCritMultiplier: 2.0
@@ -242,6 +244,7 @@ describe('PC-72: potion crit (effect ×1.5, duration ×1.5)', () => {
       monsters: [{ id: 1, max_hp: 100, damage: 10, speed: 5, accuracy: 0, label: 'A' }]
     });
     eng.state.player.hp = 800;
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     for (let i = 0; i < 8; i++) eng.advanceToNextDecision();
     assert.equal(eng.state.player.hp, 950, 'in-battle heal crit applies ×1.5');
