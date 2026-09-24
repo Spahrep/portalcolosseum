@@ -418,6 +418,22 @@
       animation: queue-arrive-glow 0.35s ease-out;
     }
 
+    /* Stage 1-2: Insert preview marker (INSERT-only — never on removal ticks) */
+    .queue-insert-preview {
+      height: 0;
+      margin-bottom: 2px;
+      background: rgba(255, 204, 102, 0.15);
+      border: 1px dashed #ffcc66;
+      border-radius: 2px;
+      box-sizing: border-box;
+      transition: height 250ms ease-out;
+      pointer-events: none;
+      overflow: hidden;
+    }
+    .queue-insert-preview.active {
+      height: 24px; /* full slot height — pushes subsequent rows down */
+    }
+
     /* Stage 3: Left-to-right wipe */
     .queue-row-inserting {
       overflow: hidden;

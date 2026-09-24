@@ -22,9 +22,9 @@ The prediction bar (`#prediction-bar`) is already visible on the queue while the
 
 ---
 
-### Stage 2: Space Creation — REMOVED (2026-09-24)
+### Stage 2: Space Creation (INSERT-only — gated off removal ticks, 2026-09-24)
 
-~~After the action is confirmed, the space where the new row will land needs to grow...~~ **Removed.** The empty push-down preview (a dashed yellow `queue-insert-preview` box that pushed the below rows down) was scrapped because it collided with the top-item exit: on a tick that both removes the top row and admits a new one, the premature preview shoved the current top row *down* before it slid out — exactly the "yellow box pushes the top item down" artifact Spahrep reported. The dotted box is gone from both `battleClock._renderNew` and `tickLoop`. Arrivals now appear directly via `renderQueue` + the Stage 3/4 entry animations (bar grows + flash); no open-space preview.
+After the action is confirmed, the space where the new row will land grows: a dashed-yellow `queue-insert-preview` box (`animateQueueSpaceCreation` in `battle-app.js`) opens a slot and pushes the rows below down. **Insert-only:** the preview runs only when the transition removes NOTHING (`diff.resolved.length === 0` / `resolved.length === 0`). On any tick that also removes a row (especially the top), it is skipped — otherwise the empty preview shoves the leaving row down before it slides out (the "yellow box pushes the top item down" artifact). Arrivals on a removal tick appear directly via `renderQueue` + the Stage 3/4 entry animations.
 
 ---
 
