@@ -22,9 +22,9 @@ The prediction bar (`#prediction-bar`) is already visible on the queue while the
 
 ---
 
-### Stage 2: Space Creation (INSERT-only — gated off removal ticks, 2026-09-24)
+### Stage 2: Space Creation (every insert, 2026-09-24)
 
-After the action is confirmed, the space where the new row will land grows: a dashed-yellow `queue-insert-preview` box (`animateQueueSpaceCreation` in `battle-app.js`) opens a slot and pushes the rows below down. **Insert-only:** the preview runs only when the transition removes NOTHING (`diff.resolved.length === 0` / `resolved.length === 0`). On any tick that also removes a row (especially the top), it is skipped — otherwise the empty preview shoves the leaving row down before it slides out (the "yellow box pushes the top item down" artifact). Arrivals on a removal tick appear directly via `renderQueue` + the Stage 3/4 entry animations.
+After the action is confirmed, the space where the new row will land grows: a dashed-yellow `queue-insert-preview` box (`animateQueueSpaceCreation` in `battle-app.js`) opens a slot and pushes the rows below down. Runs on **every** insert. Events advance atomically — a transition is either a removal or an insert, never both — so inserts are never suppressed and never collide with an exit. The removal path (top row slide-out + siblings slide-up) does not run space-creation at all.
 
 ---
 

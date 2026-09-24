@@ -78,9 +78,9 @@ class BattleClock {
     this._timer = setTimeout(() => this._runInsert(), QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS); // exit anim (slide-out + siblings slide-up) runs fully before the queue rebuilds
   }
 
-  /** Phase 2: Insert — the space-creation push-down preview runs ONLY on pure
-   *   inserts (diff.resolved empty). On a removal tick it's skipped so the
-   *   dotted box never shoves the leaving top row down. */
+  /** Phase 2: Insert — space-creation push-down preview runs on every insert.
+   *   Events advance atomically (a transition is either a removal or an insert,
+   *   never both), so no removal-awareness is needed here. */
   async _runInsert() {
     await this._renderNew();
   }
@@ -91,9 +91,8 @@ class BattleClock {
 
     const preset = getSpeedPreset();
     const queueEl = document.getElementById('queue');
-    // Space-creation push-down is insert-only: never while a row is removed
-    // from the top, or the empty preview shoves the leaving row down first.
-    if (diff.resolved.length === 0 && diff.added.length > 0 && queueEl) {
+    // Space-creation push-down — fires on every insert.
+    if (diff.added.length > 0 && queueEl) {
       await animateQueueSpaceCreation(diff.added, queueEl, preset);
     }
 
@@ -2464,12 +2463,11 @@ async function tickLoop(runId) {
     resolved.forEach(id => markQueueRowExiting(id));
     const added = newQueue.filter(r => !oldIds.has(r.id));
 
-    // Space creation — empty-slot push-down dotted preview, INSERT-only.
-    // Gated on no removals this tick: when a row is being removed (e.g. the
-    // top), the exit is already sliding it out and a preview would shove it
-    // back down before it leaves.
+    // Space creation — empty-slot push-down dotted preview. Fires on every
+    // insert: events advance atomically, so an insert tick never coincides
+    // with a removal and no removal-guard is needed.
     const queueEl = document.getElementById('queue');
-    if (resolved.length === 0 && added.length > 0 && queueEl && preset.charMs > 0) {
+    if (added.length > 0 && queueEl && preset.charMs > 0) {
       const sortedNew = sortQueueRows(added);
       const domRows = Array.from(queueEl.children).filter(c =>
         c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId)
