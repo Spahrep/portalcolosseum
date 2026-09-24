@@ -1,4 +1,4 @@
-# Current Design Status (as of 2026-09-23)
+# Current Design Status (as of 2026-09-24)
 
 This file captures the current state of design decisions for Portal Colosseum. It is intended as a living reference until decisions are moved into more permanent documents.
 
@@ -22,7 +22,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 ## Consumables (documented in consumables.md) — NEW 2026-09-08
 
 - Weapons + consumables are the **only MVP item types**. Armor, materials, throwables, pouches = PMVP.
-- Consumables modify one stat (HP heal / Speed / Accuracy / Damage), template-based with base ± delta like weapons
+- Consumables modify one stat (HP heal / Speed / Accuracy / Damage), template-based with floor+window (+only deltas per consumables.md LOCKED model)
 - Each potion rolls an **effect value** AND a **drink speed** (pill vs 4L jug)
 - Grade (D–S) assigned after generation, same standard-deviation system as weapons (20hp potion = A, 22hp = S)
 - **Use requires a hand free of cooldown** (may be holding a weapon): total drink time = **weapon-in-hand speed + consumable speed** (ruled PC-DEC-013, Spahrep 2026-09-16); how that total splits pre/post-effect is still TBD
