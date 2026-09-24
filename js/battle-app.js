@@ -75,7 +75,7 @@ class BattleClock {
       markQueueRowExiting(id);
     });
 
-    this._timer = setTimeout(() => this._runInsert(), 250); // 200ms anim + 50ms buffer
+    this._timer = setTimeout(() => this._runInsert(), QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS); // exit anim (slide-out + siblings slide-up) runs fully before the queue rebuilds
   }
 
   /**
@@ -139,6 +139,12 @@ class BattleClock {
 }
 
 const battleClock = new BattleClock();
+
+// Exit animation duration for queue rows — MUST match the `.queue-row-exit`
+// / `.queue-row-lift` CSS in run.html. The battle clock holds the rebuild long
+// enough for the row to slide out AND the rows below to slide up before re-rendering.
+const QUEUE_EXIT_MS = 280;
+const QUEUE_EXIT_BUFFER_MS = 60; // grace after the animation so the final frame lands
 
 const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
@@ -1125,10 +1131,50 @@ function markQueueRowExiting(rowId) {
   if (!row) return;
   row.classList.remove('queue-row-current');
   row.classList.add('queue-row-exit');
+
+  // Free the slot NOW: pin the leaving row absolutely at its current spot so
+  // it stops holding flow space (no "build space / push everything down"),
+  // then the CSS slides it right-out + fades. #queue is position:relative.
+  const queueRect = el.getBoundingClientRect();
+  const rowRect = row.getBoundingClientRect();
+  row.style.left = (rowRect.left - queueRect.left) + 'px';
+  row.style.top = (rowRect.top - queueRect.top) + 'px';
+  row.style.width = rowRect.width + 'px';
+
   if (!exitingQueueRows.has(rowId)) {
     exitingQueueRows.set(rowId, { element: row, finished: false });
   }
+
+  // FLIP slide-up: once the row detaches, the rows below jump up instantly.
+  // Capture their pre-detach tops (First/Last), then Invert the jump with a
+  // translateY and Play it back to 0 next frame → they glide up into the slot.
+  const siblings = [];
+  for (let s = row.nextElementSibling; s; s = s.nextElementSibling) {
+    if (s.classList.contains('queue-insert-preview')) continue;
+    siblings.push(s);
+  }
+  const firstTops = siblings.map(s => s.getBoundingClientRect().top);
+  void el.offsetHeight; // flush layout so the absolute detach actually moved siblings
+  const moved = [];
+  siblings.forEach((s, i) => {
+    if (!s.isConnected) return;
+    const delta = firstTops[i] - s.getBoundingClientRect().top;
+    if (delta === 0) return;
+    s.classList.add('queue-row-lift');
+    s.style.transform = `translateY(${delta}px)`;
+    moved.push(s);
+  });
+  // Commit the inverted state, then next frame clear it so the transition glides up.
+  if (moved.length) void moved[0].offsetHeight;
+  requestAnimationFrame(() => {
+    moved.forEach(s => { if (s.isConnected) s.style.transform = ''; });
+  });
+  const liftTimer = setTimeout(() => {
+    moved.forEach(s => s.classList.remove('queue-row-lift'));
+  }, QUEUE_EXIT_MS + 40);
+
   row.addEventListener('animationend', () => {
+    clearTimeout(liftTimer);
     const entry = exitingQueueRows.get(rowId);
     if (entry) entry.finished = true;
     // removal happens on next clearQueueDom or immediately if finished

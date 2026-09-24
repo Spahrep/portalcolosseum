@@ -123,33 +123,28 @@ The preview bar and spacer disappear. The real queue row (`.queue-row` with `.qu
 
 ---
 
-## 2. Exit Animation — Slide Out
+## 2. Exit Animation — Slide Out, Siblings Slide Up
 
 Trigger: A queue row finishes processing (e.g. an attack resolves or a row is cancelled).
 
 **Mechanism:**
 1. Add `.queue-row-exit` to the row being removed.
-2. The row animates: fades out + shrinks height to 0.
-3. Remaining rows below slide up to fill the gap (via the shrinking row collapsing).
-4. After `animationend`, remove the row from DOM.
+2. The row is pinned `position: absolute` at its current spot (out of flow) by `markQueueRowExiting` — it stops holding its slot immediately, so nothing below gets pushed down / no space "builds up" to remove it.
+3. The CSS slides the row right-out and fades it (280ms).
+4. The rows below FLIP-slide up into the freed slot: their pre-detach tops are captured, the jump is inverted with a one-frame `translateY`, then cleared so the `.queue-row-lift` transition glides them up (280ms).
+5. `animationend` removes the row from the DOM.
 
-**CSS (existing):**
+**CSS.**
 ```css
-.queue-row-exit {
-  animation: queue-row-exit 200ms ease-in forwards;
-}
 @keyframes queue-row-exit {
-  from { opacity: 1; max-height: 40px; }
-  to   { opacity: 0; max-height: 0; padding: 0 10px; margin: 0; }
+  0%   { opacity: 1; transform: translateX(0); }
+  100% { opacity: 0; transform: translateX(96px); }
 }
+.queue-row-exit { position: absolute; animation: queue-row-exit 280ms ease-in forwards; }
+.queue-row-lift { transition: transform 280ms ease-in; }
 ```
 
-**JS hook (existing):**
-```javascript
-function markQueueRowExiting(rowId) {
-  // Adds .queue-row-exit, sets exitingQueueRows, attaches animationend
-}
-```
+**JS hook (existing):** `markQueueRowExiting()` — detaches the row absolutely, runs the FLIP slide-up on the siblings, attaches `animationend`. Duration constants `QUEUE_EXIT_MS` (280) + `QUEUE_EXIT_BUFFER_MS` (60) in `battle-app.js` must match the CSS. The battle clock holds re-render for `QUEUE_EXIT_MS + buffer` so slide-out + slide-up finish before the queue rebuilds (a shorter wait snaps the rows).
 
 ---
 

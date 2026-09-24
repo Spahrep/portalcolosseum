@@ -292,10 +292,24 @@
     .queue-row-slide-in { animation: queue-row-slide-in 300ms ease-out forwards; }
 
     @keyframes queue-row-exit {
-      0% { opacity: 1; max-height: 42px; transform: translateY(0); }
-      100% { opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-top: 0; margin-bottom: 0; transform: translateY(-10px); }
+      0%   { opacity: 1; transform: translateX(0); }
+      100% { opacity: 0; transform: translateX(96px); }
     }
-    .queue-row-exit { animation: queue-row-exit 280ms ease-in forwards; overflow: hidden; }
+    /* Top-item exit: the leaving row is pinned `position:absolute` by
+       battle-app.js (out of flow) so it stops holding its slot — no downward
+       push / no space built to remove it — then it slides right-out + fades.
+       Rows below FLIP-slide up into the freed slot via .queue-row-lift.
+       Duration must match QUEUE_EXIT_MS in js/battle-app.js. */
+    .queue-row-exit {
+      position: absolute;
+      animation: queue-row-exit 280ms ease-in forwards;
+    }
+    /* FLIP slide-up for rows below the removed one: battle-app.js sets an
+       inverted translateY for one frame, then clears it and the transition
+       glides them up into the vacated slot. */
+    .queue-row-lift {
+      transition: transform 280ms ease-in;
+    }
     .queue-size-L .queue-row .tic { font-size: 14px!important; }
     .queue-size-L .queue-row.top-row { font-size: 19px!important; }
 
