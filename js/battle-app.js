@@ -1114,11 +1114,14 @@ function renderQueue(bs, fill = false, onDone = null) {
 function diffQueueForAnimation(oldBs, newBs) {
   const oldRows = sortQueueRows(oldBs.queue || []);
   const newRows = sortQueueRows(newBs.queue || []);
-  const oldIds = new Set(oldRows.map(r => r.id));
-  const newIds = new Set(newRows.map(r => r.id));
+  // Hand rows use stable label key (LH/RH singleton identity preserved across tics/state updates);
+  // monsters/monsters use id (regenerated per cycle). This prevents value-update slide-out+slide-in.
+  function rowKey(r) { return (r.label === 'LH' || r.label === 'RH') ? r.label : r.id; }
+  const oldKeys = new Set(oldRows.map(rowKey));
+  const newKeys = new Set(newRows.map(rowKey));
   return {
-    resolved: oldRows.filter(r => !newIds.has(r.id)).map(r => r.id),
-    added: newRows.filter(r => !oldIds.has(r.id)).map(r => ({
+    resolved: oldRows.filter(r => !newKeys.has(rowKey(r))).map(r => r.id),
+    added: newRows.filter(r => !oldKeys.has(rowKey(r))).map(r => ({
       id: r.id,
       isMonster: r.label !== 'LH' && r.label !== 'RH' && r.event === 'attack'
     }))
