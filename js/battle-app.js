@@ -61,22 +61,21 @@ class BattleClock {
     this._runResolve();
   }
 
-  /** Phase 1: Resolve animation — exit slide-up/fade on resolved entries. */
-  _runResolve() {
+  /** Phase 1: Resolve animation — genuine-removal slide-out, then group lift.
+   * Non-hand value/state changes (hand morphs) never land in diff.resolved, so
+   * they skip this entirely and render in place. */
+  async _runResolve() {
     const { _diff: diff } = this;
     const queueEl = document.getElementById('queue');
 
     if (!queueEl || diff.resolved.length === 0) {
-      this._runInsert();
+      await this._runInsert();
       return;
     }
 
     const toExit = diff.resolved.slice(0, 1); // exactly one row per removal
-    toExit.forEach(id => {
-      markQueueRowExiting(id);
-    });
-
-    this._timer = setTimeout(() => this._runInsert(), QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS); // one at a time
+    await runQueueRemoval(toExit);            // slide-out → gap → group lift
+    await this._runInsert();
   }
 
   /** Phase 2: Insert — space-creation push-down preview. Runs on inserts, but
@@ -149,7 +148,76 @@ const battleClock = new BattleClock();
 // / `.queue-row-lift` CSS in run.html. The battle clock holds the rebuild long
 // enough for the row to slide out AND the rows below to slide up before re-rendering.
 const QUEUE_EXIT_MS = 280;
-const QUEUE_EXIT_BUFFER_MS = 60; // grace after the animation so the final frame lands
+// Genuine-removal sequence: slide fully out (QUEUE_EXIT_MS) → this gap →
+// remaining rows glide up TOGETHER (QUEUE_EXIT_MS again). See runQueueRemoval.
+const QUEUE_REMOVE_GAP_MS = 100;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+/**
+ * Genuine-removal choreography (shared by BattleClock._runResolve and tickLoop):
+ *   1) the resolved row(s) slide fully out over QUEUE_EXIT_MS (stays in flow),
+ *   2) QUEUE_REMOVE_GAP_MS pause,
+ *   3) the remaining rows FLIP up together as one unit over QUEUE_EXIT_MS.
+ * Callers must pass exactly one id (slice(0,1)) per removal per the shipped spec.
+ * The container is left with the remaining rows at their final positions; the
+ * subsequent renderQueue() reconciles in place (stable-key pass) so this lift is
+ * never clobbered mid-animation.
+ */
+async function runQueueRemoval(resolvedIds) {
+  const queueEl = document.getElementById('queue');
+  if (!queueEl || resolvedIds.length === 0) return;
+  resolvedIds.forEach(id => markQueueRowExiting(id));
+  await sleep(QUEUE_EXIT_MS);       // 1) slide out fully
+  await sleep(QUEUE_REMOVE_GAP_MS); // 2) pause
+  await groupLiftRemaining();       // 3) glide the rest up together
+}
+
+/** FLIP group-lift: release the exited rows' space, then animate every
+ * remaining queue row up as one unit (no per-row stagger, no jump). */
+async function groupLiftRemaining() {
+  const queueEl = document.getElementById('queue');
+  if (!queueEl) return;
+  const exited = Array.from(queueEl.children).filter(c => exitingQueueRows.has(c.dataset.rowId));
+  const siblings = Array.from(queueEl.children).filter(c =>
+    c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId)
+  );
+  if (siblings.length === 0) {
+    // nothing to glide — just drop the exited rows and clear the cache
+    exited.forEach(c => c.remove());
+    exited.forEach(c => exitingQueueRows.delete(c.dataset.rowId));
+    return;
+  }
+  // Capture rows at their pushed-down positions BEFORE releasing the exited
+  // row's space, so the FLIP can pin them there and then glide to natural.
+  const before = siblings.map(r => r.getBoundingClientRect().top);
+  exited.forEach(c => c.remove());
+  exited.forEach(c => exitingQueueRows.delete(c.dataset.rowId));
+  const after = siblings.map(r => r.getBoundingClientRect().top);
+  // FLIP: lock siblings at pre-removal offsets, force reflow, then clear the
+  // transform — the transition glides them up together.
+  siblings.forEach((r, i) => {
+    r.style.transition = 'none';
+    r.style.transform = `translateY(${before[i] - after[i]}px)`;
+  });
+  void queueEl.offsetHeight; // reflow to commit the locked transform
+  siblings.forEach(r => {
+    r.style.transition = `transform ${QUEUE_EXIT_MS}ms ease-in`;
+    r.style.transform = '';
+  });
+  await sleep(QUEUE_EXIT_MS);
+  siblings.forEach(r => { r.style.transition = ''; r.style.transform = ''; });
+}
+
+/** Stable identity for a queue row across renders: hands are singletons keyed
+ * by label (LH/RH) — their id regenerates every tick (engine addEvent always
+ * UUIDs), so label is the only stable key. Monsters are keyed by id (one row
+ * per attack cycle). Shared by diffQueueForAnimation and renderQueue. */
+function queueRowKey(row) {
+  return (row.label === 'LH' || row.label === 'RH') ? `h:${row.label}` : `i:${row.id}`;
+}
 
 const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
@@ -1000,6 +1068,36 @@ function renderQueue(bs, fill = false, onDone = null) {
     }
     return;
   }
+  // In-place reconciliation: when the STABLE key set (hands by label, monsters
+  // by id) matches the existing DOM exactly, this is a pure value/state update
+  // (e.g. 'L. Hand Ready 38' → 'L. Hand Ready —', or a tic decrement) — mutate
+  // each row's text/tics and reorder, with NO slide-out/slide-in. This is what
+  // stops same-hand updates from animating.
+  const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
+  const newKeys = queue.map(queueRowKey);
+  if (domKeys.size === newKeys.length && newKeys.every(k => domKeys.has(k))) {
+    const monsters = bs.monsters || [];
+    const sorted = sortQueueRows(queue);
+    // Detach non-row children (e.g. the PC-56 prediction bar) so the reorder
+    // below only shuffles rows; re-append them last so the bar stays on top.
+    const nonRows = Array.from(el.children).filter(c => !c.classList.contains('queue-row'));
+    nonRows.forEach(c => c.remove());
+    sorted.forEach((row, index) => {
+      const domEl = currentRows.find(r => r.dataset.stableKey === queueRowKey(row));
+      if (domEl && domEl.parentNode) {
+        el.appendChild(domEl); // reorder into its sorted slot (existing rows only)
+        updateQueueRowInPlace(domEl, row, monsters, bs, index);
+      }
+    });
+    nonRows.forEach(c => el.appendChild(c));
+    const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
+    if (titleEl) titleEl.textContent = 'Action Queue';
+    if (fill && onDone) {
+      const rows = Math.max(queue.length, 1);
+      setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+    }
+    return;
+  }
   clearQueueDom();
   const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
   if (titleEl) {
@@ -1114,14 +1212,14 @@ function renderQueue(bs, fill = false, onDone = null) {
 function diffQueueForAnimation(oldBs, newBs) {
   const oldRows = sortQueueRows(oldBs.queue || []);
   const newRows = sortQueueRows(newBs.queue || []);
-  // Hand rows use stable label key (LH/RH singleton identity preserved across tics/state updates);
-  // monsters/monsters use id (regenerated per cycle). This prevents value-update slide-out+slide-in.
-  function rowKey(r) { return (r.label === 'LH' || r.label === 'RH') ? r.label : r.id; }
-  const oldKeys = new Set(oldRows.map(rowKey));
-  const newKeys = new Set(newRows.map(rowKey));
+  // Hand rows use stable label key (LH/RH singleton identity preserved across
+  // tics/state updates); monsters use id (regenerated per cycle). This prevents
+  // value-update slide-out+slide-in.
+  const oldKeys = new Set(oldRows.map(queueRowKey));
+  const newKeys = new Set(newRows.map(queueRowKey));
   return {
-    resolved: oldRows.filter(r => !newKeys.has(rowKey(r))).map(r => r.id),
-    added: newRows.filter(r => !oldKeys.has(rowKey(r))).map(r => ({
+    resolved: oldRows.filter(r => !newKeys.has(queueRowKey(r))).map(r => r.id),
+    added: newRows.filter(r => !oldKeys.has(queueRowKey(r))).map(r => ({
       id: r.id,
       isMonster: r.label !== 'LH' && r.label !== 'RH' && r.event === 'attack'
     }))
@@ -1153,19 +1251,14 @@ function markQueueRowExiting(rowId) {
   const row = el.querySelector(`[data-row-id="${rowId}"]`);
   if (!row) return;
   row.classList.remove('queue-row-current');
-  row.classList.add('queue-row-exit');
+  row.classList.add('queue-row-exit'); // slides fully out but STAYS in flow (space not released yet)
 
   if (!exitingQueueRows.has(rowId)) {
     exitingQueueRows.set(rowId, { element: row, finished: false });
   }
-
-  row.addEventListener('animationend', () => {
-    // Minimal: only top-row exit slide-out (sibling glide added later per directive)
-    if (row.parentNode) row.parentNode.removeChild(row);
-    const entry = exitingQueueRows.get(rowId);
-    if (entry) entry.finished = true;
-    exitingQueueRows.delete(rowId);
-  }, { once: true });
+  // Removal + sibling group-lift is owned by groupLiftRemaining() (rare it
+  // actually leaves the DOM after this). No auto-remove here so the rows below
+  // never jump — they glide up together as one unit after the exit+gap.
 }
 
 // Shared rail-row builder: used by renderQueue and the PC-64 intro countdown so
@@ -1179,6 +1272,7 @@ function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   }
   div.dataset.rowId = row.id;
   div.dataset.tics = row.tics;
+  div.dataset.stableKey = queueRowKey(row);
   const nameSpan = document.createElement('span');
   nameSpan.className = 'name';
   // Ready placeholder rows: show the hand label and "Ready" — no tic countdown
@@ -1223,6 +1317,53 @@ function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   }
   // PC-56: bar-only mode — no pin markers; the prediction bar is added by renderQueue
   return div;
+}
+
+// In-place text/tics mutation for a same-logical-row update (Behavior A). Mirrors
+// buildQueueRow's output but reuses the existing DOM node so nothing slides or
+// flickers. Hand rows and monsters already carry .stableKey from buildQueueRow.
+function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
+  div.dataset.rowId = row.id;
+  div.dataset.tics = row.tics;
+  div.classList.toggle('top-row', index >= 0 && index < 3);
+  const isMonster = row.event === 'attack' && row.label && row.label !== 'LH' && row.label !== 'RH';
+  const hasBar = !isMonster && row.event !== 'ready' && row.event !== 'approach';
+  let nameSpan = div.querySelector('.name');
+  let ticSpan = div.querySelector('.tic');
+  let bar = div.querySelector('.queue-bar');
+  if (!nameSpan) {
+    nameSpan = document.createElement('span');
+    nameSpan.className = 'name';
+    div.prepend(nameSpan);
+  }
+  if (!ticSpan) {
+    ticSpan = document.createElement('span');
+    ticSpan.className = 'tic';
+    div.appendChild(ticSpan);
+  }
+  if (row.event === 'ready') {
+    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    ticSpan.textContent = '—';
+  } else if (row.event === 'approach') {
+    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+  } else if (isMonster) {
+    const mon = monsters.find(m => m.label === row.label);
+    const monName = (mon && mon.name) ? mon.name : (mon && mon.label) ? mon.label : queueLabel(row);
+    const atkName = queueEventName(row, monsters, bs);
+    nameSpan.textContent = `${monName}'s ${atkName}`;
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+  } else {
+    nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+  }
+  if (hasBar && !bar) {
+    bar = document.createElement('div');
+    bar.className = 'queue-bar';
+    div.appendChild(bar);
+  } else if (!hasBar && bar) {
+    bar.remove();
+  }
 }
 
 // PC-64 battle intro: rows sorted by tics ascending with player-first ties —
@@ -2434,16 +2575,16 @@ async function tickLoop(runId) {
     renderMonsters(bs.monsters || []);
     renderLoadout(bs);
 
-    // Queue: compute diff for exit+entry animations before re-render
+    // Queue: label-keyed diff (hands stable by label, monsters by id) so hand
+    // value/state updates render in place and ONLY genuine removals slide out.
     const newQueue = bs.queue || [];
-    const oldIds = new Set(oldQueue.map(r => r.id));
-    const newIds = new Set(newQueue.map(r => r.id));
-    const resolved = oldQueue.filter(r => !newIds.has(r.id)).slice(0, 1); // exactly one row per removal (purge multi for now)
-    resolved.forEach(r => markQueueRowExiting(r.id));
+    const oldKeys = new Set(oldQueue.map(queueRowKey));
+    const newKeys = new Set(newQueue.map(queueRowKey));
+    const resolved = oldQueue.filter(r => !newKeys.has(queueRowKey(r))).slice(0, 1); // exactly one row per removal
     if (resolved.length > 0) {
-      await new Promise(r => setTimeout(r, QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS));
+      await runQueueRemoval(resolved.map(r => r.id)); // slide-out → gap → group lift
     }
-    const added = newQueue.filter(r => !oldIds.has(r.id));
+    const added = newQueue.filter(r => !oldKeys.has(queueRowKey(r)));
 
     // Space creation — empty-slot push-down dotted preview. Runs on inserts,
     // but suppressed when this tick also removes a row (a hand-ready commit
