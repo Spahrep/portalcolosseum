@@ -295,13 +295,10 @@
       0%   { opacity: 1; transform: translateX(0); }
       100% { opacity: 0; transform: translateX(96px); }
     }
-    /* Top-item exit: the leaving row is pinned `position:absolute` by
-       battle-app.js (out of flow) so it stops holding its slot — no downward
-       push / no space built to remove it — then it slides right-out + fades.
-       Rows below FLIP-slide up into the freed slot via .queue-row-lift.
-       Duration must match QUEUE_EXIT_MS in js/battle-app.js. */
+    /* Top-item exit: row stays in flow during slide-out (transform only; space
+       not released until removal). After 280ms exit completes, row is removed
+       and rows below FLIP-slide up. Duration matches QUEUE_EXIT_MS. */
     .queue-row-exit {
-      position: absolute;
       animation: queue-row-exit 280ms ease-in forwards;
     }
     /* FLIP slide-up for rows below the removed one: battle-app.js sets an

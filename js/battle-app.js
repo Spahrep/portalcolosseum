@@ -75,7 +75,7 @@ class BattleClock {
       markQueueRowExiting(id);
     });
 
-    this._timer = setTimeout(() => this._runInsert(), QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS); // exit anim (slide-out + siblings slide-up) runs fully before the queue rebuilds
+    this._timer = setTimeout(() => this._runInsert(), QUEUE_EXIT_MS + QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS); // sequential exit + lift before rebuild
   }
 
   /** Phase 2: Insert — space-creation push-down preview. Runs on inserts, but
@@ -1136,53 +1136,43 @@ function markQueueRowExiting(rowId) {
   row.classList.remove('queue-row-current');
   row.classList.add('queue-row-exit');
 
-  // Free the slot NOW: pin the leaving row absolutely at its current spot so
-  // it stops holding flow space (no "build space / push everything down"),
-  // then the CSS slides it right-out + fades. #queue is position:relative.
-  const queueRect = el.getBoundingClientRect();
-  const rowRect = row.getBoundingClientRect();
-  row.style.left = (rowRect.left - queueRect.left) + 'px';
-  row.style.top = (rowRect.top - queueRect.top) + 'px';
-  row.style.width = rowRect.width + 'px';
-
   if (!exitingQueueRows.has(rowId)) {
     exitingQueueRows.set(rowId, { element: row, finished: false });
   }
 
-  // FLIP slide-up: once the row detaches, the rows below jump up instantly.
-  // Capture their pre-detach tops (First/Last), then Invert the jump with a
-  // translateY and Play it back to 0 next frame → they glide up into the slot.
-  const siblings = [];
-  for (let s = row.nextElementSibling; s; s = s.nextElementSibling) {
-    if (s.classList.contains('queue-insert-preview')) continue;
-    siblings.push(s);
-  }
-  const firstTops = siblings.map(s => s.getBoundingClientRect().top);
-  void el.offsetHeight; // flush layout so the absolute detach actually moved siblings
-  const moved = [];
-  siblings.forEach((s, i) => {
-    if (!s.isConnected) return;
-    const delta = firstTops[i] - s.getBoundingClientRect().top;
-    if (delta === 0) return;
-    s.classList.add('queue-row-lift');
-    s.style.transform = `translateY(${delta}px)`;
-    moved.push(s);
-  });
-  // Commit the inverted state, then next frame clear it so the transition glides up.
-  if (moved.length) void moved[0].offsetHeight;
-  requestAnimationFrame(() => {
-    moved.forEach(s => { if (s.isConnected) s.style.transform = ''; });
-  });
-  const liftTimer = setTimeout(() => {
-    moved.forEach(s => s.classList.remove('queue-row-lift'));
-  }, QUEUE_EXIT_MS + 40);
-
   row.addEventListener('animationend', () => {
-    clearTimeout(liftTimer);
+    // Exit complete: remove row (free slot) THEN FLIP siblings up sequentially.
+    const siblings = [];
+    for (let s = row.nextElementSibling; s; s = s.nextElementSibling) {
+      if (s.classList.contains('queue-insert-preview')) continue;
+      siblings.push(s);
+    }
+    const firstTops = siblings.map(s => s.getBoundingClientRect().top);
+
+    if (row.parentNode) row.parentNode.removeChild(row);
+
     const entry = exitingQueueRows.get(rowId);
     if (entry) entry.finished = true;
-    // removal happens on next clearQueueDom or immediately if finished
-    if (row.parentNode) row.parentNode.removeChild(row);
+
+    // FLIP siblings now that slot is freed.
+    void el.offsetHeight;
+    const moved = [];
+    siblings.forEach((s, i) => {
+      if (!s.isConnected) return;
+      const delta = firstTops[i] - s.getBoundingClientRect().top;
+      if (delta === 0) return;
+      s.classList.add('queue-row-lift');
+      s.style.transform = `translateY(${delta}px)`;
+      moved.push(s);
+    });
+    if (moved.length) void moved[0].offsetHeight;
+    requestAnimationFrame(() => {
+      moved.forEach(s => { if (s.isConnected) s.style.transform = ''; });
+    });
+    const liftTimer = setTimeout(() => {
+      moved.forEach(s => s.classList.remove('queue-row-lift'));
+    }, QUEUE_EXIT_MS + 40);
+
     exitingQueueRows.delete(rowId);
   }, { once: true });
 }
@@ -2216,10 +2206,6 @@ async function loadBattle(runId) {
         const queueEl = document.getElementById('queue');
         // Mark first resolved entry as "current" during narration — it stays
         // at the top while the typewriter describes the action.
-        if (queueEl && diff.resolved.length > 0) {
-          const firstEl = queueEl.querySelector(`[data-row-id="${diff.resolved[0]}"]`);
-          if (firstEl) firstEl.classList.add('queue-row-current');
-        }
         // BattleClock handles the entire post-commit sequence:
         //   highlight → feed narration → resolve flash+shrink → renderQueue → entry animations
         battleClock.start(diff, bs, () => {
@@ -2464,7 +2450,8 @@ async function tickLoop(runId) {
     const resolved = oldQueue.filter(r => !newIds.has(r.id));
     resolved.forEach(r => markQueueRowExiting(r.id));
     if (resolved.length > 0) {
-      await new Promise(r => setTimeout(r, QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS));
+      // Sequential: exit (280) + lift (280) + buffer; re-render after both finish
+      await new Promise(r => setTimeout(r, QUEUE_EXIT_MS + QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS));
     }
     const added = newQueue.filter(r => !oldIds.has(r.id));
 
