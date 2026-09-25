@@ -71,11 +71,12 @@ class BattleClock {
       return;
     }
 
-    diff.resolved.forEach(id => {
+    const toExit = diff.resolved.slice(0, 1); // exactly one row per removal
+    toExit.forEach(id => {
       markQueueRowExiting(id);
     });
 
-    this._timer = setTimeout(() => this._runInsert(), QUEUE_EXIT_MS + QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS); // sequential exit + lift before rebuild
+    this._timer = setTimeout(() => this._runInsert(), QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS); // one at a time
   }
 
   /** Phase 2: Insert — space-creation push-down preview. Runs on inserts, but
@@ -984,12 +985,27 @@ function renderQueue(bs, fill = false, onDone = null) {
   debugLog('renderQueue', `fill=${fill} n_queue=${bs.queue?.length || 0} n_monsters=${bs.monsters?.length || 0}`);
   const el = document.getElementById('queue');
   if (!el) return;
+  // No-flicker: skip full wipe+rebuild if queue ids/order unchanged (prevents re-trigger enter anims on every tick)
+  const queue = bs.queue || [];
+  const currentRows = Array.from(el.querySelectorAll('.queue-row')).filter(r => !r.classList.contains('queue-row-exit') && !r.classList.contains('queue-insert-preview'));
+  const currentIds = currentRows.map(r => r.dataset.rowId);
+  const newIds = queue.map(r => r.id);
+  if (currentIds.length === newIds.length && currentIds.every((id, i) => id === newIds[i])) {
+    // unchanged — leave DOM alone, just update title if needed
+    const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
+    if (titleEl) titleEl.textContent = 'Action Queue';
+    if (fill && onDone) {
+      const rows = Math.max(queue.length, 1);
+      setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+    }
+    return;
+  }
   clearQueueDom();
   const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
   if (titleEl) {
     titleEl.textContent = 'Action Queue';
   }
-  const queue = bs.queue || [];
+  // queue already declared in no-flicker check above
   if (fill && onDone) {
     // Ceremony-intro: signal completion after the last row's fade lands, so the
     // command window never waits on an animation that cannot start (empty queue).
@@ -1141,38 +1157,10 @@ function markQueueRowExiting(rowId) {
   }
 
   row.addEventListener('animationend', () => {
-    // Exit complete: remove row (free slot) THEN FLIP siblings up sequentially.
-    const siblings = [];
-    for (let s = row.nextElementSibling; s; s = s.nextElementSibling) {
-      if (s.classList.contains('queue-insert-preview')) continue;
-      siblings.push(s);
-    }
-    const firstTops = siblings.map(s => s.getBoundingClientRect().top);
-
+    // Minimal: only top-row exit slide-out (sibling glide added later per directive)
     if (row.parentNode) row.parentNode.removeChild(row);
-
     const entry = exitingQueueRows.get(rowId);
     if (entry) entry.finished = true;
-
-    // FLIP siblings now that slot is freed.
-    void el.offsetHeight;
-    const moved = [];
-    siblings.forEach((s, i) => {
-      if (!s.isConnected) return;
-      const delta = firstTops[i] - s.getBoundingClientRect().top;
-      if (delta === 0) return;
-      s.classList.add('queue-row-lift');
-      s.style.transform = `translateY(${delta}px)`;
-      moved.push(s);
-    });
-    if (moved.length) void moved[0].offsetHeight;
-    requestAnimationFrame(() => {
-      moved.forEach(s => { if (s.isConnected) s.style.transform = ''; });
-    });
-    const liftTimer = setTimeout(() => {
-      moved.forEach(s => s.classList.remove('queue-row-lift'));
-    }, QUEUE_EXIT_MS + 40);
-
     exitingQueueRows.delete(rowId);
   }, { once: true });
 }
@@ -2447,11 +2435,10 @@ async function tickLoop(runId) {
     const newQueue = bs.queue || [];
     const oldIds = new Set(oldQueue.map(r => r.id));
     const newIds = new Set(newQueue.map(r => r.id));
-    const resolved = oldQueue.filter(r => !newIds.has(r.id));
+    const resolved = oldQueue.filter(r => !newIds.has(r.id)).slice(0, 1); // exactly one row per removal (purge multi for now)
     resolved.forEach(r => markQueueRowExiting(r.id));
     if (resolved.length > 0) {
-      // Sequential: exit (280) + lift (280) + buffer; re-render after both finish
-      await new Promise(r => setTimeout(r, QUEUE_EXIT_MS + QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS));
+      await new Promise(r => setTimeout(r, QUEUE_EXIT_MS + QUEUE_EXIT_BUFFER_MS));
     }
     const added = newQueue.filter(r => !oldIds.has(r.id));
 
