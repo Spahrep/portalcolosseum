@@ -229,36 +229,80 @@ export function createEngine(rng = Math.random) {
     return removeHead(state.queue);
   }
 
+  // Explicit Peek→Process→Cleanup→Remove phases (PC-94)
+  // Master loop (tick) calls them serially, one item at a time.
+  // Early data-detach (remove before process) preserved to avoid ghost rows.
+  function peek() {
+    return peekHead(state.queue);
+  }
+
+  function remove() {
+    return removeHead(state.queue);
+  }
+
+  function process(row) {
+    if (!row) return null;
+    const feedBefore = state.feed.length;
+    handleFire(row);
+    // expire buffs (same logic as stepOnce for compat)
+    const stillActive = [];
+    for (const b of state.buffs) {
+      if (b.endTic <= state.tic) {
+        log(`${b.name} buff expired`);
+      } else {
+        stillActive.push(b);
+      }
+    }
+    state.buffs = stillActive;
+    sortQueue(state.queue);
+    const newFeed = state.feed.slice(feedBefore);
+    const narrate = newFeed.join('\n');
+    return { row, narrate, feed: newFeed };
+  }
+
+  function cleanup() {
+    const pd = isPlayerDead(state.player);
+    const allMonstersDead = state.monsters.length > 0 && state.monsters.every(isMonsterDead);
+    const battleOver = allMonstersDead || pd;
+    if (pd) {
+      return { terminal: 'death', battleOver: true };
+    }
+    if (allMonstersDead) {
+      return { terminal: 'victory', battleOver: true };
+    }
+    return { terminal: null, battleOver: false };
+  }
+
   function tick() {
-    // PC-82: remove head BEFORE processing and advance tics so every entry
-    // converges toward 0 — matching popNext / stepOnce semantics.
-    // Without this, monster entries at tic=5+ never reach tic=0 because
-    // player entries (ready=0, winding=3, cooldown=cd) always sort first.
-    const removedRow = removeHead(state.queue);
-    if (!removedRow) {
+    // Master loop: Peek → Remove(data early) → Process → Cleanup → (visual remove client-side)
+    // One item at a time, strictly serial.
+    const row = peek();
+    if (!row) {
       // No non-ready rows. Player needs to act or battle is over.
       const hasReadyHand = Object.values(state.player?.hands || {}).some(h => h.state === 'Ready');
       if (hasReadyHand) return { needsInput: true, row: null };
       return { done: true };
     }
+    // Early data-detach BEFORE process (preserve ghost-row prevention)
+    const removedRow = remove();
+    if (!removedRow) {
+      const hasReadyHand = Object.values(state.player?.hands || {}).some(h => h.state === 'Ready');
+      if (hasReadyHand) return { needsInput: true, row: null };
+      return { done: true };
+    }
     const head = removedRow;
-    // Advance tics by the consumed row's value — every non-ready entry
-    // gets closer to the front. handleFire runs *after* advancement so
-    // any newly-added entries use the updated tic baseline.
+    // Advance tics by the consumed row's value
     const ticCost = head.tics;
     if (ticCost > 0) {
       for (const r of state.queue) {
         if (r.event !== 'ready') r.tics = Math.max(0, r.tics - ticCost);
       }
     }
-    const feedBefore = state.feed.length;
-    handleFire(head);
-    sortQueue(state.queue);
-    const newFeed = state.feed.slice(feedBefore);
-    const narrate = newFeed.join('\n');
-    const pd = isPlayerDead(state.player);
-    const allMonstersDead = state.monsters.length > 0 && state.monsters.every(isMonsterDead);
-    const battleOver = allMonstersDead || pd;
+    const result = process(head);
+    const cleanupResult = cleanup();
+    const narrate = result ? result.narrate : '';
+    const newFeed = result ? result.feed : [];
+    const battleOver = cleanupResult.battleOver;
     return { narrate, row: head, feed: newFeed, needsInput: false,
       playerReady: Object.values(state.player?.hands || {}).some(h => h.state === 'Ready'), battleOver };
   }
