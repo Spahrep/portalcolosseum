@@ -157,6 +157,37 @@ function sleep(ms) {
 }
 
 /**
+ * Event-driven wait for animation/transition completion.
+ * Uses animationend or transitionend per caller.
+ * Reduced-motion media query short-circuits to immediate resolve (no wait).
+ * Timeout fallback preserves behavior when events never fire (reduced-motion
+ * environments, etc.). Matches the monster-death pattern.
+ */
+function waitForEvent(el, eventName, timeoutMs = QUEUE_EXIT_MS + 50) {
+  return new Promise(resolve => {
+    if (!el) {
+      resolve();
+      return;
+    }
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReduced) {
+      resolve();
+      return;
+    }
+    const handler = () => {
+      el.removeEventListener(eventName, handler);
+      resolve();
+    };
+    el.addEventListener(eventName, handler, { once: true });
+    // fallback for reduced-motion or when event never fires
+    setTimeout(() => {
+      el.removeEventListener(eventName, handler);
+      resolve();
+    }, timeoutMs);
+  });
+}
+
+/**
  * Genuine-removal choreography (shared by BattleClock._runResolve and tickLoop):
  *   1) the resolved row(s) slide fully out over QUEUE_EXIT_MS (stays in flow),
  *   2) QUEUE_REMOVE_GAP_MS pause,
@@ -169,9 +200,15 @@ function sleep(ms) {
 async function runQueueRemoval(resolvedIds) {
   const queueEl = document.getElementById('queue');
   if (!queueEl || resolvedIds.length === 0) return;
-  resolvedIds.forEach(id => markQueueRowExiting(id));
-  await sleep(QUEUE_EXIT_MS);       // 1) slide out fully
-  await sleep(QUEUE_REMOVE_GAP_MS); // 2) pause
+  // strict barrier: fire all exit visuals in parallel, await completion via events
+  const exitRows = [];
+  resolvedIds.forEach(id => {
+    markQueueRowExiting(id);
+    const row = queueEl.querySelector(`[data-row-id="${id}"]`);
+    if (row) exitRows.push(row);
+  });
+  await Promise.all(exitRows.map(r => waitForEvent(r, 'animationend')));
+  await sleep(QUEUE_REMOVE_GAP_MS); // 2) pause (gap is non-visual timing)
   await groupLiftRemaining();       // 3) glide the rest up together
 }
 
@@ -207,7 +244,8 @@ async function groupLiftRemaining() {
     r.style.transition = `transform ${QUEUE_EXIT_MS}ms ease-in`;
     r.style.transform = '';
   });
-  await sleep(QUEUE_EXIT_MS);
+  // strict barrier inside step: await all transitionend events in parallel
+  await Promise.all(siblings.map(r => waitForEvent(r, 'transitionend')));
   siblings.forEach(r => { r.style.transition = ''; r.style.transform = ''; });
 }
 
