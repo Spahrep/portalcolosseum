@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getHpWord, HP_BANDS } from '../js/combat/hp-words.js';
-import { createQueue, commitNewRow, popNext, sortQueue, computeTimingMarkers } from '../js/combat/tic-queue.js';
+import { createQueue, commitNewRow, popNext, sortQueue, computeTimingMarkers, morphHandRow, removeHandRow } from '../js/combat/tic-queue.js';
 import createEngine, { resumeEngine } from '../js/combat/engine.js';
 import { swapHandWithBelt } from '../js/combat/participants.js';
 
@@ -51,6 +51,47 @@ describe('Tic queue ordering + player-first ties', () => {
     assert.equal(q[0].tics, 2);
     assert.equal(q[1].label, 'M');
     assert.equal(q[1].tics, 4);
+  });
+});
+
+describe('PC-96a: morphHandRow + removeHandRow in-place primitives', () => {
+  it('morphHandRow preserves id, changes event/tics, re-sorts', () => {
+    const q = createQueue();
+    const r1 = commitNewRow(q, 'M', 'attack', 10);
+    const r2 = commitNewRow(q, 'LH', 'winding', 5);
+    const origId = r2.id;
+    const morphed = morphHandRow(q, 'LH', 'impact', 2);
+    assert.ok(morphed);
+    assert.equal(morphed.id, origId);
+    assert.equal(morphed.event, 'impact');
+    assert.equal(morphed.tics, 2);
+    assert.equal(q[0].label, 'LH'); // now lowest tics
+  });
+
+  it('morphHandRow returns null for unknown label', () => {
+    const q = createQueue();
+    commitNewRow(q, 'RH', 'cooldown', 3);
+    const res = morphHandRow(q, 'LH', 'ready', 0);
+    assert.equal(res, null);
+  });
+
+  it('removeHandRow removes + re-sorts + returns the row', () => {
+    const q = createQueue();
+    commitNewRow(q, 'M', 'attack', 8);
+    const hand = commitNewRow(q, 'RH', 'cooldown', 4);
+    const removed = removeHandRow(q, 'RH');
+    assert.ok(removed);
+    assert.equal(removed.id, hand.id);
+    assert.equal(q.length, 1);
+    assert.equal(q[0].label, 'M');
+  });
+
+  it('removeHandRow returns null for unknown label', () => {
+    const q = createQueue();
+    commitNewRow(q, 'LH', 'winding', 5);
+    const res = removeHandRow(q, 'RH');
+    assert.equal(res, null);
+    assert.equal(q.length, 1);
   });
 });
 
