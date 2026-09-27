@@ -2,6 +2,13 @@
 // Pure ESM. Sorted array of {id, label, event, tics}. tick() decrements, fires at 0.
 // Player-first on ties. Re-sort only on commit. Hand rows morph (identity preserved).
 // F5: collision-free IDs via crypto.randomUUID() (stateless serverless safe).
+//
+// STRICTLY-SERIAL SINGLE-HEAD CONTRACT (PC-96 / docs/battle-engine-item-processing.md):
+// Master loop is Peek -> Process -> Cleanup -> Remove (one head item at a time).
+// Hand rows (label 'LH'/'RH') are NEVER remove+re-add. They MORPH IN PLACE on stable
+// key so the renderer can use id for stable-key diffing. removeHandRow is the
+// explicit "disappear when cooldown hits 0" primitive (hand-free beat); the row is
+// gone, not turned into a visible 'ready' placeholder.
 
 export function createQueue() {
   return [];
@@ -74,8 +81,17 @@ export function morphHandRow(queue, handLabel, newEvent, newTics) {
     row.event = newEvent;
     row.tics = newTics;
     sortQueue(queue);
+    return row;
   }
-  return row;
+  return null;
+}
+
+export function removeHandRow(queue, handLabel) {
+  const idx = queue.findIndex(r => r.label === handLabel);
+  if (idx === -1) return null;
+  const [removed] = queue.splice(idx, 1);
+  sortQueue(queue);
+  return removed;
 }
 
 // PC-56: computeTimingMarkers returns bar info for prediction bar UX
