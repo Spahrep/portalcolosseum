@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import createEngine, { resumeEngine } from '../js/combat/engine.js';
+import { applyBuffs } from '../js/combat/buffs.js';
 
 function seededRNG(seed = 42) {
   let s = seed;
@@ -8,6 +9,12 @@ function seededRNG(seed = 42) {
     s = (s * 16807) % 2147483647;
     return (s - 1) / 2147483646;
   };
+}
+
+function stepUntil(eng, pred, max = 40) {
+  let s = eng.getState();
+  for (let i = 0; i < max && !pred(s); i++) s = eng.stepQueue();
+  return s;
 }
 
 function makeParticipants(consumeA = null, consumeB = null) {
@@ -49,8 +56,8 @@ describe('Potion use (PC-39)', () => {
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
     eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 3 });
-    eng.advanceToNextDecision();
-    assert.ok(eng.state.queue.some(r => r.label === 'LH' && r.event === 'recovery') || eng.state.feed.some(l => l.includes('drinking')));
+    stepUntil(eng, s => s.queue.some(r => r.label === 'LH' && r.event === 'recovery') || s.feed.some(l => l.includes('healed')));
+    assert.ok(eng.state.queue.some(r => r.label === 'LH' && r.event === 'recovery') || eng.state.feed.some(l => l.includes('LH drinks') || l.includes('LH healed')));
   });
 
   it('params.hand honored', () => {
@@ -58,8 +65,8 @@ describe('Potion use (PC-39)', () => {
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
     eng.advanceToNextDecision();
     eng.commitPotion('A', { hand: 'RH', weaponSpeed: 3 });
-    eng.advanceToNextDecision();
-    assert.ok(eng.state.queue.some(r => r.label === 'RH' && r.event === 'recovery') || eng.state.feed.some(l => l.includes('drinking')));
+    stepUntil(eng, s => s.queue.some(r => r.label === 'RH' && r.event === 'recovery') || s.feed.some(l => l.includes('healed')));
+    assert.ok(eng.state.queue.some(r => r.label === 'RH' && r.event === 'recovery') || eng.state.feed.some(l => l.includes('RH drinks') || l.includes('RH healed')));
   });
 
   it('params.hand on busy hand throws Hand not ready', () => {
@@ -98,8 +105,8 @@ describe('Potion use (PC-39)', () => {
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 20, rolled_speed: 2, template_name: 'Heal' }));
     eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
-    // advance to effect
-    let s = eng.advanceToNextDecision();
+    // Drinking row is behind already-queued rows; walk insertion order until it fires.
+    let s = stepUntil(eng, st => st.potions?.A?.used);
     assert.equal(s.potions.A.used, true);
     assert.throws(() => eng.commitPotion('A'), /Potion already used/);
   });
@@ -107,10 +114,10 @@ describe('Potion use (PC-39)', () => {
   it('effect pipeline called ONCE: exactly one heal line, hp delta correct', () => {
     const eng = createEngine(seededRNG(10));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 40, rolled_speed: 2, template_name: 'Heal' }));
-    eng.state.player.hp = 900;
     eng.advanceToNextDecision();
+    eng.state.player.hp = 900;
     eng.commitPotion('A', { weaponSpeed: 0 });
-    const afterPre = eng.advanceToNextDecision();
+    const afterPre = stepUntil(eng, s => s.feed.some(l => l.includes('healed')));
     // effect should have fired
     const healLines = afterPre.feed.filter(l => l.includes('healed'));
     assert.equal(healLines.length, 1);
@@ -295,21 +302,25 @@ describe('Buff potion effects and duration (PC-39)', () => {
 
   it('duration tracking / remaining decrement', () => {
     const eng = createEngine(seededRNG(104));
-    const p = makeParticipants({ effect_type: 'damage', rolled_floor: 5, rolled_speed: 2, duration_ticks: 4, template_name: 'Dmg' });
+    const p = makeParticipants({ effect_type: 'damage', rolled_floor: 5, rolled_speed: 2, duration_ticks: 20, template_name: 'Dmg' });
     eng.startBattle(p);
     eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
-    let s;
-    for (let i = 0; i < 10; i++) {
-      s = eng.advanceToNextDecision();
-      if (s.feed.some(l => l.includes('damage +5'))) break;
-    }
+    let s = stepUntil(eng, st => st.feed.some(l => l.includes('damage +5')));
     const initialRemaining = s.buffs[0].endTic - s.tic;
     assert.ok(initialRemaining > 0);
-    // one more advance processes recovery (tics=1), tic advances by 1
-    s = eng.advanceToNextDecision();
-    const nextRemaining = s.buffs[0].endTic - s.tic;
-    assert.equal(nextRemaining, initialRemaining - 1);
+    // Next insertion-order head may not be the 1-tic recovery. Remaining tracks
+    // the tic delta of whatever row is actually next, and must not reorder.
+    const ticBefore = s.tic;
+    const idsBefore = eng.state.queue.map(r => r.id);
+    const headId = eng.state.queue.find(r => r.event !== 'ready')?.id;
+    s = eng.stepQueue();
+    const idsAfter = eng.state.queue.map(r => r.id);
+    const survivors = idsBefore.filter(id => id !== headId);
+    const appended = idsAfter.filter(id => !idsBefore.includes(id));
+    assert.deepEqual(idsAfter, survivors.concat(appended), 'step removes the head and appends successors; it does not reorder');
+    assert.ok(s.buffs[0], 'buff survives one step');
+    assert.equal(s.buffs[0].endTic - s.tic, initialRemaining - (s.tic - ticBefore));
   });
 
   it('expiry at the correct tick and removes modifier', () => {
@@ -334,58 +345,43 @@ describe('Buff potion effects and duration (PC-39)', () => {
 
   it('stacking identical: two damage buffs add values, separate endTics', () => {
     const eng = createEngine(seededRNG(106));
-    const dmgA = { effect_type: 'damage', rolled_floor: 5, rolled_speed: 2, duration_ticks: 5, template_name: 'DmgA' };
-    const dmgB = { effect_type: 'damage', rolled_floor: 7, rolled_speed: 2, duration_ticks: 6, template_name: 'DmgB' };
+    const dmgA = { effect_type: 'damage', rolled_floor: 5, rolled_speed: 2, duration_ticks: 40, template_name: 'DmgA' };
+    const dmgB = { effect_type: 'damage', rolled_floor: 7, rolled_speed: 2, duration_ticks: 50, template_name: 'DmgB' };
     const p = makeParticipants(dmgA, dmgB);
     eng.startBattle(p);
     eng.advanceToNextDecision();
+    // Both drinks must be inserted before either resolves. A later drink sits
+    // behind the first buff's expiry row, so walking to it expires the first buff.
     eng.commitPotion('A', { weaponSpeed: 0 });
-    let s;
-    for (let i = 0; i < 10; i++) {
-      s = eng.advanceToNextDecision();
-      if (s.feed.some(l => l.includes('damage +5'))) break;
-    }
     eng.commitPotion('B', { weaponSpeed: 0 });
-    for (let i = 0; i < 10; i++) {
-      s = eng.advanceToNextDecision();
-      if (s.feed.some(l => l.includes('damage +7'))) break;
-    }
+    const s = stepUntil(eng, st => st.buffs.length >= 2);
     assert.equal(s.buffs.length, 2);
-    // advance until hand is Ready before committing attack
-    for (let i = 0; i < 10; i++) {
-      if (eng.state.player.hands.RH.state === 'Ready') break;
-      eng.advanceToNextDecision();
-    }
+    const ends = [...s.buffs.map(b => b.endTic)].sort((a, b) => a - b);
+    assert.ok(ends[0] !== ends[1]);
+    assert.equal(applyBuffs(s.buffs, s.tic, 'damage'), 12);
+    // Recovery sits behind the expiry rows, so a real walk to Ready expires the
+    // buffs first. Flip the hand only to read commitAttack's frozen math.
+    eng.state.player.hands.RH.state = 'Ready';
     eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
     const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'winding');
     assert.equal(attackRow.damage, 10 + 5 + 7);
-    const ends = s.buffs.map(b => b.endTic).sort();
-    assert.ok(ends[0] !== ends[1]);
   });
 
   it('stacking different: speed + damage both apply to same attack', () => {
     const eng = createEngine(seededRNG(107));
-    const spd = { effect_type: 'speed', rolled_floor: 2, rolled_speed: 2, duration_ticks: 5, template_name: 'Spd' };
-    const dmg = { effect_type: 'damage', rolled_floor: 6, rolled_speed: 2, duration_ticks: 5, template_name: 'Dmg' };
+    const spd = { effect_type: 'speed', rolled_floor: 2, rolled_speed: 2, duration_ticks: 40, template_name: 'Spd' };
+    const dmg = { effect_type: 'damage', rolled_floor: 6, rolled_speed: 2, duration_ticks: 40, template_name: 'Dmg' };
     const p = makeParticipants(spd, dmg);
     eng.startBattle(p);
     eng.advanceToNextDecision();
+    // Commit both before either resolves so the speed buff is still active when damage lands.
     eng.commitPotion('A', { weaponSpeed: 0 });
-    let s;
-    for (let i = 0; i < 10; i++) {
-      s = eng.advanceToNextDecision();
-      if (s.feed.some(l => l.includes('speed +2'))) break;
-    }
     eng.commitPotion('B', { weaponSpeed: 0 });
-    for (let i = 0; i < 10; i++) {
-      s = eng.advanceToNextDecision();
-      if (s.feed.some(l => l.includes('damage +6'))) break;
-    }
-    // advance until hand ready per critical buff test order
-    for (let i = 0; i < 20; i++) {
-      if (eng.state.player.hands.RH.state === 'Ready') break;
-      eng.advanceToNextDecision();
-    }
+    const s = stepUntil(eng, st => st.buffs.some(b => b.type === 'speed') && st.buffs.some(b => b.type === 'damage'));
+    assert.equal(applyBuffs(s.buffs, s.tic, 'speed'), 2);
+    assert.equal(applyBuffs(s.buffs, s.tic, 'damage'), 6);
+    // Same as the identical-stack case: do not walk the expiry rows to reach Ready.
+    eng.state.player.hands.RH.state = 'Ready';
     eng.commitAttack('RH', 1, [1], { castTicks: 4, cooldownTicks: 3, playerDamage: 10 });
     const attackRow = eng.state.queue.find(r => r.label === 'RH' && r.event === 'winding');
     assert.equal(attackRow.damage, 10 + 6);
@@ -395,26 +391,16 @@ describe('Buff potion effects and duration (PC-39)', () => {
 
   it('expiry of one stacked buff does not kill the other', () => {
     const eng = createEngine(seededRNG(108));
-    const short = { effect_type: 'damage', rolled_floor: 4, rolled_speed: 2, duration_ticks: 2, template_name: 'Short' };
-    const long = { effect_type: 'damage', rolled_floor: 9, rolled_speed: 2, duration_ticks: 6, template_name: 'Long' };
+    const short = { effect_type: 'damage', rolled_floor: 4, rolled_speed: 2, duration_ticks: 8, template_name: 'Short' };
+    const long = { effect_type: 'damage', rolled_floor: 9, rolled_speed: 2, duration_ticks: 40, template_name: 'Long' };
     const p = makeParticipants(short, long);
     eng.startBattle(p);
     eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
-    let s;
-    for (let i = 0; i < 10; i++) {
-      s = eng.advanceToNextDecision();
-      if (s.feed.some(l => l.includes('damage +4'))) break;
-    }
+    stepUntil(eng, st => st.feed.some(l => l.includes('damage +4')));
     eng.commitPotion('B', { weaponSpeed: 0 });
-    for (let i = 0; i < 10; i++) {
-      s = eng.advanceToNextDecision();
-      if (s.feed.some(l => l.includes('damage +9'))) break;
-    }
-    for (let i = 0; i < 20; i++) {
-      s = eng.advanceToNextDecision();
-      if (s.feed.some(l => l.includes('Short buff expired'))) break;
-    }
+    let s = stepUntil(eng, st => st.feed.some(l => l.includes('damage +9')));
+    s = stepUntil(eng, st => st.feed.some(l => l.includes('Short buff expired')), 40);
     assert.equal(s.buffs.length, 1);
     assert.equal(s.buffs[0].name, 'Long');
     assert.ok(s.buffs[0].endTic > s.tic);
@@ -427,7 +413,9 @@ describe('Buff potion effects and duration (PC-39)', () => {
     eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 4 });
     eng.commitAttack('RH', 1, [1], { castTicks: 3, cooldownTicks: 2, playerDamage: 10 });
-    eng.advanceToNextDecision();
+    // Attack damage is frozen at commit, before the later-inserted drinking row lands.
+    // Walk insertion order until that hit resolves.
+    stepUntil(eng, s => s.feed.some(l => /RH (?:attack )?hits .+ for 10/.test(l)));
     // pre>0 means buff lands after commit; damage frozen at base 10 (observable in feed, not winding row)
     const hitLine = eng.state.feed.find(l => /RH (?:attack )?hits .+ for 10/.test(l));
     assert.ok(hitLine, 'expected base damage hit (no buff)');

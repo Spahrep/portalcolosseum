@@ -1,7 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getHpWord, HP_BANDS } from '../js/combat/hp-words.js';
-import { createQueue, commitNewRow, popNext, sortQueue, computeTimingMarkers } from '../js/combat/tic-queue.js';
+import { createQueue, commitNewRow, popNext, computeTimingMarkers, peekHead, addEvent } from '../js/combat/tic-queue.js';
 import createEngine, { resumeEngine } from '../js/combat/engine.js';
 import { swapHandWithBelt } from '../js/combat/participants.js';
 
@@ -26,31 +26,56 @@ describe('HP words', () => {
   });
 });
 
-describe('Tic queue ordering + player-first ties', () => {
-  it('sorts by tics, player (LH/RH) before monsters on tie', () => {
+describe('Insertion-ordered queue (tics are display-only)', () => {
+  it('inserting A(60) then B(52) stays [A, B], head is A, countdown tick does not reorder', () => {
+    const q = createQueue();
+    commitNewRow(q, 'A', 'attack', 60);
+    commitNewRow(q, 'B', 'attack', 52);
+    assert.deepEqual(q.map(r => r.label), ['A', 'B'], 'lower tics must not jump ahead of an earlier insert');
+    assert.equal(peekHead(q).label, 'A');
+    assert.equal(peekHead(q).tics, 60);
+    assert.deepEqual(q.map(r => r.label), ['A', 'B'], 'peekHead must not reorder');
+
+    // Countdown tick: a 1-tic predecessor fires and decrements A/B in place.
+    // B(52) must not slide ahead of A(60).
+    const eng = createEngine(seededRNG(1));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [{ id: 1, max_hp: 50, damage: 1, speed: 100, accuracy: 0, label: 'Z' }]
+    });
+    eng.state.queue = [];
+    addEvent(eng.state.queue, 'C', 'cooldown', 1);
+    addEvent(eng.state.queue, 'A', 'attack', 60);
+    addEvent(eng.state.queue, 'B', 'attack', 52);
+    eng.tick();
+    assert.deepEqual(eng.state.queue.map(r => r.label), ['A', 'B'], 'countdown tick must not reorder');
+    assert.equal(eng.state.queue[0].tics, 59);
+    assert.equal(eng.state.queue[1].tics, 51);
+    assert.equal(peekHead(eng.state.queue).label, 'A');
+  });
+});
+
+describe('Tic queue ordering (insertion order, tics display-only)', () => {
+  it('keeps commit order; lowest tics does not jump the queue', () => {
     const q = createQueue();
     commitNewRow(q, 'M', 'attack', 5);
     commitNewRow(q, 'LH', 'winding', 5);
     commitNewRow(q, 'RH', 'cooldown', 3);
-    sortQueue(q);
-    assert.equal(q[0].label, 'RH');
-    assert.equal(q[1].label, 'LH');
-    assert.equal(q[2].label, 'M');
+    assert.deepEqual(q.map(r => r.label), ['M', 'LH', 'RH']);
+    assert.equal(peekHead(q).label, 'M');
   });
 
-  it('popNext pops lowest tics and advances remaining', () => {
+  it('popNext pops the first inserted non-ready row and decrements the rest in place', () => {
     const q = createQueue();
     commitNewRow(q, 'M', 'attack', 5);
     commitNewRow(q, 'LH', 'impact', 1);
     commitNewRow(q, 'RH', 'cooldown', 3);
     const result = popNext(q);
-    assert.equal(result.row.label, 'LH');
-    assert.equal(result.ticOffset, 1);
-    assert.equal(q.length, 2);
-    assert.equal(q[0].label, 'RH');
-    assert.equal(q[0].tics, 2);
-    assert.equal(q[1].label, 'M');
-    assert.equal(q[1].tics, 4);
+    assert.equal(result.row.label, 'M');
+    assert.equal(result.ticOffset, 5);
+    assert.deepEqual(q.map(r => r.label), ['LH', 'RH']);
+    assert.equal(q[0].tics, 0);
+    assert.equal(q[1].tics, 0);
   });
 });
 
@@ -61,10 +86,11 @@ describe('PC-66: event-driven time-skip', () => {
     commitNewRow(q, 'LH', 'impact', 1);
     commitNewRow(q, 'RH', 'cooldown', 9);
     const result = popNext(q);
-    assert.equal(result.row.label, 'LH');
-    assert.equal(result.ticOffset, 1);
-    assert.equal(q.find(r => r.label === 'M').tics, 4);
-    assert.equal(q.find(r => r.label === 'RH').tics, 8);
+    assert.equal(result.row.label, 'M');
+    assert.equal(result.ticOffset, 5);
+    assert.equal(q.find(r => r.label === 'LH').tics, 0);
+    assert.equal(q.find(r => r.label === 'RH').tics, 4);
+    assert.deepEqual(q.map(r => r.label), ['LH', 'RH']);
   });
 
   it('advances past a 50-tic no-decision gap instead of stranding (run 75 softlock)', () => {
@@ -349,7 +375,8 @@ describe('Player attack accuracy (weapon_instance.accuracy wiring)', () => {
     const initialHp = eng.state.monsters[0].current_hp;
     eng.advanceToNextDecision();  // resolve approach rows -> Ready
     eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, playerAccuracy: 70, isMultiTarget: false });
-    for (let i = 0; i < 5; i++) eng.advanceToNextDecision();
+    // Committed chain sits behind already-queued rows. Walk insertion order until cooldown completes.
+    for (let i = 0; i < 20 && eng.state.player.hands.LH.state !== 'Ready'; i++) eng.stepQueue();
     assert.equal(eng.state.monsters[0].current_hp, initialHp, 'miss: no damage');
     const hasMiss = eng.state.feed.some(l => l.includes('misses'));
     assert.ok(hasMiss, 'miss log present');
@@ -606,7 +633,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.ok(state.tic > 3);
   });
 
-  it('tie: hand and monster at the same speed → hand acts first (player-first)', () => {
+  it('insertion order: monster row is inserted before the hand, so the monster acts first even when the hand tic readout is lower', () => {
     const eng = createEngine(seededRNG(7));
     eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 100 },
@@ -616,7 +643,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const lhIdx = state.feed.findIndex(l => l.includes('LH Ready'));
     const hitIdx = state.feed.findIndex(l => l.includes('A hits player'));
     assert.ok(lhIdx !== -1 && hitIdx !== -1);
-    assert.ok(lhIdx < hitIdx, 'LH fires before the monster on a tie');
+    assert.ok(hitIdx < lhIdx, 'monster was inserted first, so it fires before LH Ready');
   });
 
   it('unarmed hand: fist speed from loadout gives the hand a real approach position', () => {
@@ -693,7 +720,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.ok(firstHitIdx < firstReadyIdx, 'monster hit lands before the player hand becomes ready');
   });
 
-  it('fast monster double-fire: speed-1 monster fires twice during advance before hands ready', () => {
+  it('fast monster does not jump ahead of later approach rows just because its cooldown readout is lower', () => {
     const eng = createEngine(seededRNG(7));
     eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 8, hand_r_speed: 9 },
@@ -704,11 +731,11 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.equal(monRow.tics, 2, 'monster first attack at speed + prepare (1+1)');
     const after = eng.advanceToNextDecision();
     const hits = after.feed.filter(l => l.includes('A hits player'));
-    assert.ok(hits.length >= 2, 'monster fired at least twice during the advance');
-    assert.ok(after.tic > 2);
+    assert.equal(hits.length, 1, 'inserted-first attack fires once; the follow-up does not jump the approach rows');
+    assert.ok(after.queue.some(r => r.label === 'A' && r.event === 'cooldown'), 'follow-up cooldown stays in insertion order');
   });
 
-  it('tie: LH approach row sorts before monster attack at same tics (player-first)', () => {
+  it('insertion order: monster attack is ahead of the same-tic LH approach because it was inserted first', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 100 },
@@ -718,7 +745,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const lhIdx = q.findIndex(r => r.label === 'LH' && r.event === 'approach');
     const monIdx = q.findIndex(r => r.event === 'attack');
     assert.ok(lhIdx !== -1 && monIdx !== -1);
-    assert.ok(lhIdx < monIdx, 'LH approach ahead of monster at same tics (player-first tiebreaker)');
+    assert.ok(monIdx < lhIdx, 'monster attack inserted before LH approach');
     // hand 5 ties monster attack at speed 4 + default prepare 1
     assert.equal(q[lhIdx].tics, q[monIdx].tics);
     assert.equal(q[monIdx].tics, 5);
@@ -749,11 +776,19 @@ describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 5, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
     });
-    // RH commits first with a slow cast; LH then commits a fast one-shot kill.
-    eng.advanceToNextDecision();  // resolve approach rows -> Ready
-    eng.commitAttack('RH', 2, [1], { castTicks: 8, cooldownTicks: 3, playerDamage: 100 });
-    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
+    // Killer must already be an impact row, with the other hand's winding inserted
+    // after it. Otherwise insertion order morphs the other winding before the kill.
     eng.advanceToNextDecision();
+    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
+    let guard = 0;
+    while (!eng.state.queue.some(r => r.label === 'LH' && r.event === 'impact') && guard < 30) {
+      eng.stepQueue();
+      guard++;
+    }
+    eng.commitAttack('RH', 2, [1], { castTicks: 8, cooldownTicks: 3, playerDamage: 100 });
+    for (let i = 0; i < 20 && !eng.state.feed.some(l => l.includes('RH attack cancelled')); i++) {
+      eng.stepQueue();
+    }
     const rh = eng.state.queue.find(r => r.label === 'RH');
     assert.ok(rh, 'RH row exists');
     assert.equal(rh.event, 'cooldown', 'RH cancelled straight into cooldown, not winding/impact');
@@ -859,9 +894,16 @@ describe('monster cooldown lifecycle (option A)', () => {
   it('cooldown fire inserts the next attack at speed + prepare', () => {
     const eng = slowHandsBattle();
     const fires = [];
-    eng.stepQueue(fires); // attack → cooldown
-    eng.stepQueue(fires); // cooldown → next attack
-    const next = eng.state.queue.find(r => r.label === 'A');
+    eng.stepQueue(fires); // attack → cooldown (monster is inserted first)
+    assert.equal(fires[0].event, 'attack');
+    // Approach rows sit ahead of the appended cooldown. Walk insertion order.
+    let guard = 0;
+    while (!fires.some(f => f.label === 'A' && f.event === 'cooldown') && guard < 20) {
+      eng.stepQueue(fires);
+      guard++;
+    }
+    const cooldownFire = fires.find(f => f.label === 'A' && f.event === 'cooldown');
+    const next = eng.state.queue.find(r => r.label === 'A' && r.event === 'attack');
     assert.ok(next, 'successor row exists');
     assert.equal(next.event, 'attack');
     assert.equal(next.tics, 5, 'mon.speed 3 + prepare 2');
@@ -869,8 +911,8 @@ describe('monster cooldown lifecycle (option A)', () => {
     assert.equal(next.monsterAttackName, 'Bite');
     assert.equal(eng.state.queue.filter(r => r.label === 'A' && r.event === 'cooldown').length, 0);
     assert.ok(eng.state.feed.some(l => l.includes('prepares a Bite')));
-    assert.deepEqual(fires[1].after, { event: 'attack', tics: 5 });
-    assert.equal(fires[1].event, 'cooldown');
+    assert.deepEqual(cooldownFire.after, { event: 'attack', tics: 5 });
+    assert.equal(cooldownFire.event, 'cooldown');
   });
 
   it('seeded RNG produces identical feed and queue across two runs', () => {

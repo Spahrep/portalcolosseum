@@ -81,11 +81,19 @@ describe('Heal effects (PC-39)', () => {
     assert.throws(() => applyPotionEffect(state, { type: 'heal', amount: -5, name: 'Heal' }, 0), /Heal potion missing rolled_floor/);
   });
 
+  function stepUntil(eng, pred, max = 40) {
+    let s = eng.getState();
+    for (let i = 0; i < max && !pred(s); i++) s = eng.stepQueue();
+    return s;
+  }
+
   it('engine between-fights: full restore applies instantly, slot used, feed reports healed 100', () => {
     const eng = createEngine(seededRNG(201));
     eng.startBattle(makeParticipants(healPotion(100)));
-    eng.state.player.hp = 900;
     eng.advanceToNextDecision();
+    // Baseline after the insertion-order approach (monster acts first). The
+    // heal itself is instant and must not depend on tics-sort.
+    eng.state.player.hp = 900;
     const res = eng.commitPotion('A', { phase: 'between-fights' });
     assert.equal(eng.state.player.hp, 1000);
     assert.equal(res.potions.A.used, true);
@@ -95,10 +103,11 @@ describe('Heal effects (PC-39)', () => {
   it('engine in-battle: overheal reports actual healed (10) in feed, hp capped at 1000', () => {
     const eng = createEngine(seededRNG(202));
     eng.startBattle(makeParticipants(healPotion(50)));
-    eng.state.player.hp = 990;
     eng.advanceToNextDecision();
+    eng.state.player.hp = 990;
     eng.commitPotion('A', { weaponSpeed: 0 }); // pre = ceil((0+2)/2) = 1
-    const s = eng.advanceToNextDecision(); // effect lands here
+    // Drinking row is behind already-queued rows. Walk insertion order until it fires.
+    const s = stepUntil(eng, st => st.feed.some(l => l.includes('healed')));
     assert.equal(eng.state.player.hp, 1000);
     const healLine = s.feed.find(l => l.includes('healed'));
     assert.ok(healLine, 'heal feed line not found');
@@ -109,10 +118,10 @@ describe('Heal effects (PC-39)', () => {
   it('engine in-battle: zero-HP edge — heals from 0 without NaN', () => {
     const eng = createEngine(seededRNG(203));
     eng.startBattle(makeParticipants(healPotion(100)));
-    eng.state.player.hp = 0;
     eng.advanceToNextDecision();
+    eng.state.player.hp = 0;
     eng.commitPotion('A', { weaponSpeed: 0 });
-    const s = eng.advanceToNextDecision();
+    const s = stepUntil(eng, st => st.feed.some(l => l.includes('healed 100')));
     assert.equal(eng.state.player.hp, 100);
     assert.ok(Number.isFinite(eng.state.player.hp));
     assert.ok(s.feed.some(l => l.includes('healed 100')));

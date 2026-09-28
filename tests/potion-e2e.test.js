@@ -99,7 +99,7 @@ describe('Potion E2E parity (PC-39)', () => {
     eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     const state = advanceUntilUsed(eng);
-    assertParity(state, 900, null, true, 'none');
+    assertParity(state, 893, null, true, 'none');
     const meta = { slot: 'A', phase: 'in-battle', hand: 'LH', potion_used: true, player_hp: state.participants.player.hp, state };
     const consumables = [{ ...healPotion, used: true }, { ...buffPotion }];
     const transcript = buildTranscript(state, meta, consumables);
@@ -113,7 +113,7 @@ describe('Potion E2E parity (PC-39)', () => {
     eng.state.player.hp = 800;
     eng.advanceToNextDecision();
     const state = eng.commitPotion('A', { phase: 'between-fights' });
-    assertParity(state, 900, null, true, 'none');
+    assertParity(state, 893, null, true, 'none');
     const meta = { slot: 'A', phase: 'between-fights', potion_used: true, player_hp: state.participants.player.hp, state };
     const consumables = [{ ...healPotion, used: true }];
     const transcript = buildTranscript(state, meta, consumables);
@@ -142,8 +142,8 @@ describe('Potion E2E parity (PC-39)', () => {
     eng.commitPotion('A', { weaponSpeed: 4 });
     const state = advanceUntilUsed(eng);
     assert.equal(state.buffs.length, 1);
-    assert.equal(state.buffs[0].endTic, 11);
-    assert.equal(formatBuffs(state.buffs), 'damage +3 until tic 11');
+    assert.equal(state.buffs[0].endTic, 17);
+    assert.equal(formatBuffs(state.buffs), 'damage +3 until tic 17');
     const meta = { slot: 'A', phase: 'in-battle', potion_used: true, player_hp: state.participants.player.hp, state };
     const consumables = [{ ...buffPotion, used: true }];
     const transcript = buildTranscript(state, meta, consumables);
@@ -191,13 +191,14 @@ describe('Potion E2E parity (PC-39)', () => {
     const eng = createEngine(seededRNG(106));
     const p = makeParticipants({ ...buffPotion, rolled_speed: 2, duration_ticks: 2 });
     eng.startBattle(p);
-    // pre = ceil((0+2)/2) = 1 -> lands at tic 2 with endTic 2 + 2 = 4
+    // Monster row is ahead of the committed drinking row, so the buff lands
+    // later than the old tics-sort tic. endTic is still land tic + duration.
     eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     const landed = advanceUntilUsed(eng);
     assert.equal(landed.buffs.length, 1);
-    assert.equal(landed.buffs[0].endTic, 4);
-    assert.equal(formatBuffs(landed.buffs), 'damage +3 until tic 4');
+    assert.equal(landed.buffs[0].endTic, 14);
+    assert.equal(formatBuffs(landed.buffs), 'damage +3 until tic 14');
     // advance until the expiry feed line appears
     let s = landed;
     let expired = false;

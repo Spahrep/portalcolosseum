@@ -469,7 +469,7 @@ async function playInsertCeremony(entries, preset, bs) {
     return;
   }
   const monsters = (bs && bs.monsters) || [];
-  for (const entry of sortQueueRows(list)) {
+  for (const entry of list) {
     const gap = await openInsertGap(entry, queueEl);
     await playInsertMarker(gap);
     if (bs) {
@@ -1203,10 +1203,9 @@ function finishBattleIntro() {
   if (el) el.innerHTML = '';
 
   const queue = lastBs ? lastBs.queue || [] : [];
-  const sorted = sortQueueRows(queue);
   const monsters = lastBs ? lastBs.monsters || [] : [];
 
-  sorted.forEach((row, i) => {
+  queue.forEach((row, i) => {
     setTimeout(() => {
       if (el) {
         const rowEl = buildQueueRow(row, monsters, lastBs, false);
@@ -1216,7 +1215,7 @@ function finishBattleIntro() {
     }, i * 200);
   });
 
-  const totalDelay = (sorted.length * 200) + 350;
+  const totalDelay = (queue.length * 200) + 350;
   setTimeout(() => {
     renderFeed([]);
     // PC-91: Advance through approach phase until first decision point.
@@ -1365,20 +1364,20 @@ function renderQueue(bs, fill = false, onDone = null) {
   }
   // In-place reconciliation: when the STABLE key set matches the existing DOM
   // exactly (hands h:LH/h:RH, monster attack+cooldown m:<label>), this is a
-  // successor/value update — mutate text and reorder, no slide-out/slide-in.
+  // successor/value update — mutate text in engine (insertion) order. Never
+  // re-sort by tics; a countdown tick only rewrites the tic readout.
   const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
   const newKeys = queue.map(queueRowKey);
   if (domKeys.size === newKeys.length && newKeys.every(k => domKeys.has(k))) {
     const monsters = bs.monsters || [];
-    const sorted = sortQueueRows(queue);
     // Detach non-row children (e.g. the PC-56 prediction bar) so the reorder
     // below only shuffles rows; re-append them last so the bar stays on top.
     const nonRows = Array.from(el.children).filter(c => !c.classList.contains('queue-row'));
     nonRows.forEach(c => c.remove());
-    sorted.forEach((row, index) => {
+    queue.forEach((row, index) => {
       const domEl = currentRows.find(r => r.dataset.stableKey === queueRowKey(row));
       if (domEl && domEl.parentNode) {
-        el.appendChild(domEl); // reorder into its sorted slot (existing rows only)
+        el.appendChild(domEl); // keep engine insertion order (existing rows only)
         updateQueueRowInPlace(domEl, row, monsters, bs, index);
       }
     });
@@ -1405,8 +1404,7 @@ function renderQueue(bs, fill = false, onDone = null) {
   }
   if (queue.length === 0) return;
   const monsters = bs.monsters || [];
-  const sorted = sortQueueRows(queue);
-  sorted.forEach((row, index) => {
+  queue.forEach((row, index) => {
     if (!exitingQueueRows.has(row.id)) {
       el.appendChild(buildQueueRow(row, monsters, bs, true, index));
     }
@@ -1415,7 +1413,8 @@ function renderQueue(bs, fill = false, onDone = null) {
   if (queueBarInfo && queueBarInfo.kind === 'bar' && queueBarInfo.firstId && queueBarInfo.lastId) {
     const bar = document.createElement('div');
     bar.className = 'prediction-bar';
-    // Build a tic→position ladder from DOM rows (in DOM order, already sorted)
+    // Read-only tic→pixel ladder for the PC-56 prediction bar. The copy-sort
+    // does not reorder the queue or the DOM (those stay in insertion order).
     const rowEls = Array.from(el.querySelectorAll('.queue-row'));
     const queueRect = el.getBoundingClientRect();
     const ladder = rowEls.filter(r => r.dataset.tics !== undefined).map(r => {
@@ -1491,8 +1490,7 @@ function renderQueue(bs, fill = false, onDone = null) {
     el.appendChild(bar);
   }
   if (fill) {
-    // Ceremony-intro: intro fill — rows are sorted by tics, so the top row is First
-    // (next); reveal them in that order, top to bottom, one at a time.
+    // Ceremony-intro fill: reveal rows in engine (insertion) order, top to bottom.
     Array.from(el.children).forEach((row, i) => {
       row.style.transition = `opacity ${QUEUE_FILL_MS}ms ease`;
       row.style.opacity = '0';
@@ -1503,8 +1501,8 @@ function renderQueue(bs, fill = false, onDone = null) {
 
 // diff for resolve/enter animations (non-blocking)
 function diffQueueForAnimation(oldBs, newBs) {
-  const oldRows = sortQueueRows(oldBs.queue || []);
-  const newRows = sortQueueRows(newBs.queue || []);
+  const oldRows = oldBs.queue || [];
+  const newRows = newBs.queue || [];
   // Hand rows use stable label key (LH/RH singleton identity preserved across
   // tics/state updates). Monster attack/cooldown share m:<label> so a phase
   // change is a successor, not a removal+insert. This prevents value-update
@@ -1664,8 +1662,8 @@ function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
   }
 }
 
-// PC-64 battle intro: rows sorted by tics ascending with player-first ties —
-// identical ordering to renderQueue (see sortQueueRows below).
+// Intro countdown mirror only (playIntroCountdown / finishIntroSnap). Live queue
+// render follows engine insertion order and must not call this.
 function sortQueueRows(queue) {
   return [...queue].sort((a, b) => {
     if ((a.tics ?? 0) !== (b.tics ?? 0)) return (a.tics ?? 0) - (b.tics ?? 0);

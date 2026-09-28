@@ -1,7 +1,8 @@
 // js/combat/tic-queue.js
-// Pure ESM. Sorted array of {id, label, event, tics}. tick() decrements, fires at 0.
-// Player-first on ties. Re-sort only on commit. Hand rows carry a stable id (h:LH/h:RH).
-// F5: collision-free IDs via crypto.randomUUID() (stateless serverless safe).
+// Pure ESM. Insertion-ordered list of {id, label, event, tics}.
+// Order is frozen at insert (addEvent appends). Tics are display-only and never
+// drive order — nothing in this module re-sorts the queue. Head = first non-ready
+// row in array order. F5: collision-free IDs via crypto.randomUUID().
 
 export function createQueue() {
   return [];
@@ -10,19 +11,25 @@ export function createQueue() {
 export function addEvent(queue, label, event, tics, id = null) {
   const entry = { id: id ?? globalThis.crypto.randomUUID(), label, event, tics };
   queue.push(entry);
-  // stable insert; sort only on commit per spec
   return entry;
 }
 
-export function popNext(queue) {
-  sortQueue(queue);
+// Head = first non-ready row in insertion order. Leading ready rows are skipped.
+// Does not sort and does not reorder.
+function firstActionableIndex(queue) {
   let headIdx = 0;
   while (headIdx < queue.length && queue[headIdx].event === 'ready') {
     headIdx++;
   }
-  if (headIdx >= queue.length) return null;
+  return headIdx < queue.length ? headIdx : -1;
+}
+
+export function popNext(queue) {
+  const headIdx = firstActionableIndex(queue);
+  if (headIdx === -1) return null;
   const row = queue[headIdx];
   const ticOffset = row.tics;
+  // Countdown readout only — decrement in place, never reorder.
   for (const r of queue) {
     r.tics = Math.max(0, r.tics - ticOffset);
   }
@@ -31,44 +38,27 @@ export function popNext(queue) {
 }
 
 export function peekHead(queue) {
-  sortQueue(queue);
-  let headIdx = 0;
-  while (headIdx < queue.length && queue[headIdx].event === 'ready') {
-    headIdx++;
-  }
-  if (headIdx >= queue.length) return null;
+  const headIdx = firstActionableIndex(queue);
+  if (headIdx === -1) return null;
   return queue[headIdx];
 }
 
 export function removeHead(queue) {
-  sortQueue(queue);
-  let headIdx = 0;
-  while (headIdx < queue.length && queue[headIdx].event === 'ready') {
-    headIdx++;
-  }
-  if (headIdx >= queue.length) return null;
+  const headIdx = firstActionableIndex(queue);
+  if (headIdx === -1) return null;
   const row = queue[headIdx];
   queue.splice(headIdx, 1);
   return row;
 }
 
-export function sortQueue(queue) {
-  queue.sort((a, b) => {
-    if (a.tics !== b.tics) return a.tics - b.tics;
-    const aPlayer = a.label === 'LH' || a.label === 'RH' ? 0 : 1;
-    const bPlayer = b.label === 'LH' || b.label === 'RH' ? 0 : 1;
-    if (aPlayer !== bPlayer) return aPlayer - bPlayer;
-    return 0;
-  });
-}
-
 export function commitNewRow(queue, label, event, tics) {
-  const entry = addEvent(queue, label, event, tics);
-  sortQueue(queue);
-  return entry;
+  return addEvent(queue, label, event, tics);
 }
 
-// PC-56: computeTimingMarkers returns bar info for prediction bar UX
+// PC-56: computeTimingMarkers returns bar info for prediction bar UX.
+// The copy-sort below is READ-ONLY and exists only to find [minT, maxT] boundary
+// rows for the prediction bar. It does NOT mutate queue order. Queue order is
+// insertion order; tics are display values and never drive processing.
 // Returns:
 //   {kind: 'bar', firstId: string, lastId: string, hasInside: boolean}
 //     hasInside=true — the bar spans rows that contain the timing range (attack CAN land in these)
@@ -81,16 +71,17 @@ export function computeTimingMarkers(queue, attack, weaponSpeed = 0) {
   const minT = Number(weaponSpeed) + Number(attack.prepare_time || attack.prepareTime || 0);
   const range = Number(attack.prepare_time_range || attack.prepareTimeRange || 0);
   const maxT = minT + range;
-  const sorted = [...queue].sort((a, b) => a.tics - b.tics);
+  // Read-only copy-sort for the PC-56 prediction bar. Not the queue order.
+  const barOrder = [...queue].sort((a, b) => a.tics - b.tics);
   // Inclusive: rows with tics within [minT, maxT]
-  const inside = sorted.filter(r => r.tics >= minT && r.tics <= maxT);
+  const inside = barOrder.filter(r => r.tics >= minT && r.tics <= maxT);
   if (inside.length > 0) {
     return { kind: 'bar', firstId: inside[0].id, lastId: inside[inside.length - 1].id, minT, maxT, hasInside: true };
   }
   // No row inside: expand to nearest boundary rows
-  const before = sorted.filter(r => r.tics < minT);
-  const after = sorted.filter(r => r.tics > maxT);
-  const firstId = before.length > 0 ? before[before.length - 1].id : sorted[0].id;
-  const lastId = after.length > 0 ? after[0].id : sorted[sorted.length - 1].id;
+  const before = barOrder.filter(r => r.tics < minT);
+  const after = barOrder.filter(r => r.tics > maxT);
+  const firstId = before.length > 0 ? before[before.length - 1].id : barOrder[0].id;
+  const lastId = after.length > 0 ? after[0].id : barOrder[barOrder.length - 1].id;
   return { kind: 'bar', firstId, lastId, minT, maxT, hasInside: false };
 }

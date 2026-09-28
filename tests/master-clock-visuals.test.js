@@ -48,15 +48,14 @@ describe('Master clock tick order (PC-94)', () => {
     });
     const head = peekHead(eng.state.queue);
     assert.ok(head, 'queue has a non-ready head');
-    assert.equal(head.event, 'approach');
+    assert.equal(head.event, 'attack', 'monster attack is inserted before approach rows');
     const feedBefore = eng.state.feed.length;
     const result = eng.tick();
     assert.equal(result.row, head, 'tick returns the peeked head');
-    assert.equal(result.row.event, 'approach');
+    assert.equal(result.row.event, 'attack');
     assert.equal(eng.state.queue.includes(head), false, 'processed head is gone after tick');
     assert.ok(eng.state.feed.length > feedBefore, 'process ran and wrote narration before return');
-    assert.equal(eng.state.player.hands.LH.state, 'Ready');
-    assert.ok(eng.state.queue.some(r => r.label === 'LH' && r.event === 'ready'));
+    assert.equal(eng.state.player.hands.LH.state, 'Approach', 'approach rows stay behind the inserted-first attack');
     assert.equal(result.needsInput, false);
   });
 

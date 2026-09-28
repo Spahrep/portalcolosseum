@@ -5,7 +5,7 @@
 // F2: winding → impact transition implemented so attacks deal damage and hands return to Ready.
 // F10: startBattle accepts optional initialPlayerHp for cross-battle HP carry.
 
-import { createQueue, commitNewRow, popNext, sortQueue, addEvent, peekHead, removeHead } from './tic-queue.js';
+import { createQueue, commitNewRow, popNext, addEvent, peekHead, removeHead } from './tic-queue.js';
 import { createPlayer, createMonster, isPlayerDead, isMonsterDead, applyDamage, swapHandWithBelt as swapHandWithBeltPure, PLAYER_MAX_HP } from './participants.js';
 import { getHpWord } from './hp-words.js';
 import { rollDamage, checkHit, resolveAttack, multiTargetReduction } from './damage.js';
@@ -97,7 +97,6 @@ export function createEngine(rng = Math.random) {
         impactRow.critChance = row.critChance;
         impactRow.critMultiplier = row.critMultiplier;
         impactRow.attackName = row.attackName;
-        sortQueue(state.queue);
       } else if (row.event === 'impact') {
         let targets = [];
         if (row.targetIds && row.targetIds.length > 0) {
@@ -135,20 +134,17 @@ export function createEngine(rng = Math.random) {
         const cd = row.cooldownTicks || 2;
         // impact → cooldown: remove old (already popped), add fresh cooldown row
         addEvent(state.queue, row.label, 'cooldown', cd);
-        sortQueue(state.queue);
       } else if (row.event === 'cooldown') {
         const handState = state.player.hands[row.label];
         if (handState) handState.state = 'Ready';
         // cooldown → ready: remove old (already popped), add fresh ready row
         addEvent(state.queue, row.label, 'ready', 0);
-        sortQueue(state.queue);
         log(`${row.label} Ready`);
       } else if (row.event === 'approach') {
         const handState = state.player.hands[row.label];
         if (handState) handState.state = 'Ready';
         // approach → ready: remove old (already popped), add fresh ready row
         addEvent(state.queue, row.label, 'ready', 0);
-        sortQueue(state.queue);
         log(`${row.label} Ready`);
       } else if (row.event === 'drinking') {
         const potion = state.potions?.[row.potionSlot];
@@ -156,7 +152,6 @@ export function createEngine(rng = Math.random) {
           // defensive: reloaded state already used must not double-apply
           // drinking → recovery: remove old (already popped), add fresh recovery row
           addEvent(state.queue, row.label, 'recovery', row.postTicks ?? 0);
-          sortQueue(state.queue);
           return;
         }
         potion.used = true;
@@ -168,18 +163,15 @@ export function createEngine(rng = Math.random) {
           if (remainingTics > 0) {
             const expRow = addEvent(state.queue, null, 'buff_expiry', remainingTics);
             expRow.buffName = result.buff.name;
-            sortQueue(state.queue);
           }
         }
         // drinking → recovery: remove old (already popped), add fresh recovery row
         addEvent(state.queue, row.label, 'recovery', row.postTicks ?? 0);
-        sortQueue(state.queue);
       } else if (row.event === 'recovery') {
         const handState = state.player.hands[row.label];
         if (handState) handState.state = 'Ready';
         // recovery → ready: remove old (already popped), add fresh ready row
         addEvent(state.queue, row.label, 'ready', 0);
-        sortQueue(state.queue);
         log(`${row.label} Ready`);
       }
     } else {
@@ -227,7 +219,6 @@ export function createEngine(rng = Math.random) {
               ? row.cooldownTicks
               : mon.speed + rollStat(atk?.cooldown_time, atk?.cooldown_time_range);
             addEvent(state.queue, mon.label, 'cooldown', cdTics);
-            sortQueue(state.queue);
           }
         }
       }
@@ -249,7 +240,6 @@ export function createEngine(rng = Math.random) {
       }
     }
     state.buffs = stillActive;
-    sortQueue(state.queue);
     const narrate = state.feed.length > feedBefore ? state.feed[feedBefore] : (state.feed[state.feed.length - 1] || '');
     return { row, narrate };
   }
@@ -284,7 +274,6 @@ export function createEngine(rng = Math.random) {
       }
     }
     state.buffs = stillActive;
-    sortQueue(state.queue);
     const newFeed = state.feed.slice(feedBefore);
     const narrate = newFeed.join('\n');
     return { row, narrate, feed: newFeed };
@@ -348,7 +337,6 @@ export function createEngine(rng = Math.random) {
         const idx = state.queue.indexOf(q);
         if (idx !== -1) state.queue.splice(idx, 1);
         addEvent(state.queue, q.label, 'cooldown', cd);
-        sortQueue(state.queue);
         log(`${q.label} ${q.attackName || 'attack'} cancelled — target already defeated`);
       }
     }
@@ -356,12 +344,10 @@ export function createEngine(rng = Math.random) {
 
   function stepQueue(captureFires = null) {
     if (isBattleOver()) {
-      sortQueue(state.queue);
       return getState();
     }
     const rowHead = peekHead(state.queue);
     if (!rowHead) {
-      sortQueue(state.queue);
       return getState();
     }
     const ticOffset = rowHead.tics;
@@ -373,12 +359,10 @@ export function createEngine(rng = Math.random) {
     // don't leave the original row duplicating in the queue
     const removedRow = removeProcessedHead();
     if (!removedRow) {
-      sortQueue(state.queue);
       return getState();
     }
     const result = stepOnce(removedRow);
     if (!result) {
-      sortQueue(state.queue);
       return getState();
     }
     const { row } = result;
@@ -400,7 +384,6 @@ export function createEngine(rng = Math.random) {
         after
       });
     }
-    sortQueue(state.queue);
     return getState();
   }
 
@@ -423,7 +406,6 @@ export function createEngine(rng = Math.random) {
       iterations++;
       if (iterations > 500) break;
     }
-    sortQueue(state.queue);
     return getState();
   }
 
@@ -643,7 +625,6 @@ export function createEngine(rng = Math.random) {
       if (idx !== -1) state.queue.splice(idx, 1);
     }
     addEvent(state.queue, hand, 'cooldown', result.delay);
-    sortQueue(state.queue);
     return { success: true, delay: result.delay, newWeaponId: result.newWeaponId, oldWeaponId: result.oldWeaponId };
   }
 
