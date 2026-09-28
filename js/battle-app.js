@@ -1348,7 +1348,7 @@ function renderQueue(bs, fill = false, onDone = null) {
   if (!el) return;
   // No-flicker: skip full wipe+rebuild if queue ids/order unchanged (prevents re-trigger enter anims on every tick)
   const queue = bs.queue || [];
-  const currentRows = Array.from(el.querySelectorAll('.queue-row')).filter(r => !r.classList.contains('queue-row-exit') && !r.classList.contains('queue-insert-gap'));
+  const currentRows = Array.from(el.querySelectorAll('.queue-row'));
   const currentIds = currentRows.map(r => r.dataset.rowId);
   const newIds = queue.map(r => r.id);
   const currentTics = currentRows.map(r => String(r.dataset.tics ?? ''));
