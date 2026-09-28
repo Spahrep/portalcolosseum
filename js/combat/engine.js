@@ -2,7 +2,7 @@
 // Pure ESM orchestrator. Commit-driven. Deterministic with injected RNG (seeded for tests).
 // Resolves to next player decision point. Emits feed. Cancels in-flight on death (MVP).
 // Parameterized commitAttack for API data-driven timing/damage/multi-target.
-// F2: winding → impact morph implemented so attacks deal damage and hands return to Ready.
+// F2: winding → impact transition implemented so attacks deal damage and hands return to Ready.
 // F10: startBattle accepts optional initialPlayerHp for cross-battle HP carry.
 
 import { createQueue, commitNewRow, popNext, sortQueue, addEvent, peekHead, removeHead } from './tic-queue.js';

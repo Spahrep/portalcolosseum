@@ -1,6 +1,6 @@
 // js/combat/tic-queue.js
 // Pure ESM. Sorted array of {id, label, event, tics}. tick() decrements, fires at 0.
-// Player-first on ties. Re-sort only on commit. Hand rows morph (identity preserved).
+// Player-first on ties. Re-sort only on commit. Hand rows carry a stable id (h:LH/h:RH).
 // F5: collision-free IDs via crypto.randomUUID() (stateless serverless safe).
 
 export function createQueue() {
@@ -66,16 +66,6 @@ export function commitNewRow(queue, label, event, tics) {
   const entry = addEvent(queue, label, event, tics);
   sortQueue(queue);
   return entry;
-}
-
-export function morphHandRow(queue, handLabel, newEvent, newTics) {
-  const row = queue.find(r => r.label === handLabel);
-  if (row) {
-    row.event = newEvent;
-    row.tics = newTics;
-    sortQueue(queue);
-  }
-  return row;
 }
 
 // PC-56: computeTimingMarkers returns bar info for prediction bar UX

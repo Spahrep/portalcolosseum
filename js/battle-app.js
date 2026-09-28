@@ -62,8 +62,8 @@ class BattleClock {
   }
 
   /** Phase 1: Resolve animation — genuine-removal slide-out, then group lift.
-   * Non-hand value/state changes (hand morphs) never land in diff.resolved, so
-   * they skip this entirely and render in place. */
+   * Non-hand value/state changes (in-place hand state updates) never land in
+   * diff.resolved, so they skip this entirely and render in place. */
   async _runResolve() {
     const { _diff: diff } = this;
     const queueEl = document.getElementById('queue');

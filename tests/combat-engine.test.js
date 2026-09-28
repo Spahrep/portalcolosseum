@@ -528,7 +528,7 @@ describe('PC-54 belt swap (swapHandWithBelt + engine wiring)', () => {
     eng.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [] });
     eng.advanceToNextDecision();
     // A Ready hand now has a 'ready' placeholder row at tics=0 (top of queue).
-    // The swap must morph it to cooldown instead of creating a new row.
+    // The swap must transition it to cooldown instead of creating a new row.
     const pre = eng.state.queue.find(r => r.label === 'LH');
     assert.ok(pre, 'LH ready placeholder row exists before swap');
     assert.equal(pre.event, 'ready');
@@ -543,7 +543,7 @@ describe('PC-54 belt swap (swapHandWithBelt + engine wiring)', () => {
     assert.equal(eng.state.player.hands.LH.weaponId, 99);
   });
 
-  it('engine wiring: non-Ready hand returns error without queue morph', () => {
+  it('engine wiring: non-Ready hand returns error without queue transition', () => {
     const eng = createEngine(seededRNG(8));
     eng.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [] });
     eng.state.player.hands.LH.state = 'winding';
