@@ -48,14 +48,17 @@ describe('Master clock tick order (PC-94)', () => {
     });
     const head = peekHead(eng.state.queue);
     assert.ok(head, 'queue has a non-ready head');
-    assert.equal(head.event, 'attack', 'monster attack is inserted before approach rows');
+    // LH approach key 1 is ahead of RH 2 and the monster attack (speed 8 + prepare 1).
+    assert.equal(head.label, 'LH');
+    assert.equal(head.event, 'approach');
+    assert.equal(head.tics, 1);
     const feedBefore = eng.state.feed.length;
     const result = eng.tick();
     assert.equal(result.row, head, 'tick returns the peeked head');
-    assert.equal(result.row.event, 'attack');
+    assert.equal(result.row.event, 'approach');
     assert.equal(eng.state.queue.includes(head), false, 'processed head is gone after tick');
     assert.ok(eng.state.feed.length > feedBefore, 'process ran and wrote narration before return');
-    assert.equal(eng.state.player.hands.LH.state, 'Approach', 'approach rows stay behind the inserted-first attack');
+    assert.equal(eng.state.player.hands.LH.state, 'Ready');
     assert.equal(result.needsInput, false);
   });
 
@@ -116,6 +119,27 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.equal(/classList\.add\([^)]*queue-row-exit/.test(popFn), false);
     assert.match(popFn, /\.remove\(\)/);
     assert.match(loop, /runQueueRemoval/); // non-head path still slides
+  });
+
+  it('live render follows engine array order and does not re-sort or rebuild a same-id tick', () => {
+    const render = fnBodyUntilNext(app, 'function renderQueue', ['function diffQueueForAnimation']);
+    const ceremony = fnBodyUntilNext(app, 'async function playInsertCeremony', ['async function awaitTickVisuals']);
+    assert.equal(render.includes('sortQueueRows'), false, 'renderQueue must not sort');
+    assert.equal(ceremony.includes('sortQueueRows'), false, 'playInsertCeremony must not sort');
+    assert.ok(render.indexOf('updateQueueRowInPlace') >= 0 && render.indexOf('updateQueueRowInPlace') < render.indexOf('buildQueueRow'),
+      'same-id path updates in place before any rebuild');
+    assert.equal(render.includes('clearQueueDom'), true, 'rebuild remains the fallback for a real shape change');
+    const intro = app.indexOf('function playIntroCountdown');
+    const afterIntro = app.indexOf('function appendFeedLine');
+    const def = app.indexOf('function sortQueueRows');
+    assert.ok(def > 0 && def < intro, 'sortQueueRows is defined for the intro theater only');
+    let from = def + 'function sortQueueRows'.length;
+    while (true) {
+      const at = app.indexOf('sortQueueRows(', from);
+      if (at < 0) break;
+      assert.ok(at > intro && at < afterIntro, 'sortQueueRows calls stay inside the intro theater');
+      from = at + 1;
+    }
   });
 
   it('hand-ready commit plays the ceremony instead of suppressing it', () => {

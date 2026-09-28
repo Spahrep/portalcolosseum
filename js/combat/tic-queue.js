@@ -1,20 +1,39 @@
 // js/combat/tic-queue.js
-// Pure ESM. Insertion-ordered list of {id, label, event, tics}.
-// Order is frozen at insert (addEvent appends). Tics are display-only and never
-// drive order — nothing in this module re-sorts the queue. Head = first non-ready
-// row in array order. F5: collision-free IDs via crypto.randomUUID().
+// Pure ESM. Ordered list of {id, label, event, tics}.
+// `tics` is an ordering key only: each new row is spliced into tics-ascending
+// position once, at insert, and the array is never globally re-sorted.
+// Ties: player rows (LH/RH) before other labels, then stable (after equals).
+// Head = first non-ready row in that frozen array order.
+// F5: collision-free IDs via crypto.randomUUID().
 
 export function createQueue() {
   return [];
 }
 
+function isPlayerLabel(label) {
+  return label === 'LH' || label === 'RH';
+}
+
+// Index where `entry` belongs. Does not sort the existing rows.
+function orderedInsertIndex(queue, entry) {
+  const entryTics = entry.tics ?? 0;
+  const entryPlayer = isPlayerLabel(entry.label);
+  for (let i = 0; i < queue.length; i++) {
+    const row = queue[i];
+    const rowTics = row.tics ?? 0;
+    if (entryTics < rowTics) return i;
+    if (entryTics === rowTics && entryPlayer && !isPlayerLabel(row.label)) return i;
+  }
+  return queue.length;
+}
+
 export function addEvent(queue, label, event, tics, id = null) {
   const entry = { id: id ?? globalThis.crypto.randomUUID(), label, event, tics };
-  queue.push(entry);
+  queue.splice(orderedInsertIndex(queue, entry), 0, entry);
   return entry;
 }
 
-// Head = first non-ready row in insertion order. Leading ready rows are skipped.
+// Head = first non-ready row in array order. Leading ready rows are skipped.
 // Does not sort and does not reorder.
 function firstActionableIndex(queue) {
   let headIdx = 0;
@@ -28,13 +47,9 @@ export function popNext(queue) {
   const headIdx = firstActionableIndex(queue);
   if (headIdx === -1) return null;
   const row = queue[headIdx];
-  const ticOffset = row.tics;
-  // Countdown readout only — decrement in place, never reorder.
-  for (const r of queue) {
-    r.tics = Math.max(0, r.tics - ticOffset);
-  }
+  // Remove only. Sibling ordering keys are not rewritten — order was fixed at insert.
   queue.splice(headIdx, 1);
-  return { row, ticOffset };
+  return { row, ticOffset: row.tics };
 }
 
 export function peekHead(queue) {
@@ -57,8 +72,8 @@ export function commitNewRow(queue, label, event, tics) {
 
 // PC-56: computeTimingMarkers returns bar info for prediction bar UX.
 // The copy-sort below is READ-ONLY and exists only to find [minT, maxT] boundary
-// rows for the prediction bar. It does NOT mutate queue order. Queue order is
-// insertion order; tics are display values and never drive processing.
+// rows for the prediction bar. It does NOT mutate queue order. Live queue order
+// is the array order fixed at insert.
 // Returns:
 //   {kind: 'bar', firstId: string, lastId: string, hasInside: boolean}
 //     hasInside=true — the bar spans rows that contain the timing range (attack CAN land in these)

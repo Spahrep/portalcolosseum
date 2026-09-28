@@ -309,16 +309,19 @@ describe('Buff potion effects and duration (PC-39)', () => {
     let s = stepUntil(eng, st => st.feed.some(l => l.includes('damage +5')));
     const initialRemaining = s.buffs[0].endTic - s.tic;
     assert.ok(initialRemaining > 0);
-    // Next insertion-order head may not be the 1-tic recovery. Remaining tracks
-    // the tic delta of whatever row is actually next, and must not reorder.
+    // Head is removed; a successor is spliced at its ordering key, not appended.
+    // Rows that were already placed keep their relative order.
     const ticBefore = s.tic;
     const idsBefore = eng.state.queue.map(r => r.id);
     const headId = eng.state.queue.find(r => r.event !== 'ready')?.id;
     s = eng.stepQueue();
     const idsAfter = eng.state.queue.map(r => r.id);
-    const survivors = idsBefore.filter(id => id !== headId);
-    const appended = idsAfter.filter(id => !idsBefore.includes(id));
-    assert.deepEqual(idsAfter, survivors.concat(appended), 'step removes the head and appends successors; it does not reorder');
+    const survivorIds = idsBefore.filter(id => id !== headId);
+    assert.deepEqual(idsAfter.filter(id => survivorIds.includes(id)), survivorIds, 'existing rows keep relative order');
+    const tics = eng.state.queue.map(r => r.tics ?? 0);
+    for (let i = 1; i < tics.length; i++) {
+      assert.ok(tics[i] >= tics[i - 1], 'array stays ordered by the ordering key');
+    }
     assert.ok(s.buffs[0], 'buff survives one step');
     assert.equal(s.buffs[0].endTic - s.tic, initialRemaining - (s.tic - ticBefore));
   });

@@ -394,27 +394,43 @@ function measuredRowHeight(queueEl) {
   return h > 0 ? Math.round(h) : 24;
 }
 
-function insertIndexFor(entry, domRows) {
-  let insertIdx = domRows.length;
-  for (let i = 0; i < domRows.length; i++) {
-    const curTics = Number(domRows[i].dataset.tics ?? 0);
-    const newTics = entry.tics ?? 0;
-    if (newTics < curTics || (newTics === curTics && (entry.label === 'LH' || entry.label === 'RH'))) {
-      insertIdx = i;
-      break;
-    }
-  }
-  return insertIdx;
+function domRowIsPlayer(el) {
+  return (el.dataset.stableKey || '').startsWith('h:');
 }
 
-async function openInsertGap(entry, queueEl) {
+// Visual slot for a new row. Prefer the engine array index (order was fixed at
+// insert) so existing DOM rows are not re-sorted. The comparator is only the
+// fallback when there is no engine queue to follow.
+function insertIndexFor(entry, domRows, engineQueue) {
+  if (engineQueue && entry && entry.id != null) {
+    const engineIdx = engineQueue.findIndex(r => r.id === entry.id);
+    if (engineIdx !== -1) {
+      const before = new Set(engineQueue.slice(0, engineIdx).map(r => r.id));
+      let visual = 0;
+      for (const el of domRows) {
+        if (before.has(el.dataset.rowId)) visual++;
+      }
+      return visual;
+    }
+  }
+  const newTics = entry.tics ?? 0;
+  const newPlayer = entry.label === 'LH' || entry.label === 'RH';
+  for (let i = 0; i < domRows.length; i++) {
+    const curTics = Number(domRows[i].dataset.tics ?? 0);
+    if (newTics < curTics) return i;
+    if (newTics === curTics && newPlayer && !domRowIsPlayer(domRows[i])) return i;
+  }
+  return domRows.length;
+}
+
+async function openInsertGap(entry, queueEl, engineQueue) {
   const domRows = Array.from(queueEl.children).filter(c =>
     c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId) && !c.classList.contains('queue-row-exit')
   );
   const gap = document.createElement('div');
   gap.className = 'queue-insert-gap';
   gap.style.setProperty('--insert-gap', `${measuredRowHeight(queueEl)}px`);
-  const refChild = domRows[insertIndexFor(entry, domRows)] || null;
+  const refChild = domRows[insertIndexFor(entry, domRows, engineQueue)] || null;
   if (refChild) queueEl.insertBefore(gap, refChild);
   else queueEl.appendChild(gap);
   void gap.offsetHeight;
@@ -470,7 +486,7 @@ async function playInsertCeremony(entries, preset, bs) {
   }
   const monsters = (bs && bs.monsters) || [];
   for (const entry of list) {
-    const gap = await openInsertGap(entry, queueEl);
+    const gap = await openInsertGap(entry, queueEl, bs && bs.queue);
     await playInsertMarker(gap);
     if (bs) {
       const rowEl = buildQueueRow(entry, monsters, bs, true);
@@ -1345,15 +1361,17 @@ function renderQueue(bs, fill = false, onDone = null) {
   debugLog('renderQueue', `fill=${fill} n_queue=${bs.queue?.length || 0} n_monsters=${bs.monsters?.length || 0}`);
   const el = document.getElementById('queue');
   if (!el) return;
-  // No-flicker: skip full wipe+rebuild if queue ids/order unchanged (prevents re-trigger enter anims on every tick)
+  // Same rows in the same engine order: rewrite readouts in place. Never rebuild
+  // and never move nodes — a tick must not re-slide rows that did not change slot.
   const queue = bs.queue || [];
   const currentRows = Array.from(el.querySelectorAll('.queue-row'));
   const currentIds = currentRows.map(r => r.dataset.rowId);
   const newIds = queue.map(r => r.id);
-  const currentTics = currentRows.map(r => String(r.dataset.tics ?? ''));
-  const newTics = queue.map(r => String(r.tics ?? 0));
-  if (currentIds.length === newIds.length && currentIds.every((id, i) => id === newIds[i]) && currentTics.every((t, i) => t === newTics[i])) {
-    // unchanged — leave DOM alone, just update title if needed
+  if (currentIds.length === newIds.length && currentIds.every((id, i) => id === newIds[i])) {
+    const monsters = bs.monsters || [];
+    queue.forEach((row, index) => {
+      updateQueueRowInPlace(currentRows[index], row, monsters, bs, index);
+    });
     const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
     if (titleEl) titleEl.textContent = 'Action Queue';
     if (fill && onDone) {
@@ -1362,24 +1380,24 @@ function renderQueue(bs, fill = false, onDone = null) {
     }
     return;
   }
-  // In-place reconciliation: when the STABLE key set matches the existing DOM
-  // exactly (hands h:LH/h:RH, monster attack+cooldown m:<label>), this is a
-  // successor/value update — mutate text in engine (insertion) order. Never
-  // re-sort by tics; a countdown tick only rewrites the tic readout.
+  // Stable-key successor (hand phase, monster attack↔cooldown): relabel the
+  // existing node. Move a node only if its engine slot actually changed.
   const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
   const newKeys = queue.map(queueRowKey);
   if (domKeys.size === newKeys.length && newKeys.every(k => domKeys.has(k))) {
     const monsters = bs.monsters || [];
-    // Detach non-row children (e.g. the PC-56 prediction bar) so the reorder
-    // below only shuffles rows; re-append them last so the bar stays on top.
     const nonRows = Array.from(el.children).filter(c => !c.classList.contains('queue-row'));
     nonRows.forEach(c => c.remove());
     queue.forEach((row, index) => {
       const domEl = currentRows.find(r => r.dataset.stableKey === queueRowKey(row));
-      if (domEl && domEl.parentNode) {
-        el.appendChild(domEl); // keep engine insertion order (existing rows only)
-        updateQueueRowInPlace(domEl, row, monsters, bs, index);
+      if (!domEl || !domEl.parentNode) return;
+      const rowsNow = Array.from(el.querySelectorAll('.queue-row'));
+      if (rowsNow[index] !== domEl) {
+        const ref = rowsNow[index] || null;
+        if (ref) el.insertBefore(domEl, ref);
+        else el.appendChild(domEl);
       }
+      updateQueueRowInPlace(domEl, row, monsters, bs, index);
     });
     nonRows.forEach(c => el.appendChild(c));
     const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
@@ -1414,7 +1432,7 @@ function renderQueue(bs, fill = false, onDone = null) {
     const bar = document.createElement('div');
     bar.className = 'prediction-bar';
     // Read-only tic→pixel ladder for the PC-56 prediction bar. The copy-sort
-    // does not reorder the queue or the DOM (those stay in insertion order).
+    // does not reorder the queue or the DOM (those stay in engine array order).
     const rowEls = Array.from(el.querySelectorAll('.queue-row'));
     const queueRect = el.getBoundingClientRect();
     const ladder = rowEls.filter(r => r.dataset.tics !== undefined).map(r => {
@@ -1490,7 +1508,7 @@ function renderQueue(bs, fill = false, onDone = null) {
     el.appendChild(bar);
   }
   if (fill) {
-    // Ceremony-intro fill: reveal rows in engine (insertion) order, top to bottom.
+    // Ceremony-intro fill: reveal rows in engine array order, top to bottom.
     Array.from(el.children).forEach((row, i) => {
       row.style.transition = `opacity ${QUEUE_FILL_MS}ms ease`;
       row.style.opacity = '0';
@@ -1662,8 +1680,8 @@ function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
   }
 }
 
-// Intro countdown mirror only (playIntroCountdown / finishIntroSnap). Live queue
-// render follows engine insertion order and must not call this.
+// Intro theater mirror only (playIntroCountdown). Live render follows engine
+// array order and must not call this.
 function sortQueueRows(queue) {
   return [...queue].sort((a, b) => {
     if ((a.tics ?? 0) !== (b.tics ?? 0)) return (a.tics ?? 0) - (b.tics ?? 0);
