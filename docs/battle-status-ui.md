@@ -1,6 +1,6 @@
 # Battle Status UI — Action Queue Column
 
-**Status:** Decided (2026-09-08) — mechanics locked, visual polish TBD
+**Status:** Decided through PC-DEC-055 (2026-09-28) — mechanics locked (incl. monster cooldown mirror of player lifecycle), visual polish TBD
 **Supersedes:** The gui1 tic-track bar. This replaces the horizontal timeline.
 
 ## Core Model
