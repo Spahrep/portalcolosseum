@@ -82,12 +82,12 @@ This is the de-facto **Process** step — a big `if/else` dispatch on `row.event
 Refactor `tick()` (or add a new master-loop entry) so the four phases are explicit functions with clear inputs/outputs:
 
 - **`peek()`** → returns the head row (variant-free read; skip `ready` placeholders). No mutation.
-- **`process(row)`** → the polymorphic dispatch (extract from `handleFire`). Returns the processed result + any follow-up rows scheduled. **Preserve the early data-detach** (remove the head from the array before `process` runs its `addEvent`/`commitNewRow` follow-ups) — do NOT move Remove to the end of the data path.
+- **`process(row)`** → the polymorphic dispatch (extract from `handleFire`). Returns the processed result + any follow-up rows scheduled. Follow-up rows (cooldown, next attack) are inserted via `addEvent`/`commitNewRow` as **NEW rows** at their tics-out — the head is NOT removed here. Remove happens LAST, after Cleanup.
 - **`cleanup()`** → the death/defeat/victory gate:
   - player HP ≤ 0 → return `{ terminal: 'death' }` (short-circuit; no Remove of current item)
   - monsters with HP ≤ 0 → remove their associated actions from the queue, flag for removal visuals
   - no monsters left → return `{ terminal: 'victory' }` (let cleanup fully process; no Remove beyond)
-- **`remove()`** → uniform: pop the completed action (data already detached), signal the visual remove (slide-out → shift-up). Type-agnostic.
+- **`remove()`** → uniform: pop the completed head (the processed row's successor was already inserted by Process), signal the visual remove (slide-out → shift-up). Type-agnostic. Runs LAST.
 
 The `/tick` endpoint (`api/combat/[...path].js:748-786`) must call the new master loop and return enough info for the client to drive the visual barrier (which phase ran, what visuals to fire, terminal state).
 

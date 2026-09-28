@@ -196,28 +196,36 @@ PC-70: 7b388a5 (flash on every roll tick) → 56be7e0 (keep natural repeats) →
 - The full **preview band** (Phase 1 above) is deferred to PMVP; its eventual
   coexistence with the ">" markers is not yet designed.
 
-## Row Morph (Player Hands)
+## Player Hand Row (Per-Phase Successor, Rendered In Place)
 
-A hand's attack is one row through both phases — the row identity is the hand, never duplicated:
+A hand's attack runs the master loop `Peek → Process → Cleanup → Remove` one row at a
+time. Each phase boundary **replaces the processed head with a new successor row**
+inserted at its tics-out — mechanically a remove + a new insert, **NOT an in-place
+morph**. There is no row "morphing." The UI shows one row per hand at a time because
+hand rows carry a stable key (`h:LH`/`h:RH`); the renderer animates the old row's
+removal + the new row's slide-in as one continuous transform, so it *looks* like the
+same row relabeling. That illusion is renderer-only.
 
 ```
 commit Slash (cast 4, cd 1)
-  RH | Slash  | 4      ← windup counting down
+  RH | Slash  | 4      ← winding row counting down
   (lands at 0: damage applies, footer stamps, command box flashes)
-  RH | Ready  | 1      ← SAME row relabeled to cooldown, re-sorted
-  (hits 0: row disappears, command box lights gold — hand free)
+  RH | Ready  | 1      ← NEW cooldown row inserted at tics-out (removed head replaced)
+  (hits 0: cooldown row removed, command box lights gold — hand free)
 ```
 
-- The row swaps content (attack name → `Ready`) and the sort repositions it.
+- The successor row is a **new queue entry** (fresh id) inserted by `Process`; the
+  processed head is popped by `Remove` last. The stable-key renderer is what makes the
+  swap read as "the same row changing."
 - Pre/cooldown profiles can be anything: short pre + long cd, long pre + short cd, balanced.
   The mechanism handles all of them — sorting does the work, not assumptions about typical values.
 - A long cooldown row sits near the bottom of the column for its duration. That IS the
   information: the hand is committed, leave it alone.
-- When a `Ready` row hits 0 and disappears, the hand's command box lights up (gold) +
-  footer stamp. This beat is the player's only notice signal after a dormant row — it matters
-  more the longer the cooldown was.
+- When a hand's `ready`/cooldown row hits 0 and is removed, the hand's command box
+  lights up (gold) + footer stamp. This beat is the player's only notice signal after a
+  dormant row — it matters more the longer the cooldown was.
 
-### Monster Rows (No Morph)
+### Monster Rows (Per-Cycle Successor)
 
 Monster attacks land and are done. No cooldown phase on the mob's row:
 damage applies, and the monster's next attack in its cycle spawns as a **new row**.

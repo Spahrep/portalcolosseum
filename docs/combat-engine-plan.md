@@ -21,7 +21,7 @@ The project is already committed to server-owned combat state:
 
 ## Tic Queue
 
-Sorted array of `{id, label, event, tics}`. Every tick: decrement all; fire events at 0 (player-first on ties); re-sort only on commit. Hand rows morph (attack name → Ready, same row identity). Row identity: hands = permanent row; monsters = per-cycle row. Cap ~10 visible rows is a client concern.
+Sorted array of `{id, label, event, tics}`. Every tick: decrement all; fire events at 0 (player-first on ties); re-sort only on commit. The master loop is strictly serial `Peek → Process → Cleanup → Remove`, one head item at a time. Every phase transition is a **new queue entry**: the processed head is removed and its successor (cooldown, next attack, etc.) is inserted as a fresh row at its tics-out position. There is NO in-place row morphing. Row identity: hands = one row per hand at a time (stable key `h:LH`/`h:RH`, successor replaces the processed head); monsters = per-cycle row. Cap ~10 visible rows is a client concern. (The stable-key renderer animates a hand's row replacement so it visually reads as "the same row transforming," but each phase is mechanically a remove + a new insert.)
 
 ## HP Tracking
 

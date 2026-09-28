@@ -60,10 +60,10 @@ hand Ready → select potion → [pre tics] → EFFECT LANDS → [post tics] →
 
 1. **pre** — hand locks; row event `drinking`, tics = pre.
 2. **effect** — at fire: heal applies (HP += amount, cap 1000) or buff starts (`createBuff(name, value, endTic)`, pushed to `state.buffs`). Slot marked used.
-3. **post** — hand still locked; row morphs to `recovery`, tics = post. Buff runs during post.
+3. **post** — hand still locked; the `recovery` successor row is inserted, tics = post. Buff runs during post.
 4. hand returns to `Ready`.
 
-Row lifecycle on the one-row-per-hand queue: `drinking → effect → recovery → (removed, hand Ready)`. The morph follows existing `morphHandRow` conventions so the UI's one-row-per-hand invariant holds.
+Row lifecycle on the one-row-per-hand queue: `drinking → effect → recovery → (removed, hand Ready)`. Each transition is mechanically a **remove + a new insert** (the processed head is popped; the successor row is inserted at its tics-out) — NOT an in-place morph. The stable-key renderer animates the swap as "the same row transforming."
 
 ### 6.2 Formula (documented placeholder — tuning knob)
 
