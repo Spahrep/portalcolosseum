@@ -44,7 +44,8 @@ class BattleClock {
   /** Begin the post-commit transition. Called from loadBattle after highlighting. */
   start(diff, newBs, onComplete) {
     this.abort();
-    if (diff.resolved.length === 0 && diff.added.length === 0) {
+    const commits = (diff && diff.readyCommits) || [];
+    if (diff.resolved.length === 0 && diff.added.length === 0 && commits.length === 0) {
       if (onComplete) onComplete();
       return;
     }
@@ -61,9 +62,8 @@ class BattleClock {
     this._runResolve();
   }
 
-  /** Phase 1: Resolve animation — genuine-removal slide-out, then group lift.
-   * Non-hand value/state changes (in-place hand state updates) never land in
-   * diff.resolved, so they skip this entirely and render in place. */
+  /** Phase 1: genuine non-head removals slide out. The processed head is a
+   * silent pop (no exit slide) — it was pinned through narration. */
   async _runResolve() {
     const { _diff: diff } = this;
     const queueEl = document.getElementById('queue');
@@ -73,58 +73,57 @@ class BattleClock {
       return;
     }
 
-    const toExit = diff.resolved.slice(0, 1); // exactly one row per removal
-    await runQueueRemoval(toExit);            // slide-out → gap → group lift
+    const top = queueEl.querySelector('.queue-row:not(.queue-row-exit)');
+    const headId = diff.resolved[0];
+    const headIsTop = top && String(top.dataset.rowId) === String(headId);
+    if (headIsTop) {
+      top.classList.remove('queue-row-exit', 'queue-row-current');
+      top.remove();
+      const rest = diff.resolved.slice(1, 2);
+      if (rest.length) await runQueueRemoval(rest);
+    } else {
+      await runQueueRemoval(diff.resolved.slice(0, 1));
+    }
     await this._runInsert();
   }
 
-  /** Phase 2: Insert — space-creation push-down preview. Runs on inserts, but
-     *   is suppressed when the same tick also removes a row (a hand-ready commit
-     *   removes the ready row AND adds the attack row in one tick). When a
-     *   removal is happening, the exit slide-out/slide-up owns the motion and a
-     *   preview would shove rows down mid-exit. */
-    async _runInsert() {
-      await this._renderNew();
+  /** Phase 2: Insert — ready row has already left (or leaves here). The attack
+   * row then plays the full ceremony. Never suppressed just because a removal
+   * happened in the same tick. */
+  async _runInsert() {
+    await this._renderNew();
+  }
+
+  /** Phase 3: ceremony (event-gated), then render, then entry settle. */
+  async _renderNew() {
+    const { _diff: diff, _newBs: newBs } = this;
+    const preset = getSpeedPreset();
+    const commits = diff.readyCommits || [];
+
+    for (const c of commits) {
+      if (animationsSkipped(preset)) {
+        const el = findQueueRowByIdentity(c.ready);
+        if (el) el.remove();
+      } else {
+        await runQueueRemoval([c.ready.id]);
+      }
     }
 
-    /** Phase 3: Render updated queue, then apply entry-enter animations. */
-    async _renderNew() {
-      const { _diff: diff, _newBs: newBs } = this;
+    const addedRows = diff.addedRows
+      || (newBs.queue || []).filter(r => (diff.added || []).some(a => a.id === r.id));
+    const ceremonyEntries = [...addedRows, ...commits.map(c => c.attack)];
 
-      const preset = getSpeedPreset();
-      const queueEl = document.getElementById('queue');
-      // Space-creation push-down — only when nothing is removed this tick.
-      if (diff.resolved.length === 0 && diff.added.length > 0 && queueEl) {
-        await animateQueueSpaceCreation(diff.added, queueEl, preset);
-      }
-
-      // Always render the full queue — this is where entries actually appear
+    if (ceremonyEntries.length > 0) {
+      await playInsertCeremony(ceremonyEntries, preset, newBs);
+    } else {
       renderQueue(newBs);
+    }
 
-    // Cosmetic entry-enter animations on freshly rendered entries
-    if (diff.added.length > 0) {
-      const nqEl = document.getElementById('queue');
-      if (nqEl) {
-        diff.added.forEach(entry => {
-          const id = entry && entry.id ? entry.id : entry;
-          const rowEl = nqEl.querySelector(`[data-row-id="${id}"]`);
-          if (rowEl) {
-            if (entry && entry.isMonster) {
-              rowEl.classList.add('queue-row-monster-enter');
-              setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
-            } else {
-              rowEl.classList.add('queue-row-enter');
-              setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
-            }
-          }
-        });
-        // Panel flash
-        const qp = document.querySelector('.queue-panel');
-        if (qp) {
-          qp.classList.add('queue-arrived');
-          setTimeout(() => qp.classList.remove('queue-arrived'), 350);
-        }
-      }
+    const qp = document.querySelector('.queue-panel');
+    if (qp && ceremonyEntries.length > 0 && !animationsSkipped(preset)) {
+      qp.classList.add('queue-arrived');
+      await waitForEvent(qp, 'animationend', 400);
+      qp.classList.remove('queue-arrived');
     }
 
     this._finish();
@@ -151,6 +150,11 @@ const QUEUE_EXIT_MS = 280;
 // Genuine-removal sequence: slide fully out (QUEUE_EXIT_MS) → this gap →
 // remaining rows glide up TOGETHER (QUEUE_EXIT_MS again). See runQueueRemoval.
 const QUEUE_REMOVE_GAP_MS = 100;
+// Insert ceremony durations — must match run.html (.queue-insert-gap / .queue-insert-bar / .queue-row-enter).
+const QUEUE_GAP_MS = 300;
+const QUEUE_WIPE_MS = 250;
+const QUEUE_FLASH_MS = 150;
+const QUEUE_ENTER_MS = 250;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
@@ -264,6 +268,7 @@ let supabase;
 let currentRunId = null;
 let lastBs = null; // last loaded battle_state (safeState) — source for attack/potion lookups
 let busy = false;
+let masterClockDepth = 0; // >0 while tickLoop / commit ceremony owns the clock; blocks setBusy(false)
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
 let queueBarInfo = null; // {kind:'bar',firstId,lastId} | null — PC-56 prediction bar
 let playerName = 'Player';
@@ -286,6 +291,241 @@ const QUEUE_FILL_MS = 700;      // per-row fade
 
 // Bug 4 fix: persistent cache for exit-animating queue rows (like deathCards for monsters)
 const exitingQueueRows = new Map(); // rowId -> { element, finished }
+
+function enterMasterClock() { masterClockDepth++; }
+function leaveMasterClock() { masterClockDepth = Math.max(0, masterClockDepth - 1); }
+
+function prefersReducedMotion() {
+  return !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}
+
+/** Instant preset and reduced-motion both skip queue motion (rows land directly). */
+function animationsSkipped(preset) {
+  const p = preset || getSpeedPreset();
+  return prefersReducedMotion() || !p || p.charMs === 0;
+}
+
+function typeFeedLinesAsync(lines) {
+  return new Promise(resolve => {
+    typeFeedLines(lines || [], resolve);
+  });
+}
+
+/** Type every feed line not yet shown, and resolve when the typewriter finishes. */
+async function awaitNarration(feed) {
+  const lines = feed || [];
+  if (lines.length <= renderedFeedLines) return;
+  const fresh = lines.slice(renderedFeedLines);
+  await typeFeedLinesAsync(fresh);
+  renderedFeedLines = lines.length;
+}
+
+function isMonsterQueueRow(row) {
+  return !!(row && row.event === 'attack' && row.label && row.label !== 'LH' && row.label !== 'RH');
+}
+
+function findQueueRowByIdentity(row) {
+  if (!row) return null;
+  const queueEl = document.getElementById('queue');
+  if (!queueEl) return null;
+  if (row.id != null) {
+    const byId = queueEl.querySelector(`[data-row-id="${row.id}"]`);
+    if (byId) return byId;
+  }
+  const key = queueRowKey(row);
+  return Array.from(queueEl.querySelectorAll('.queue-row')).find(el => el.dataset.stableKey === key) || null;
+}
+
+/** Hand-ready commit: same stable key, event flips ready → a committed action. */
+function findReadyCommits(oldQueue, newQueue) {
+  const commits = [];
+  for (const oldRow of oldQueue || []) {
+    if (oldRow.label !== 'LH' && oldRow.label !== 'RH') continue;
+    if (oldRow.event !== 'ready') continue;
+    const next = (newQueue || []).find(r => r.label === oldRow.label);
+    if (next && next.event !== 'ready') commits.push({ ready: oldRow, attack: next });
+  }
+  return commits;
+}
+
+function pinProcessedHead(head) {
+  const row = findQueueRowByIdentity(head);
+  if (!row) return;
+  row.classList.add('queue-row-current');
+  row.classList.remove('queue-row-exit');
+}
+
+/**
+ * Head removal is a silent pop — no exit slide. A same-key successor (hand
+ * phase change) stays in the DOM so renderQueue can relabel it in place.
+ */
+function silentPopHead(head, newQueue) {
+  if (!head) return;
+  const row = findQueueRowByIdentity(head);
+  if (!row) return;
+  row.classList.remove('queue-row-current', 'queue-row-exit');
+  const key = queueRowKey(head);
+  const successorSameKey = (newQueue || []).some(r => queueRowKey(r) === key);
+  if (!successorSameKey) {
+    exitingQueueRows.delete(row.dataset.rowId);
+    if (head.id != null) exitingQueueRows.delete(head.id);
+    row.remove();
+  }
+}
+
+function measuredRowHeight(queueEl) {
+  const sample = queueEl.querySelector('.queue-row:not(.queue-row-exit)');
+  if (!sample) return 24;
+  const h = sample.getBoundingClientRect().height;
+  return h > 0 ? Math.round(h) : 24;
+}
+
+function insertIndexFor(entry, domRows) {
+  let insertIdx = domRows.length;
+  for (let i = 0; i < domRows.length; i++) {
+    const curTics = Number(domRows[i].dataset.tics ?? 0);
+    const newTics = entry.tics ?? 0;
+    if (newTics < curTics || (newTics === curTics && (entry.label === 'LH' || entry.label === 'RH'))) {
+      insertIdx = i;
+      break;
+    }
+  }
+  return insertIdx;
+}
+
+async function openInsertGap(entry, queueEl) {
+  const domRows = Array.from(queueEl.children).filter(c =>
+    c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId) && !c.classList.contains('queue-row-exit')
+  );
+  const gap = document.createElement('div');
+  gap.className = 'queue-insert-gap';
+  gap.style.setProperty('--insert-gap', `${measuredRowHeight(queueEl)}px`);
+  const refChild = domRows[insertIndexFor(entry, domRows)] || null;
+  if (refChild) queueEl.insertBefore(gap, refChild);
+  else queueEl.appendChild(gap);
+  void gap.offsetHeight;
+  gap.classList.add('open');
+  await waitForEvent(gap, 'transitionend', QUEUE_GAP_MS + 80);
+  return gap;
+}
+
+/** Distinct marker filling the open slot: wipe left→right, then one flash. */
+async function playInsertMarker(gap) {
+  const marker = document.createElement('div');
+  marker.className = 'queue-insert-bar';
+  gap.appendChild(marker);
+  void marker.offsetWidth;
+  marker.classList.add('wipe');
+  await waitForEvent(marker, 'animationend', QUEUE_WIPE_MS + 80);
+  marker.classList.remove('wipe');
+  void marker.offsetWidth;
+  marker.classList.add('flash');
+  await waitForEvent(marker, 'animationend', QUEUE_FLASH_MS + 80);
+  return marker;
+}
+
+async function settleEnteredRows(entries, preset) {
+  const queueEl = document.getElementById('queue');
+  if (!queueEl || !entries || entries.length === 0 || animationsSkipped(preset)) return;
+  const waits = [];
+  for (const entry of entries) {
+    const id = entry && entry.id != null ? entry.id : entry;
+    const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
+    if (!rowEl) continue;
+    const isMon = isMonsterQueueRow(entry);
+    const cls = isMon ? 'queue-row-monster-enter' : 'queue-row-enter';
+    rowEl.classList.add(cls);
+    const timeout = isMon ? 450 : QUEUE_ENTER_MS + 80;
+    waits.push(waitForEvent(rowEl, 'animationend', timeout).then(() => {
+      rowEl.classList.remove('queue-row-enter', 'queue-row-monster-enter');
+    }));
+  }
+  await Promise.all(waits);
+}
+
+/**
+ * Full insert ceremony: empty gap grows → marker wipes → flashes → real row settles.
+ * Event-gated via waitForEvent. Instant / reduced-motion skips straight to render.
+ */
+async function playInsertCeremony(entries, preset, bs) {
+  const list = entries || [];
+  const queueEl = document.getElementById('queue');
+  if (list.length === 0 || !queueEl || animationsSkipped(preset)) {
+    if (bs) renderQueue(bs);
+    return;
+  }
+  const monsters = (bs && bs.monsters) || [];
+  for (const entry of sortQueueRows(list)) {
+    const gap = await openInsertGap(entry, queueEl);
+    await playInsertMarker(gap);
+    if (bs) {
+      const rowEl = buildQueueRow(entry, monsters, bs, true);
+      const cls = isMonsterQueueRow(entry) ? 'queue-row-monster-enter' : 'queue-row-enter';
+      rowEl.classList.add(cls);
+      gap.replaceWith(rowEl);
+      const timeout = isMonsterQueueRow(entry) ? 450 : QUEUE_ENTER_MS + 80;
+      await waitForEvent(rowEl, 'animationend', timeout);
+      rowEl.classList.remove('queue-row-enter', 'queue-row-monster-enter');
+    } else {
+      gap.remove();
+    }
+  }
+  if (bs) renderQueue(bs);
+}
+
+/** Hit-shake / fresh death cards started this tick. Resolves on animationend. */
+async function awaitTickVisuals(deathBefore) {
+  const els = [];
+  const container = document.querySelector('.container');
+  if (container && (container.classList.contains('container-shake') || container.classList.contains('container-crit-shake'))) {
+    els.push(container);
+  }
+  document.querySelectorAll('.monster-hit, .monster-crit-hit').forEach(el => els.push(el));
+  if (deathBefore) {
+    for (const [key, entry] of deathCards) {
+      if (!deathBefore.has(key) && entry.el) els.push(entry.el);
+    }
+  }
+  if (els.length === 0) return;
+  await Promise.all(els.map(el => waitForEvent(el, 'animationend', MONSTER_DEATH_MS + 80)));
+}
+
+/**
+ * Hand-ready commit beat: the ready row leaves, THEN the attack row lands
+ * through the full ceremony. Runs before the next /tick so the clock does
+ * not swallow the insert.
+ */
+async function playCommitArrival(runId) {
+  const fullRun = await apiCall(`/runs/${runId}`, 'GET');
+  const run = fullRun.run || fullRun;
+  const rich = run.battle_state || {};
+  const bs = {
+    ...rich,
+    player_hp: run.player_hp ?? rich.player?.hp ?? 0,
+    max_hp: run.max_hp ?? rich.player?.max_hp ?? 100
+  };
+  const prev = lastBs;
+  const preset = getSpeedPreset();
+  const commits = findReadyCommits(prev?.queue || [], bs.queue || []);
+  const narrateP = awaitNarration(bs.feed || []);
+  const visualP = (async () => {
+    if (commits.length === 0) return;
+    for (const c of commits) {
+      if (animationsSkipped(preset)) {
+        const el = findQueueRowByIdentity(c.ready);
+        if (el) el.remove();
+      } else {
+        await runQueueRemoval([c.ready.id]);
+      }
+    }
+    await playInsertCeremony(commits.map(c => c.attack), preset, bs);
+  })();
+  await Promise.all([narrateP, visualP]);
+  lastBs = bs;
+  renderPlayerHP(bs);
+  renderLoadout(bs);
+  if (commits.length === 0) renderQueue(bs);
+}
 
 // Tuning constants for dice-selection roulette (client theater only).
 // Sweep: uniform left→right walk, stops on random same-color box (incl phantom).
@@ -454,8 +694,9 @@ function showErrorState(title, detail, showReturn = true) {
 }
 
 function setBusy(state) {
-  // Don't release busy if the clock is mid-transition — let _finish() handle it
-  if (!state && battleClock.state !== 'IDLE') return;
+  // Don't release busy if the clock is mid-transition — let _finish() / tickLoop handle it.
+  // masterClockDepth covers the server tick loop, which is not the BattleClock state machine.
+  if (!state && (battleClock.state !== 'IDLE' || masterClockDepth > 0)) return;
   busy = state;
   // Dynamic hand buttons + ITEM all live inside #action-menu; gate the whole row.
   document.querySelectorAll('#action-menu button').forEach(btn => {
@@ -1093,10 +1334,12 @@ function renderQueue(bs, fill = false, onDone = null) {
   if (!el) return;
   // No-flicker: skip full wipe+rebuild if queue ids/order unchanged (prevents re-trigger enter anims on every tick)
   const queue = bs.queue || [];
-  const currentRows = Array.from(el.querySelectorAll('.queue-row')).filter(r => !r.classList.contains('queue-row-exit') && !r.classList.contains('queue-insert-preview'));
+  const currentRows = Array.from(el.querySelectorAll('.queue-row')).filter(r => !r.classList.contains('queue-row-exit') && !r.classList.contains('queue-insert-gap'));
   const currentIds = currentRows.map(r => r.dataset.rowId);
   const newIds = queue.map(r => r.id);
-  if (currentIds.length === newIds.length && currentIds.every((id, i) => id === newIds[i])) {
+  const currentTics = currentRows.map(r => String(r.dataset.tics ?? ''));
+  const newTics = queue.map(r => String(r.tics ?? 0));
+  if (currentIds.length === newIds.length && currentIds.every((id, i) => id === newIds[i]) && currentTics.every((t, i) => t === newTics[i])) {
     // unchanged — leave DOM alone, just update title if needed
     const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
     if (titleEl) titleEl.textContent = 'Action Queue';
@@ -1277,7 +1520,7 @@ function clearQueueDom() {
         exitingQueueRows.delete(id);
       }
       // else keep it (still animating), do not remove or replace
-    } else if (!child.classList.contains('queue-insert-preview')) {
+    } else {
       child.remove();
     }
   });
@@ -1416,40 +1659,8 @@ function sortQueueRows(queue) {
 }
 
 async function animateQueueSpaceCreation(added, queueEl, preset) {
-  if (added.length > 0 && queueEl && preset.charMs > 0) {
-    const sortedNew = sortQueueRows(added);
-    const domRows = Array.from(queueEl.children).filter(c =>
-      c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId)
-    );
-    const previews = [];
-    sortedNew.forEach(entry => {
-      let insertIdx = domRows.length;
-      for (let i = 0; i < domRows.length; i++) {
-        const curTics = Number(domRows[i].dataset.tics ?? 0);
-        const newTics = entry.tics ?? 0;
-        if (newTics < curTics || (newTics === curTics && (entry.label === 'LH' || entry.label === 'RH'))) {
-          insertIdx = i;
-          break;
-        }
-      }
-      const preview = document.createElement('div');
-      preview.className = 'queue-insert-preview';
-      const refChild = domRows[insertIdx] || null;
-      if (refChild) {
-        queueEl.insertBefore(preview, refChild);
-        domRows.splice(insertIdx, 0, preview);
-      } else {
-        queueEl.appendChild(preview);
-        domRows.push(preview);
-      }
-      previews.push(preview);
-    });
-    requestAnimationFrame(() => {
-      previews.forEach(p => p.classList.add('active'));
-    });
-    await new Promise(r => setTimeout(r, 300));
-    previews.forEach(p => p.remove());
-  }
+  if (!added || added.length === 0 || !queueEl) return;
+  await playInsertCeremony(added, preset, null);
 }
 
 // PC-64: tic-0 countdown to the first decision point — theater over the
@@ -1824,6 +2035,12 @@ async function doAttack(runId, hand, attackId, targetIds) {
     // Hide the action menu — it will re-render on tickLoop break with fresh state
     const menuWrap = document.getElementById('action-choices');
     if (menuWrap) menuWrap.style.display = 'none';
+    enterMasterClock();
+    try {
+      await playCommitArrival(runId);
+    } catch (err) {
+      console.error('commit ceremony:', err);
+    }
     await tickLoop(runId);
   } catch (e) {
     const msg = String(e.message || e);
@@ -1832,6 +2049,8 @@ async function doAttack(runId, hand, attackId, targetIds) {
     } else {
       showMessage(msg, true);
     }
+  } finally {
+    leaveMasterClock();
   }
   setBusy(false);
 }
@@ -1846,9 +2065,17 @@ async function doSwap(runId, hand) {
     pendingAttack = null;
     const menuWrap = document.getElementById('action-choices');
     if (menuWrap) menuWrap.style.display = 'none';
+    enterMasterClock();
+    try {
+      await playCommitArrival(runId);
+    } catch (err) {
+      console.error('commit ceremony:', err);
+    }
     await tickLoop(runId);
   } catch (e) {
     showMessage(String(e.message || e), true);
+  } finally {
+    leaveMasterClock();
   }
   setBusy(false);
 }
@@ -2290,9 +2517,17 @@ async function usePotion(runId, slot) {
     const payload = { slot };
     await apiCall(`/runs/${runId}/use-potion`, 'POST', payload);
     showMessage(`Potion ${slot} used`);
+    enterMasterClock();
+    try {
+      await playCommitArrival(runId);
+    } catch (err) {
+      console.error('commit ceremony:', err);
+    }
     await tickLoop(runId);
   } catch (e) {
     showMessage(e.message, true);
+  } finally {
+    leaveMasterClock();
   }
   setBusy(false);
 }
@@ -2373,11 +2608,11 @@ async function loadBattle(runId) {
       // feed narrates events that led to that state.
       if (prevBs) {
         const diff = diffQueueForAnimation(prevBs, bs);
-        const queueEl = document.getElementById('queue');
-        // Mark first resolved entry as "current" during narration — it stays
-        // at the top while the typewriter describes the action.
-        // BattleClock handles the entire post-commit sequence:
-        //   highlight → feed narration → resolve flash+shrink → renderQueue → entry animations
+        diff.readyCommits = findReadyCommits(prevBs.queue || [], bs.queue || []);
+        diff.addedRows = (bs.queue || []).filter(r => (diff.added || []).some(a => a.id === r.id));
+        // Pin the departing head through narration — no exit slide until the clock resolves.
+        const pinned = (prevBs.queue || []).find(r => r.id === diff.resolved[0]);
+        if (pinned) pinProcessedHead(pinned);
         battleClock.start(diff, bs, () => {
           renderQueue(bs);
         });
@@ -2398,13 +2633,12 @@ async function loadBattle(runId) {
           Array.from(nqEl.children).forEach((row, i) => {
             setTimeout(() => {
               const isMonRow = row.querySelector('.name')?.textContent?.includes("'s ");
-              if (isMonRow) {
-                row.classList.add('queue-row-monster-enter');
-                setTimeout(() => row.classList.remove('queue-row-monster-enter'), 400);
-              } else {
-                row.classList.add('queue-row-enter');
-                setTimeout(() => row.classList.remove('queue-row-enter'), 1200);
-              }
+              const cls = isMonRow ? 'queue-row-monster-enter' : 'queue-row-enter';
+              row.classList.add(cls);
+              const timeout = isMonRow ? 450 : QUEUE_ENTER_MS + 80;
+              waitForEvent(row, 'animationend', timeout).then(() => {
+                row.classList.remove('queue-row-enter', 'queue-row-monster-enter');
+              });
             }, i * 100);
           });
         }
@@ -2578,136 +2812,112 @@ async function init() {
 
 async function tickLoop(runId) {
   debugLog('tickLoop', `runId=${runId}`);
-  let oldQueue = lastBs?.queue ? [...lastBs.queue] : [];
-  while (true) {
-    // Pacing delay between ticks so the player sees each event
-    const preset = getSpeedPreset();
-    if (preset.charMs > 0) {
-      const tickPacing = Math.min(500, Math.max(150, Math.round(preset.lineDelayMs / 3)));
-      await new Promise(r => setTimeout(r, tickPacing));
-    }
-
-    // PC-DEC-045e: fetch full run state in parallel with tick so render
-    // functions have monsters, player, weapons, dice, potions available.
-    const [data, fullRun] = await Promise.all([
-      apiCall(`/runs/${runId}/tick`, 'POST'),
-      apiCall(`/runs/${runId}`, 'GET')
-    ]);
-    const tickState = data.state || {};
-    const rich = (fullRun.run && fullRun.run.battle_state) || fullRun.battle_state || {};
-    const bs = {
-      ...rich,
-      queue: tickState.queue || rich.queue || [],
-      player: tickState.player || rich.player,
-      feed: tickState.feed || rich.feed || [],
-      tic: tickState.tic ?? rich.tic ?? 0,
-      battle_over: tickState.battle_over,
-      player_dead: tickState.player_dead,
-      // Top-level fields renderPlayerHP reads
-      player_hp: tickState.player?.hp ?? fullRun.player_hp ?? rich.player?.hp ?? 0,
-      max_hp: tickState.player?.max_hp ?? fullRun.max_hp ?? rich.player?.max_hp ?? 100
-    };
-    lastBs = bs;
-
-    renderPlayerHP(bs);
-    renderMonsters(bs.monsters || []);
-    renderLoadout(bs);
-
-    // Queue: label-keyed diff (hands stable by label, monsters by id) so hand
-    // value/state updates render in place and ONLY genuine removals slide out.
-    const newQueue = bs.queue || [];
-    const oldKeys = new Set(oldQueue.map(queueRowKey));
-    const newKeys = new Set(newQueue.map(queueRowKey));
-    const resolved = oldQueue.filter(r => !newKeys.has(queueRowKey(r))).slice(0, 1); // exactly one row per removal
-    if (resolved.length > 0) {
-      await runQueueRemoval(resolved.map(r => r.id)); // slide-out → gap → group lift
-    }
-    const added = newQueue.filter(r => !oldKeys.has(queueRowKey(r)));
-
-    // Space creation — empty-slot push-down dotted preview. Runs on inserts,
-    // but suppressed when this tick also removes a row (a hand-ready commit
-    // removes the ready row AND adds the attack row in one tick). When a
-    // removal is happening, the exit slide-out/slide-up owns the motion and a
-    // preview would shove rows down mid-exit.
-    const queueEl = document.getElementById('queue');
-    if (resolved.length === 0 && added.length > 0 && queueEl && preset.charMs > 0) {
-      const sortedNew = sortQueueRows(added);
-      const domRows = Array.from(queueEl.children).filter(c =>
-        c.classList.contains('queue-row') && !exitingQueueRows.has(c.dataset.rowId)
-      );
-      const previews = [];
-      sortedNew.forEach(entry => {
-        let insertIdx = domRows.length;
-        for (let i = 0; i < domRows.length; i++) {
-          const curTics = Number(domRows[i].dataset.tics ?? 0);
-          const newTics = entry.tics ?? 0;
-          if (newTics < curTics || (newTics === curTics && (entry.label === 'LH' || entry.label === 'RH'))) {
-            insertIdx = i;
-            break;
-          }
-        }
-        const preview = document.createElement('div');
-        preview.className = 'queue-insert-preview';
-        const refChild = domRows[insertIdx] || null;
-        if (refChild) {
-          queueEl.insertBefore(preview, refChild);
-          domRows.splice(insertIdx, 0, preview);
-        } else {
-          queueEl.appendChild(preview);
-          domRows.push(preview);
-        }
-        previews.push(preview);
-      });
-      requestAnimationFrame(() => {
-        previews.forEach(p => p.classList.add('active'));
-      });
-      await new Promise(r => setTimeout(r, 300));
-      previews.forEach(p => p.remove());
-    }
-
-    renderQueue(bs);
-
-    // Entry animations for newly added rows (Stages 4-5: bar grows, flashes)
-    if (added.length > 0 && queueEl) {
-      added.forEach((entry) => {
-        const id = entry && entry.id ? entry.id : entry;
-        const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
-        if (rowEl) {
-          const isMon = entry.label !== 'LH' && entry.label !== 'RH' && entry.event === 'attack';
-          if (isMon) {
-            rowEl.classList.add('queue-row-monster-enter');
-            setTimeout(() => rowEl.classList.remove('queue-row-monster-enter'), 400);
-          } else {
-            rowEl.classList.add('queue-row-enter');
-            // queue-bar-entry animation covers Stages 3-4: bar grows left-to-right, flashes
-            setTimeout(() => rowEl.classList.remove('queue-row-enter'), 1200);
-          }
-        }
-      });
-    }
-    oldQueue = [...newQueue];
-
-    // One tick = one event processed = one new narration line.
-    // Append it individually for clean typewriter animation.
-    const narrate = data.result?.narrate;
-    if (narrate) {
-      appendFeedLine(narrate);
-      renderedFeedLines = (bs.feed || []).length;
-    } else if (bs.feed && bs.feed.length > renderedFeedLines) {
-      // Fallback: render full feed with diff
-      renderFeed(bs.feed, null);
-      renderedFeedLines = bs.feed.length;
-    }
-
-    if (data.result?.playerReady || data.result?.needsInput || data.result?.done || data.result?.battleOver || bs.battle_over) {
-      // Render action menu ONLY on break — avoids flicker during intermediate ticks
-      // (monster attacks, cooldowns resolving) where the player cannot interact.
-      renderActionMenu(bs);
-      if (data.result?.battleOver || bs.battle_over) {
-        showAdvanceUI(runId, bs);
+  const outer = masterClockDepth === 0;
+  enterMasterClock();
+  try {
+    let oldQueue = lastBs?.queue ? [...lastBs.queue] : [];
+    while (true) {
+      // Inter-tick pacing so each event is readable. Not a preview/entry barrier.
+      const preset = getSpeedPreset();
+      if (preset.charMs > 0) {
+        const tickPacing = Math.min(500, Math.max(150, Math.round(preset.lineDelayMs / 3)));
+        await new Promise(r => setTimeout(r, tickPacing));
       }
-      break;
+
+      // PC-DEC-045e: fetch full run state in parallel with tick so render
+      // functions have monsters, player, weapons, dice, potions available.
+      const [data, fullRun] = await Promise.all([
+        apiCall(`/runs/${runId}/tick`, 'POST'),
+        apiCall(`/runs/${runId}`, 'GET')
+      ]);
+      const tickState = data.state || {};
+      const rich = (fullRun.run && fullRun.run.battle_state) || fullRun.battle_state || {};
+      const bs = {
+        ...rich,
+        queue: tickState.queue || rich.queue || [],
+        player: tickState.player || rich.player,
+        feed: tickState.feed || rich.feed || [],
+        tic: tickState.tic ?? rich.tic ?? 0,
+        battle_over: tickState.battle_over,
+        player_dead: tickState.player_dead,
+        player_hp: tickState.player?.hp ?? fullRun.player_hp ?? rich.player?.hp ?? 0,
+        max_hp: tickState.player?.max_hp ?? fullRun.max_hp ?? rich.player?.max_hp ?? 100
+      };
+      const processedHead = data.result?.row || null;
+      const newQueue = bs.queue || [];
+
+      // Processed head stays pinned through narration + visuals. Do not
+      // renderQueue (which would drop it) until both have finished.
+      pinProcessedHead(processedHead);
+
+      const deathBefore = new Set(deathCards.keys());
+      renderPlayerHP(bs);
+      renderMonsters(bs.monsters || []);
+      renderLoadout(bs);
+
+      // Typewriter starts first (it kicks hit feedback), then both are awaited.
+      const narrateP = awaitNarration(bs.feed);
+      const visualsP = awaitTickVisuals(deathBefore);
+      await Promise.all([narrateP, visualsP]);
+
+      // removeHead LAST — silent pop, never an exit slide.
+      silentPopHead(processedHead, newQueue);
+
+      const oldKeys = new Set(oldQueue.map(queueRowKey));
+      const newKeys = new Set(newQueue.map(queueRowKey));
+      const processedKey = processedHead ? queueRowKey(processedHead) : null;
+      const readyCommits = findReadyCommits(oldQueue, newQueue);
+
+      // Genuine non-head removals still slide out + group-lift.
+      const nonHead = oldQueue.filter(r => {
+        const k = queueRowKey(r);
+        if (processedKey && k === processedKey) return false;
+        if (readyCommits.some(c => queueRowKey(c.ready) === k)) return false;
+        return !newKeys.has(k);
+      }).slice(0, 1);
+      if (nonHead.length > 0) {
+        if (animationsSkipped(preset)) {
+          nonHead.forEach(r => {
+            const el = findQueueRowByIdentity(r);
+            if (el) el.remove();
+          });
+        } else {
+          await runQueueRemoval(nonHead.map(r => r.id));
+        }
+      }
+
+      // Hand-ready commit split: ready row leaves, THEN the attack row lands.
+      for (const c of readyCommits) {
+        if (animationsSkipped(preset)) {
+          const el = findQueueRowByIdentity(c.ready);
+          if (el) el.remove();
+        } else {
+          await runQueueRemoval([c.ready.id]);
+        }
+      }
+
+      const added = newQueue.filter(r => !oldKeys.has(queueRowKey(r)));
+      const ceremonyEntries = [...added, ...readyCommits.map(c => c.attack)];
+      if (ceremonyEntries.length > 0) {
+        await playInsertCeremony(ceremonyEntries, preset, bs);
+      } else {
+        renderQueue(bs);
+      }
+
+      lastBs = bs;
+      oldQueue = [...newQueue];
+
+      if (data.result?.playerReady || data.result?.needsInput || data.result?.done || data.result?.battleOver || bs.battle_over) {
+        renderActionMenu(bs);
+        if (data.result?.battleOver || bs.battle_over) {
+          showAdvanceUI(runId, bs);
+        }
+        break;
+      }
     }
+  } finally {
+    leaveMasterClock();
+    if (outer) setBusy(false);
   }
 }
 

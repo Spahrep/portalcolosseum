@@ -231,7 +231,8 @@ export function createEngine(rng = Math.random) {
 
   // Explicit Peek→Process→Cleanup→Remove phases (PC-94)
   // Master loop (tick) calls them serially, one item at a time.
-  // Early data-detach (remove before process) preserved to avoid ghost rows.
+  // remove() fires ONLY after process() — the head stays until narration
+  // data is produced. Never detach the head before process.
   function peek() {
     return peekHead(state.queue);
   }

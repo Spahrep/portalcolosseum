@@ -22,9 +22,16 @@ The prediction bar (`#prediction-bar`) is already visible on the queue while the
 
 ---
 
-### Stage 2: Space Creation (inserts; suppressed when a removal happens in the same tick, 2026-09-24)
+### Stage 2: Space Creation (clean empty gap — locked 2026-09-28)
 
-After the action is confirmed, the space where the new row will land grows: a dashed-yellow `queue-insert-preview` box (`animateQueueSpaceCreation` in `battle-app.js`) opens a slot and pushes the rows below down. Runs on inserts, **but is suppressed whenever the same tick also removes a row** (`diff.resolved.length === 0` / `resolved.length === 0`). A hand-ready commit is a remove + insert in one tick (the ready row leaves, the attack row lands), so the preview must not fire there — otherwise the dotted box shoves rows down mid-exit. On a removal tick the exit slide-out/slide-up owns the motion and arrivals appear via `renderQueue` + the Stage 3/4 entry animations.
+After the action is confirmed, the slot where the new row will land grows open and the rows below push down into that space. There is **no bordered or filled marker**. The dashed-yellow `.queue-insert-preview` box was unrequested design creep and is removed.
+
+**Mechanism (`openInsertGap` in `battle-app.js`):**
+1. Insert a `.queue-insert-gap` (`height: 0`, transparent, `border: none`) at the sorted index.
+2. Add `.open`. CSS transitions `height` to one row (`--insert-gap`) and `margin-bottom` to `2px` over `300ms` ease-out.
+3. Barrier is `waitForEvent(gap, 'transitionend', QUEUE_GAP_MS + 80)` — not `setTimeout(300)`. Reduced-motion and the Instant preset (`charMs === 0`) skip the ceremony and land the row directly.
+
+**Hand-ready commit is two beats, not one suppressed tick (locked).** The ready row leaves first (genuine slide-out + group-lift via `runQueueRemoval`). THEN the attack row plays the full ceremony (gap grows → insert marker wipes → flashes → row settles) in `playCommitArrival` / `playInsertCeremony`, before the next `/tick`. A same-tick removal must not suppress this ceremony.
 
 ---
 
@@ -32,21 +39,30 @@ After the action is confirmed, the space where the new row will land grows: a da
 
 After the space is grown, the bar (yellow/orange insert marker) grows in from left to right within the spacer area.
 
-**Mechanism:**
-1. Inside the spacer, a child `.queue-insert-bar` appears at `width: 0`, positioned at the left edge.
-2. Animate `width` from `0` to `100%` (full width of the spacer row).
-3. Duration: `250ms`, easing: `ease-in-out`.
+The marker is a **distinct element** from the arriving row's `.queue-bar`. It fills the open `.queue-insert-gap`, then is replaced by the real row. Do not fold grow+flash into `.queue-bar` / `queue-bar-entry` (that keyframe is gone).
 
-**CSS:**
+**Mechanism (`playInsertMarker`):**
+1. Append `.queue-insert-bar` (`width: 0`) inside the gap.
+2. Add `.wipe`. Keyframe animates `width` from `0` to `100%`.
+3. Duration: `250ms`, easing: `ease-in-out`.
+4. Barrier: `waitForEvent(marker, 'animationend', QUEUE_WIPE_MS + 80)`.
+
+**CSS (shipped in `run.html`):**
 ```css
 .queue-insert-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
   height: 100%;
-  background: linear-gradient(90deg, #ffcc66, #ffaa33);
   width: 0;
-  transition: width 250ms ease-in-out;
+  background: linear-gradient(90deg, #ffcc66, #ffaa33);
 }
-.queue-insert-bar.full {
-  width: 100%;
+.queue-insert-bar.wipe {
+  animation: queue-insert-wipe 250ms ease-in-out forwards;
+}
+@keyframes queue-insert-wipe {
+  from { width: 0; }
+  to { width: 100%; }
 }
 ```
 
@@ -57,9 +73,10 @@ After the space is grown, the bar (yellow/orange insert marker) grows in from le
 The bar finishes growing all the way in, then flashes once — a brief brighten-and-dim to signal the insert point is locked.
 
 **Mechanism:**
-1. After the bar reaches full width, add `.queue-insert-bar.flash` class.
-2. The flash keyframe: `opacity` 1.0 → 0.3 → 1.0 over `150ms`.
-3. After the flash completes, the spacer and bar are removed and the real queue row is inserted.
+1. After the wipe's `animationend`, remove `.wipe`, force reflow, add `.queue-insert-bar.flash`.
+2. The flash keyframe: `opacity` 1.0 → 0.3 → 1.0 over `150ms` (`insert-flash`).
+3. Barrier: `waitForEvent(marker, 'animationend', QUEUE_FLASH_MS + 80)`.
+4. Then the gap is replaced by the real queue row (Stage 5).
 
 **CSS:**
 ```css
@@ -156,7 +173,7 @@ Trigger: Returning to a battle mid-fight (page reload or resume). All existing q
 ## 4. Edge Cases
 
 ### Row at top of queue (current item)
-No animation for the current top item — it stays pinned while processing. Insert and exit animations only apply to non-current rows.
+No exit animation for the current top item. On the master-clock path (`tickLoop`) the processed head stays pinned (`.queue-row-current`) while its typewriter line and hit/death visuals run. Both are awaited before the next `/tick` POST. Removal of that head is a **silent pop** (`silentPopHead`) — never `runQueueRemoval` / `.queue-row-exit`. A same-key hand successor (winding → impact) stays in the DOM and is relabeled in place. Genuine **non-head** removals still slide out and group-lift.
 
 ### Multiple rows inserted simultaneously
 Each row follows the 5-stage sequence independently. The spacer grows for each row sequentially. Avoid batching — the queue processes one item at a time per the Master Clock model (`action-visual-lifecycle.md §1`).
@@ -174,9 +191,20 @@ When charMs=0 and lineDelayMs=0 (Instant preset), skip all 5 insert stages. Inse
 | Stage | Status | Location |
 |---|---|---|
 | Stage 1: Prediction bar | ✅ Done | `computeTimingMarkers()` + `#prediction-bar` |
-| Stage 2: Space creation | ❌ Not implemented | — |
-| Stage 3: Bar grows in | ❌ Not implemented | — |
-| Stage 4: Flash | ❌ Not implemented | — |
-| Stage 5: Row appears | ✅ Partial | `.queue-row-enter` + stagger on load |
-| Exit animation | ✅ Done | `markQueueRowExiting()` + `.queue-row-exit` |
+| Stage 2: Space creation | ✅ Done | `.queue-insert-gap` + `openInsertGap()` — empty gap, event-gated. No dotted box. |
+| Stage 3: Bar grows in | ✅ Done | `.queue-insert-bar.wipe` / `queue-insert-wipe` (width 0→100%, 250ms). Distinct from `.queue-bar`. |
+| Stage 4: Flash | ✅ Done | `.queue-insert-bar.flash` / `insert-flash` (150ms), `waitForEvent(animationend)` |
+| Stage 5: Row appears | ✅ Done | gap replaced by `.queue-row-enter` / `.queue-row-monster-enter`, `waitForEvent` |
+| Exit animation | ✅ Done | Non-head only: `runQueueRemoval()` + `.queue-row-exit` + group-lift. Head is a silent pop. |
 | Staggered entry (resume) | ⚠️ Partial | Only on fresh battle load, skip on resume |
+| Hand-ready commit split | ✅ Done | `playCommitArrival()` — ready row leaves, then full insert ceremony, then `/tick` |
+| Master-clock order | ✅ Done | `tickLoop`: pin head → typewriter ∥ visuals → await both → silent pop → ceremony → next `/tick` |
+
+---
+
+## 6. Locked decisions (2026-09-28)
+
+1. **No dotted box.** `.queue-insert-preview` (dashed yellow border/fill) is gone from JS and CSS. Space creation is a clean empty `.queue-insert-gap`.
+2. **Commit ceremony is not suppressed.** A hand-ready commit used to be remove+insert in one tick, which skipped the insert ceremony. The beat is split: ready row leaves, then the attack row lands through gap → wipe → flash → settle.
+3. **Event-gated timing.** Preview and entry barriers use `waitForEvent` (`transitionend` / `animationend`), with the existing reduced-motion short-circuit. Do not reintroduce `setTimeout(300)` / `setTimeout(1200)` as the barrier.
+4. **Engine order unchanged.** `tick()` is Peek → Process → Cleanup → Remove. It returns the processed head (`result.row`). `remove()` fires only after `process()`.

@@ -367,37 +367,7 @@
       overflow: hidden;
     }
 
-    /* ---- Bar entry animation (5-step flow: push, grow left-to-right, flash, disappear) ---- */
-    @keyframes queue-bar-entry {
-      0% {
-        width: 8px;
-        opacity: 0;
-      }
-      5% {
-        opacity: 0.7;
-      }
-      50% {
-        width: 100%;
-        opacity: 0.7;
-      }
-      65% {
-        width: 100%;
-        opacity: 1.0;
-      }
-      80% {
-        width: 100%;
-        opacity: 0.7;
-      }
-      100% {
-        opacity: 0;
-        width: 100%;
-      }
-    }
-    .queue-row-enter .queue-bar {
-      animation: queue-bar-entry 1.2s ease-out forwards;
-    }
-
-    /* Monster pulse (no bar) */
+    /* Monster pulse (no bar) — row settle only. Wipe+flash is .queue-insert-bar, not .queue-bar. */
     @keyframes queue-monster-pulse {
       0%   { background: transparent; box-shadow: none; }
       30%  { background: rgba(200, 50, 50, 0.15); box-shadow: inset 0 0 6px rgba(200, 50, 50, 0.3); }
@@ -415,33 +385,49 @@
       animation: queue-arrive-glow 0.35s ease-out;
     }
 
-    /* Stage 1-2: Insert preview marker (space-creation on every insert) */
-    .queue-insert-preview {
+    /* Stage 2: clean empty gap. Rows push down into open space — no border, no fill. */
+    .queue-insert-gap {
       height: 0;
-      margin-bottom: 2px;
-      background: rgba(255, 204, 102, 0.15);
-      border: 1px dashed #ffcc66;
-      border-radius: 2px;
+      margin-bottom: 0;
+      background: transparent;
+      border: none;
       box-sizing: border-box;
-      transition: height 250ms ease-out;
-      pointer-events: none;
-      overflow: hidden;
-    }
-    .queue-insert-preview.active {
-      height: 24px; /* full slot height — pushes subsequent rows down */
-    }
-
-    /* Stage 3: Left-to-right wipe */
-    .queue-row-inserting {
       overflow: hidden;
       position: relative;
+      pointer-events: none;
+      transition: height 300ms ease-out, margin-bottom 300ms ease-out;
     }
-    .queue-row-inserting .queue-bar {
-      animation: queue-bar-wipe 300ms ease-out forwards;
+    .queue-insert-gap.open {
+      height: var(--insert-gap, 24px);
+      margin-bottom: 2px;
     }
-    @keyframes queue-bar-wipe {
-      0%   { width: 8px; opacity: 0.7; }
-      100% { width: 100%; opacity: 0.7; }
+
+    /* Stages 3–4: insert marker, distinct from the row's .queue-bar.
+       Wipe left→right (250ms ease-in-out), then one brighten-dim flash (150ms). */
+    .queue-insert-bar {
+      position: absolute;
+      left: 0;
+      top: 0;
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, #ffcc66, #ffaa33);
+      pointer-events: none;
+    }
+    .queue-insert-bar.wipe {
+      animation: queue-insert-wipe 250ms ease-in-out forwards;
+    }
+    @keyframes queue-insert-wipe {
+      from { width: 0; }
+      to { width: 100%; }
+    }
+    .queue-insert-bar.flash {
+      width: 100%;
+      animation: insert-flash 150ms ease-out;
+    }
+    @keyframes insert-flash {
+      0%   { opacity: 1; }
+      50%  { opacity: 0.3; background: #ffee88; }
+      100% { opacity: 1; }
     }
 
     /* PC-63 DW cascading command menu — three-window modal cascade per the
