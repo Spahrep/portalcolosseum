@@ -274,8 +274,7 @@ export function createEngine(rng = Math.random) {
   }
 
   function tick() {
-    // Master loop: Peek → Remove(data early) → Process → Cleanup → (visual remove client-side)
-    // One item at a time, strictly serial.
+    // Master loop: Peek → Process → Cleanup → Remove (Remove pops head LAST)
     const row = peek();
     if (!row) {
       // No non-ready rows. Player needs to act or battle is over.
@@ -283,15 +282,8 @@ export function createEngine(rng = Math.random) {
       if (hasReadyHand) return { needsInput: true, row: null };
       return { done: true };
     }
-    // Early data-detach BEFORE process (preserve ghost-row prevention)
-    const removedRow = remove();
-    if (!removedRow) {
-      const hasReadyHand = Object.values(state.player?.hands || {}).some(h => h.state === 'Ready');
-      if (hasReadyHand) return { needsInput: true, row: null };
-      return { done: true };
-    }
-    const head = removedRow;
-    // Advance tics by the consumed row's value
+    const head = row;  // do not remove yet — remove LAST
+    // Advance tics by the row's value (before remove)
     const ticCost = head.tics;
     if (ticCost > 0) {
       for (const r of state.queue) {
@@ -300,6 +292,7 @@ export function createEngine(rng = Math.random) {
     }
     const result = process(head);
     const cleanupResult = cleanup();
+    remove();  // pop head LAST, after process/cleanup
     const narrate = result ? result.narrate : '';
     const newFeed = result ? result.feed : [];
     const battleOver = cleanupResult.battleOver;
