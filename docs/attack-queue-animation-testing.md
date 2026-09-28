@@ -13,7 +13,8 @@
 Navigate to a fresh battle. The queue should contain:
 
 - **Approach rows**: One per hand, ordered by weapon speed (fastest first). Shows label ("L. Hand", "R. Hand") and tic count. No timing bar on approach rows.
-- **Monster attacks**: One per monster, ordered by monster speed. Shows monster name + tic count. No timing bar.
+- **Monster attacks**: One per living monster at battle start, ordered by `mon.speed + prepare`. Shows monster name + tic count. No timing bar.
+- **Monster cooldown** (after an attack fires): "<Monster name> recovering" with the player-style timing bar. Not present at battle start.
 - **Total entries**: Number of hands + number of monsters. Example: 2 hands + 1 Glimmerling = 3 entries.
 
 **Pass criteria:**
@@ -23,6 +24,7 @@ Navigate to a fresh battle. The queue should contain:
 - [ ] Tic counts display as numbers (not "—" or blank)
 - [ ] Approach rows show no timing bar (per §6: no bar for non-ready-non-monster rows — approach is excluded from bar display)
 - [ ] Monster attack rows show no timing bar, only tic count (per §6)
+- [ ] Monster cooldown rows (after an attack fires) show "<Monster name> recovering" and a player-style timing bar (option A: tics = mon.speed + rollStat(cooldown_time, cooldown_time_range))
 
 ### 1.2 Queue Sort Order
 
@@ -86,10 +88,12 @@ After impact resolves:
 
 ### 2.5 Monster Attack States
 
-- [ ] Monster "ready" token shows monster name + "Ready"
 - [ ] Monster "attack" row shows "Monster X's [Attack Name]" with tic count
-- [ ] No timing bar on monster rows (per §6)
+- [ ] No timing bar on monster attack rows (per §6)
 - [ ] After monster attack fires, damage narration appears in message log and player HP bar depletes
+- [ ] The fired attack is a silent successor replace into a cooldown row — no exit slide
+- [ ] Cooldown row label is "<Monster name> recovering" with a timing bar (option A formula: mon.speed + rollStat(cooldown_time, cooldown_time_range))
+- [ ] When that cooldown fires, the next attack row lands in place (silent successor), tics = mon.speed + rollStat(prepare_time, prepare_time_range)
 
 ---
 
@@ -107,6 +111,7 @@ Per `action-visual-lifecycle.md §6`:
 
 - [ ] Player winding/cooldown bars are blue/cyan (per §6)
 - [ ] No timing bar on ready rows, monster attack rows, or approach rows
+- [ ] Monster cooldown ("recovering") rows DO have the player-style timing bar
 
 ### 3.3 Bar Updates
 

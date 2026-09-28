@@ -225,12 +225,22 @@ commit Slash (cast 4, cd 1)
   lights up (gold) + footer stamp. This beat is the player's only notice signal after a
   dormant row — it matters more the longer the cooldown was.
 
-### Monster Rows (Per-Cycle Successor)
+### Monster Rows (Attack then Cooldown, Per-Cycle Successor)
 
-Monster attacks land and are done. No cooldown phase on the mob's row:
-damage applies, and the monster's next attack in its cycle spawns as a **new row**.
-A monster with a 30-tic attack cycle appears multiple times in the column at once —
-that's correct and intended (the old tic-track couldn't show repetition; the queue can).
+Monsters mirror the player attack lifecycle (option A, Spahrep 2026-09-28). `mon.speed`
+plays the `weaponSpeed` role. A cycle is two successor rows, not one:
+
+- attack tics = `mon.speed + rollStat(attack.prepare_time, prepare_time_range)`
+- cooldown tics = `mon.speed + rollStat(attack.cooldown_time, cooldown_time_range)`
+
+The attack row fires (damage resolves), then a **new** cooldown row is inserted at that
+attack's stored cooldown. When the cooldown fires, the next attack is picked and a **new**
+attack row is inserted at its prepare. One row per monster at a time — attack, then
+cooldown — rendered in place via the stable key `m:<label>` (same successor-replace as
+hands). Monster attack rows stay name + tic, no bar. The cooldown row is a clear row:
+label `<Monster name> recovering`, player-style timing bar. Monsters are slower on purpose
+(`mon.speed` is added into both phases). Death still cancels every queued row for that
+monster (PC-DEC-054).
 
 ## Tie Resolution
 

@@ -330,7 +330,10 @@
       z-index: 2;
     }
 
-    /* ---- Queue bar for insert animation (yellow sweep on player rows) ---- */
+    /* ---- Queue bar for insert animation (yellow sweep on player rows) ----
+       Monster cooldown ("<Name> recovering") is a clear row and uses this same
+       player-style .queue-bar. Fill formula unchanged. Monster attack rows
+       do not get a bar (name + tic only). */
     .queue-bar {
       position: absolute;
       right: 0;

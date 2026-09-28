@@ -57,10 +57,11 @@ MasterClock.start():
 | `ready` | Monster | Monster's turn to act | AI picks attack → Narrate → Visuals → Insert winding → Remove |
 | `winding` | Any | Attack preparation | Narrate → Visuals → Insert impact → Remove |
 | `impact` | Any | Attack execution | Engine resolves → Narrate + Visuals (parallel) → Insert cooldown → Remove |
-| `cooldown` | Any | Recovery | Narrate → Visuals → Insert ready → Remove |
+| `cooldown` | Player hand | Recovery | Narrate → Visuals → Insert ready → Remove |
+| `cooldown` | Monster | Recovering after the attack that just fired | Silent successor → when it fires, insert next attack (`mon.speed + rollStat(prepare_time, prepare_time_range)`) → Remove |
 | `drinking` | Player hand | Potion consumption | Narrate → Visuals → Apply effect → Insert recovery → Remove |
 | `recovery` | Player hand | Post-potion cooldown | Narrate → Visuals → Insert ready → Remove |
-| `attack` | Monster | Monster attack (immediate fire — no winding) | Engine resolves → Narrate + Visuals (parallel) → Insert next attack → Remove |
+| `attack` | Monster | Windup (`mon.speed + rollStat(prepare_time, prepare_time_range)`) | Engine resolves → Narrate + Visuals (parallel) → Insert this attack's cooldown (`mon.speed + rollStat(cooldown_time, cooldown_time_range)`) → Remove |
 | Buff expiry | System | Buff wears off | Typewriter only → Remove |
 
 ---
@@ -188,27 +189,38 @@ When the first `ready` token surfaces → player's turn begins.
 
 ### Phase 2: Monster Attack Fires — "Giant Rat: Power Attack" at top
 
-If the monster uses a winding-delay model, same lifecycle as player phases 2-4 above (winding → impact → cooldown → ready).
+Option A (Spahrep 2026-09-28): monsters mirror the player lifecycle. `mon.speed` is added
+into both phases, same shape as `weapon.speed + attack.<prepare|cooldown>_time`.
 
-If the monster uses a direct-fire model (attack row with mon.speed delay):
+- attack tics = `mon.speed + rollStat(prepare_time, prepare_time_range)`
+- cooldown tics = `mon.speed + rollStat(cooldown_time, cooldown_time_range)`
 
-**Sub-actions:**
+**Sub-actions when the `attack` row fires:**
 
-1. **Engine resolves:**
+1. **Engine resolves** (unchanged):
    - Rolls damage (±3)
    - Checks accuracy
    - If hit: applies to player HP
-   - If crit: doubles damage
-
+   - If crit: multiplies damage
 2. **(Parallel — both must finish):**
    - **Typewriter:** "Giant Rat Power Attack hits player for 12 damage!" (or "misses" / "CRITICAL!")
    - **Visuals:** Damage numbers on player, health bar depletion, shake/hit feedback
-
-3. If still alive: monster AI picks next attack and inserts it.
-
-4. **Remove** the current `attack` item.
-
+3. If still alive: insert a `cooldown` successor for **this** attack (stored `cooldownTicks`,
+   not the next attack). Label on the rail: "<Monster name> recovering", with the player-style
+   timing bar.
+4. **Remove** the current `attack` item (silent pop — successor replace, not an exit slide).
 5. **Master Clock ticks** → next item.
+
+**Sub-actions when the `cooldown` row fires:**
+
+1. `pickMonsterAttack` selects the next attack.
+2. Insert a new `attack` row at `mon.speed + rollStat(next.prepare_time, prepare_time_range)`
+   and store `cooldownTicks = mon.speed + rollStat(next.cooldown_time, cooldown_time_range)`.
+3. Feed: "<Monster> prepares a <attackName>..."
+4. **Remove** the cooldown item (silent successor replace).
+5. **Master Clock ticks** → next item.
+
+Last attack of a dead monster inserts nothing (death-cancels-everything, PC-DEC-054).
 
 ### Phase 3: Monster Death
 
@@ -276,7 +288,7 @@ Trigger: A buff's `endTic` reaches current tic.
 
 ## 6. Timing Bar Visual Specification
 
-Every non-ready, non-monster row has a timing bar that visualizes countdown progress.
+Every non-ready row has a timing bar that visualizes countdown progress, except monster `attack` rows and approach rows. Monster `cooldown` ("recovering") uses the same player-style bar.
 
 | Event | Bar behavior |
 |---|---|
@@ -286,6 +298,7 @@ Every non-ready, non-monster row has a timing bar that visualizes countdown prog
 | `recovery` | Same — fills from empty to full. |
 | `ready` | No bar — shows `—` instead of tic count. |
 | `attack` (monster) | No bar — tic count label only. |
+| `cooldown` (monster) | Same player-style fill — "<Monster name> recovering". |
 
 **Bar formula:** `width% = (1 - tics / initialTics) × 100`
 
@@ -304,6 +317,7 @@ Every non-ready, non-monster row has a timing bar that visualizes countdown prog
 | `recovery` | "L. Hand Ready" | tic count | Timing bar |
 | `ready` | "L. Hand Ready" | — | None |
 | `attack` (monster) | "Giant Rat's Power Attack" | tic count | None |
+| `cooldown` (monster) | "Giant Rat recovering" | tic count | Timing bar |
 
 **Ordering:** The queue is ordered at INSERTION time — never globally re-sorted. Each item is placed at its correct position when added. For items at the same tic:
 1. Status effects / buffs / DOTs / expiries go first (inserted before anything else at that tic)
@@ -369,7 +383,8 @@ Tics are set when the item is inserted:
 - `winding` = castTicks (from weapon params)
 - `cooldown` = cooldownTicks (from weapon params)
 - `ready` = 0 (always surfaces immediately)
-- Monster `attack` = mon.speed
+- Monster `attack` = `mon.speed + rollStat(prepare_time, prepare_time_range)`
+- Monster `cooldown` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)`
 
 **Tics are display values only.** They help the player read timing. They do NOT drive processing order — insertion order does. The timing bar formula uses `tics / initialTics` to show progress. The bar reflects the item's position in the queue order.
 

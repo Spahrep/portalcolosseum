@@ -254,11 +254,14 @@ async function groupLiftRemaining() {
 }
 
 /** Stable identity for a queue row across renders: hands are singletons keyed
- * by label (LH/RH) — their id regenerates every tick (engine addEvent always
- * UUIDs), so label is the only stable key. Monsters are keyed by id (one row
- * per attack cycle). Shared by diffQueueForAnimation and renderQueue. */
+ * by label (LH/RH) — their id regenerates every tick, so label is the only
+ * stable key. Monster attack and cooldown are one cycle keyed by label
+ * (`m:<label>`) so attack→cooldown→next attack is a successor replace, not a
+ * removal+insert. Other rows key on id. */
 function queueRowKey(row) {
-  return (row.label === 'LH' || row.label === 'RH') ? `h:${row.label}` : `i:${row.id}`;
+  if (row.label === 'LH' || row.label === 'RH') return `h:${row.label}`;
+  if (row.label && (row.event === 'attack' || row.event === 'cooldown')) return `m:${row.label}`;
+  return `i:${row.id}`;
 }
 
 const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
@@ -322,6 +325,17 @@ async function awaitNarration(feed) {
 
 function isMonsterQueueRow(row) {
   return !!(row && row.event === 'attack' && row.label && row.label !== 'LH' && row.label !== 'RH');
+}
+
+function isMonsterCooldownRow(row) {
+  return !!(row && row.event === 'cooldown' && row.label && row.label !== 'LH' && row.label !== 'RH');
+}
+
+function monsterQueueName(row, monsters) {
+  const mon = (monsters || []).find(m => m.label === row.label);
+  if (mon && mon.name) return mon.name;
+  if (mon && mon.label) return mon.label;
+  return queueLabel(row);
 }
 
 function findQueueRowByIdentity(row) {
@@ -1349,11 +1363,9 @@ function renderQueue(bs, fill = false, onDone = null) {
     }
     return;
   }
-  // In-place reconciliation: when the STABLE key set (hands by label, monsters
-  // by id) matches the existing DOM exactly, this is a pure value/state update
-  // (e.g. 'L. Hand Ready 38' → 'L. Hand Ready —', or a tic decrement) — mutate
-  // each row's text/tics and reorder, with NO slide-out/slide-in. This is what
-  // stops same-hand updates from animating.
+  // In-place reconciliation: when the STABLE key set matches the existing DOM
+  // exactly (hands h:LH/h:RH, monster attack+cooldown m:<label>), this is a
+  // successor/value update — mutate text and reorder, no slide-out/slide-in.
   const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
   const newKeys = queue.map(queueRowKey);
   if (domKeys.size === newKeys.length && newKeys.every(k => domKeys.has(k))) {
@@ -1494,8 +1506,9 @@ function diffQueueForAnimation(oldBs, newBs) {
   const oldRows = sortQueueRows(oldBs.queue || []);
   const newRows = sortQueueRows(newBs.queue || []);
   // Hand rows use stable label key (LH/RH singleton identity preserved across
-  // tics/state updates); monsters use id (regenerated per cycle). This prevents
-  // value-update slide-out+slide-in.
+  // tics/state updates). Monster attack/cooldown share m:<label> so a phase
+  // change is a successor, not a removal+insert. This prevents value-update
+  // slide-out+slide-in.
   const oldKeys = new Set(oldRows.map(queueRowKey));
   const newKeys = new Set(newRows.map(queueRowKey));
   return {
@@ -1576,13 +1589,15 @@ function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
     div.appendChild(ticSpan);
     return div;
   }
-  // Monster attack rows: show "<Monster name>'s <Attack>" (e.g. "Imp's Bite")
-  const isMonster = row.event === 'attack' && row.label && row.label !== 'LH' && row.label !== 'RH';
+  // Monster attack rows: show "<Monster name>'s <Attack>" (e.g. "Imp's Bite").
+  // No timing bar — canonical attack rows stay name + tic.
+  const isMonster = isMonsterQueueRow(row);
   if (isMonster) {
-    const mon = monsters.find(m => m.label === row.label);
-    const monName = (mon && mon.name) ? mon.name : (mon && mon.label) ? mon.label : queueLabel(row);
     const atkName = queueEventName(row, monsters, bs);
-    nameSpan.textContent = `${monName}'s ${atkName}`;
+    nameSpan.textContent = `${monsterQueueName(row, monsters)}'s ${atkName}`;
+  } else if (isMonsterCooldownRow(row)) {
+    // Clear row (player-style bar). Label "<Monster name> recovering".
+    nameSpan.textContent = `${monsterQueueName(row, monsters)} recovering`;
   } else {
     nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
   }
@@ -1607,7 +1622,8 @@ function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
   div.dataset.rowId = row.id;
   div.dataset.tics = row.tics;
   div.classList.toggle('top-row', index >= 0 && index < 3);
-  const isMonster = row.event === 'attack' && row.label && row.label !== 'LH' && row.label !== 'RH';
+  const isMonster = isMonsterQueueRow(row);
+  const isRecovering = isMonsterCooldownRow(row);
   const hasBar = !isMonster && row.event !== 'ready' && row.event !== 'approach';
   let nameSpan = div.querySelector('.name');
   let ticSpan = div.querySelector('.tic');
@@ -1629,10 +1645,11 @@ function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
     nameSpan.textContent = `${queueLabel(row)} Ready`;
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   } else if (isMonster) {
-    const mon = monsters.find(m => m.label === row.label);
-    const monName = (mon && mon.name) ? mon.name : (mon && mon.label) ? mon.label : queueLabel(row);
     const atkName = queueEventName(row, monsters, bs);
-    nameSpan.textContent = `${monName}'s ${atkName}`;
+    nameSpan.textContent = `${monsterQueueName(row, monsters)}'s ${atkName}`;
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+  } else if (isRecovering) {
+    nameSpan.textContent = `${monsterQueueName(row, monsters)} recovering`;
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   } else {
     nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
@@ -1703,7 +1720,10 @@ function playIntroCountdown(bs, intro, onDone) {
       renderPlayerHP({ player_hp: f.hp, max_hp: bs.player.max_hp });
       if (f.after) {
         const row = ordered.find(r => r.label === f.label);
-        if (row) row.tics = f.after.tics;
+        if (row) {
+          row.tics = f.after.tics;
+          if (f.after.event) row.event = f.after.event;
+        }
       } else {
         const idx = ordered.findIndex(r => r.label === f.label);
         if (idx !== -1) ordered.splice(idx, 1);
@@ -1782,6 +1802,8 @@ function queueLabel(row) {
 
 function queueEventName(row, monsters, bs) {
   if (row.event === 'approach') return '';
+  // Monster cooldown is a clear recovering row, not a hand-ready countdown.
+  if (isMonsterCooldownRow(row)) return 'recovering';
   // A hand freeing is a state change — the queue counts down to "Ready".
   if (row.event === 'cooldown' || row.event === 'recovery') return 'Ready';
   if (row.event === 'drinking') {
@@ -1789,6 +1811,8 @@ function queueEventName(row, monsters, bs) {
     return (p && p.template_name) ? p.template_name : 'Potion';
   }
   if (row.attackName) return row.attackName;
+  // Picked at commit (PC-72). Falls back to the primary attack for legacy rows.
+  if (row.monsterAttackName) return row.monsterAttackName;
   // Monster attack rows carry no name — use the monster's primary attack.
   const mon = monsters.find(m => m.label === row.label);
   if (mon && Array.isArray(mon.attacks) && mon.attacks.length && mon.attacks[0].name) {

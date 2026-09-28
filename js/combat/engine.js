@@ -35,6 +35,22 @@ export function createEngine(rng = Math.random) {
     return atks.length ? atks[Math.floor(rng()*atks.length)] : null;
   }
 
+  // Option A: mon.speed plays the weaponSpeed role. Same contract as the API
+  // rollStat — range <= 0 consumes no RNG and returns base (clamped >= 1).
+  // Uses state.rng so battle seeding stays deterministic.
+  function rollStat(base, range) {
+    const b = Number(base) || 1;
+    const v = Number(range) || 0;
+    if (v <= 0) return Math.max(1, b);
+    const delta = Math.floor(state.rng() * (v * 2 + 1)) - v;
+    return Math.max(1, b + delta);
+  }
+
+  function monsterAttackByName(mon, name) {
+    if (!name) return null;
+    return (mon.attacks || []).find(a => a && a.name === name) || null;
+  }
+
   // PC-72: potion crit. Rolled ONLY when crit_chance > 0 so legacy potions and
   // pre-crit tests consume no extra RNG. On crit: heal amount and buff value
   // × critEffectMultiplier, buff duration × critDurationMultiplier (rounded).
@@ -167,39 +183,52 @@ export function createEngine(rng = Math.random) {
         log(`${row.label} Ready`);
       }
     } else {
+      // Monster lifecycle (option A): attack → cooldown → next attack.
+      // Do not let a cooldown row fall through into attack resolution.
       const mon = state.monsters.find(m => m.label === row.label);
       if (mon && !isMonsterDead(mon)) {
-        // PC-72: use pre-selected attack from commit time (row.monsterAttackName)
-        const atkName = row.monsterAttackName || null;
-        let dmg = rollDamage(mon.damage, 3, state.rng);
-        if (checkHit(mon.accuracy, state.rng)) {
-          // PC-72: monster crit — mon.critChance (from generate_monster payload)
-          // × pickedAttack.crit_factor, same formula as the player side. Roll
-          // only after a hit lands (misses can't crit) and only when the final
-          // chance is > 0, so legacy states/tests consume no extra RNG.
-          const atkForCrit = (mon.attacks||[]).find(a => a && a.name === atkName);
-          const finalCritChance = (Number(mon.crit_chance ?? mon.critChance) || 0) * (Number(atkForCrit?.crit_factor) || 1);
-          let crit = false;
-          if (finalCritChance > 0 && state.rng() * 100 < finalCritChance) {
-            dmg = Math.round(dmg * (Number(atkForCrit?.crit_multiplier) || 2.0));
-            crit = true;
-          }
-          applyDamage(state.player, dmg);
-          const monLabel = mon.name
-            ? `${mon.name} ${row.label.replace(/^Monster /i, '')}`
-            : row.label;
-          log(`${monLabel} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}${crit ? ' CRITICAL!' : ''}`);
-        } else {
-          const monLabel = mon.name
-            ? `${mon.name} ${row.label.replace(/^Monster /i, '')}`
-            : row.label;
-          log(`${monLabel} ${atkName ? atkName + ' ' : ''}misses`);
-        }
-        if (!isMonsterDead(mon)) {
+        if (row.event === 'cooldown') {
           const nextAtk = pickMonsterAttack(mon, state.rng);
-          const newRow = commitNewRow(state.queue, row.label, 'attack', mon.speed);
+          const prepare = rollStat(nextAtk?.prepare_time, nextAtk?.prepare_time_range);
+          const newRow = commitNewRow(state.queue, mon.label, 'attack', mon.speed + prepare);
           newRow.monsterAttackName = nextAtk?.name || null;
+          newRow.cooldownTicks = mon.speed + rollStat(nextAtk?.cooldown_time, nextAtk?.cooldown_time_range);
           log(`${mon.name || mon.template_name || 'Monster'} ${row.label.replace('Monster ', '')} prepares ${nextAtk?.name ? `a ${nextAtk.name}` : 'an attack'}...`);
+        } else if (row.event === 'attack') {
+          // PC-72: use pre-selected attack from commit time (row.monsterAttackName)
+          const atkName = row.monsterAttackName || null;
+          let dmg = rollDamage(mon.damage, 3, state.rng);
+          if (checkHit(mon.accuracy, state.rng)) {
+            // PC-72: monster crit — mon.critChance (from generate_monster payload)
+            // × pickedAttack.crit_factor, same formula as the player side. Roll
+            // only after a hit lands (misses can't crit) and only when the final
+            // chance is > 0, so legacy states/tests consume no extra RNG.
+            const atkForCrit = (mon.attacks||[]).find(a => a && a.name === atkName);
+            const finalCritChance = (Number(mon.crit_chance ?? mon.critChance) || 0) * (Number(atkForCrit?.crit_factor) || 1);
+            let crit = false;
+            if (finalCritChance > 0 && state.rng() * 100 < finalCritChance) {
+              dmg = Math.round(dmg * (Number(atkForCrit?.crit_multiplier) || 2.0));
+              crit = true;
+            }
+            applyDamage(state.player, dmg);
+            const monLabel = mon.name
+              ? `${mon.name} ${row.label.replace(/^Monster /i, '')}`
+              : row.label;
+            log(`${monLabel} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}${crit ? ' CRITICAL!' : ''}`);
+          } else {
+            const monLabel = mon.name
+              ? `${mon.name} ${row.label.replace(/^Monster /i, '')}`
+              : row.label;
+            log(`${monLabel} ${atkName ? atkName + ' ' : ''}misses`);
+          }
+          if (!isMonsterDead(mon)) {
+            const atk = monsterAttackByName(mon, atkName);
+            const cdTics = Number.isFinite(row.cooldownTicks)
+              ? row.cooldownTicks
+              : mon.speed + rollStat(atk?.cooldown_time, atk?.cooldown_time_range);
+            addEvent(state.queue, mon.label, 'cooldown', cdTics);
+            sortQueue(state.queue);
+          }
         }
       }
     }
@@ -356,8 +385,11 @@ export function createEngine(rng = Math.random) {
     if (captureFires) {
       const mon = state.monsters.find(m => m.label === row.label);
       let after = null;
-      if (row.event === 'attack' && mon && !isMonsterDead(mon)) {
-        after = { event: 'attack', tics: mon.speed };
+      // Read the successor already inserted by handleFire — do not roll again.
+      if (mon && !isMonsterDead(mon) && (row.event === 'attack' || row.event === 'cooldown')) {
+        const nextEvent = row.event === 'attack' ? 'cooldown' : 'attack';
+        const successor = state.queue.find(r => r.label === row.label && r.event === nextEvent);
+        if (successor) after = { event: nextEvent, tics: successor.tics };
       }
       captureFires.push({
         tic: state.tic,
@@ -467,8 +499,10 @@ export function createEngine(rng = Math.random) {
     state.monsters.forEach(mon => {
       if (!isMonsterDead(mon)) {
         const atk = pickMonsterAttack(mon, state.rng);
-        const row = commitNewRow(state.queue, mon.label, 'attack', mon.speed);
+        const prepare = rollStat(atk?.prepare_time, atk?.prepare_time_range);
+        const row = commitNewRow(state.queue, mon.label, 'attack', mon.speed + prepare);
         row.monsterAttackName = atk?.name || null;
+        row.cooldownTicks = mon.speed + rollStat(atk?.cooldown_time, atk?.cooldown_time_range);
         log(`${mon.name || mon.template_name || 'Monster'} ${mon.label.replace('Monster ', '')} prepares ${atk?.name ? `a ${atk.name}` : 'an attack'}...`);
       }
     });

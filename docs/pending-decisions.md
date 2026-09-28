@@ -455,6 +455,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Death-cancels-everything rule — resolves the last PMVP remainder of PC-DEC-046. When a monster dies, ALL of its queued attacks are removed from the queue immediately (no ticking down, no no-op at fire, no in-flight resolution). A dead monster never attacks again, even on the tic it died. Player-side kill-cancel (PC-DEC-046) is unchanged: explicit-target hand attacks whose targets are all dead cancel into cooldown; auto-target attacks redirect to the first living monster. Applied to current-design-status.md (kill-cancel bullet), battle-status-ui.md (death/queue section), combat-engine-plan.md (HP Tracking — Death). Decided by Spahrep, 2026-09-21.
 
+- ID: PC-DEC-055
+  Date: 2026-09-28
+  Source: docs/workorder-2026-09-28-monster-cooldown.md (design lock recorded by Hermes)
+  Speaker: Spahrep
+  Verbatim: "Option A — monsters mirror the player attack lifecycle (windup → impact/common → cooldown → next windup), with mon.speed added into BOTH phases, exactly like the player formula weapon.speed + attack.<prepare|cooldown>_time."
+  Status: DECIDED
+  Notes: Locked option A (strict player-mirror). Monsters are slower on purpose — do not retune the formula to be balance-neutral; template base_speed may be retuned later. Attack tics = mon.speed + rollStat(prepare_time, prepare_time_range). Cooldown tics = mon.speed + rollStat(cooldown_time, cooldown_time_range). Attack fire inserts that attack's cooldown; cooldown fire picks the next attack. Death-cancels-everything (PC-DEC-054) unchanged. Applied to battle-status-ui.md, action-visual-lifecycle.md, combat-engine-plan.md, attack-queue-animation-testing.md, current-design-status.md.
+
 ## Open
 
 - ID: PC-DEC-004

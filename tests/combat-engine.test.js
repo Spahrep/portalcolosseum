@@ -567,7 +567,9 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.ok(approachRows.some(r => r.label === 'LH' && r.tics === 4));
     assert.ok(approachRows.some(r => r.label === 'RH' && r.tics === 6));
     const monsterRow = state.queue.find(r => r.event === 'attack');
-    assert.equal(monsterRow.tics, 8);
+    // no attacks on the fixture → rollStat(prepare) defaults to 1
+    assert.equal(monsterRow.tics, 9, 'monster attack at speed + default prepare (8+1)');
+    assert.equal(monsterRow.cooldownTicks, 9, 'stored cooldown is speed + default cooldown (8+1)');
     // no advance: no Ready feed lines yet
     assert.ok(!state.feed.some(l => l.includes('Ready')));
   });
@@ -591,7 +593,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const eng = createEngine(seededRNG(7));
     eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
     });
     const state = eng.advanceToNextDecision();
     const hits = state.feed.filter(l => l.includes('A hits player'));
@@ -632,7 +634,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
     });
     assert.equal(state.intro, null, 'no intro on state (getState coerces undefined→null)');
     // hands in Approach, queue has pre-advance rows
@@ -643,7 +645,8 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const monRow = state.queue.find(r => r.event === 'attack');
     assert.ok(lhRow && lhRow.tics === 4, 'LH approach at weapon speed 4');
     assert.ok(rhRow && rhRow.tics === 6, 'RH approach at weapon speed 6');
-    assert.ok(monRow && monRow.tics === 3, 'monster attack at monster speed 3');
+    assert.ok(monRow && monRow.tics === 3, 'monster attack at speed + default prepare (2+1)');
+    assert.equal(monRow.cooldownTicks, 3, 'stored cooldown is speed + default cooldown (2+1)');
     // no fires resolved during start
     assert.ok(!state.feed.some(l => l.includes('hits player')));
     assert.ok(!state.feed.some(l => l.includes('Ready')));
@@ -653,7 +656,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
     }, null, null, 1500);
     assert.equal(state.participants.player.hp, 1500); // no advance -> no damage taken
     assert.equal(state.participants.player.max_hp, 1500);
@@ -664,7 +667,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
     }, null, 450, 1500);
     assert.equal(state.participants.player.hp, 450); // F10 carry applied, no advance damage
     assert.equal(state.participants.player.max_hp, 1500); // max stays config-driven
@@ -674,7 +677,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
     });
     const q = state.queue;
     const monIdx = q.findIndex(r => r.event === 'attack');
@@ -690,15 +693,15 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.ok(firstHitIdx < firstReadyIdx, 'monster hit lands before the player hand becomes ready');
   });
 
-  it('fast monster double-fire: speed-2 monster fires twice during advance before hands ready', () => {
+  it('fast monster double-fire: speed-1 monster fires twice during advance before hands ready', () => {
     const eng = createEngine(seededRNG(7));
     eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 6 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 8, hand_r_speed: 9 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 1, accuracy: 100, label: 'A' }]
     });
-    // monster first attack at tic 2 in the raw queue
+    // no attacks → attack tics = speed + default prepare 1
     const monRow = eng.state.queue.find(r => r.event === 'attack');
-    assert.equal(monRow.tics, 2, 'monster first attack at tic 2');
+    assert.equal(monRow.tics, 2, 'monster first attack at speed + prepare (1+1)');
     const after = eng.advanceToNextDecision();
     const hits = after.feed.filter(l => l.includes('A hits player'));
     assert.ok(hits.length >= 2, 'monster fired at least twice during the advance');
@@ -709,21 +712,23 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 100 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 5, accuracy: 100, label: 'A' }]
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 4, accuracy: 100, label: 'A' }]
     });
     const q = state.queue;
     const lhIdx = q.findIndex(r => r.label === 'LH' && r.event === 'approach');
     const monIdx = q.findIndex(r => r.event === 'attack');
     assert.ok(lhIdx !== -1 && monIdx !== -1);
     assert.ok(lhIdx < monIdx, 'LH approach ahead of monster at same tics (player-first tiebreaker)');
+    // hand 5 ties monster attack at speed 4 + default prepare 1
     assert.equal(q[lhIdx].tics, q[monIdx].tics);
+    assert.equal(q[monIdx].tics, 5);
   });
 
   it('loadState round-trips the raw queue without any intro snapshot', () => {
     const eng = createEngine(seededRNG(7));
     eng.startBattle({
       loadout: { hand_l_speed: 4, hand_r_speed: 6 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A' }]
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
     });
     const persisted = JSON.parse(JSON.stringify(eng.state));
     assert.equal(persisted.intro, undefined, 'no intro persisted');
@@ -800,5 +805,116 @@ describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
     }
     assert.ok(eng.state.feed.some(l => l.includes('RH attack hits B')), 'RH multi-target still hits living B');
     assert.ok(!eng.state.feed.some(l => l.includes('RH attack cancelled')), 'no cancellation while a target lives');
+  });
+});
+
+describe('monster cooldown lifecycle (option A)', () => {
+  const bite = {
+    id: 1,
+    name: 'Bite',
+    prepare_time: 2,
+    prepare_time_range: 0,
+    cooldown_time: 4,
+    cooldown_time_range: 0
+  };
+
+  function slowHandsBattle(seed = 3) {
+    const eng = createEngine(seededRNG(seed));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 100, hand_r_speed: 100 },
+      monsters: [{
+        id: 1, max_hp: 80, damage: 10, speed: 3, accuracy: 100, label: 'A', name: 'Wolf',
+        attacks: [bite]
+      }]
+    });
+    return eng;
+  }
+
+  it('startBattle seeds first attack at speed + prepare and stores cooldown', () => {
+    const eng = slowHandsBattle();
+    const row = eng.state.queue.find(r => r.label === 'A' && r.event === 'attack');
+    assert.ok(row, 'first attack row seeded');
+    assert.equal(row.tics, 5, 'mon.speed 3 + prepare 2');
+    assert.equal(row.cooldownTicks, 7, 'mon.speed 3 + cooldown 4 stored on the row');
+    assert.equal(row.monsterAttackName, 'Bite');
+    assert.ok(eng.state.feed.some(l => l.includes('prepares a Bite')));
+    assert.equal(eng.state.queue.filter(r => r.label === 'A' && r.event === 'cooldown').length, 0);
+  });
+
+  it('attack fire resolves damage and inserts cooldown, not the next attack', () => {
+    const eng = slowHandsBattle();
+    const hpBefore = eng.state.player.hp;
+    const fires = [];
+    eng.stepQueue(fires);
+    assert.ok(eng.state.player.hp < hpBefore, 'damage resolved on attack fire');
+    assert.ok(eng.state.feed.some(l => /hits player for \d+/.test(l)));
+    const monRows = eng.state.queue.filter(r => r.label === 'A');
+    assert.equal(monRows.length, 1);
+    assert.equal(monRows[0].event, 'cooldown');
+    assert.equal(monRows[0].tics, 7, 'stored cooldownTicks, not a re-seeded attack');
+    assert.equal(eng.state.queue.some(r => r.label === 'A' && r.event === 'attack'), false);
+    assert.deepEqual(fires[0].after, { event: 'cooldown', tics: 7 });
+  });
+
+  it('cooldown fire inserts the next attack at speed + prepare', () => {
+    const eng = slowHandsBattle();
+    const fires = [];
+    eng.stepQueue(fires); // attack → cooldown
+    eng.stepQueue(fires); // cooldown → next attack
+    const next = eng.state.queue.find(r => r.label === 'A');
+    assert.ok(next, 'successor row exists');
+    assert.equal(next.event, 'attack');
+    assert.equal(next.tics, 5, 'mon.speed 3 + prepare 2');
+    assert.equal(next.cooldownTicks, 7);
+    assert.equal(next.monsterAttackName, 'Bite');
+    assert.equal(eng.state.queue.filter(r => r.label === 'A' && r.event === 'cooldown').length, 0);
+    assert.ok(eng.state.feed.some(l => l.includes('prepares a Bite')));
+    assert.deepEqual(fires[1].after, { event: 'attack', tics: 5 });
+    assert.equal(fires[1].event, 'cooldown');
+  });
+
+  it('seeded RNG produces identical feed and queue across two runs', () => {
+    const ranged = {
+      id: 1,
+      name: 'Bite',
+      prepare_time: 4,
+      prepare_time_range: 2,
+      cooldown_time: 6,
+      cooldown_time_range: 3
+    };
+    function run() {
+      const eng = createEngine(seededRNG(11));
+      eng.startBattle({
+        loadout: { hand_l_speed: 40, hand_r_speed: 40 },
+        monsters: [{
+          id: 1, max_hp: 200, damage: 8, speed: 3, accuracy: 80, label: 'A', name: 'Wolf',
+          attacks: [ranged, { id: 2, name: 'Claw', prepare_time: 1, prepare_time_range: 1, cooldown_time: 2, cooldown_time_range: 1 }]
+        }]
+      });
+      for (let i = 0; i < 8; i++) eng.tick();
+      return {
+        feed: eng.state.feed,
+        queue: eng.state.queue.map(r => ({
+          label: r.label, event: r.event, tics: r.tics,
+          monsterAttackName: r.monsterAttackName || null,
+          cooldownTicks: r.cooldownTicks ?? null
+        }))
+      };
+    }
+    const a = run();
+    const b = run();
+    assert.deepEqual(a.feed, b.feed);
+    assert.deepEqual(a.queue, b.queue);
+    assert.ok(a.feed.length > 1, 'both runs produced narration');
+  });
+
+  it('missing cooldownTicks falls back to speed + rollStat at fire time', () => {
+    const eng = slowHandsBattle();
+    const row = eng.state.queue.find(r => r.event === 'attack');
+    delete row.cooldownTicks;
+    eng.stepQueue();
+    const cd = eng.state.queue.find(r => r.label === 'A');
+    assert.equal(cd.event, 'cooldown');
+    assert.equal(cd.tics, 7, 'fallback uses this attack cooldown_time');
   });
 });

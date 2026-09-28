@@ -60,10 +60,8 @@ export const buffLandSnapshot = [
   "tic 1 — LH Ready",
   "tic 1 — RH Ready",
   "Your left hand drinks Dmg Potion...",
-  "tic 5 — A hits player for 7",
-  "tic 5 — mob A prepares an attack...",
   "Your left hand's potion grants damage +3 until tic 11.",
-  "Potion A used — in battle.  HP: 993/1000  buffs: damage +3 until tic 11",
+  "Potion A used — in battle.  HP: 1000/1000  buffs: damage +3 until tic 11",
   "#2 Dmg Potion Dmg grade B (used)"
 ];
 
