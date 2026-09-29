@@ -298,6 +298,45 @@ let shouldAnimateDice = false;
 let battleIntroPending = false;
 let introTimer = null; // PC-64: countdown interval for the battle-intro replay
 
+// PC-81: action-menu input is bound once. renderActionMenu publishes the live
+// cascade here; both handlers read it. Binding inside renderActionMenu leaked a
+// document mousemove listener and clobbered document.onkeydown on every decision.
+let keyboardActive = false;
+let actionMenuLive = null; // { stack, renderStack, selectTop, back } | null
+
+function onActionMenuMouseMove() {
+  keyboardActive = false;
+}
+
+function onActionMenuKeyDown(e) {
+  if (busy) return;
+  if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+  const menu = actionMenuLive;
+  if (!menu) return;
+  const top = menu.stack[menu.stack.length - 1];
+  if (!top) return;
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    keyboardActive = true;
+    const selectable = [];
+    top.rows.forEach((r, i) => { if (!r.blank && !r.disabled) selectable.push(i); });
+    if (!selectable.length) return;
+    const cur = selectable.indexOf(top.activeIdx);
+    const dir = (e.key === 'ArrowUp' || e.key === 'ArrowLeft') ? -1 : 1;
+    top.activeIdx = selectable[(cur + dir + selectable.length) % selectable.length];
+    menu.renderStack();
+    e.preventDefault();
+  } else if (e.key === 'Enter') {
+    menu.selectTop();
+    e.preventDefault();
+  } else if (e.key === 'Escape') {
+    menu.back();
+    e.preventDefault();
+  }
+}
+
+document.addEventListener('mousemove', onActionMenuMouseMove);
+document.addEventListener('keydown', onActionMenuKeyDown);
+
 function enterMasterClock() { masterClockDepth++; }
 function leaveMasterClock() { masterClockDepth = Math.max(0, masterClockDepth - 1); }
 
@@ -1109,6 +1148,10 @@ function escHtml(s) {
  */
 function renderActionMenu(bs) {
   debugLog('renderActionMenu', `n_hands=${Object.keys(bs.player?.hands || {}).length} n_monsters=${(bs.monsters||[]).filter(m=>!m.dead).length}`);
+  // Drop the previous cascade before rebuild or early return so a gone menu
+  // cannot keep receiving keys. Hover starts enabled until an arrow key.
+  actionMenuLive = null;
+  keyboardActive = false;
   const wrap = document.getElementById('action-choices');
   if (!wrap) return;
   wrap.innerHTML = '';
@@ -1480,34 +1523,8 @@ function renderActionMenu(bs) {
 
   // keyboard: Up/Down move the cursor (skips blank/disabled rows), Enter selects,
   // Esc backs one window (root: no-op). Only the top window responds.
-  let keyboardActive = false;
-
-  // When the mouse actually moves (not just sits), re-enable hover selection.
-  document.addEventListener('mousemove', () => { keyboardActive = false; }, { once: false });
-
-  document.onkeydown = (e) => {
-    if (busy) return;
-    if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
-    const top = stack[stack.length - 1];
-    if (!top) return;
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-      keyboardActive = true;
-      const selectable = [];
-      top.rows.forEach((r, i) => { if (!r.blank && !r.disabled) selectable.push(i); });
-      if (!selectable.length) return;
-      const cur = selectable.indexOf(top.activeIdx);
-      const dir = (e.key === 'ArrowUp' || e.key === 'ArrowLeft') ? -1 : 1;
-      top.activeIdx = selectable[(cur + dir + selectable.length) % selectable.length];
-      renderStack();
-      e.preventDefault();
-    } else if (e.key === 'Enter') {
-      selectTop();
-      e.preventDefault();
-    } else if (e.key === 'Escape') {
-      back();
-      e.preventDefault();
-    }
-  };
+  // PC-81: handlers are bound once at module scope and read this cascade.
+  actionMenuLive = { stack, renderStack, selectTop, back };
 }
 
 
