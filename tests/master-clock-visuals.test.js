@@ -105,20 +105,26 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.match(settle, /waitForEvent\(rowEl, 'animationend'/);
   });
 
-  it('tickLoop pins the head through narration, then silent-pops — no exit slide', () => {
+  it('tickLoop pins the head through narration, then slides it out and glides the queue up', () => {
     const loop = fnBody(app, 'tickLoop');
     const post = loop.indexOf('/tick');
     const pin = loop.indexOf('pinProcessedHead(processedHead)');
     const narrate = loop.indexOf('awaitNarration(');
     const both = loop.indexOf('await Promise.all([narrateP, visualsP])');
-    const pop = loop.indexOf('silentPopHead(processedHead');
-    assert.ok(post >= 0 && pin > post && narrate > pin && both > narrate && pop > both,
-      'order is POST → pin → narrate → await both → silent pop');
-    const popFn = fnBodyUntilNext(app, 'function silentPopHead', ['function measuredRowHeight']);
-    assert.equal(popFn.includes('queue-row-exit'), true); // removes the class, does not add it
-    assert.equal(/classList\.add\([^)]*queue-row-exit/.test(popFn), false);
-    assert.match(popFn, /\.remove\(\)/);
+    const exit = loop.indexOf('animateFiredHeadExit(processedHead');
+    assert.ok(post >= 0 && pin > post && narrate > pin && both > narrate && exit > both,
+      'order is POST → pin → narrate → await both → slide-out');
+    assert.equal(loop.includes('silentPopHead'), false, 'fired head is not a silent pop');
+    const exitFn = fnBodyUntilNext(app, 'async function animateFiredHeadExit', ['function reseatSameKeySuccessor', 'function measuredRowHeight']);
+    assert.match(exitFn, /head\.event === 'ready'/, 'a ready pause is not a fired-head slide');
+    assert.match(exitFn, /runQueueRemoval/, 'fired head uses slide-out + group-lift');
+    assert.match(exitFn, /queueRowKey/, 'same-key successor is recognized, not dropped');
+    assert.match(exitFn, /reseatSameKeySuccessor/);
+    assert.match(loop, /newQueue\.filter\(r => !oldKeys\.has\(queueRowKey\(r\)\)\)/, 'added stays key-based');
     assert.match(loop, /runQueueRemoval/); // non-head path still slides
+    const ceremonyAt = loop.indexOf('playInsertCeremony');
+    const readyRemove = loop.indexOf('runQueueRemoval([c.ready.id])');
+    assert.ok(ceremonyAt >= 0 && readyRemove > ceremonyAt, 'tickLoop: attack ceremony before ready slide-out');
   });
 
   it('live render follows engine array order and does not re-sort or rebuild a same-id tick', () => {
@@ -142,13 +148,23 @@ describe('Master clock visual fidelity (client contract)', () => {
     }
   });
 
-  it('hand-ready commit plays the ceremony instead of suppressing it', () => {
+  it('hand-ready commit plays the ceremony before the ready row slides out', () => {
     const commit = fnBody(app, 'playCommitArrival');
     const removeAt = commit.indexOf('runQueueRemoval');
     const ceremonyAt = commit.indexOf('playInsertCeremony');
-    assert.ok(removeAt >= 0 && ceremonyAt > removeAt, 'ready row leaves, then ceremony');
+    assert.ok(ceremonyAt >= 0 && removeAt > ceremonyAt, 'attack lands, then ready row slides out');
     assert.match(commit, /await Promise.all\(\[narrateP, visualP\]\)/);
     const insert = fnBodyUntilNext(app, 'async _runInsert()', ['class BattleClock', 'async _runResolve()', 'async _renderNew()']);
     assert.equal(insert.includes('resolved.length === 0'), false);
+    const renderNew = fnBodyUntilNext(app, 'async _renderNew()', ['/** All done']);
+    const clockCeremony = renderNew.indexOf('playInsertCeremony');
+    const clockRemove = renderNew.indexOf('runQueueRemoval');
+    assert.ok(clockCeremony >= 0 && clockRemove > clockCeremony, 'battle clock: attack ceremony before ready slide-out');
+  });
+
+  it('monster attack and cooldown stay one stable key', () => {
+    const keyFn = fnBodyUntilNext(app, 'function queueRowKey', ['const SUPABASE_URL']);
+    assert.match(keyFn, /row\.event === 'attack' \|\| row\.event === 'cooldown'/);
+    assert.match(keyFn, /`m:\$\{row\.label\}`/);
   });
 });

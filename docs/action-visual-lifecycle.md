@@ -33,7 +33,7 @@ MasterClock.start():
     animateItem(event)               // effects, health bar, shake, sparkles
     await BOTH finish                // typewriter + visuals both must complete
     
-    removeHead()                     // pop the processed item — done
+    removeHead()                     // fired head slides out, queue glides up — done
     
     if (player hand is Ready):       // player's turn
       showActionMenu()
@@ -208,7 +208,7 @@ into both phases, same shape as `weapon.speed + attack.<prepare|cooldown>_time`.
 3. If still alive: insert a `cooldown` successor for **this** attack (stored `cooldownTicks`,
    not the next attack). Label on the rail: "<Monster name> recovering", with the player-style
    timing bar.
-4. **Remove** the current `attack` item (silent pop — successor replace, not an exit slide).
+4. **Remove** the current `attack` item (slide-out + glide-up). The cooldown stays a same-key successor in data (`m:<label>`); the fired attack row slides out and the rows below glide up together. Not a key-breaking remove+add.
 5. **Master Clock ticks** → next item.
 
 **Sub-actions when the `cooldown` row fires:**
@@ -217,7 +217,7 @@ into both phases, same shape as `weapon.speed + attack.<prepare|cooldown>_time`.
 2. Insert a new `attack` row at `mon.speed + rollStat(next.prepare_time, prepare_time_range)`
    and store `cooldownTicks = mon.speed + rollStat(next.cooldown_time, cooldown_time_range)`.
 3. Feed: "<Monster> prepares a <attackName>..."
-4. **Remove** the cooldown item (silent successor replace).
+4. **Remove** the cooldown item (slide-out + glide-up). The next attack stays a same-key successor in data (`m:<label>`); the fired cooldown row slides out and the queue glides up.
 5. **Master Clock ticks** → next item.
 
 Last attack of a dead monster inserts nothing (death-cancels-everything, PC-DEC-054).
@@ -345,7 +345,7 @@ MasterClock.tick():
   ├─ typewriter.print(narration) — char by char + animateItem(effects)
   │   → Await BOTH to complete
   │
-  ├─ removeHead() — pop the processed item — done
+  ├─ removeHead() — fired head slides out + queue glides up — done
   │
   ├─ Check triggers:
   │   ├─ If player hand is Ready → show command menu, PAUSE

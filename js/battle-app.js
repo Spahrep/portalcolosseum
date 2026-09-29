@@ -62,8 +62,8 @@ class BattleClock {
     this._runResolve();
   }
 
-  /** Phase 1: genuine non-head removals slide out. The processed head is a
-   * silent pop (no exit slide) — it was pinned through narration. */
+  /** Phase 1: removals slide out + group-lift, including a fired head.
+   * The head stayed pinned through narration; this runs after that. */
   async _runResolve() {
     const { _diff: diff } = this;
     const queueEl = document.getElementById('queue');
@@ -77,8 +77,7 @@ class BattleClock {
     const headId = diff.resolved[0];
     const headIsTop = top && String(top.dataset.rowId) === String(headId);
     if (headIsTop) {
-      top.classList.remove('queue-row-exit', 'queue-row-current');
-      top.remove();
+      await runQueueRemoval([headId]);
       const rest = diff.resolved.slice(1, 2);
       if (rest.length) await runQueueRemoval(rest);
     } else {
@@ -87,18 +86,28 @@ class BattleClock {
     await this._runInsert();
   }
 
-  /** Phase 2: Insert — ready row has already left (or leaves here). The attack
-   * row then plays the full ceremony. Never suppressed just because a removal
-   * happened in the same tick. */
+  /** Phase 2: attack row plays the ceremony first; the ready placeholder
+   * then slides out. Never suppressed just because a removal happened
+   * in the same tick. */
   async _runInsert() {
     await this._renderNew();
   }
 
-  /** Phase 3: ceremony (event-gated), then render, then entry settle. */
+  /** Phase 3: ceremony (event-gated), then ready slide-out, then entry settle. */
   async _renderNew() {
     const { _diff: diff, _newBs: newBs } = this;
     const preset = getSpeedPreset();
     const commits = diff.readyCommits || [];
+
+    const addedRows = diff.addedRows
+      || (newBs.queue || []).filter(r => (diff.added || []).some(a => a.id === r.id));
+    const ceremonyEntries = [...addedRows, ...commits.map(c => c.attack)];
+
+    // Attack lands in its slot first. Skip the closing reconcile when a ready
+    // placeholder still has to slide out — renderQueue would wipe it.
+    if (ceremonyEntries.length > 0) {
+      await playInsertCeremony(ceremonyEntries, preset, newBs, { reconcile: commits.length === 0 });
+    }
 
     for (const c of commits) {
       if (animationsSkipped(preset)) {
@@ -109,13 +118,7 @@ class BattleClock {
       }
     }
 
-    const addedRows = diff.addedRows
-      || (newBs.queue || []).filter(r => (diff.added || []).some(a => a.id === r.id));
-    const ceremonyEntries = [...addedRows, ...commits.map(c => c.attack)];
-
-    if (ceremonyEntries.length > 0) {
-      await playInsertCeremony(ceremonyEntries, preset, newBs);
-    } else {
+    if (commits.length > 0 || ceremonyEntries.length === 0) {
       renderQueue(newBs);
     }
 
@@ -370,21 +373,46 @@ function pinProcessedHead(head) {
 }
 
 /**
- * Head removal is a silent pop — no exit slide. A same-key successor (hand
- * phase change) stays in the DOM so renderQueue can relabel it in place.
+ * Fired-head exit: slide the processed row out, then glide the rows below up.
+ * Call only after narration + visuals. A `ready` pause is not a fired head.
+ * A same-key successor (monster attack→cooldown, hand phase) stays the same
+ * key in data — reseat that successor so renderQueue does not treat the
+ * glide as a key-breaking rebuild.
  */
-function silentPopHead(head, newQueue) {
-  if (!head) return;
+async function animateFiredHeadExit(head, newQueue, bs) {
+  if (!head || head.event === 'ready') return;
+  const key = queueRowKey(head);
+  const successor = (newQueue || []).find(r => queueRowKey(r) === key);
+  if (animationsSkipped(getSpeedPreset())) {
+    if (!successor) {
+      const el = findQueueRowByIdentity(head);
+      if (el) el.remove();
+    }
+    return;
+  }
   const row = findQueueRowByIdentity(head);
   if (!row) return;
-  row.classList.remove('queue-row-current', 'queue-row-exit');
-  const key = queueRowKey(head);
-  const successorSameKey = (newQueue || []).some(r => queueRowKey(r) === key);
-  if (!successorSameKey) {
-    exitingQueueRows.delete(row.dataset.rowId);
-    if (head.id != null) exitingQueueRows.delete(head.id);
-    row.remove();
-  }
+  const id = row.dataset.rowId || head.id;
+  await runQueueRemoval([id]);
+  if (successor) reseatSameKeySuccessor(successor, newQueue, bs);
+}
+
+/** Put a same-key successor back in the DOM at its engine slot, without an
+ * enter slide. The fired row already slid out; this is not a new key. */
+function reseatSameKeySuccessor(successor, engineQueue, bs) {
+  const queueEl = document.getElementById('queue');
+  if (!queueEl || !successor) return;
+  const key = queueRowKey(successor);
+  const existing = Array.from(queueEl.querySelectorAll('.queue-row')).find(el => el.dataset.stableKey === key);
+  if (existing) return;
+  const rowEl = buildQueueRow(successor, (bs && bs.monsters) || [], bs || {}, true);
+  const domRows = Array.from(queueEl.children).filter(c =>
+    c.classList.contains('queue-row') && !c.classList.contains('queue-row-exit')
+  );
+  const idx = insertIndexFor(successor, domRows, engineQueue);
+  const ref = domRows[idx] || null;
+  if (ref) queueEl.insertBefore(rowEl, ref);
+  else queueEl.appendChild(rowEl);
 }
 
 function measuredRowHeight(queueEl) {
@@ -399,18 +427,28 @@ function domRowIsPlayer(el) {
 }
 
 // Visual slot for a new row. Prefer the engine array index (order was fixed at
-// insert) so existing DOM rows are not re-sorted. The comparator is only the
-// fallback when there is no engine queue to follow.
+// insert) so existing DOM rows are not re-sorted. A departing placeholder still
+// in the DOM (ready row waiting to slide out) is not an ordering anchor.
+// The comparator is only the fallback when there is no engine queue to follow.
 function insertIndexFor(entry, domRows, engineQueue) {
   if (engineQueue && entry && entry.id != null) {
     const engineIdx = engineQueue.findIndex(r => r.id === entry.id);
     if (engineIdx !== -1) {
       const before = new Set(engineQueue.slice(0, engineIdx).map(r => r.id));
-      let visual = 0;
-      for (const el of domRows) {
-        if (before.has(el.dataset.rowId)) visual++;
+      if (before.size === 0) return 0;
+      let passed = 0;
+      let lastBeforeIdx = -1;
+      for (let i = 0; i < domRows.length; i++) {
+        if (before.has(domRows[i].dataset.rowId)) {
+          passed++;
+          lastBeforeIdx = i;
+        }
       }
-      return visual;
+      // All anchors are on screen: land just after the last one so a departing
+      // ready placeholder does not shift the slot. If an anchor is missing,
+      // fall back to the count of anchors already present.
+      if (passed >= before.size && lastBeforeIdx !== -1) return lastBeforeIdx + 1;
+      return passed;
     }
   }
   const newTics = entry.tics ?? 0;
@@ -477,11 +515,12 @@ async function settleEnteredRows(entries, preset) {
  * Full insert ceremony: empty gap grows → marker wipes → flashes → real row settles.
  * Event-gated via waitForEvent. Instant / reduced-motion skips straight to render.
  */
-async function playInsertCeremony(entries, preset, bs) {
+async function playInsertCeremony(entries, preset, bs, opts) {
+  const reconcile = !opts || opts.reconcile !== false;
   const list = entries || [];
   const queueEl = document.getElementById('queue');
   if (list.length === 0 || !queueEl || animationsSkipped(preset)) {
-    if (bs) renderQueue(bs);
+    if (bs && reconcile) renderQueue(bs);
     return;
   }
   const monsters = (bs && bs.monsters) || [];
@@ -500,7 +539,7 @@ async function playInsertCeremony(entries, preset, bs) {
       gap.remove();
     }
   }
-  if (bs) renderQueue(bs);
+  if (bs && reconcile) renderQueue(bs);
 }
 
 /** Hit-shake / fresh death cards started this tick. Resolves on animationend. */
@@ -521,9 +560,9 @@ async function awaitTickVisuals(deathBefore) {
 }
 
 /**
- * Hand-ready commit beat: the ready row leaves, THEN the attack row lands
- * through the full ceremony. Runs before the next /tick so the clock does
- * not swallow the insert.
+ * Hand-ready commit beat: the attack row lands through the full ceremony,
+ * THEN the ready placeholder slides out. Runs before the next /tick so the
+ * clock does not swallow the insert.
  */
 async function playCommitArrival(runId) {
   const fullRun = await apiCall(`/runs/${runId}`, 'GET');
@@ -540,6 +579,9 @@ async function playCommitArrival(runId) {
   const narrateP = awaitNarration(bs.feed || []);
   const visualP = (async () => {
     if (commits.length === 0) return;
+    // Attack slides into its slot first. Reconcile is deferred so the ready
+    // placeholder is still in the DOM to slide out after the ceremony lands.
+    await playInsertCeremony(commits.map(c => c.attack), preset, bs, { reconcile: false });
     for (const c of commits) {
       if (animationsSkipped(preset)) {
         const el = findQueueRowByIdentity(c.ready);
@@ -548,7 +590,7 @@ async function playCommitArrival(runId) {
         await runQueueRemoval([c.ready.id]);
       }
     }
-    await playInsertCeremony(commits.map(c => c.attack), preset, bs);
+    renderQueue(bs);
   })();
   await Promise.all([narrateP, visualP]);
   lastBs = bs;
@@ -2900,8 +2942,9 @@ async function tickLoop(runId) {
       const visualsP = awaitTickVisuals(deathBefore);
       await Promise.all([narrateP, visualsP]);
 
-      // removeHead LAST — silent pop, never an exit slide.
-      silentPopHead(processedHead, newQueue);
+      // removeHead LAST — fired head slides out + queue glides up.
+      // Ready pauses are not a fired head. Same-key successors stay same-key.
+      await animateFiredHeadExit(processedHead, newQueue, bs);
 
       const oldKeys = new Set(oldQueue.map(queueRowKey));
       const newKeys = new Set(newQueue.map(queueRowKey));
@@ -2926,7 +2969,13 @@ async function tickLoop(runId) {
         }
       }
 
-      // Hand-ready commit split: ready row leaves, THEN the attack row lands.
+      // Attack ceremony first, then the ready placeholder slides out.
+      // added stays key-based so a same-key successor is not a new insert.
+      const added = newQueue.filter(r => !oldKeys.has(queueRowKey(r)));
+      const ceremonyEntries = [...added, ...readyCommits.map(c => c.attack)];
+      if (ceremonyEntries.length > 0) {
+        await playInsertCeremony(ceremonyEntries, preset, bs, { reconcile: readyCommits.length === 0 });
+      }
       for (const c of readyCommits) {
         if (animationsSkipped(preset)) {
           const el = findQueueRowByIdentity(c.ready);
@@ -2935,12 +2984,7 @@ async function tickLoop(runId) {
           await runQueueRemoval([c.ready.id]);
         }
       }
-
-      const added = newQueue.filter(r => !oldKeys.has(queueRowKey(r)));
-      const ceremonyEntries = [...added, ...readyCommits.map(c => c.attack)];
-      if (ceremonyEntries.length > 0) {
-        await playInsertCeremony(ceremonyEntries, preset, bs);
-      } else {
+      if (readyCommits.length > 0 || ceremonyEntries.length === 0) {
         renderQueue(bs);
       }
 

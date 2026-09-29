@@ -31,7 +31,7 @@ After the action is confirmed, the slot where the new row will land grows open a
 2. Add `.open`. CSS transitions `height` to one row (`--insert-gap`) and `margin-bottom` to `2px` over `300ms` ease-out.
 3. Barrier is `waitForEvent(gap, 'transitionend', QUEUE_GAP_MS + 80)` — not `setTimeout(300)`. Reduced-motion and the Instant preset (`charMs === 0`) skip the ceremony and land the row directly.
 
-**Hand-ready commit is two beats, not one suppressed tick (locked).** The ready row leaves first (genuine slide-out + group-lift via `runQueueRemoval`). THEN the attack row plays the full ceremony (gap grows → insert marker wipes → flashes → row settles) in `playCommitArrival` / `playInsertCeremony`, before the next `/tick`. A same-tick removal must not suppress this ceremony.
+**Hand-ready commit is two beats, not one suppressed tick (locked).** The new attack row plays the full ceremony first (gap grows → insert marker wipes → flashes → row settles) in `playCommitArrival` / `playInsertCeremony`. THEN the ready placeholder slides out (genuine slide-out + group-lift via `runQueueRemoval`). A same-tick removal must not suppress this ceremony.
 
 ---
 
@@ -173,7 +173,7 @@ Trigger: Returning to a battle mid-fight (page reload or resume). All existing q
 ## 4. Edge Cases
 
 ### Row at top of queue (current item)
-No exit animation for the current top item. On the master-clock path (`tickLoop`) the processed head stays pinned (`.queue-row-current`) while its typewriter line and hit/death visuals run. Both are awaited before the next `/tick` POST. Removal of that head is a **silent pop** (`silentPopHead`) — never `runQueueRemoval` / `.queue-row-exit`. A same-key hand successor (winding → impact) stays in the DOM and is relabeled in place. Genuine **non-head** removals still slide out and group-lift.
+The processed head stays pinned (`.queue-row-current`) while its typewriter line and hit/death visuals run. Both are awaited before removal. Removal of a fired head (attack, winding, impact, cooldown — including monster attack→cooldown) is a **slide-out + glide-up** (`runQueueRemoval` / `.queue-row-exit` + `groupLiftRemaining`), not a silent pop. A same-key successor stays the same key in data (`h:LH` / `m:<label>`); the animation does not turn it into a key-breaking remove+add. A plain `ready` pause is not a fired-head slide. Genuine **non-head** removals still slide out and group-lift.
 
 ### Multiple rows inserted simultaneously
 Each row follows the 5-stage sequence independently. The spacer grows for each row sequentially. Avoid batching — the queue processes one item at a time per the Master Clock model (`action-visual-lifecycle.md §1`).
@@ -195,16 +195,16 @@ When charMs=0 and lineDelayMs=0 (Instant preset), skip all 5 insert stages. Inse
 | Stage 3: Bar grows in | ✅ Done | `.queue-insert-bar.wipe` / `queue-insert-wipe` (width 0→100%, 250ms). Distinct from `.queue-bar`. |
 | Stage 4: Flash | ✅ Done | `.queue-insert-bar.flash` / `insert-flash` (150ms), `waitForEvent(animationend)` |
 | Stage 5: Row appears | ✅ Done | gap replaced by `.queue-row-enter` / `.queue-row-monster-enter`, `waitForEvent` |
-| Exit animation | ✅ Done | Non-head only: `runQueueRemoval()` + `.queue-row-exit` + group-lift. Head is a silent pop. |
+| Exit animation | ✅ Done | Fired head and non-head: `runQueueRemoval()` + `.queue-row-exit` + group-lift. Head stays pinned through narration, then slides out. |
 | Staggered entry (resume) | ⚠️ Partial | Only on fresh battle load, skip on resume |
-| Hand-ready commit split | ✅ Done | `playCommitArrival()` — ready row leaves, then full insert ceremony, then `/tick` |
-| Master-clock order | ✅ Done | `tickLoop`: pin head → typewriter ∥ visuals → await both → silent pop → ceremony → next `/tick` |
+| Hand-ready commit split | ✅ Done | `playCommitArrival()` — attack ceremony first, then ready row slides out, then `/tick` |
+| Master-clock order | ✅ Done | `tickLoop`: pin head → typewriter ∥ visuals → await both → slide-out + glide → ceremony → next `/tick` |
 
 ---
 
 ## 6. Locked decisions (2026-09-28)
 
 1. **No dotted box.** `.queue-insert-preview` (dashed yellow border/fill) is gone from JS and CSS. Space creation is a clean empty `.queue-insert-gap`.
-2. **Commit ceremony is not suppressed.** A hand-ready commit used to be remove+insert in one tick, which skipped the insert ceremony. The beat is split: ready row leaves, then the attack row lands through gap → wipe → flash → settle.
+2. **Commit ceremony is not suppressed.** A hand-ready commit is two beats: the attack row lands through gap → wipe → flash → settle, then the ready placeholder slides out.
 3. **Event-gated timing.** Preview and entry barriers use `waitForEvent` (`transitionend` / `animationend`), with the existing reduced-motion short-circuit. Do not reintroduce `setTimeout(300)` / `setTimeout(1200)` as the barrier.
 4. **Engine order unchanged.** `tick()` is Peek → Process → Cleanup → Remove. It returns the processed head (`result.row`). `remove()` fires only after `process()`.
