@@ -59,14 +59,14 @@ This is the de-facto **Process** step — a big `if/else` dispatch on `row.event
 - `sortQueue` (55-63) — player-first on ties
 - `commitNewRow` (65-69), `addEvent` (10-15)
 
-### Client: `tickLoop` — `js/battle-app.js:2541-2674`
-- loops: pacing delay (2547-2550) → `POST /tick` + `GET /runs/:id` in parallel (2554-2557) → render HP/monsters/loadout (2574-2576) → label-keyed queue diff (2581-2587) → `runQueueRemoval` on resolved rows (2585) → space-creation preview (2594-2628) → `renderQueue` (2630) → entry animations (2633-2649) → typewriter `appendFeedLine` (2654-2662) → break on `playerReady`/`needsInput`/`done`/`battleOver` (2664-2672).
+### Client: `tickLoop` — `js/battle-app.js:2490-2601`
+- loops: pacing delay → `POST /tick` + `GET /runs/:id` in parallel → render HP/monsters/loadout → label-keyed queue diff → `runQueueRemoval` on resolved rows → space-creation preview → `renderQueue` (in `js/battle/queue-render.js`) → entry animations → typewriter `appendFeedLine` → break on `playerReady`/`needsInput`/`done`/`battleOver`.
 
 ### Client: visual choreography — `js/battle-app.js`
-- `runQueueRemoval` (169-176): `markQueueRowExiting` → `sleep(QUEUE_EXIT_MS=280)` → `sleep(QUEUE_REMOVE_GAP_MS=100)` → `groupLiftRemaining`.
-- `groupLiftRemaining` (180-212): FLIP slide-up, `sleep(QUEUE_EXIT_MS=280)`.
-- `BattleClock` (40-143): state machine `SCHEDULED → ANIMATING → IDLE`; `onNarrateDone` (58-62) gates on feed narration completion. Partial barrier — narration only, not all visuals.
-- Constants: `QUEUE_EXIT_MS = 280` (150), `QUEUE_REMOVE_GAP_MS = 100` (153). Entry anims: 1200ms (117), 400ms (114/2641), monster 400ms.
+- `runQueueRemoval` (202-220): `markQueueRowExiting` → `sleep(QUEUE_EXIT_MS=280)` → `sleep(QUEUE_REMOVE_GAP_MS=100)` → `groupLiftRemaining`.
+- `groupLiftRemaining` (219-257): FLIP slide-up, `sleep(QUEUE_EXIT_MS=280)`.
+- `BattleClock` (37-143): state machine `SCHEDULED → ANIMATING → IDLE`; `onNarrateDone` (67-71) gates on feed narration completion. Partial barrier — narration only, not all visuals.
+- Constants: `QUEUE_EXIT_MS = 280` (12), `QUEUE_REMOVE_GAP_MS = 100` (15) — both in `js/battle/queue-render.js`. Entry anims: 1200ms, 400ms, monster 400ms.
 
 ## 3. The gaps (verified)
 

@@ -4,7 +4,7 @@
 
 **Design persona:** Spahrep — wireframe mockup of queue insert animation stages.
 
-**Audience:** Developer implementing queue DOM animation in `battle-app.js`.
+**Audience:** Developer implementing queue DOM animation in `js/battle/queue-render.js` (extracted from `battle-app.js` in PC-77).
 
 ---
 
@@ -143,7 +143,7 @@ Trigger: A queue row finishes processing (e.g. an attack resolves or a row is ca
 .queue-row-lift { transition: transform 280ms ease-in; }
 ```
 
-**JS hook (existing):** `markQueueRowExiting()` — detaches the row absolutely, runs the FLIP slide-up on the siblings, attaches `animationend`. Duration constants `QUEUE_EXIT_MS` (280) + `QUEUE_EXIT_BUFFER_MS` (60) in `battle-app.js` must match the CSS. The battle clock holds re-render for `QUEUE_EXIT_MS + buffer` so slide-out + slide-up finish before the queue rebuilds (a shorter wait snaps the rows).
+**JS hook (existing):** `markQueueRowExiting()` — detaches the row absolutely, runs the FLIP slide-up on the siblings, attaches `animationend`. Duration constants `QUEUE_EXIT_MS` (280) + `QUEUE_EXIT_BUFFER_MS` (60) in `js/battle/queue-render.js` must match the CSS. The battle clock holds re-render for `QUEUE_EXIT_MS + buffer` so slide-out + slide-up finish before the queue rebuilds (a shorter wait snaps the rows).
 
 ---
 
@@ -152,7 +152,7 @@ Trigger: A queue row finishes processing (e.g. an attack resolves or a row is ca
 Trigger: Returning to a battle mid-fight (page reload or resume). All existing queue rows appear with a staggered cascade instead of popping in instantly.
 
 **Mechanism:**
-1. After `renderQueue()` builds the fresh DOM, iterate all `.queue-row` children.
+1. After `renderQueue()` (in `js/battle/queue-render.js`) builds the fresh DOM, iterate all `.queue-row` children.
 2. Add `.queue-row-enter` to each with a cascading `animation-delay`: `0ms`, `100ms`, `200ms`, etc.
 3. On `animationend`, remove the enter class.
 

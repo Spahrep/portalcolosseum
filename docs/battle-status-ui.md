@@ -36,7 +36,7 @@ Timing information is shown as a **range exactly once — during browse** — th
 >
 > **IMPLEMENTATION REALITY (Spahrep 2026-09-16): the preview marker system does not
 > exist in code, and the timing column is not working as intended either — the whole
-> area needs to be revisited.** Current code: `js/battle-app.js renderQueue()` renders
+> area needs to be revisited.** Current code: `js/battle/queue-render.js renderQueue()` renders
 > the next-up events column (`Label EventName | tics`, sorted ascending); there is NO
 > preview band, no ">" markers, no browse-phase range display anywhere in the client.
 >
