@@ -6,12 +6,8 @@
  * Auth redirect to /login.html on no session
  */
 
-import { supabaseClient } from '../js/utils.js';
+import { apiCall, checkAuth } from './combat/combat-api.js';
 
-const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
-const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
-
-let supabase;
 // Backpack and loadout hold ITEM objects: { kind: 'weapon'|'consumable', id, name }.
 // Identity is the instance id, never the name — two Wristblades are two distinct
 // instances and must stay distinct (a name-keyed map collapsed them into one id,
@@ -35,35 +31,6 @@ const GRADE_COLORS = {
   S: '#a335ee',  // purple — top tier
   // orange reserved for future beyond-S content
 };
-
-function getAuthToken() {
-  // For API calls, use supabase session token
-  return supabase?.auth?.getSession?.().then(({data}) => data?.session?.access_token);
-}
-
-async function apiCall(path, method = 'GET', body = null) {
-  const token = await getAuthToken();
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const opts = { method, headers, credentials: 'include' };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`/api/combat${path}`, opts);
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-
-async function checkAuth() {
-  if (!supabase) {
-    window.location.href = '/login.html';
-    return false;
-  }
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    window.location.href = '/login.html';
-    return false;
-  }
-  return session;
-}
 
 async function loadData() {
   // Fetch weapons, consumables, portals (first one)
@@ -592,10 +559,7 @@ function setupCancelButton() {
 
 async function init() {
   popupEl = document.getElementById('info-popup');
-  // supabaseClient FIRST matching game-app.js exactly (auth order fix)
-  if (SUPABASE_URL) {
-    supabase = supabaseClient();
-  }
+  // checkAuth creates the shared PKCE client (supabaseClient) before getSession.
   const session = await checkAuth();
   if (!session) return;
 

@@ -5,52 +5,10 @@
  * Fetches GET /api/combat/portals (now includes ap_cost, unlock_gold_cost, player_has_completed_previous, is_locked)
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { apiCall, checkAuth } from './combat/combat-api.js';
 
-const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
-const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
-
-let supabase;
 let portals = [];
 let selectedIndex = -1;
-
-function initSupabase() {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-    console.error('Missing Supabase env');
-    return null;
-  }
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true, autoRefreshToken: true }
-  });
-}
-
-async function getAuthToken() {
-  return supabase?.auth?.getSession?.().then(({data}) => data?.session?.access_token);
-}
-
-async function apiCall(path, method = 'GET', body = null) {
-  const token = await getAuthToken();
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const opts = { method, headers, credentials: 'include' };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`/api/combat${path}`, opts);
-  if (!res.ok) throw new Error(await res.text());
-  return res.json();
-}
-
-async function checkAuth() {
-  if (!supabase) {
-    window.location.href = '/login.html';
-    return false;
-  }
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    window.location.href = '/login.html';
-    return false;
-  }
-  return session;
-}
 
 function showToast(msg) {
   const toast = document.createElement('div');
@@ -206,7 +164,6 @@ function setupKeyboardNav() {
 }
 
 async function init() {
-  supabase = initSupabase();
   const session = await checkAuth();
   if (!session) return;
 

@@ -8,6 +8,7 @@
  */
 
 import { supabaseClient } from '../js/utils.js';
+import { apiCall, checkAuth } from './combat/combat-api.js';
 import { computeTimingMarkers } from './combat/tic-queue.js';
 import { getSpeedPreset, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
 import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.debug in Supabase
@@ -604,37 +605,7 @@ async function playCommitArrival(runId) {
 }
 
 // Settings now live in ./settings-controller.js (single source of truth for speed + font size)
-
-function getAuthToken() {
-  return supabase?.auth?.getSession?.().then(({ data }) => data?.session?.access_token);
-}
-
-async function apiCall(path, method = 'GET', body = null) {
-  const token = await getAuthToken();
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-  const opts = { method, headers, credentials: 'include' };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(`/api/combat${path}`, opts);
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(text || `HTTP ${res.status}`);
-  }
-  return res.json();
-}
-
-async function checkAuth() {
-  if (!supabase) {
-    window.location.href = '/login.html';
-    return false;
-  }
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
-    window.location.href = '/login.html';
-    return false;
-  }
-  return true;
-}
+// Auth fetch trio lives in ./combat/combat-api.js (checkAuth returns session).
 
 function showMessage(text, isError = false) {
   const box = document.getElementById('message-box');
