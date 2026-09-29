@@ -22,6 +22,33 @@ import {
   QUEUE_WIPE_MS, QUEUE_FLASH_MS, QUEUE_ENTER_MS
 } from './battle/queue-render.js';
 
+import {
+  clearTyping, typeFeedLines, renderFeed, populateFeedInstantly,
+  appendFeedLine, typeFeedLinesAsync, awaitNarration,
+  bindFeedRender, getRenderedFeedLines, setRenderedFeedLines, addRenderedFeedLines,
+  isTypingInProgress, setFeedPinned
+} from './battle/feed-render.js';
+import {
+  renderDice, updateCurrentDie, performSweepAnimation,
+  rollDiceAnimation, bindDiceRender
+} from './battle/dice-render.js';
+
+// PC-78: feed and dice own their state. Hooks stay here (busy gate, hit
+// feedback, ceremony) so the new modules do not import battle-app.js.
+bindFeedRender({
+  setBusy,
+  handleHitLine,
+  setSuppressHitFeedback: (v) => { suppressHitFeedback = v; },
+});
+bindDiceRender({
+  appendFeedLine,
+  revealMonsters,
+  finishBattleIntro,
+  getShouldAnimateDice: () => shouldAnimateDice,
+  setShouldAnimateDice: (v) => { shouldAnimateDice = v; },
+});
+
+
 /**
  * BattleClock — orchestrates post-commit animation sequencing.
  * Phase flow:
@@ -289,21 +316,6 @@ function animationsSkipped(preset) {
   return prefersReducedMotion() || !p || p.charMs === 0;
 }
 
-function typeFeedLinesAsync(lines) {
-  return new Promise(resolve => {
-    typeFeedLines(lines || [], resolve);
-  });
-}
-
-/** Type every feed line not yet shown, and resolve when the typewriter finishes. */
-async function awaitNarration(feed) {
-  const lines = feed || [];
-  if (lines.length <= renderedFeedLines) return;
-  const fresh = lines.slice(renderedFeedLines);
-  await typeFeedLinesAsync(fresh);
-  renderedFeedLines = lines.length;
-}
-
 function findQueueRowByIdentity(row) {
   if (!row) return null;
   const queueEl = document.getElementById('queue');
@@ -562,21 +574,6 @@ async function playCommitArrival(runId) {
   if (commits.length === 0) renderQueue(bs);
 }
 
-// Tuning constants for dice-selection roulette (client theater only).
-// Sweep: uniform left→right walk, stops on random same-color box (incl phantom).
-// Landed box IS selection (no morph). Roll: real faces from payload, weighty decel.
-const DICE_ANIM = {
-  COUNTDOWN_WHIR: 12,   // Spahrep's countdown: steps = 12*(n-1) + r, r in 1..n solved so the countdown ends on a drawn-color box
-  SWEEP_FAST: 35,       // ms per die at full whir (sweep start)
-  SWEEP_TAIL: 16,       // final sweep steps that decelerate into the landing
-  SWEEP_SLOW: 240,      // ms on the very last step (weighty arrival, no instant stop)
-  LAND_PAUSE: 350,      // beat on the landed box before the roll starts
-  ROLL_TICKS: 16,       // tumbles before settle (longer, weightier roll)
-  ROLL_INITIAL: 80,     // ms start for the roll (quick transitions)
-  ROLL_DECEL: 1.16,     // per-tick decel factor
-  ROLL_MIN: 400         // final dwell cap (~4.4s total roll)
-};
-
 // PC-52r/PC-63: monster condition words color by severity everywhere they render.
 const BAND_CLASS = {
   healthy: 'st-green', injured: 'st-amber', battered: 'st-orange', critical: 'st-red'
@@ -587,87 +584,6 @@ function bandClass(m) {
 }
 
 // Settings now live in ./settings-controller.js (single source of truth for speed + font size)
-
-// PC-DEC-044: typewriter state + helpers (only new lines type; appendFeedLine + system paths stay instant)
-let typingInProgress = false;
-let typingTimeouts = [];
-let typingSetBusy = false; // track if *this* typing batch set the busy gate
-let feedPinned = true; // DO-2: auto-scroll only while pinned; user scroll-up pauses for the batch
-// Feed lines already displayed in #message-box. The box is NOT a pure feed
-// mirror — it also holds the battle-complete panel, "Advancing..." and
-// "Attack committed" system lines — so the incremental feed diff must track
-// the feed by count, not box children (children-based diffs drop history
-// lines once any system content sits in the box, and can let a stale
-// battle-complete panel survive into the next battle).
-let renderedFeedLines = 0;
-
-function clearTyping() {
-  typingTimeouts.forEach(t => clearTimeout(t));
-  typingTimeouts = [];
-  typingInProgress = false;
-  if (typingSetBusy) {
-    setBusy(false);
-    document.body.classList.remove('command-hidden');
-    typingSetBusy = false;
-  }
-}
-
-function typeFeedLines(lines, onComplete) {
-  // Latest-feed-wins: a commit/Enter can land mid-batch (keyboard path bypasses the
-  // disabled buttons). If a batch is already typing, complete it instantly first so
-  // only ONE typing loop runs at a time — same skip semantics as click-to-complete.
-  if (typingInProgress) clearTyping();
-  const box = document.getElementById('message-box');
-  if (!box) {
-    if (onComplete) onComplete();
-    return;
-  }
-  const preset = getSpeedPreset();
-  if (preset.charMs === 0 || lines.length === 0) {
-    lines.forEach(l => appendFeedLine(l));
-    if (onComplete) onComplete();
-    return;
-  }
-  typingInProgress = true;
-  setBusy(true); // gate action menu during typing per spec
-  document.body.classList.add('command-hidden');
-  typingSetBusy = true;
-  feedPinned = true; // start pinned for this batch; scroll-up will unpin for remainder of batch
-  let lineIndex = 0;
-  function typeNextLine() {
-    if (lineIndex >= lines.length) {
-      typingInProgress = false;
-      setBusy(false);
-      document.body.classList.remove('command-hidden');
-      if (onComplete) onComplete();
-      return;
-    }
-    const lineText = lines[lineIndex];
-    // PC-70: the hit reaction fires as the line STARTS typing — impact lands
-    // with the message, not after it finishes narrating.
-    handleHitLine(lineText);
-    const div = document.createElement('div');
-    div.className = 'msg-line';
-    box.appendChild(div);
-    if (feedPinned) box.scrollTop = box.scrollHeight;
-    let charIndex = 0;
-    function typeChar() {
-      if (charIndex < lineText.length) {
-        div.textContent = lineText.slice(0, charIndex + 1);
-        charIndex++;
-        if (feedPinned) box.scrollTop = box.scrollHeight;
-        const t = setTimeout(typeChar, preset.charMs);
-        typingTimeouts.push(t);
-      } else {
-        lineIndex++;
-        const t = setTimeout(typeNextLine, preset.lineDelayMs);
-        typingTimeouts.push(t);
-      }
-    }
-    typeChar();
-  }
-  typeNextLine();
-}
 
 function getAuthToken() {
   return supabase?.auth?.getSession?.().then(({ data }) => data?.session?.access_token);
@@ -714,7 +630,7 @@ function showErrorState(title, detail, showReturn = true) {
   const box = document.getElementById('message-box');
   if (!box) return;
   box.innerHTML = '';
-  renderedFeedLines = 0; // error screen replaces the log — next render starts fresh
+  setRenderedFeedLines(0); // error screen replaces the log — next render starts fresh
   const err = document.createElement('div');
   err.className = 'msg-error';
   err.innerHTML = `<strong>${title}</strong><br>${detail || ''}`;
@@ -853,215 +769,6 @@ function handleHitLine(line) {
     if (isCrit) triggerCritMonsterHit(hit.letter);
     else triggerMonsterHit(hit.letter);
   }
-}
-
-function renderDice(dice) {
-  debugLog('renderDice', `remaining=${dice.remaining?.green || 0}g/${dice.remaining?.yellow || 0}y/${dice.remaining?.red || 0}r willRoll=${shouldAnimateDice}`);
-  const tray = document.getElementById('dice-tray');
-  const labels = document.getElementById('dice-labels');
-  if (!tray || !labels || !dice) return;
-  tray.innerHTML = '';
-  const rem = dice.remaining || { green: 0, yellow: 0, red: 0 };
-  const used = dice.used || { green: 0, yellow: 0, red: 0 };
-  const current = dice.current;
-  // Die-box markers (presentation only): the single color letters were
-  // swapped for glyphs — green ?? / yellow ?! / red !!.
-  const MARK = { green: '??', yellow: '?!', red: '!!' };
-
-  const remRow = document.createElement('div');
-  remRow.style.cssText = 'display:flex;gap:3px;margin-bottom:4px;';
-  for (let i = 0; i < (rem.green || 0); i++) {
-    const d = document.createElement('div');
-    d.className = 'die green';
-    d.textContent = MARK.green;
-    remRow.appendChild(d);
-  }
-  for (let i = 0; i < (rem.yellow || 0); i++) {
-    const d = document.createElement('div');
-    d.className = 'die yellow';
-    d.textContent = MARK.yellow;
-    remRow.appendChild(d);
-  }
-  for (let i = 0; i < (rem.red || 0); i++) {
-    const d = document.createElement('div');
-    d.className = 'die red';
-    d.textContent = MARK.red;
-    remRow.appendChild(d);
-  }
-  tray.appendChild(remRow);
-
-  labels.innerHTML = `
-    <div>REMAINING (${(rem.green||0)+(rem.yellow||0)+(rem.red||0)})</div>
-    <div>USED (${(used.green||0)+(used.yellow||0)+(used.red||0)})</div>
-  `;
-
-  const curEl = document.getElementById('current-die');
-  if (curEl) {
-    if (current && current.color && current.face != null) {
-      if (shouldAnimateDice) {
-        shouldAnimateDice = false;
-        appendFeedLine('Selecting portal difficulty...');
-        curEl.style.display = 'none';
-        // Stage 1 (selection): sweep row = remaining pool + the drawn die as an
-        // extra box, so the roulette can land ON it. It shows the color marker
-        // like every other box — never the face, or the result is spoiled early.
-        const drawnEl = document.createElement('div');
-        drawnEl.className = `die ${current.color}`;
-        drawnEl.textContent = MARK[current.color] || '??';
-        // Phantom inserted at END of its color block (G→Y→R natural order preserved).
-        // This keeps same-color boxes contiguous; out-of-order would be a tell.
-        // Sweep will pick uniformly among same-color boxes (incl. phantom) and
-        // walk to it; landing box IS the drawn die (no morph ever).
-        let insertAt;
-        if (current.color === 'green') insertAt = rem.green || 0;
-        else if (current.color === 'yellow') insertAt = (rem.green || 0) + (rem.yellow || 0);
-        else insertAt = (rem.green || 0) + (rem.yellow || 0) + (rem.red || 0);
-        remRow.insertBefore(drawnEl, remRow.children[insertAt] || null);
-        // Labels match visible pool during sweep: REMAINING counts the
-        // phantom (+1, die still "in play"); USED must NOT count it yet
-        // (server already moved it to used) — so show usedTotal - 1.
-        // The cleanup render below restores true post-draw counts.
-        const remTotal = (rem.green || 0) + (rem.yellow || 0) + (rem.red || 0);
-        const usedTotal = (used.green || 0) + (used.yellow || 0) + (used.red || 0);
-        labels.innerHTML = `
-          <div>REMAINING (${remTotal + 1})</div>
-          <div>USED (${usedTotal - 1})</div>
-        `;
-        const diceEls = Array.from(remRow.children); // >= 1 (drawn die appended)
-        // Stage 2 (roll) plays out IN the box the sweep landed on — the
-        // current-die slot stays hidden until the reveal, so the chosen
-        // die is never shown sitting at the row's right edge mid-roll.
-        // After it lands, re-render the tray so the phantom drawn-die box
-        // and its highlight are cleared — final state = true post-draw.
-        const selectAndRoll = (landedBox) => {
-          const colorLabel = current.color.charAt(0).toUpperCase() + current.color.slice(1);
-          appendFeedLine(`${colorLabel} die selected`);
-          appendFeedLine('Rolling Portal Die...');
-          rollDiceAnimation(landedBox, current, dice.faces, () => {
-            debugLog('ceremony', 'roll settled, starting reveal');
-            appendFeedLine(`${current.face} rolled`);
-            updateCurrentDie(curEl, current); // persistent slot lights up
-            appendFeedLine('Selecting Monsters...');
-            revealMonsters(() => {
-              debugLog('ceremony', 'reveal complete, calling finishBattleIntro');
-              appendFeedLine('Creating Action Queue...');
-              finishBattleIntro();
-            });
-            setTimeout(() => renderDice(dice), 350);
-          });
-        };
-        if (diceEls.length === 1) {
-          // Only the drawn die in the tray: brief highlight, then roll.
-          diceEls[0].classList.add('highlight');
-          setTimeout(() => selectAndRoll(diceEls[0]), DICE_ANIM.LAND_PAUSE);
-        } else {
-          // Spahrep's spec: the landed box IS the drawn die — no morph,
-          // ever. Land on a random box OF THE DRAWN COLOR (existing
-          // same-color boxes + the phantom), then walk from 0 to it.
-          const candidates = [];
-          diceEls.forEach((el, i) => {
-            if (el.classList.contains(current.color)) candidates.push(i);
-          });
-          // Phantom guarantees >= 1 same-color box; fall back defensively.
-          const targetIndex = candidates.length > 0
-            ? candidates[Math.floor(Math.random() * candidates.length)]
-            : Math.floor(Math.random() * diceEls.length);
-          performSweepAnimation(diceEls, targetIndex, selectAndRoll);
-        }
-      } else {
-        updateCurrentDie(curEl, current);
-      }
-    } else {
-      curEl.style.display = 'none';
-    }
-  }
-}
-
-function updateCurrentDie(curEl, current) {
-  curEl.innerHTML = `
-    <div class="die ${current.color}" style="width:32px;height:32px;font-size:14px;">${current.face}</div>
-    <div style="font-size:9px;color:#88aaff;margin-top:2px;">${current.rolled_value != null ? current.rolled_value : ''}</div>
-  `;
-  curEl.style.display = 'flex';
-}
-
-function performSweepAnimation(diceEls, targetIndex, onLand) {
-  const total = diceEls.length;
-  // Spahrep's countdown: start at the first die, hop to the next, reduce
-  // the count, stop on zero. Count = 12*(n-1) + r (r in 1..n) — the whir
-  // term is pure theater (12-ish laps of the loop at high speed, same
-  // every run, no info about the draw), and r is SOLVED BACKWARDS so the
-  // countdown lands exactly on the target box. The caller picked the
-  // target uniformly from the drawn color's boxes, so the landing IS the
-  // selection — no morph, ever.
-  const whir = DICE_ANIM.COUNTDOWN_WHIR * (total - 1);
-  const r = ((targetIndex + DICE_ANIM.COUNTDOWN_WHIR) % total) || total; // (r + whir) % total === targetIndex, r in 1..n
-  let count = whir + r; // steps remaining
-  let idx = 0;
-
-  function step() {
-    diceEls.forEach(el => el.classList.remove('highlight'));
-    diceEls[idx % total].classList.add('highlight');
-    if (count === 0) {
-      // countdown hit zero: this box IS the drawn die
-      setTimeout(() => onLand(diceEls[idx % total]), DICE_ANIM.LAND_PAUSE);
-      return;
-    }
-    idx++;
-    count--;
-    setTimeout(step, stepDelay(count));
-  }
-
-  function stepDelay(count) {
-    // Pacing only — the countdown math above is untouched. Full-speed whir
-    // for most of the spin, then the final SWEEP_TAIL steps interpolate
-    // down to SWEEP_SLOW, so the highlight decelerates into the landing
-    // instead of stopping dead.
-    if (count > DICE_ANIM.SWEEP_TAIL) return DICE_ANIM.SWEEP_FAST;
-    const t = (count - 1) / Math.max(1, DICE_ANIM.SWEEP_TAIL - 1);
-    return DICE_ANIM.SWEEP_SLOW - (DICE_ANIM.SWEEP_SLOW - DICE_ANIM.SWEEP_FAST) * t;
-  }
-
-  step();
-}
-
-// Roll tumbles real faces[color] from payload (defensive [face] if missing).
-// No invented values — repeated faces are legitimate (dice carry the same
-// value on several faces), so each tick spins a fresh face span in instead:
-// the number visibly rotates between rolls even when it stays the same.
-// Settles with pop; #current-die lights only after.
-function rollDiceAnimation(box, current, faces, onDone) {
-  debugLog('rollDiceAnimation', `color=${current.color} face=${current.face} n_faces=${faces?.[current.color]?.length || 'fallback'}`);
-  // The box keeps its color and highlight — it is already the draw's die.
-  const pool = (faces && faces[current.color] && faces[current.color].length > 0)
-    ? faces[current.color]
-    : [current.face]; // defensive: unknown pool → die just settles
-
-  let tick = 0;
-  let interval = DICE_ANIM.ROLL_INITIAL;
-  // The reel animation lives on the span, and each tick creates a NEW span —
-  // the spin replays automatically, no class-toggle dance needed.
-  box.classList.add('rolling');
-  function step() {
-    if (tick >= DICE_ANIM.ROLL_TICKS) {
-      box.classList.remove('rolling');
-      box.textContent = current.face;
-      box.classList.remove('rolled');
-      void box.offsetWidth; // force reflow so the pop animation restarts
-      box.classList.add('rolled');
-      onDone();
-      debugLog('rollDiceAnimation', `settled face=${current.face}`);
-      return;
-    }
-    const face = document.createElement('span');
-    face.className = 'die-face';
-    face.textContent = pool[Math.floor(Math.random() * pool.length)];
-    box.replaceChildren(face);
-    tick++;
-    interval = Math.min(DICE_ANIM.ROLL_MIN, Math.floor(interval * DICE_ANIM.ROLL_DECEL));
-    setTimeout(step, interval);
-  }
-  step();
 }
 
 function renderMonsters(monsters) {
@@ -1250,79 +957,6 @@ function finishBattleIntro() {
   }, totalDelay);
 }
 
-function renderFeed(feed, onComplete) {
-  debugLog('renderFeed', `n_lines=${feed?.length || 0} rendered=${renderedFeedLines}`);
-  const box = document.getElementById('message-box');
-  if (!box) return;
-  const currentLines = feed || [];
-  // EMPTY feed = new-battle reset signal (tic-0 ceremony): clear box, show placeholder instantly, reset state
-  if (currentLines.length === 0) {
-    box.innerHTML = '';
-    renderedFeedLines = 0; // placeholder is a system line, not feed
-    appendFeedLine('Battle begins...');
-    if (onComplete) onComplete();
-    typingInProgress = false;
-    typingSetBusy = false;
-    typingTimeouts = [];
-    return;
-  }
-  // incremental: only type NEW lines (diff by feed count, not box children —
-  // the box also holds panel/system lines that must not shift the feed diff)
-  if (currentLines.length <= renderedFeedLines) {
-    // Feed cap collision: engine once capped at 10 lines, so feed content can
-    // shift at the same length. Detect by comparing last lines — if different,
-    // reset and re-render the full feed.
-    if (currentLines.length > 0 && currentLines.length === renderedFeedLines) {
-      const lastShown = box.querySelector('.msg-line:last-child');
-      const lastFeed = currentLines[currentLines.length - 1];
-      if (!lastShown || lastShown.textContent !== lastFeed) {
-        // content shifted — clear and re-display everything
-        renderedFeedLines = 0;
-        // fall through to render all lines below
-      } else {
-        if (onComplete) onComplete();
-        return; // genuinely nothing new
-      }
-    } else {
-      if (onComplete) onComplete();
-      return;
-    }
-  }
-  const newLines = currentLines.slice(renderedFeedLines);
-  const preset = getSpeedPreset();
-  if (preset.charMs === 0) {
-    newLines.forEach(lineText => appendFeedLine(lineText));
-    if (onComplete) onComplete();
-    renderedFeedLines = currentLines.length;
-    return;
-  }
-  typeFeedLines(newLines, onComplete);
-  renderedFeedLines = currentLines.length;
-}
-
-// PC-72: resume path — the battle already happened; restore the log at once
-// instead of typing history (the typewriter is for NEW lines only). Hit
-// reactions stay suppressed: re-shaking every historical hit would read as
-// fresh damage, not a resume.
-function populateFeedInstantly(feed) {
-  const lines = feed || [];
-  if (lines.length === 0) {
-    renderFeed([]); // empty state — 'Battle begins...' placeholder
-    return;
-  }
-  suppressHitFeedback = true;
-  try {
-    // Only append feed lines not yet shown (PC-72 resume: full feed on a
-    // fresh page because the counter starts at 0; commits append only the
-    // new lines — no duplicates, and system lines never shift the diff).
-    const fresh = lines.slice(renderedFeedLines);
-    fresh.forEach(line => appendFeedLine(line));
-    renderedFeedLines = lines.length;
-  } finally {
-    suppressHitFeedback = false;
-  }
-}
-
 function renderPlayerHP(runOrState) {
   // Update HP text via #hp-value span (does not blow away sibling bar element)
   const valEl = document.getElementById('hp-value');
@@ -1410,7 +1044,7 @@ function playIntroCountdown(bs, intro, onDone) {
         if (idx !== -1) ordered.splice(idx, 1);
       }
     }
-    renderedFeedLines += fires.length; // intro fires are feed lines — keep the diff counter in sync
+    addRenderedFeedLines(fires.length); // intro fires are feed lines — keep the diff counter in sync
     // Re-render the rail from the mirror so decrements + after-effects show.
     if (el) {
       el.innerHTML = '';
@@ -1424,19 +1058,6 @@ function playIntroCountdown(bs, intro, onDone) {
       finishIntroSnap(bs, onDone);
     }
   }, dwell);
-}
-
-function appendFeedLine(line) {
-  // PC-70: every feed line passes the hit router — covers the instant text
-  // preset, the intro-countdown fires, and one-shot lines.
-  handleHitLine(line);
-  const box = document.getElementById('message-box');
-  if (!box) return;
-  const div = document.createElement('div');
-  div.className = 'msg-line';
-  div.textContent = line;
-  box.appendChild(div);
-  box.scrollTop = box.scrollHeight;
 }
 
 function clearIntroTimer() {
@@ -1466,9 +1087,9 @@ function finishIntroSnap(bs, onDone) {
     // clear any prior content (placeholder + any revealed) so we type the full post-reset feed
     const box = document.getElementById('message-box');
     if (box) box.innerHTML = '';
-    renderedFeedLines = 0; // full-feed re-type starts from the top
-    typeFeedLines(feed, done);
-    renderedFeedLines = feed.length;
+    setRenderedFeedLines(0); // full-feed re-type starts from the top
+    typeFeedLines(feed, done, setBusy, handleHitLine);
+    setRenderedFeedLines(feed.length);
   } else {
     done();
   }
@@ -1478,7 +1099,7 @@ function showAdvanceUI(runId, state) {
   const box = document.getElementById('message-box');
   if (!box) return;
   box.innerHTML = '';
-  renderedFeedLines = 0;
+  setRenderedFeedLines(0);
   const actionWrap = document.getElementById('action-choices');
   if (actionWrap) actionWrap.innerHTML = '';
 
@@ -1641,7 +1262,7 @@ function showAdvanceUI(runId, state) {
         overlay.remove();
         const mbox = document.getElementById('message-box');
         if (mbox) mbox.innerHTML = '';
-        renderedFeedLines = 0;
+        setRenderedFeedLines(0);
         showMessage('Advancing to next battle...');
         shouldAnimateDice = true;
         await loadBattle(runId);
@@ -2266,7 +1887,7 @@ async function loadBattle(runId) {
     if (battleIntroPending) {
       const msgBox = document.getElementById('message-box');
       if (msgBox) { msgBox.innerHTML = ''; }
-      renderedFeedLines = 0;
+      setRenderedFeedLines(0);
     }
     renderDice(bs.dice || {});
     renderMonsters(bs.monsters || []);
@@ -2295,7 +1916,7 @@ async function loadBattle(runId) {
         });
       }
       const feedCb = (battleClock.state !== 'IDLE') ? () => battleClock.onNarrateDone() : null;
-      if (!prevBs && renderedFeedLines === 0 && bs.feed && bs.feed.length > 0) {
+      if (!prevBs && getRenderedFeedLines() === 0 && bs.feed && bs.feed.length > 0) {
         populateFeedInstantly(bs.feed);
         if (feedCb) feedCb();
       } else {
@@ -2475,14 +2096,14 @@ async function init() {
   const msgBox = document.getElementById('message-box');
   if (msgBox) {
     msgBox.onclick = () => {
-      if (typingInProgress) {
+      if (isTypingInProgress()) {
         clearTyping();
       }
     };
     // DO-2 scroll-pinning: toggle pinned flag; typing only auto-scrolls while pinned
     msgBox.addEventListener('scroll', () => {
       const atBottom = msgBox.scrollTop + msgBox.clientHeight >= msgBox.scrollHeight - 8;
-      feedPinned = atBottom;
+      setFeedPinned(atBottom);
     });
   }
 }

@@ -137,7 +137,8 @@ describe('Master clock visual fidelity (client contract)', () => {
       'same-id path updates in place before any rebuild');
     assert.equal(render.includes('clearQueueDom'), true, 'rebuild remains the fallback for a real shape change');
     const intro = app.indexOf('function playIntroCountdown');
-    const afterIntro = app.indexOf('function appendFeedLine');
+    // appendFeedLine moved to js/battle/feed-render.js (PC-78); clearIntroTimer is the next function.
+    const afterIntro = app.indexOf('function clearIntroTimer');
     assert.ok(queueRender.includes('function sortQueueRows'), 'sortQueueRows is defined for the intro theater only');
     assert.equal(app.includes('function sortQueueRows'), false, 'live battle-app.js does not redefine the intro sort');
     let from = 0;
