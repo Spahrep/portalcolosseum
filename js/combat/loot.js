@@ -1,6 +1,8 @@
 // Loot generation for Portal Colosseum
 // Pure functions for computing drops from monster fights
 
+import { weightedPick as pickWeighted } from '../pure-utils.js';
+
 /**
  * normalInt(mean, range) — Box-Muller transform returning integer ±range from mean
  * Clamped to [mean-range, mean+range]
@@ -18,17 +20,10 @@ export function normalInt(mean, range, rng = Math.random) {
 /**
  * Weighted random pick from an array of {weight} items.
  * Returns the item or null if empty.
+ * Delegates to pure-utils (inclusive mode preserves the zero-total uniform fallback).
  */
 export function weightedPick(items, rng = Math.random) {
-  if (!items || items.length === 0) return null;
-  const totalWeight = items.reduce((s, i) => s + i.weight, 0);
-  if (totalWeight <= 0) return items[Math.floor(rng() * items.length)];
-  let roll = rng() * totalWeight;
-  for (const item of items) {
-    roll -= item.weight;
-    if (roll <= 0) return item;
-  }
-  return items[items.length - 1];
+  return pickWeighted(items, (item) => item.weight, rng, { mode: 'inclusive' });
 }
 
 /**

@@ -32,8 +32,9 @@ import {
 import { renderMonsters, revealMonsters, handleHitLine,
          bandClass, setMonstersPendingReveal,
          setSuppressHitFeedback, deathCards, MONSTER_DEATH_MS } from './battle/monster-render.js';
+import { escapeHtml } from './pure-utils.js';
 import {
-  escHtml, attackInfo, showInfo, buildRootActionRows,
+  attackInfo, showInfo, buildRootActionRows,
 } from './battle/action-menu-rows.js';
 
 // PC-78: feed and dice own their state. Hooks stay here (busy gate, hit
@@ -1257,7 +1258,7 @@ function renderActionMenu(bs) {
         attack: a,
         weapon,
         rows: monsters.map((m, i) => ({
-          html: `<span class="dw-letter">${LETTERS[i]}</span>: ${escHtml(m.name)} - <span class="${bandClass(m)}">${escHtml(m.hp_word || m.hpWord || 'Healthy')}</span>`,
+          html: `<span class="dw-letter">${LETTERS[i]}</span>: ${escapeHtml(m.name)} - <span class="${bandClass(m)}">${escapeHtml(m.hp_word || m.hpWord || 'Healthy')}</span>`,
           monster: m,
           letter: LETTERS[i]
         }))
@@ -1270,7 +1271,7 @@ function renderActionMenu(bs) {
     stack.push({
       kind: 'confirm',
       slot,
-      text: `Use <strong>${escHtml(p.template_name)}</strong> (${escHtml(p.effect_label || '')})?`,
+      text: `Use <strong>${escapeHtml(p.template_name)}</strong> (${escapeHtml(p.effect_label || '')})?`,
       rows: yesNoRows(() => usePotion(currentRunId, slot))
     });
     renderStack();
@@ -1279,7 +1280,7 @@ function renderActionMenu(bs) {
   function pickEquip() {
     stack.push({
       kind: 'confirm',
-      text: `Swap ${handLineText} with <span class="dw-weapon">${escHtml(belt.name)}</span>?`,
+      text: `Swap ${handLineText} with <span class="dw-weapon">${escapeHtml(belt.name)}</span>?`,
       rows: yesNoRows(() => doSwap(currentRunId, hand))
     });
     renderStack();
@@ -1297,7 +1298,7 @@ function renderActionMenu(bs) {
       if (lvl.potion) {
         stack.push({
           kind: 'confirm',
-          text: `Use <strong>${escHtml(lvl.potion.template_name)}</strong> (${escHtml(lvl.potion.effect_label || '')}) on ${row.label}?`,
+          text: `Use <strong>${escapeHtml(lvl.potion.template_name)}</strong> (${escapeHtml(lvl.potion.effect_label || '')}) on ${row.label}?`,
           rows: yesNoRows(() => usePotion(currentRunId, lvl.slot))
         });
       } else {
@@ -1306,7 +1307,7 @@ function renderActionMenu(bs) {
         const label = row.monster ? `${row.letter} ${row.monster.name}` : 'ALL MONSTERS';
         stack.push({
           kind: 'confirm',
-          text: `Confirm ${escHtml(lvl.attack.name)}: ${escHtml(label)}`,
+          text: `Confirm ${escapeHtml(lvl.attack.name)}: ${escapeHtml(label)}`,
           rows: yesNoRows(() => doAttack(currentRunId, hand, lvl.attack.id, ids))
         });
       }

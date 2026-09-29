@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
-import { setSpeed, setFontSize, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeChange } from './settings-controller.js';
+import { showNotReadyModal, highlightSpeedButtons, highlightFontButtons, initMenuSettings } from './settings-menu.js';
 
 // === SUPABASE CONFIGURATION ===
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
@@ -120,29 +120,10 @@ async function initGame() {
     document.getElementById('logout-confirm-dialog').hidden = false;
   });
 
-  // Logout confirm Yes
-  document.getElementById('logout-confirm-yes')?.addEventListener('click', () => {
-    hideMenuSettings();
-    setTimeout(() => logout(), 100);
-  });
-  // Logout confirm No
-  document.getElementById('logout-confirm-no')?.addEventListener('click', () => {
-    document.getElementById('logout-confirm-dialog').hidden = true;
-  });
-  // Backdrop dismiss for not-ready modal
+  // Not-ready modal only. Menu close, backdrop, and logout-confirm yes/no
+  // are wired once in initMenuSettings — binding them here too fired logout twice.
   document.getElementById('not-ready-modal')?.addEventListener('click', hideNotReadyModal);
   document.getElementById('not-ready-close')?.addEventListener('click', hideNotReadyModal);
-  // Backdrop dismiss for menu-settings-modal
-  const menuModal = document.getElementById('menu-settings-modal');
-  const menuFrame = menuModal?.querySelector('.menu-settings-frame');
-  if (menuModal && menuFrame) {
-    menuModal.addEventListener('click', (e) => {
-      if (!menuFrame.contains(e.target) && e.target !== document.getElementById('menu-settings-close')) {
-        hideMenuSettings();
-      }
-    });
-  }
-  menuModal?.querySelector('#menu-settings-close')?.addEventListener('click', hideMenuSettings);
 }
 
 async function loadServerSettings(tokenForHeader) {
@@ -180,10 +161,6 @@ async function logout() {
 }
 
 // === NOT-READY MODAL (mobile simplified - no location marker clearing) ===
-function showNotReadyModal() {
-  const modal = document.getElementById('not-ready-modal');
-  if (modal) modal.hidden = false;
-}
 function hideNotReadyModal() {
   const modal = document.getElementById('not-ready-modal');
   if (modal) modal.hidden = true;
@@ -206,106 +183,11 @@ function hideMenuSettings() {
   if (modal) modal.hidden = true;
 }
 
-function highlightSpeedButtons() {
-  const current = getSpeedKey();
-  document.querySelectorAll('.speed-opt').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.speed.toLowerCase() === current ||
-      (btn.dataset.speed === 'STANDARD' && current === 'normal'));
-  });
-}
-
-function highlightFontButtons() {
-  const current = getFontSizeKey();
-  document.querySelectorAll('.font-opt').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.font === current);
-  });
-}
-
-function setBattleTextSpeed(key) {
-  setSpeed(key);
-  highlightSpeedButtons();
-  syncSettings({ battle_text_speed: key.toLowerCase() });
-}
-
-function setQueueFontSize(key) {
-  setFontSize(key);
-  highlightFontButtons();
-}
-
-async function syncSettings(partial) {
-  if (!supabase) return;
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return;
-    await fetch('/api/user/profile', {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`
-      },
-      body: JSON.stringify({ settings: partial }),
-    });
-  } catch (e) {
-    console.error('Settings sync failed (soft):', e);
-  }
-}
-
-function initMenuSettings() {
-  const closeBtn = document.getElementById('menu-settings-close');
-  if (closeBtn) closeBtn.addEventListener('click', hideMenuSettings);
-
-  const modal = document.getElementById('menu-settings-modal');
-  const frame = modal?.querySelector('.menu-settings-frame');
-  if (modal && frame) {
-    modal.addEventListener('click', (e) => {
-      if (!frame.contains(e.target) && e.target !== closeBtn) {
-        hideMenuSettings();
-      }
-    });
-  }
-
-  document.querySelectorAll('.speed-opt').forEach(btn => {
-    btn.addEventListener('click', () => {
-      setBattleTextSpeed(btn.dataset.speed);
-    });
-  });
-
-  document.querySelectorAll('.font-opt').forEach(btn => {
-    btn.addEventListener('click', () => {
-      setQueueFontSize(btn.dataset.font);
-    });
-  });
-
-  onSpeedChange(() => highlightSpeedButtons());
-  onFontSizeChange(() => highlightFontButtons());
-
-  const logoutBtn = document.getElementById('menu-logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      const confirm = document.getElementById('logout-confirm-dialog');
-      if (confirm) confirm.hidden = false;
-    });
-  }
-
-  const confirmYes = document.getElementById('logout-confirm-yes');
-  if (confirmYes) {
-    confirmYes.addEventListener('click', () => {
-      hideMenuSettings();
-      setTimeout(() => logout(), 100);
-    });
-  }
-
-  const confirmNo = document.getElementById('logout-confirm-no');
-  if (confirmNo) {
-    confirmNo.addEventListener('click', () => {
-      const confirm = document.getElementById('logout-confirm-dialog');
-      if (confirm) confirm.hidden = true;
-    });
-  }
-}
-
 document.addEventListener('DOMContentLoaded', () => {
   initGame();
-  initMenuSettings();
+  initMenuSettings({
+    getSupabase: () => supabase,
+    hideMenuSettings,
+    logout,
+  });
 });

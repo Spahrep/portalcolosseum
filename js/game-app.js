@@ -16,7 +16,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
-import { setSpeed, setFontSize, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeChange } from './settings-controller.js';
+import { showNotReadyModal, highlightSpeedButtons, highlightFontButtons, initMenuSettings } from './settings-menu.js';
 
 // === SUPABASE CONFIGURATION ===
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
@@ -134,11 +134,6 @@ function isNotReadyModalOpen() {
   return modal ? !modal.hidden : false;
 }
 
-function showNotReadyModal() {
-  const modal = document.getElementById('not-ready-modal');
-  if (modal) modal.hidden = false;
-}
-
 function hideNotReadyModal() {
   const modal = document.getElementById('not-ready-modal');
   if (modal) modal.hidden = true;
@@ -178,21 +173,6 @@ function hideMenuSettings() {
   if (modal) modal.hidden = true;
   // Clear selection state so marker does not retain blue/[x] after close
   document.querySelectorAll('.location-marker').forEach(m => m.classList.remove('selected', 'visited'));
-}
-
-function highlightSpeedButtons() {
-  const current = getSpeedKey();
-  document.querySelectorAll('.speed-opt').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.speed.toLowerCase() === current ||
-      (btn.dataset.speed === 'STANDARD' && current === 'normal'));
-  });
-}
-
-function highlightFontButtons() {
-  const current = getFontSizeKey();
-  document.querySelectorAll('.font-opt').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.font === current);
-  });
 }
 
 /** Apply visual focus to the currently focused menu item index */
@@ -257,104 +237,6 @@ function handleMenuKeydown(e) {
       return true;
   }
   return false;
-}
-
-function setBattleTextSpeed(key) {
-  setSpeed(key);
-  highlightSpeedButtons();
-  syncSettings({ battle_text_speed: key.toLowerCase() });
-}
-
-function setQueueFontSize(key) {
-  setFontSize(key);
-  highlightFontButtons();
-}
-
-/**
- * Sync a partial settings object to the server.
- * Merges the provided keys into the user's profile settings via PATCH /api/user/profile.
- * Fails silently — localStorage is the local authoritative cache.
- */
-async function syncSettings(partial) {
-  if (!supabase) return;
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session?.access_token) return;
-    await fetch('/api/user/profile', {
-      method: 'PATCH',
-      credentials: 'include',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${session.access_token}`
-      },
-      body: JSON.stringify({ settings: partial }),
-    });
-  } catch (e) {
-    console.error('Settings sync failed (soft):', e);
-  }
-}
-
-function initMenuSettings() {
-  const closeBtn = document.getElementById('menu-settings-close');
-  if (closeBtn) closeBtn.addEventListener('click', hideMenuSettings);
-
-  // Click backdrop to dismiss (same pattern as not-ready-modal)
-  const modal = document.getElementById('menu-settings-modal');
-  const frame = modal?.querySelector('.menu-settings-frame');
-  if (modal && frame) {
-    modal.addEventListener('click', (e) => {
-      // Close only if clicking the backdrop, not the frame or its children
-      if (!frame.contains(e.target) && e.target !== closeBtn) {
-        hideMenuSettings();
-      }
-    });
-  }
-
-  // Speed option buttons
-  document.querySelectorAll('.speed-opt').forEach(btn => {
-    btn.addEventListener('click', () => {
-      setBattleTextSpeed(btn.dataset.speed);
-    });
-  });
-
-  // Font size option buttons
-  document.querySelectorAll('.font-opt').forEach(btn => {
-    btn.addEventListener('click', () => {
-      setQueueFontSize(btn.dataset.font);
-    });
-  });
-
-  // Subscribe to external changes (e.g. from battle tab or other tab) to keep highlights in sync
-  onSpeedChange(() => highlightSpeedButtons());
-  onFontSizeChange(() => highlightFontButtons());
-
-  // Logout button — shows the confirmation dialog
-  const logoutBtn = document.getElementById('menu-logout-btn');
-  if (logoutBtn) {
-    logoutBtn.addEventListener('click', () => {
-      const confirm = document.getElementById('logout-confirm-dialog');
-      if (confirm) confirm.hidden = false;
-    });
-  }
-
-  // Logout confirmation Yes — performs actual logout (reuses existing logout())
-  const confirmYes = document.getElementById('logout-confirm-yes');
-  if (confirmYes) {
-    confirmYes.addEventListener('click', () => {
-      hideMenuSettings();
-      // Give the modal time to hide before redirecting
-      setTimeout(() => logout(), 100);
-    });
-  }
-
-  // Logout confirmation No — dismisses the dialog
-  const confirmNo = document.getElementById('logout-confirm-no');
-  if (confirmNo) {
-    confirmNo.addEventListener('click', () => {
-      const confirm = document.getElementById('logout-confirm-dialog');
-      if (confirm) confirm.hidden = true;
-    });
-  }
 }
 
 /**
@@ -669,8 +551,13 @@ document.addEventListener('DOMContentLoaded', () => {
   initGame();
   // First-run tutorial overlay (localStorage-persisted, dismissible)
   showOnboarding();
-  // Menu/settings modal (in-town settings: text speed, log out)
-  initMenuSettings();
+  // Menu/settings modal (in-town settings: text speed, log out).
+  // Wired once here — not also inside initGame.
+  initMenuSettings({
+    getSupabase: () => supabase,
+    hideMenuSettings,
+    logout,
+  });
 
   // Re-pan on resize to account for aspect ratio changes
   window.addEventListener('resize', () => {

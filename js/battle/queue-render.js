@@ -288,6 +288,21 @@ export function markQueueRowExiting(rowId) {
   // never jump — they glide up together as one unit after the exit+gap.
 }
 
+// Ready / approach / monster-attack / recovering label. Shared by buildQueueRow
+// and updateQueueRowInPlace so the two paths cannot drift.
+function queueRowDisplayLabel(row, monsters, bs) {
+  if (row.event === 'ready' || row.event === 'approach') {
+    return `${queueLabel(row)} Ready`;
+  }
+  if (isMonsterQueueRow(row)) {
+    return `${monsterQueueName(row, monsters)}'s ${queueEventName(row, monsters, bs)}`;
+  }
+  if (isMonsterCooldownRow(row)) {
+    return `${monsterQueueName(row, monsters)} recovering`;
+  }
+  return `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+}
+
 // Shared rail-row builder: used by renderQueue and the PC-64 intro countdown so
 // countdown rows are pixel-identical to the real queue (same sort, same DOM).
 // withMarkers=false omits PC-56 '>' timing markers (no selection during the intro).
@@ -304,7 +319,7 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   nameSpan.className = 'name';
   // Ready placeholder rows: show the hand label and "Ready" — no tic countdown
   if (row.event === 'ready') {
-    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
     const ticSpan = document.createElement('span');
     ticSpan.className = 'tic';
     ticSpan.textContent = '—';
@@ -314,7 +329,7 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   }
   // Approach rows: show "L. Hand Ready" with tic count (approach still fires)
   if (row.event === 'approach') {
-    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
     const ticSpan = document.createElement('span');
     ticSpan.className = 'tic';
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
@@ -326,13 +341,12 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   // No timing bar — canonical attack rows stay name + tic.
   const isMonster = isMonsterQueueRow(row);
   if (isMonster) {
-    const atkName = queueEventName(row, monsters, bs);
-    nameSpan.textContent = `${monsterQueueName(row, monsters)}'s ${atkName}`;
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
   } else if (isMonsterCooldownRow(row)) {
     // Clear row (player-style bar). Label "<Monster name> recovering".
-    nameSpan.textContent = `${monsterQueueName(row, monsters)} recovering`;
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
   } else {
-    nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
   }
   const ticSpan = document.createElement('span');
   ticSpan.className = 'tic';
@@ -372,20 +386,19 @@ export function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
     div.appendChild(ticSpan);
   }
   if (row.event === 'ready') {
-    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
     ticSpan.textContent = '—';
   } else if (row.event === 'approach') {
-    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   } else if (isMonster) {
-    const atkName = queueEventName(row, monsters, bs);
-    nameSpan.textContent = `${monsterQueueName(row, monsters)}'s ${atkName}`;
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   } else if (isRecovering) {
-    nameSpan.textContent = `${monsterQueueName(row, monsters)} recovering`;
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   } else {
-    nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   }
   if (hasBar && !bar) {
