@@ -7,7 +7,7 @@
  * No console errors; errors in message box.
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { supabaseClient } from '../js/utils.js';
 import { computeTimingMarkers } from './combat/tic-queue.js';
 import { getSpeedPreset, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
 import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.debug in Supabase
@@ -1646,17 +1646,7 @@ async function init() {
     showErrorState('Configuration error', 'Missing Supabase ENV.');
     return;
   }
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      flowType: 'pkce',
-      detectSessionInUrl: true,
-      storage: {
-        getItem: (key) => localStorage.getItem(key),
-        setItem: (key, value) => localStorage.setItem(key, value),
-        removeItem: (key) => localStorage.removeItem(key)
-      }
-    }
-  });
+  supabase = supabaseClient();
   if (!(await checkAuth())) return;
 
   // PC-52: fill hud-name from session (front-end only, placeholder dock)

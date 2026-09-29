@@ -5,7 +5,7 @@
  * Required because CSP script-src 'self' esm.sh https://*.supabase.co
  * blocks all inline <script> blocks.
  *
- * This module imports createClient directly from esm.sh (allowed by CSP),
+ * This module uses shared supabaseClient() from utils.js (PKCE + localStorage),
  * reads config from window.ENV (set by /api/env.js), and attaches all
  * event listeners via DOMContentLoaded.
  *
@@ -15,7 +15,7 @@
  *   Enter triggers the selected location's action (pan to building + Enter The Portal).
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { supabaseClient } from '../js/utils.js';
 import { showNotReadyModal, highlightSpeedButtons, highlightFontButtons, initMenuSettings } from './settings-menu.js';
 
 // === SUPABASE CONFIGURATION ===
@@ -286,17 +286,7 @@ async function initGame() {
   // Security: tokens are short-lived access tokens; the refresh_token
   // (long-lived) goes through HttpOnly cookies, not localStorage.
   if (SUPABASE_URL) {
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        flowType: 'pkce',
-        detectSessionInUrl: true,
-        storage: {
-          getItem: (key) => localStorage.getItem(key),
-          setItem: (key, value) => localStorage.setItem(key, value),
-          removeItem: (key) => localStorage.removeItem(key)
-        }
-      }
-    });
+    supabase = supabaseClient();
   }
 
   // Fail-closed auth check: session is persisted via localStorage (PKCE flow)

@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { supabaseClient } from '../js/utils.js';
 import { showNotReadyModal, highlightSpeedButtons, highlightFontButtons, initMenuSettings } from './settings-menu.js';
 
 // === SUPABASE CONFIGURATION ===
@@ -11,17 +11,7 @@ let supabase;
 async function initGame() {
   // Initialize Supabase client with localStorage-backed PKCE storage
   if (SUPABASE_URL) {
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        flowType: 'pkce',
-        detectSessionInUrl: true,
-        storage: {
-          getItem: (key) => localStorage.getItem(key),
-          setItem: (key, value) => localStorage.setItem(key, value),
-          removeItem: (key) => localStorage.removeItem(key)
-        }
-      }
-    });
+    supabase = supabaseClient();
   }
 
   // Fail-closed auth check

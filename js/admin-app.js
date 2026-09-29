@@ -6,7 +6,7 @@
  * Service-role key NEVER touches the client.
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { supabaseClient } from '../js/utils.js';
 
 // === SUPABASE CONFIGURATION ===
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
@@ -21,17 +21,7 @@ let allAttacks = []; // cached for dropdowns
 // ============================================================
 
 function initSupabase() {
-  supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: {
-      flowType: 'pkce',
-      detectSessionInUrl: true,
-      storage: {
-        getItem: (key) => localStorage.getItem(key),
-        setItem: (key, value) => localStorage.setItem(key, value),
-        removeItem: (key) => localStorage.removeItem(key),
-      },
-    },
-  });
+  supabase = supabaseClient();
 }
 
 async function getToken() {

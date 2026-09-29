@@ -6,7 +6,7 @@
  * Auth redirect to /login.html on no session
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
+import { supabaseClient } from '../js/utils.js';
 
 const SUPABASE_URL = window.ENV && window.ENV.SUPABASE_URL;
 const SUPABASE_ANON_KEY = window.ENV && window.ENV.SUPABASE_ANON_KEY;
@@ -592,19 +592,9 @@ function setupCancelButton() {
 
 async function init() {
   popupEl = document.getElementById('info-popup');
-  // createClient FIRST matching game-app.js exactly (auth order fix)
+  // supabaseClient FIRST matching game-app.js exactly (auth order fix)
   if (SUPABASE_URL) {
-    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: {
-        flowType: 'pkce',
-        detectSessionInUrl: true,
-        storage: {
-          getItem: (key) => localStorage.getItem(key),
-          setItem: (key, value) => localStorage.setItem(key, value),
-          removeItem: (key) => localStorage.removeItem(key)
-        }
-      }
-    });
+    supabase = supabaseClient();
   }
   const session = await checkAuth();
   if (!session) return;
