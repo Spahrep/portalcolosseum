@@ -824,6 +824,161 @@ function finishIntroSnap(bs, onDone) {
   }
 }
 
+function ensureAdvanceOverlayStyles() {
+  if (document.getElementById('pc89-advance-styles')) return;
+  const style = document.createElement('style');
+  style.id = 'pc89-advance-styles';
+  style.textContent = `
+.advance-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  font-family: "Pixeloid Mono", "Courier New", monospace;
+}
+.advance-panel {
+  background: #0a1a2e;
+  border: 2px solid #4a90d9;
+  border-radius: 4px;
+  padding: 20px;
+  max-width: 520px;
+  width: 90%;
+  color: #e0f0ff;
+  box-shadow: 0 0 20px rgba(74,144,217,0.3);
+}
+.advance-header {
+  text-align: center;
+  margin-bottom: 12px;
+  font-size: 14px;
+  letter-spacing: 1px;
+}
+.advance-loading {
+  text-align: center;
+  color: #88aadd;
+}
+.advance-error {
+  color: #ff6666;
+}
+.advance-loot {
+  border-top: 1px solid #4a90d9;
+  border-bottom: 1px solid #4a90d9;
+  padding: 10px 0;
+  margin: 10px 0;
+  font-size: 13px;
+}
+.advance-loot-title {
+  margin-bottom: 6px;
+  color: #aaddff;
+}
+.advance-gold { color: #ffcc66; }
+.advance-weapon-count { color: #aaddff; }
+.advance-lp { color: #88ffaa; }
+.advance-share {
+  margin: 10px 0;
+  font-size: 13px;
+}
+.advance-tier-note {
+  color: #88aadd;
+  font-size: 11px;
+}
+.advance-or {
+  margin: 10px 0;
+  color: #ffaa66;
+  font-size: 12px;
+}
+.advance-weapons {
+  margin: 8px 0;
+}
+.advance-weapons-label {
+  color: #aaddff;
+  margin-bottom: 4px;
+}
+.advance-weapon {
+  display: block;
+  margin: 3px 0;
+  padding: 4px 8px;
+  border: 1px solid #4a90d9;
+  cursor: pointer;
+  font-size: 12px;
+  border-radius: 2px;
+  background: transparent;
+  box-shadow: none;
+}
+.advance-weapon.is-selected {
+  border: 2px solid #66ff99;
+  background: #112a44;
+  box-shadow: 0 0 6px rgba(102,255,153,0.3);
+}
+.advance-btn-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 16px;
+}
+.action-btn.advance-extract,
+.action-btn.advance-extract:hover {
+  background: #1a5a1a;
+  color: #66ff99;
+  border-color: #66ff99;
+}
+.action-btn.advance-fight,
+.action-btn.advance-fight:hover {
+  background: #5a1a1a;
+  color: #ff6666;
+  border-color: #ff6666;
+}
+.action-btn.advance-town,
+.action-btn.advance-town:hover {
+  background: #1a3a5a;
+  color: #88ccff;
+}
+.advance-extracted-title {
+  text-align: center;
+  color: #66ff99;
+  margin: 12px 0;
+}
+.advance-extracted-box {
+  border: 1px solid #4a90d9;
+  padding: 8px;
+  margin: 8px 0;
+  font-size: 13px;
+}
+.advance-note {
+  margin-top: 12px;
+  font-size: 10px;
+  color: #6688aa;
+  text-align: center;
+}
+.end-run-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+`;
+  document.head.appendChild(style);
+}
+
+// Fixed full-screen flex-centered shell. className carries backdrop and z-index.
+// game-app onboarding is a different module (navy backdrop + element id) and
+// showLossScreen appends into #message-box — neither uses this helper.
+function mountOverlay(className) {
+  ensureAdvanceOverlayStyles();
+  const overlay = document.createElement('div');
+  overlay.className = className;
+  document.body.appendChild(overlay);
+  return overlay;
+}
+
 function showAdvanceUI(runId, state) {
   const box = document.getElementById('message-box');
   if (!box) return;
@@ -838,186 +993,173 @@ function showAdvanceUI(runId, state) {
     return;
   }
 
-  // Full-screen overlay modal
-  const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);display:flex;align-items:center;justify-content:center;z-index:1000;font-family:"Pixeloid Mono","Courier New",monospace;';
+  mountAdvanceOverlay(runId, state);
+
+  // Also keep message-box clean
+  box.appendChild(document.createElement('div')); // placeholder
+}
+
+function mountAdvanceOverlay(runId, state) {
+  const overlay = mountOverlay('advance-overlay');
 
   const panel = document.createElement('div');
-  panel.style.cssText = 'background:#0a1a2e;border:2px solid #4a90d9;border-radius:4px;padding:20px;max-width:520px;width:90%;color:#e0f0ff;box-shadow:0 0 20px rgba(74,144,217,0.3);';
+  panel.className = 'advance-panel';
 
   // Header (populated with real values once the run is fetched)
   const header = document.createElement('div');
-  header.style.cssText = 'text-align:center;margin-bottom:12px;font-size:14px;letter-spacing:1px;';
+  header.className = 'advance-header';
   header.innerHTML = '⚔ BATTLE COMPLETE ⚔';
   panel.appendChild(header);
 
-  // Fetch run for prize_pool + tiers (async populate)
-  let runData = null;
-  let tiers = [];
-  let currentTier = null;
-
   const content = document.createElement('div');
-  content.innerHTML = '<div style="text-align:center;color:#88aadd;">Loading loot pool...</div>';
+  content.innerHTML = '<div class="advance-loading">Loading loot pool...</div>';
   panel.appendChild(content);
+  overlay.appendChild(panel);
 
-  // Fetch run and template
+  // Fetch run for prize_pool + tiers (async populate)
   (async () => {
     try {
       const runJson = await apiCall(`/runs/${runId}`);
-      runData = runJson.run || runJson;
+      const runData = runJson.run || runJson;
       header.innerHTML = `⚔ BATTLE ${runData.current_battle || '?'} OF ${runData.total_battles || '?'} COMPLETE ⚔<br>HP: ${runData.player_hp ?? state.player?.hp ?? 0}/${runData.max_hp ?? state.player?.max_hp ?? 1000}`;
-      tiers = (runData.stop_share_tiers && Array.isArray(runData.stop_share_tiers) && runData.stop_share_tiers.length > 0)
-        ? runData.stop_share_tiers
-        : [
-          {gold_pct: 0.20, sel_items: 0, rand_items: 0},
-          {gold_pct: 0.20, sel_items: 0, rand_items: 1},
-          {gold_pct: 0.30, sel_items: 1, rand_items: 1},
-          {gold_pct: 0.60, sel_items: 1, rand_items: 2},
-          {gold_pct: 0.80, sel_items: 2, rand_items: 2}
-        ];
-      const battleNum = runData ? (runData.current_battle || 1) : 1;
-      const totalB = runData ? (runData.total_battles || 5) : 5;
+      // Server pays tmpl.stop_share_tiers or []. Never invent a client table.
+      const tiers = runData.stop_share_tiers;
+      if (!Array.isArray(tiers) || tiers.length === 0) {
+        content.innerHTML = '<div class="advance-error">Failed to load loot data</div>';
+        return;
+      }
+      const battleNum = runData.current_battle || 1;
       const idx = Math.max(0, Math.min(battleNum - 1, tiers.length - 1));
-      currentTier = tiers[idx] || tiers[tiers.length-1];
-      renderLootUI();
+      const currentTier = tiers[idx] || tiers[tiers.length - 1];
+      renderLootChoices(runData, currentTier, content, overlay, runId);
     } catch (e) {
-      content.innerHTML = '<div style="color:#ff6666;">Failed to load loot data</div>';
+      content.innerHTML = '<div class="advance-error">Failed to load loot data</div>';
     }
   })();
+}
 
-  function renderLootUI() {
-    if (!runData) return;
-    const pp = runData.prize_pool || { gold: 0, weapon_ids: [], lp_earned: 0 };
-    const goldPct = currentTier ? currentTier.gold_pct : 0.2;
-    const sel = currentTier ? currentTier.sel_items : 0;
-    const rand = currentTier ? currentTier.rand_items : 0;
-    const isLast = (runData.current_battle || 1) >= (runData.total_battles || 5);
+function renderLootChoices(runData, currentTier, content, overlay, runId) {
+  if (!runData) return;
+  const pp = runData.prize_pool || { gold: 0, weapon_ids: [], lp_earned: 0 };
+  const goldPct = currentTier ? currentTier.gold_pct : 0.2;
+  const sel = currentTier ? currentTier.sel_items : 0;
+  const rand = currentTier ? currentTier.rand_items : 0;
+  const isLast = (runData.current_battle || 1) >= (runData.total_battles || 5);
 
-    content.innerHTML = `
-      <div style="border-top:1px solid #4a90d9;border-bottom:1px solid #4a90d9;padding:10px 0;margin:10px 0;font-size:13px;">
-        <div style="margin-bottom:6px;color:#aaddff;">─── LOOT POOL ───</div>
-        <div>Gold: <span style="color:#ffcc66;">${pp.gold || 0}</span></div>
-        <div>Weapons: <span style="color:#aaddff;">${(pp.weapon_ids || []).length}</span></div>
-        <div>LP Earned: <span style="color:#88ffaa;">${pp.lp_earned || 0}</span></div>
+  content.innerHTML = `
+      <div class="advance-loot">
+        <div class="advance-loot-title">─── LOOT POOL ───</div>
+        <div>Gold: <span class="advance-gold">${pp.gold || 0}</span></div>
+        <div>Weapons: <span class="advance-weapon-count">${(pp.weapon_ids || []).length}</span></div>
+        <div>LP Earned: <span class="advance-lp">${pp.lp_earned || 0}</span></div>
       </div>
-      <div style="margin:10px 0;font-size:13px;">
+      <div class="advance-share">
         If you extract now:<br>
-        Take: <span style="color:#ffcc66;">${Math.floor((pp.gold||0)*goldPct)} gold</span> (${Math.round(goldPct*100)}%)<br>
+        Take: <span class="advance-gold">${Math.floor((pp.gold||0)*goldPct)} gold</span> (${Math.round(goldPct*100)}%)<br>
         Weapons: ${sel + rand}<br>
-        <span style="color:#88aadd;font-size:11px;">(Battle ${runData.current_battle || 1} — ${isLast ? 'full extraction' : 'tiered extraction'})</span>
+        <span class="advance-tier-note">(Battle ${runData.current_battle || 1} — ${isLast ? 'full extraction' : 'tiered extraction'})</span>
       </div>
-      <div style="margin:10px 0;color:#ffaa66;font-size:12px;">──── OR ────<br>Risk it all for the full pool</div>
+      <div class="advance-or">──── OR ────<br>Risk it all for the full pool</div>
     `;
 
-    // Weapon selection if sel_items > 0
-    let selectedIds = [];
-    const weaponsDiv = document.createElement('div');
-    weaponsDiv.style.cssText = 'margin:8px 0;';
-    if (sel > 0 && Array.isArray(pp.weapon_ids) && pp.weapon_ids.length > 0) {
-      // Build id -> weapon-name map from prize_weapons (fall back to #id)
-      const nameById = {};
-      (runData.prize_weapons || []).forEach(w => { nameById[w.id] = w.name; });
-      weaponsDiv.innerHTML = `<div style="color:#aaddff;margin-bottom:4px;">Select up to ${sel} weapons:</div>`;
-      pp.weapon_ids.forEach(wid => {
-        const wEl = document.createElement('div');
-        wEl.textContent = nameById[wid] || `Weapon #${wid}`;
-        wEl.style.cssText = 'display:block;margin:3px 0;padding:4px 8px;border:1px solid #4a90d9;cursor:pointer;font-size:12px;border-radius:2px;';
-        wEl.onclick = () => {
-          const isSel = selectedIds.includes(wid);
-          if (isSel) {
-            selectedIds = selectedIds.filter(id => id !== wid);
-            wEl.style.border = '1px solid #4a90d9';
-            wEl.style.background = 'transparent';
-            wEl.style.boxShadow = 'none';
-          } else if (selectedIds.length < sel) {
-            selectedIds.push(wid);
-            wEl.style.border = '2px solid #66ff99';
-            wEl.style.background = '#112a44';
-            wEl.style.boxShadow = '0 0 6px rgba(102,255,153,0.3)';
-          }
-        };
-        weaponsDiv.appendChild(wEl);
-      });
-      content.appendChild(weaponsDiv);
-    }
+  // Weapon selection if sel_items > 0
+  let selectedIds = [];
+  const weaponsDiv = document.createElement('div');
+  weaponsDiv.className = 'advance-weapons';
+  if (sel > 0 && Array.isArray(pp.weapon_ids) && pp.weapon_ids.length > 0) {
+    // Build id -> weapon-name map from prize_weapons (fall back to #id)
+    const nameById = {};
+    (runData.prize_weapons || []).forEach(w => { nameById[w.id] = w.name; });
+    weaponsDiv.innerHTML = `<div class="advance-weapons-label">Select up to ${sel} weapons:</div>`;
+    pp.weapon_ids.forEach(wid => {
+      const wEl = document.createElement('div');
+      wEl.textContent = nameById[wid] || `Weapon #${wid}`;
+      wEl.className = 'advance-weapon';
+      wEl.onclick = () => {
+        const isSel = selectedIds.includes(wid);
+        if (isSel) {
+          selectedIds = selectedIds.filter(id => id !== wid);
+          wEl.classList.remove('is-selected');
+        } else if (selectedIds.length < sel) {
+          selectedIds.push(wid);
+          wEl.classList.add('is-selected');
+        }
+      };
+      weaponsDiv.appendChild(wEl);
+    });
+    content.appendChild(weaponsDiv);
+  }
 
-    // Buttons
-    const btnRow = document.createElement('div');
-    btnRow.style.cssText = 'display:flex;gap:12px;justify-content:center;margin-top:16px;';
+  // Buttons
+  const btnRow = document.createElement('div');
+  btnRow.className = 'advance-btn-row';
 
-    const extractBtn = document.createElement('button');
-    extractBtn.textContent = 'EXTRACT & LEAVE';
-    extractBtn.className = 'action-btn';
-    extractBtn.style.cssText = 'background:#1a5a1a;color:#66ff99;border-color:#66ff99;';
-    extractBtn.onclick = async () => {
-      if (busy) return;
-      setBusy(true);
-      extractBtn.disabled = true;
-      try {
-        const payload = { choice: 'stop', selected_weapon_ids: selectedIds };
-        const res = await apiCall(`/runs/${runId}/battle/end`, 'POST', payload);
-        // Show extraction summary
-        content.innerHTML = `
-          <div style="text-align:center;color:#66ff99;margin:12px 0;">You extracted with:</div>
-          <div style="border:1px solid #4a90d9;padding:8px;margin:8px 0;font-size:13px;">
+  const extractBtn = document.createElement('button');
+  extractBtn.textContent = 'EXTRACT & LEAVE';
+  extractBtn.className = 'action-btn advance-extract';
+  extractBtn.onclick = () => extractAndLeave(runId, selectedIds, content, extractBtn);
+
+  const fightBtn = document.createElement('button');
+  fightBtn.textContent = 'FIGHT ON';
+  fightBtn.className = 'action-btn advance-fight';
+  fightBtn.onclick = () => fightOn(runId, overlay, fightBtn);
+
+  btnRow.appendChild(extractBtn);
+  btnRow.appendChild(fightBtn);
+  content.appendChild(btnRow);
+
+  // footer note
+  const note = document.createElement('div');
+  note.className = 'advance-note';
+  note.textContent = '(Extract = stop & keep share) (Die = lose everything)';
+  content.appendChild(note);
+}
+
+async function extractAndLeave(runId, selectedIds, content, extractBtn) {
+  if (busy) return;
+  setBusy(true);
+  extractBtn.disabled = true;
+  try {
+    const payload = { choice: 'stop', selected_weapon_ids: selectedIds };
+    const res = await apiCall(`/runs/${runId}/battle/end`, 'POST', payload);
+    // Show extraction summary
+    content.innerHTML = `
+          <div class="advance-extracted-title">You extracted with:</div>
+          <div class="advance-extracted-box">
             Gold: ${res.awarded_pool?.gold || 0}<br>
             Weapons: ${(res.awarded_pool?.weapon_ids || []).length}<br>
             LP: ${res.awarded_pool?.lp_earned || 0}
           </div>
         `;
-        const townBtn = document.createElement('button');
-        townBtn.textContent = 'Return to town';
-        townBtn.className = 'action-btn';
-        townBtn.style.cssText = 'background:#1a3a5a;color:#88ccff;';
-        townBtn.onclick = () => { window.location.href = '/game.html'; };
-        content.appendChild(townBtn);
-      } catch (e) {
-        showMessage(e.message, true);
-        setBusy(false);
-        extractBtn.disabled = false;
-      }
-    };
-
-    const fightBtn = document.createElement('button');
-    fightBtn.textContent = 'FIGHT ON';
-    fightBtn.className = 'action-btn';
-    fightBtn.style.cssText = 'background:#5a1a1a;color:#ff6666;border-color:#ff6666;';
-    fightBtn.onclick = async () => {
-      if (busy) return;
-      setBusy(true);
-      fightBtn.disabled = true;
-      try {
-        await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'continue' });
-        overlay.remove();
-        const mbox = document.getElementById('message-box');
-        if (mbox) mbox.innerHTML = '';
-        setRenderedFeedLines(0);
-        showMessage('Advancing to next battle...');
-        shouldAnimateDice = true;
-        await loadBattle(runId);
-      } catch (e) {
-        showMessage(e.message, true);
-      }
-      setBusy(false);
-    };
-
-    btnRow.appendChild(extractBtn);
-    btnRow.appendChild(fightBtn);
-    content.appendChild(btnRow);
-
-    // footer note
-    const note = document.createElement('div');
-    note.style.cssText = 'margin-top:12px;font-size:10px;color:#6688aa;text-align:center;';
-    note.textContent = '(Extract = stop & keep share) (Die = lose everything)';
-    content.appendChild(note);
+    const townBtn = document.createElement('button');
+    townBtn.textContent = 'Return to town';
+    townBtn.className = 'action-btn advance-town';
+    townBtn.onclick = () => { window.location.href = '/game.html'; };
+    content.appendChild(townBtn);
+  } catch (e) {
+    showMessage(e.message, true);
+    setBusy(false);
+    extractBtn.disabled = false;
   }
+}
 
-  overlay.appendChild(panel);
-  // Append overlay to body so it is truly full screen above everything
-  document.body.appendChild(overlay);
-
-  // Also keep message-box clean
-  box.appendChild(document.createElement('div')); // placeholder
+async function fightOn(runId, overlay, fightBtn) {
+  if (busy) return;
+  setBusy(true);
+  fightBtn.disabled = true;
+  try {
+    await apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'continue' });
+    overlay.remove();
+    const mbox = document.getElementById('message-box');
+    if (mbox) mbox.innerHTML = '';
+    setRenderedFeedLines(0);
+    showMessage('Advancing to next battle...');
+    shouldAnimateDice = true;
+    await loadBattle(runId);
+  } catch (e) {
+    showMessage(e.message, true);
+  }
+  setBusy(false);
 }
 
 /**
@@ -1572,8 +1714,7 @@ function setupEndRunButton(runId) {
   if (!btn) return;
   btn.onclick = () => {
     // exact dialog per spec
-    const dialog = document.createElement('div');
-    dialog.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;align-items:center;justify-content:center;z-index:9999;';
+    const dialog = mountOverlay('end-run-overlay');
     dialog.innerHTML = `
       <div style="background:#112233;border:3px solid #4a90d9;padding:20px;max-width:420px;color:#e0e0ff;font-family:'Pixeloid Mono',monospace;font-size:12px;">
         <div style="margin-bottom:12px;">you will lose all loot from this run and nothing will be refunded. Type 'End Run' to confirm.</div>
@@ -1584,7 +1725,6 @@ function setupEndRunButton(runId) {
         </div>
       </div>
     `;
-    document.body.appendChild(dialog);
     const input = dialog.querySelector('#end-run-input');
     const confirmBtn = dialog.querySelector('#end-run-confirm');
     const cancelBtn = dialog.querySelector('#end-run-cancel');

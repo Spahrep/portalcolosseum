@@ -174,6 +174,62 @@ async function loadTab(tab) {
 }
 
 // ============================================================
+// SHARED SAVE / DELETE / ROW ACTIONS
+// Ceremony only. Field HTML stays per tab.
+// ============================================================
+
+const RESOURCE_FORM = {
+  '/api/admin/attacks': 'attack-form-container',
+  '/api/admin/weapon-templates': 'wt-form-container',
+  '/api/admin/monster-templates': 'mt-form-container',
+  '/api/admin/portal-templates': 'pt-form-container',
+  '/api/admin/consumable-templates': 'ct-form-container',
+};
+
+async function saveResource(path, id, body) {
+  try {
+    const res = id
+      ? await apiCall(`${path}/${id}`, 'PUT', body)
+      : await apiCall(path, 'POST', body);
+    // Attacks render from the allAttacks cache. Refresh after the write and
+    // before loadTab, or the table keeps the pre-save list. Other tabs fetch
+    // inside their own render functions.
+    if (path === '/api/admin/attacks') {
+      const cached = await apiCall('/api/admin/attacks');
+      allAttacks = cached.data || [];
+    }
+    const form = document.getElementById(RESOURCE_FORM[path]);
+    if (form) form.innerHTML = '';
+    loadTab(currentTab);
+    return res?.data;
+  } catch (e) {
+    alert('Error: ' + e.message);
+  }
+}
+
+async function deleteResource(path, id, confirmText) {
+  if (!confirm(confirmText)) return;
+  try {
+    await apiCall(`${path}/${id}`, 'DELETE');
+    // Same cache: a delete must drop the row before loadTab re-renders it.
+    if (path === '/api/admin/attacks') {
+      allAttacks = allAttacks.filter(a => String(a.id) !== String(id));
+    }
+    loadTab(currentTab);
+  } catch (e) {
+    alert('Delete blocked: ' + e.message);
+  }
+}
+
+function wireRowActions(tbody, handlers) {
+  for (const [action, handler] of Object.entries(handlers)) {
+    tbody.querySelectorAll(`[data-${action}]`).forEach(btn => {
+      btn.addEventListener('click', () => handler(btn.dataset[action]));
+    });
+  }
+}
+
+// ============================================================
 // ATTACKS TAB
 // ============================================================
 
@@ -213,11 +269,9 @@ async function renderAttacks(container) {
     tbody.appendChild(tr);
   });
 
-  tbody.querySelectorAll('[data-edit]').forEach(btn => {
-    btn.addEventListener('click', () => showAttackForm(btn.dataset.edit));
-  });
-  tbody.querySelectorAll('[data-delete]').forEach(btn => {
-    btn.addEventListener('click', () => deleteAttack(btn.dataset.delete));
+  wireRowActions(tbody, {
+    edit: id => showAttackForm(id),
+    delete: id => deleteAttack(id),
   });
 }
 
@@ -283,32 +337,12 @@ function showAttackForm(id = null) {
       crit_factor: parseFloat(val('f-crit_factor')),
       crit_multiplier: parseFloat(val('f-crit_multiplier')),
     };
-    try {
-      if (isEdit) {
-        await apiCall(`/api/admin/attacks/${id}`, 'PUT', body);
-      } else {
-        await apiCall('/api/admin/attacks', 'POST', body);
-      }
-      // Refresh cached attacks
-      const res = await apiCall('/api/admin/attacks');
-      allAttacks = res.data || [];
-      container.innerHTML = '';
-      loadTab(currentTab);
-    } catch (e) {
-      alert('Error: ' + e.message);
-    }
+    await saveResource('/api/admin/attacks', id, body);
   });
 }
 
 async function deleteAttack(id) {
-  if (!confirm('Delete this attack? This will be blocked if other records reference it.')) return;
-  try {
-    await apiCall(`/api/admin/attacks/${id}`, 'DELETE');
-    allAttacks = allAttacks.filter(a => String(a.id) !== String(id));
-    loadTab(currentTab);
-  } catch (e) {
-    alert('Delete blocked: ' + e.message);
-  }
+  await deleteResource('/api/admin/attacks', id, 'Delete this attack? This will be blocked if other records reference it.');
 }
 
 // ============================================================
@@ -349,14 +383,10 @@ async function renderWeaponTemplates(container) {
     tbody.appendChild(tr);
   });
 
-  tbody.querySelectorAll('[data-edit]').forEach(btn => {
-    btn.addEventListener('click', () => showWeaponTemplateForm(btn.dataset.edit));
-  });
-  tbody.querySelectorAll('[data-mappings]').forEach(btn => {
-    btn.addEventListener('click', () => showWeaponMappingEditor(btn.dataset.mappings));
-  });
-  tbody.querySelectorAll('[data-delete]').forEach(btn => {
-    btn.addEventListener('click', () => deleteWeaponTemplate(btn.dataset.delete));
+  wireRowActions(tbody, {
+    edit: id => showWeaponTemplateForm(id),
+    mappings: id => showWeaponMappingEditor(id),
+    delete: id => deleteWeaponTemplate(id),
   });
 }
 
@@ -412,22 +442,13 @@ function showWeaponTemplateForm(id = null) {
         slot_3_chance: parseFloat(val('wt-slot_3_chance')),
         slot_4_chance: parseFloat(val('wt-slot_4_chance')),
       };
-      try {
-        if (id) await apiCall(`/api/admin/weapon-templates/${id}`, 'PUT', body);
-        else await apiCall('/api/admin/weapon-templates', 'POST', body);
-        container.innerHTML = '';
-        loadTab(currentTab);
-      } catch (e) { alert('Error: ' + e.message); }
+      await saveResource('/api/admin/weapon-templates', id, body);
     });
   });
 }
 
 async function deleteWeaponTemplate(id) {
-  if (!confirm('Delete this weapon template?')) return;
-  try {
-    await apiCall(`/api/admin/weapon-templates/${id}`, 'DELETE');
-    loadTab(currentTab);
-  } catch (e) { alert('Delete blocked: ' + e.message); }
+  await deleteResource('/api/admin/weapon-templates', id, 'Delete this weapon template?');
 }
 
 // ============================================================
@@ -732,17 +753,11 @@ async function renderMonsterTemplates(container) {
     tbody.appendChild(tr);
   });
 
-  tbody.querySelectorAll('[data-edit]').forEach(btn => {
-    btn.addEventListener('click', () => showMonsterTemplateForm(btn.dataset.edit));
-  });
-  tbody.querySelectorAll('[data-mappings]').forEach(btn => {
-    btn.addEventListener('click', () => showMonsterMappingEditor(btn.dataset.mappings));
-  });
-  tbody.querySelectorAll('[data-loot]').forEach(btn => {
-    btn.addEventListener('click', () => showMonsterLootMappingEditor(btn.dataset.loot));
-  });
-  tbody.querySelectorAll('[data-delete]').forEach(btn => {
-    btn.addEventListener('click', () => deleteMonsterTemplate(btn.dataset.delete));
+  wireRowActions(tbody, {
+    edit: id => showMonsterTemplateForm(id),
+    mappings: id => showMonsterMappingEditor(id),
+    loot: id => showMonsterLootMappingEditor(id),
+    delete: id => deleteMonsterTemplate(id),
   });
 }
 
@@ -801,22 +816,13 @@ function showMonsterTemplateForm(id = null) {
         min_gold: parseInt(val('mt-min_gold')),
         max_gold: parseInt(val('mt-max_gold')),
       };
-      try {
-        if (id) await apiCall(`/api/admin/monster-templates/${id}`, 'PUT', body);
-        else await apiCall('/api/admin/monster-templates', 'POST', body);
-        container.innerHTML = '';
-        loadTab(currentTab);
-      } catch (e) { alert('Error: ' + e.message); }
+      await saveResource('/api/admin/monster-templates', id, body);
     });
   });
 }
 
 async function deleteMonsterTemplate(id) {
-  if (!confirm('Delete this monster template?')) return;
-  try {
-    await apiCall(`/api/admin/monster-templates/${id}`, 'DELETE');
-    loadTab(currentTab);
-  } catch (e) { alert('Delete blocked: ' + e.message); }
+  await deleteResource('/api/admin/monster-templates', id, 'Delete this monster template?');
 }
 
 // ============================================================
@@ -977,17 +983,11 @@ async function renderPortalTemplates(container) {
     tbody.appendChild(tr);
   });
 
-  tbody.querySelectorAll('[data-edit]').forEach(btn => {
-    btn.addEventListener('click', () => showPortalTemplateForm(btn.dataset.edit));
-  });
-  tbody.querySelectorAll('[data-monsters]').forEach(btn => {
-    btn.addEventListener('click', () => showPortalMonsterMappingEditor(btn.dataset.monsters));
-  });
-  tbody.querySelectorAll('[data-loot]').forEach(btn => {
-    btn.addEventListener('click', () => showPortalLootMappingEditor(btn.dataset.loot));
-  });
-  tbody.querySelectorAll('[data-delete]').forEach(btn => {
-    btn.addEventListener('click', () => deletePortalTemplate(btn.dataset.delete));
+  wireRowActions(tbody, {
+    edit: id => showPortalTemplateForm(id),
+    monsters: id => showPortalMonsterMappingEditor(id),
+    loot: id => showPortalLootMappingEditor(id),
+    delete: id => deletePortalTemplate(id),
   });
 }
 
@@ -1033,22 +1033,13 @@ function showPortalTemplateForm(id = null) {
         yellow_faces: val('pt-yellow_faces'),
         red_faces: val('pt-red_faces'),
       };
-      try {
-        if (id) await apiCall(`/api/admin/portal-templates/${id}`, 'PUT', body);
-        else await apiCall('/api/admin/portal-templates', 'POST', body);
-        container.innerHTML = '';
-        loadTab(currentTab);
-      } catch (e) { alert('Error: ' + e.message); }
+      await saveResource('/api/admin/portal-templates', id, body);
     });
   });
 }
 
 async function deletePortalTemplate(id) {
-  if (!confirm('Delete this portal template?')) return;
-  try {
-    await apiCall(`/api/admin/portal-templates/${id}`, 'DELETE');
-    loadTab(currentTab);
-  } catch (e) { alert('Delete blocked: ' + e.message); }
+  await deleteResource('/api/admin/portal-templates', id, 'Delete this portal template?');
 }
 
 // ============================================================
@@ -1212,11 +1203,9 @@ async function renderConsumableTemplates(container) {
     tbody.appendChild(tr);
   });
 
-  tbody.querySelectorAll('[data-edit]').forEach(btn => {
-    btn.addEventListener('click', () => showConsumableTemplateForm(btn.dataset.edit));
-  });
-  tbody.querySelectorAll('[data-delete]').forEach(btn => {
-    btn.addEventListener('click', () => deleteConsumableTemplate(btn.dataset.delete));
+  wireRowActions(tbody, {
+    edit: id => showConsumableTemplateForm(id),
+    delete: id => deleteConsumableTemplate(id),
   });
 }
 
@@ -1300,24 +1289,13 @@ function showConsumableTemplateForm(id = null) {
       if (!['heal', 'speed', 'accuracy', 'damage'].includes(body.effect_type)) bad.push(['effect_type', body.effect_type]);
       if (body.effect_type === 'heal' && body.duration_ticks !== null) bad.push(['duration_ticks', body.duration_ticks]);
       if (bad.length) { alert('Invalid values: ' + bad.map(([k, v]) => `${k}=${v}`).join(', ')); return; }
-      try {
-        if (id) await apiCall(`/api/admin/consumable-templates/${id}`, 'PUT', body);
-        else await apiCall('/api/admin/consumable-templates', 'POST', body);
-        container.innerHTML = '';
-        loadTab(currentTab);
-      } catch (e) { alert('Error: ' + e.message); }
+      await saveResource('/api/admin/consumable-templates', id, body);
     });
   });
 }
 
 async function deleteConsumableTemplate(id) {
-  if (!confirm('Delete this consumable template? This will be blocked if other records reference it.')) return;
-  try {
-    await apiCall(`/api/admin/consumable-templates/${id}`, 'DELETE');
-    loadTab(currentTab);
-  } catch (e) {
-    alert('Delete blocked: ' + e.message);
-  }
+  await deleteResource('/api/admin/consumable-templates', id, 'Delete this consumable template? This will be blocked if other records reference it.');
 }
 
 // ============================================================
