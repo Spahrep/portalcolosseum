@@ -1193,17 +1193,29 @@ function showLossScreen(runId, state) {
   apiCall(`/runs/${runId}/battle/end`, 'POST', { choice: 'stop' }).catch(() => {});
 }
 
-async function doAttack(runId, hand, attackId, targetIds) {
-  debugLog('doAttack', `hand=${hand} attack=${attackId} n_targets=${targetIds?.length || 0}`);
+/**
+ * PC-91: one commit-then-tick ceremony for attack, swap, and potion.
+ * postFn performs the action POST and returns its JSON. message is a string
+ * or (data) => string, shown only after a successful POST and before the clock
+ * (doSwap builds its cooldown line from data.delay). hideMenu hides
+ * #action-choices. Errors propagate after the clock is left and busy is
+ * cleared so each caller keeps its own message.
+ * setBusy(false) stays in the finally, after leaveMasterClock: setBusy no-ops
+ * while masterClockDepth > 0, and a thrown POST must still release the gate.
+ */
+async function commitThenTick(runId, postFn, { message, hideMenu } = {}) {
   if (busy) return;
   setBusy(true);
+  let data;
   try {
-    const payload = { hand, attack_id: attackId, target_ids: targetIds || [] };
-    await apiCall(`/runs/${runId}/commit`, 'POST', payload); // returns {committed: true}
-    pendingAttack = null;
-    // Hide the action menu — it will re-render on tickLoop break with fresh state
-    const menuWrap = document.getElementById('action-choices');
-    if (menuWrap) menuWrap.style.display = 'none';
+    data = await postFn();
+    const text = typeof message === 'function' ? message(data) : message;
+    if (text) showMessage(text);
+    if (hideMenu) {
+      // Hide the action menu — it will re-render on tickLoop break with fresh state
+      const menuWrap = document.getElementById('action-choices');
+      if (menuWrap) menuWrap.style.display = 'none';
+    }
     enterMasterClock();
     try {
       await playCommitArrival(runId);
@@ -1211,6 +1223,23 @@ async function doAttack(runId, hand, attackId, targetIds) {
       console.error('commit ceremony:', err);
     }
     await tickLoop(runId);
+  } finally {
+    leaveMasterClock();
+    setBusy(false);
+  }
+  return data;
+}
+
+async function doAttack(runId, hand, attackId, targetIds) {
+  debugLog('doAttack', `hand=${hand} attack=${attackId} n_targets=${targetIds?.length || 0}`);
+  try {
+    await commitThenTick(runId, () => {
+      const payload = { hand, attack_id: attackId, target_ids: targetIds || [] };
+      return apiCall(`/runs/${runId}/commit`, 'POST', payload).then((res) => {
+        pendingAttack = null; // only clear on success — a failed commit keeps the selection
+        return res;
+      }); // returns {committed: true}
+    }, { hideMenu: true });
   } catch (e) {
     const msg = String(e.message || e);
     if (msg.includes('Hand not ready')) {
@@ -1218,35 +1247,23 @@ async function doAttack(runId, hand, attackId, targetIds) {
     } else {
       showMessage(msg, true);
     }
-  } finally {
-    leaveMasterClock();
   }
-  setBusy(false);
 }
 
 async function doSwap(runId, hand) {
   debugLog('doSwap', `hand=${hand}`);
-  if (busy) return;
-  setBusy(true);
   try {
-    const data = await apiCall(`/runs/${runId}/swap`, 'POST', { hand });
-    showMessage(`Belt swap (${hand}) — cooldown ${data.delay != null ? data.delay : ''} tics`);
-    pendingAttack = null;
-    const menuWrap = document.getElementById('action-choices');
-    if (menuWrap) menuWrap.style.display = 'none';
-    enterMasterClock();
-    try {
-      await playCommitArrival(runId);
-    } catch (err) {
-      console.error('commit ceremony:', err);
-    }
-    await tickLoop(runId);
+    await commitThenTick(runId, async () => {
+      const data = await apiCall(`/runs/${runId}/swap`, 'POST', { hand });
+      pendingAttack = null;
+      return data;
+    }, {
+      hideMenu: true,
+      message: (data) => `Belt swap (${hand}) — cooldown ${data.delay != null ? data.delay : ''} tics`,
+    });
   } catch (e) {
     showMessage(String(e.message || e), true);
-  } finally {
-    leaveMasterClock();
   }
-  setBusy(false);
 }
 
 /**
@@ -1554,25 +1571,14 @@ function renderActionMenu(bs) {
 
 
 async function usePotion(runId, slot) {
-  if (busy) return;
-  setBusy(true);
   try {
-    const payload = { slot };
-    await apiCall(`/runs/${runId}/use-potion`, 'POST', payload);
-    showMessage(`Potion ${slot} used`);
-    enterMasterClock();
-    try {
-      await playCommitArrival(runId);
-    } catch (err) {
-      console.error('commit ceremony:', err);
-    }
-    await tickLoop(runId);
+    await commitThenTick(runId, () => {
+      const payload = { slot };
+      return apiCall(`/runs/${runId}/use-potion`, 'POST', payload);
+    }, { message: `Potion ${slot} used` });
   } catch (e) {
     showMessage(e.message, true);
-  } finally {
-    leaveMasterClock();
   }
-  setBusy(false);
 }
 
 async function loadBattle(runId) {
