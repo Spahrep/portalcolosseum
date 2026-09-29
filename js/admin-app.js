@@ -441,116 +441,266 @@ async function deleteWeaponTemplate(id) {
 }
 
 // ============================================================
-// WEAPON TEMPLATE — ATTACK MAPPING EDITOR (PRIMARY FEATURE)
+// SHARED MAPPING EDITOR
+// One form builder for the five mapping editors. Callers fetch
+// and group data; this owns the shared HTML and event wiring.
+// Template whitespace is load-bearing — it must match the
+// previous per-editor markup exactly (ids, classes, options).
+// layout 'slots' — attack slot tables (weapon, monster).
+// layout 'pool'  — single cost/weight table (loot, portal monsters).
 // ============================================================
 
-async function showWeaponMappingEditor(templateId) {
-  const container = document.getElementById('wt-mapping-container');
-  container.innerHTML = '<p>Loading mappings...</p>';
+async function renderMappingEditor(container, spec) {
+  container.innerHTML = `<p>${spec.loadingText}</p>`;
 
   try {
-    // Fetch template details and mappings
-    const [templateRes, mappingRes] = await Promise.all([
-      apiCall(`/api/admin/weapon-templates/${templateId}`),
-      apiCall(`/api/admin/weapon-templates/${templateId}/mappings`),
-    ]);
-    const template = templateRes.data;
-    const mappings = mappingRes.data || [];
+    const view = await spec.load();
+    container.innerHTML = view.layout === 'slots'
+      ? buildSlotMappingEditorHtml(view)
+      : buildPoolMappingEditorHtml(view);
+    wireMappingEditor(container, view, spec);
+  } catch (e) {
+    container.innerHTML = `<p class="error">${spec.errorText}: ${e.message}</p>`;
+  }
+}
 
-    // Group mappings by slot
-    const bySlot = { 1: [], 2: [], 3: [] };
-    mappings.forEach(m => { if (bySlot[m.slot]) bySlot[m.slot].push(m); });
-
-    let html = `
+function buildSlotMappingEditorHtml(view) {
+  let html = `
       <div class="form-card mapping-editor">
-        <h3>Attack Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Base stats: Damage ${template.base_damage}±${template.damage_range} · Speed ${template.base_speed}±${template.speed_range} · Accuracy ${template.base_accuracy}±${template.accuracy_range} · Crit ${template.crit_base ?? 5}±${template.crit_range ?? 0}</p>
-        <p class="muted">Slot 0 (always): ${template.slot_0_attack?.name ? esc(template.slot_0_attack.name) : '—'} · S1: ${(template.slot_1_chance*100)}% · S2: ${(template.slot_2_chance*100)}% · S3: ${(template.slot_3_chance*100)}% · S4: ${(template.slot_4_chance*100)}%</p>
-    `;
+        <h3>${view.title}</h3>
+        <p class="muted">${view.subtitles[0]}</p>
+        <p class="muted">${view.subtitles[1]}</p>\n    `;
 
-    for (const slot of [1, 2, 3]) {
-      html += `
+  for (const slot of view.slots) {
+    html += `
         <div class="mapping-slot">
-          <h4>Slot ${slot} <span class="muted">(chance: ${(template['slot_' + slot + '_chance'] * 100).toFixed(0)}%)</span></h4>
+          <h4>Slot ${slot.number} <span class="muted">(chance: ${slot.chance}%)</span></h4>
           <table>
             <thead><tr><th>Attack Name</th><th>Weight</th><th>Actions</th></tr></thead>
-            <tbody>
-      `;
-      bySlot[slot].forEach(m => {
-        html += `
-          <tr>
-            <td>${esc(m.attack?.name || 'Unknown')}</td>
-            <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
-            <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
-          </tr>
-        `;
-      });
-      if (bySlot[slot].length === 0) html += '<tr><td colspan="5" class="muted">No attacks assigned to this slot</td></tr>';
-      // Add attack picker — show attacks NOT already in this slot
-      const usedIds = bySlot[slot].map(m => m.attack_id);
-      const available = allAttacks.filter(a => !usedIds.includes(a.id));
+            <tbody>\n      `;
+    for (const row of slot.rows) {
       html += `
+          <tr>
+            <td>${row.name}</td>
+            <td><input type="number" step="0.1" value="${row.weight}" data-mapping-id="${row.id}" class="weight-input"></td>
+            <td><button class="btn btn-danger" data-remove-mapping="${row.id}">Remove</button></td>
+          </tr>\n        `;
+    }
+    if (slot.rows.length === 0) html += '<tr><td colspan="5" class="muted">No attacks assigned to this slot</td></tr>';
+    const options = slot.options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+    html += `
         <tr class="add-attack-row">
           <td>
-            <select id="add-attack-slot-${slot}">
-              <option value="">— Add attack to Slot ${slot} —</option>
-              ${available.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}
+            <select id="${view.selectIdPrefix}${slot.number}">
+              <option value="">— Add attack to Slot ${slot.number} —</option>
+              ${options}
             </select>
           </td>
           <td></td>
-          <td><button class="btn" data-add-to-slot="${slot}">Add</button></td>
+          <td><button class="btn" data-add-to-slot="${slot.number}">Add</button></td>
         </tr>
         </tbody></table>
-        </div>
-      `;
-    }
+        </div>\n      `;
+  }
 
-    html += `<button class="btn btn-secondary" id="close-mapping-btn">Close</button></div>`;
-    container.innerHTML = html;
+  html += `<button class="btn btn-secondary" id="${view.closeButtonId}">Close</button></div>`;
+  return html;
+}
 
-    document.getElementById('close-mapping-btn').addEventListener('click', () => { container.innerHTML = ''; });
+function buildPoolMappingEditorHtml(view) {
+  let html = `
+      <div class="form-card mapping-editor">
+        <h3>${view.title}</h3>
+        <p class="muted">${view.subtitle}</p>
+        <table>
+          <thead><tr>${view.headHtml}</tr></thead>
+          <tbody>\n    `;
 
-    // Weight edit handlers
+  for (const row of view.rows) {
+    html += `
+        <tr>
+          <td>${row.name}</td>
+          <td><input type="number" value="${row.cost}" data-mapping-id="${row.id}" class="cost-input"></td>
+          <td><input type="number" step="0.1" value="${row.weight}" data-mapping-id="${row.id}" class="weight-input"></td>
+          <td><button class="btn btn-danger" data-remove-mapping="${row.id}">Remove</button></td>
+        </tr>\n      `;
+  }
+  if (view.rows.length === 0) html += `<tr><td colspan="4" class="muted">${view.emptyText}</td></tr>`;
+
+  const add = view.add;
+  const options = add.options.map(o => `<option value="${o.value}">${o.label}</option>`).join('');
+  html += `
+      <tr class="${add.rowClass}">
+        <td>
+          <select id="${add.selectId}">
+            <option value="">${add.placeholder}</option>
+            ${options}
+          </select>
+        </td>
+        <td><input type="number" id="${add.costInputId}" placeholder="${add.costPlaceholder}" value="10"></td>
+        <td><input type="number" id="${add.weightInputId}" placeholder="Weight" step="0.1" value="1.0"></td>
+        <td><button class="btn" id="${add.buttonId}">Add</button></td>
+      </tr>\n`;
+  if (add.closeLayout === 'split') {
+    html += `      </tbody>
+    </table>
+    <button class="btn btn-secondary" id="${view.closeButtonId}">Close</button>
+    </div>\n    `;
+  } else {
+    html += `      </tbody></table>
+      <button class="btn btn-secondary" id="${view.closeButtonId}">Close</button>
+    </div>\n    `;
+  }
+  return html;
+}
+
+function wireMappingEditor(container, view, spec) {
+  document.getElementById(view.closeButtonId).addEventListener('click', () => { container.innerHTML = ''; });
+
+  if (view.layout === 'slots') {
     container.querySelectorAll('.weight-input').forEach(input => {
       input.addEventListener('change', async (e) => {
         const mappingId = e.target.dataset.mappingId;
         const weight = parseFloat(e.target.value);
         try {
-          await apiCall(`/api/admin/weapon-templates/${templateId}/mappings/${mappingId}`, 'PATCH', { weight });
+          await spec.onWeightChange(mappingId, weight);
         } catch (err) { alert('Error updating weight: ' + err.message); }
       });
     });
 
-    // Remove handlers
     container.querySelectorAll('[data-remove-mapping]').forEach(btn => {
       btn.addEventListener('click', async () => {
-        if (!confirm('Remove this attack from the slot?')) return;
+        if (!confirm(spec.removeConfirm)) return;
         try {
-          await apiCall(`/api/admin/weapon-templates/${templateId}/mappings/${btn.dataset.removeMapping}`, 'DELETE');
-          showWeaponMappingEditor(templateId); // refresh
+          await spec.onRemove(btn.dataset.removeMapping);
+          spec.refresh();
         } catch (e) { alert('Error: ' + e.message); }
       });
     });
 
-    // Add handlers
     container.querySelectorAll('[data-add-to-slot]').forEach(btn => {
       btn.addEventListener('click', async () => {
         const slot = parseInt(btn.dataset.addToSlot);
-        const select = document.getElementById(`add-attack-slot-${slot}`);
+        const select = document.getElementById(`${view.selectIdPrefix}${slot}`);
         const attackId = parseInt(select.value);
         if (!attackId) return;
         try {
-          await apiCall(`/api/admin/weapon-templates/${templateId}/mappings`, 'POST', {
-            attack_id: attackId, slot, weight: 1.0,
-          });
-          showWeaponMappingEditor(templateId); // refresh
+          await spec.onAddSlot(slot, attackId);
+          spec.refresh();
         } catch (e) { alert('Error: ' + e.message); }
       });
     });
-
-  } catch (e) {
-    container.innerHTML = `<p class="error">Error loading mappings: ${e.message}</p>`;
+    return;
   }
+
+  container.querySelectorAll('.cost-input').forEach(input => {
+    input.addEventListener('change', async (e) => {
+      const mappingId = e.target.dataset.mappingId;
+      const cost = parseInt(e.target.value);
+      const row = e.target.closest('tr');
+      const weightInput = row.querySelector('.weight-input');
+      const weight = parseFloat(weightInput.value);
+      try {
+        await spec.onPoolChange(mappingId, cost, weight);
+      } catch (err) { alert('Error updating: ' + err.message); }
+    });
+  });
+  container.querySelectorAll('.weight-input').forEach(input => {
+    input.addEventListener('change', async (e) => {
+      const mappingId = e.target.dataset.mappingId;
+      const weight = parseFloat(e.target.value);
+      const row = e.target.closest('tr');
+      const costInput = row.querySelector('.cost-input');
+      const cost = parseInt(costInput.value);
+      try {
+        await spec.onPoolChange(mappingId, cost, weight);
+      } catch (err) { alert('Error updating: ' + err.message); }
+    });
+  });
+
+  container.querySelectorAll('[data-remove-mapping]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      if (!confirm(spec.removeConfirm)) return;
+      try {
+        await spec.onRemove(btn.dataset.removeMapping);
+        spec.refresh();
+      } catch (e) { alert('Error: ' + e.message); }
+    });
+  });
+
+  document.getElementById(view.add.buttonId).addEventListener('click', async () => {
+    const itemId = parseInt(document.getElementById(view.add.selectId).value);
+    if (!itemId) return;
+    const cost = parseInt(document.getElementById(view.add.costInputId).value);
+    const weight = parseFloat(document.getElementById(view.add.weightInputId).value);
+    try {
+      await spec.onAddPool(itemId, cost, weight);
+      spec.refresh();
+    } catch (e) { alert('Error: ' + e.message); }
+  });
+}
+
+// ============================================================
+// WEAPON TEMPLATE — ATTACK MAPPING EDITOR (PRIMARY FEATURE)
+// ============================================================
+
+async function showWeaponMappingEditor(templateId) {
+  const container = document.getElementById('wt-mapping-container');
+  return renderMappingEditor(container, {
+    loadingText: 'Loading mappings...',
+    errorText: 'Error loading mappings',
+    removeConfirm: 'Remove this attack from the slot?',
+    refresh: () => showWeaponMappingEditor(templateId),
+    async load() {
+      // Fetch template details and mappings
+      const [templateRes, mappingRes] = await Promise.all([
+        apiCall(`/api/admin/weapon-templates/${templateId}`),
+        apiCall(`/api/admin/weapon-templates/${templateId}/mappings`),
+      ]);
+      const template = templateRes.data;
+      const mappings = mappingRes.data || [];
+
+      // Group mappings by slot
+      const bySlot = { 1: [], 2: [], 3: [] };
+      mappings.forEach(m => { if (bySlot[m.slot]) bySlot[m.slot].push(m); });
+
+      return {
+        layout: 'slots',
+        title: `Attack Mappings — ${esc(template.name)}`,
+        subtitles: [
+          `Base stats: Damage ${template.base_damage}±${template.damage_range} · Speed ${template.base_speed}±${template.speed_range} · Accuracy ${template.base_accuracy}±${template.accuracy_range} · Crit ${template.crit_base ?? 5}±${template.crit_range ?? 0}`,
+          `Slot 0 (always): ${template.slot_0_attack?.name ? esc(template.slot_0_attack.name) : '—'} · S1: ${(template.slot_1_chance*100)}% · S2: ${(template.slot_2_chance*100)}% · S3: ${(template.slot_3_chance*100)}% · S4: ${(template.slot_4_chance*100)}%`,
+        ],
+        selectIdPrefix: 'add-attack-slot-',
+        closeButtonId: 'close-mapping-btn',
+        slots: [1, 2, 3].map(slot => {
+          const usedIds = bySlot[slot].map(m => m.attack_id);
+          const available = allAttacks.filter(a => !usedIds.includes(a.id));
+          return {
+            number: slot,
+            chance: (template['slot_' + slot + '_chance'] * 100).toFixed(0),
+            rows: bySlot[slot].map(m => ({
+              name: esc(m.attack?.name || 'Unknown'),
+              weight: m.weight,
+              id: m.id,
+            })),
+            options: available.map(a => ({ value: a.id, label: esc(a.name) })),
+          };
+        }),
+      };
+    },
+    onWeightChange(mappingId, weight) {
+      return apiCall(`/api/admin/weapon-templates/${templateId}/mappings/${mappingId}`, 'PATCH', { weight });
+    },
+    onRemove(mappingId) {
+      return apiCall(`/api/admin/weapon-templates/${templateId}/mappings/${mappingId}`, 'DELETE');
+    },
+    onAddSlot(slot, attackId) {
+      return apiCall(`/api/admin/weapon-templates/${templateId}/mappings`, 'POST', {
+        attack_id: attackId, slot, weight: 1.0,
+      });
+    },
+  });
 }
 
 // ============================================================
@@ -685,106 +835,59 @@ async function deleteMonsterTemplate(id) {
 
 async function showMonsterMappingEditor(templateId) {
   const container = document.getElementById('mt-mapping-container');
-  container.innerHTML = '<p>Loading mappings...</p>';
+  return renderMappingEditor(container, {
+    loadingText: 'Loading mappings...',
+    errorText: 'Error loading mappings',
+    removeConfirm: 'Remove this attack from the slot?',
+    refresh: () => showMonsterMappingEditor(templateId),
+    async load() {
+      const [templateRes, mappingRes] = await Promise.all([
+        apiCall(`/api/admin/monster-templates/${templateId}`),
+        apiCall(`/api/admin/monster-templates/${templateId}/mappings`),
+      ]);
+      const template = templateRes.data;
+      const mappings = mappingRes.data || [];
 
-  try {
-    const [templateRes, mappingRes] = await Promise.all([
-      apiCall(`/api/admin/monster-templates/${templateId}`),
-      apiCall(`/api/admin/monster-templates/${templateId}/mappings`),
-    ]);
-    const template = templateRes.data;
-    const mappings = mappingRes.data || [];
+      const bySlot = { 1: [], 2: [], 3: [], 4: [] };
+      mappings.forEach(m => { if (bySlot[m.slot]) bySlot[m.slot].push(m); });
 
-    const bySlot = { 1: [], 2: [], 3: [], 4: [] };
-    mappings.forEach(m => { if (bySlot[m.slot]) bySlot[m.slot].push(m); });
-
-    let html = `
-      <div class="form-card mapping-editor">
-        <h3>Attack Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Base stats: Damage ${template.base_damage}±${template.damage_range} · Speed ${template.base_speed}±${template.speed_range} · Accuracy ${template.base_accuracy}±${template.accuracy_range} · Crit ${template.crit_base ?? 5}±${template.crit_range ?? 0}</p>
-        <p class="muted">Slot 0 (always): ${template.slot_0_attack?.name ? esc(template.slot_0_attack.name) : '—'}</p>
-    `;
-
-    for (const slot of [1, 2, 3, 4]) {
-      html += `
-        <div class="mapping-slot">
-          <h4>Slot ${slot} <span class="muted">(chance: ${(template['slot_' + slot + '_chance'] * 100).toFixed(0)}%)</span></h4>
-          <table>
-            <thead><tr><th>Attack Name</th><th>Weight</th><th>Actions</th></tr></thead>
-            <tbody>
-      `;
-      bySlot[slot].forEach(m => {
-        html += `
-          <tr>
-            <td>${esc(m.attack?.name || 'Unknown')}</td>
-            <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
-            <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
-          </tr>
-        `;
+      return {
+        layout: 'slots',
+        title: `Attack Mappings — ${esc(template.name)}`,
+        subtitles: [
+          `Base stats: Damage ${template.base_damage}±${template.damage_range} · Speed ${template.base_speed}±${template.speed_range} · Accuracy ${template.base_accuracy}±${template.accuracy_range} · Crit ${template.crit_base ?? 5}±${template.crit_range ?? 0}`,
+          `Slot 0 (always): ${template.slot_0_attack?.name ? esc(template.slot_0_attack.name) : '—'}`,
+        ],
+        selectIdPrefix: 'mt-add-attack-slot-',
+        closeButtonId: 'mt-close-mapping-btn',
+        slots: [1, 2, 3, 4].map(slot => {
+          const usedIds = bySlot[slot].map(m => m.attack_id);
+          const available = allAttacks.filter(a => !usedIds.includes(a.id));
+          return {
+            number: slot,
+            chance: (template['slot_' + slot + '_chance'] * 100).toFixed(0),
+            rows: bySlot[slot].map(m => ({
+              name: esc(m.attack?.name || 'Unknown'),
+              weight: m.weight,
+              id: m.id,
+            })),
+            options: available.map(a => ({ value: a.id, label: esc(a.name) })),
+          };
+        }),
+      };
+    },
+    onWeightChange(mappingId, weight) {
+      return apiCall(`/api/admin/monster-templates/${templateId}/mappings/${mappingId}`, 'PATCH', { weight });
+    },
+    onRemove(mappingId) {
+      return apiCall(`/api/admin/monster-templates/${templateId}/mappings/${mappingId}`, 'DELETE');
+    },
+    onAddSlot(slot, attackId) {
+      return apiCall(`/api/admin/monster-templates/${templateId}/mappings`, 'POST', {
+        attack_id: attackId, slot, weight: 1.0,
       });
-      if (bySlot[slot].length === 0) html += '<tr><td colspan="5" class="muted">No attacks assigned to this slot</td></tr>';
-      // Add attack picker — show attacks NOT already in this slot
-      const usedIds = bySlot[slot].map(m => m.attack_id);
-      const available = allAttacks.filter(a => !usedIds.includes(a.id));
-      html += `
-        <tr class="add-attack-row">
-          <td>
-            <select id="mt-add-attack-slot-${slot}">
-              <option value="">— Add attack to Slot ${slot} —</option>
-              ${available.map(a => `<option value="${a.id}">${esc(a.name)}</option>`).join('')}
-            </select>
-          </td>
-          <td></td>
-          <td><button class="btn" data-add-to-slot="${slot}">Add</button></td>
-        </tr>
-        </tbody></table>
-        </div>
-      `;
-    }
-
-    html += `<button class="btn btn-secondary" id="mt-close-mapping-btn">Close</button></div>`;
-    container.innerHTML = html;
-
-    document.getElementById('mt-close-mapping-btn').addEventListener('click', () => { container.innerHTML = ''; });
-
-    container.querySelectorAll('.weight-input').forEach(input => {
-      input.addEventListener('change', async (e) => {
-        const mappingId = e.target.dataset.mappingId;
-        const weight = parseFloat(e.target.value);
-        try {
-          await apiCall(`/api/admin/monster-templates/${templateId}/mappings/${mappingId}`, 'PATCH', { weight });
-        } catch (err) { alert('Error updating weight: ' + err.message); }
-      });
-    });
-
-    container.querySelectorAll('[data-remove-mapping]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Remove this attack from the slot?')) return;
-        try {
-          await apiCall(`/api/admin/monster-templates/${templateId}/mappings/${btn.dataset.removeMapping}`, 'DELETE');
-          showMonsterMappingEditor(templateId);
-        } catch (e) { alert('Error: ' + e.message); }
-      });
-    });
-
-    container.querySelectorAll('[data-add-to-slot]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        const slot = parseInt(btn.dataset.addToSlot);
-        const select = document.getElementById(`mt-add-attack-slot-${slot}`);
-        const attackId = parseInt(select.value);
-        if (!attackId) return;
-        try {
-          await apiCall(`/api/admin/monster-templates/${templateId}/mappings`, 'POST', {
-            attack_id: attackId, slot, weight: 1.0,
-          });
-          showMonsterMappingEditor(templateId);
-        } catch (e) { alert('Error: ' + e.message); }
-      });
-    });
-
-  } catch (e) {
-    container.innerHTML = `<p class="error">Error loading mappings: ${e.message}</p>`;
-  }
+    },
+  });
 }
 
 // ============================================================
@@ -793,112 +896,60 @@ async function showMonsterMappingEditor(templateId) {
 
 async function showMonsterLootMappingEditor(templateId) {
   const container = document.getElementById('mt-mapping-container');
-  container.innerHTML = '<p>Loading loot mappings...</p>';
-
-  try {
-    const [templateRes, lootRes, weaponRes] = await Promise.all([
-      apiCall(`/api/admin/monster-templates/${templateId}`),
-      apiCall(`/api/admin/monster-templates/${templateId}/loot`),
-      apiCall('/api/admin/weapon-templates'),
-    ]);
-    const template = templateRes.data;
-    const mappings = lootRes.data || [];
-    const allWeapons = weaponRes.data || [];
-
-    let html = `
-      <div class="form-card mapping-editor">
-        <h3>Loot Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Gold: ${template.min_gold}–${template.max_gold} · These weapons can drop from this monster</p>
-        <table>
-          <thead><tr><th>Weapon Template</th><th>LP Cost</th><th>Weight</th><th>Actions</th></tr></thead>
-          <tbody>
-    `;
-
-    mappings.forEach(m => {
-      html += `
-        <tr>
-          <td>${esc(m.weapon_template?.name || 'Unknown')}</td>
-          <td><input type="number" value="${m.lp_cost}" data-mapping-id="${m.id}" class="cost-input"></td>
-          <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
-          <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
-        </tr>
-      `;
-    });
-    if (mappings.length === 0) html += '<tr><td colspan="4" class="muted">No loot items assigned to this monster</td></tr>';
-    // Add weapon picker — show weapons NOT already in this monster's loot pool
-    const usedIds = mappings.map(m => m.weapon_template_id);
-    const available = allWeapons.filter(w => !usedIds.includes(w.id));
-    html += `
-      <tr class="add-attack-row">
-        <td>
-          <select id="mt-add-weapon">
-            <option value="">— Add weapon to monster loot pool —</option>
-            ${available.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
-          </select>
-        </td>
-        <td><input type="number" id="mt-add-lp-cost" placeholder="LP Cost" value="10"></td>
-        <td><input type="number" id="mt-add-loot-weight" placeholder="Weight" step="0.1" value="1.0"></td>
-        <td><button class="btn" id="mt-add-loot-btn">Add</button></td>
-      </tr>
-      </tbody></table>
-      <button class="btn btn-secondary" id="mt-close-loot-btn">Close</button>
-    </div>
-    `;
-    container.innerHTML = html;
-
-    document.getElementById('mt-close-loot-btn').addEventListener('click', () => { container.innerHTML = ''; });
-
-    container.querySelectorAll('.cost-input').forEach(input => {
-      input.addEventListener('change', async (e) => {
-        const mappingId = e.target.dataset.mappingId;
-        const lp_cost = parseInt(e.target.value);
-        const row = e.target.closest('tr');
-        const weightInput = row.querySelector('.weight-input');
-        const weight = parseFloat(weightInput.value);
-        try {
-          await apiCall(`/api/admin/monster-templates/${templateId}/loot/${mappingId}`, 'PATCH', { lp_cost, weight });
-        } catch (err) { alert('Error updating: ' + err.message); }
+  return renderMappingEditor(container, {
+    loadingText: 'Loading loot mappings...',
+    errorText: 'Error loading loot mappings',
+    removeConfirm: 'Remove this loot item from the monster?',
+    refresh: () => showMonsterLootMappingEditor(templateId),
+    async load() {
+      const [templateRes, lootRes, weaponRes] = await Promise.all([
+        apiCall(`/api/admin/monster-templates/${templateId}`),
+        apiCall(`/api/admin/monster-templates/${templateId}/loot`),
+        apiCall('/api/admin/weapon-templates'),
+      ]);
+      const template = templateRes.data;
+      const mappings = lootRes.data || [];
+      const allWeapons = weaponRes.data || [];
+      const usedIds = mappings.map(m => m.weapon_template_id);
+      const available = allWeapons.filter(w => !usedIds.includes(w.id));
+      return {
+        layout: 'pool',
+        title: `Loot Mappings — ${esc(template.name)}`,
+        subtitle: `Gold: ${template.min_gold}–${template.max_gold} · These weapons can drop from this monster`,
+        headHtml: '<th>Weapon Template</th><th>LP Cost</th><th>Weight</th><th>Actions</th>',
+        rows: mappings.map(m => ({
+          name: esc(m.weapon_template?.name || 'Unknown'),
+          cost: m.lp_cost,
+          weight: m.weight,
+          id: m.id,
+        })),
+        emptyText: 'No loot items assigned to this monster',
+        closeButtonId: 'mt-close-loot-btn',
+        add: {
+          rowClass: 'add-attack-row',
+          selectId: 'mt-add-weapon',
+          placeholder: '— Add weapon to monster loot pool —',
+          options: available.map(w => ({ value: w.id, label: esc(w.name) })),
+          costInputId: 'mt-add-lp-cost',
+          costPlaceholder: 'LP Cost',
+          weightInputId: 'mt-add-loot-weight',
+          buttonId: 'mt-add-loot-btn',
+          closeLayout: 'compact',
+        },
+      };
+    },
+    onPoolChange(mappingId, lp_cost, weight) {
+      return apiCall(`/api/admin/monster-templates/${templateId}/loot/${mappingId}`, 'PATCH', { lp_cost, weight });
+    },
+    onRemove(mappingId) {
+      return apiCall(`/api/admin/monster-templates/${templateId}/loot/${mappingId}`, 'DELETE');
+    },
+    onAddPool(weaponId, lp_cost, weight) {
+      return apiCall(`/api/admin/monster-templates/${templateId}/loot`, 'POST', {
+        weapon_template_id: weaponId, lp_cost, weight,
       });
-    });
-    container.querySelectorAll('.weight-input').forEach(input => {
-      input.addEventListener('change', async (e) => {
-        const mappingId = e.target.dataset.mappingId;
-        const weight = parseFloat(e.target.value);
-        const row = e.target.closest('tr');
-        const costInput = row.querySelector('.cost-input');
-        const lp_cost = parseInt(costInput.value);
-        try {
-          await apiCall(`/api/admin/monster-templates/${templateId}/loot/${mappingId}`, 'PATCH', { lp_cost, weight });
-        } catch (err) { alert('Error updating: ' + err.message); }
-      });
-    });
-
-    container.querySelectorAll('[data-remove-mapping]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Remove this loot item from the monster?')) return;
-        try {
-          await apiCall(`/api/admin/monster-templates/${templateId}/loot/${btn.dataset.removeMapping}`, 'DELETE');
-          showMonsterLootMappingEditor(templateId);
-        } catch (e) { alert('Error: ' + e.message); }
-      });
-    });
-
-    document.getElementById('mt-add-loot-btn').addEventListener('click', async () => {
-      const weaponId = parseInt(document.getElementById('mt-add-weapon').value);
-      if (!weaponId) return;
-      const lp_cost = parseInt(document.getElementById('mt-add-lp-cost').value);
-      const weight = parseFloat(document.getElementById('mt-add-loot-weight').value);
-      try {
-        await apiCall(`/api/admin/monster-templates/${templateId}/loot`, 'POST', {
-          weapon_template_id: weaponId, lp_cost, weight,
-        });
-        showMonsterLootMappingEditor(templateId);
-      } catch (e) { alert('Error: ' + e.message); }
-    });
-
-  } catch (e) {
-    container.innerHTML = `<p class="error">Error loading loot mappings: ${e.message}</p>`;
-  }
+    },
+  });
 }
 
 // ============================================================
@@ -1016,118 +1067,60 @@ async function deletePortalTemplate(id) {
 
 async function showPortalMonsterMappingEditor(templateId) {
   const container = document.getElementById('pt-mapping-container');
-  container.innerHTML = '<p>Loading mappings...</p>';
-
-  try {
-    const [templateRes, mappingRes, monsterRes] = await Promise.all([
-      apiCall(`/api/admin/portal-templates/${templateId}`),
-      apiCall(`/api/admin/portal-templates/${templateId}/monsters`),
-      apiCall('/api/admin/monster-templates'),
-    ]);
-    const template = templateRes.data;
-    const mappings = mappingRes.data || [];
-    const allMonsters = monsterRes.data || [];
-
-    let html = `
-      <div class="form-card mapping-editor">
-        <h3>Monster Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}</p>
-        <table>
-          <thead><tr><th>Monster Name</th><th>Point Cost</th><th>Weight</th><th>Actions</th></tr></thead>
-          <tbody>
-    `;
-
-    mappings.forEach(m => {
-      html += `
-        <tr>
-          <td>${esc(m.monster_template?.name || 'Unknown')}</td>
-          <td><input type="number" value="${m.point_cost}" data-mapping-id="${m.id}" class="cost-input"></td>
-          <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
-          <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
-        </tr>
-      `;
-    });
-    if (mappings.length === 0) html += '<tr><td colspan="4" class="muted">No monsters assigned to this portal</td></tr>';
-
-    // Add monster picker row — show monsters NOT already in this portal
-    const usedIds = mappings.map(m => m.monster_template_id);
-    const available = allMonsters.filter(m => !usedIds.includes(m.id));
-    html += `
-      <tr class="add-mapping-row">
-        <td>
-          <select id="pt-add-monster">
-            <option value="">— Add monster to portal —</option>
-            ${available.map(m => `<option value="${m.id}">${esc(m.name)}</option>`).join('')}
-          </select>
-        </td>
-        <td><input type="number" id="pt-add-cost" placeholder="Point Cost" value="10"></td>
-        <td><input type="number" id="pt-add-weight" placeholder="Weight" step="0.1" value="1.0"></td>
-        <td><button class="btn" id="pt-add-monster-btn">Add</button></td>
-      </tr>
-      </tbody>
-    </table>
-    <button class="btn btn-secondary" id="pt-close-monster-btn">Close</button>
-    </div>
-    `;
-    container.innerHTML = html;
-
-    document.getElementById('pt-close-monster-btn').addEventListener('click', () => { container.innerHTML = ''; });
-
-    // Cost and weight edit handlers
-    container.querySelectorAll('.cost-input').forEach(input => {
-      input.addEventListener('change', async (e) => {
-        const mappingId = e.target.dataset.mappingId;
-        const point_cost = parseInt(e.target.value);
-        // Find the sibling weight input
-        const row = e.target.closest('tr');
-        const weightInput = row.querySelector('.weight-input');
-        const weight = parseFloat(weightInput.value);
-        try {
-          await apiCall(`/api/admin/portal-templates/${templateId}/monsters/${mappingId}`, 'PATCH', { point_cost, weight });
-        } catch (err) { alert('Error updating: ' + err.message); }
+  return renderMappingEditor(container, {
+    loadingText: 'Loading mappings...',
+    errorText: 'Error loading mappings',
+    removeConfirm: 'Remove this monster from the portal?',
+    refresh: () => showPortalMonsterMappingEditor(templateId),
+    async load() {
+      const [templateRes, mappingRes, monsterRes] = await Promise.all([
+        apiCall(`/api/admin/portal-templates/${templateId}`),
+        apiCall(`/api/admin/portal-templates/${templateId}/monsters`),
+        apiCall('/api/admin/monster-templates'),
+      ]);
+      const template = templateRes.data;
+      const mappings = mappingRes.data || [];
+      const allMonsters = monsterRes.data || [];
+      const usedIds = mappings.map(m => m.monster_template_id);
+      const available = allMonsters.filter(m => !usedIds.includes(m.id));
+      return {
+        layout: 'pool',
+        title: `Monster Mappings — ${esc(template.name)}`,
+        subtitle: `Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}`,
+        headHtml: '<th>Monster Name</th><th>Point Cost</th><th>Weight</th><th>Actions</th>',
+        rows: mappings.map(m => ({
+          name: esc(m.monster_template?.name || 'Unknown'),
+          cost: m.point_cost,
+          weight: m.weight,
+          id: m.id,
+        })),
+        emptyText: 'No monsters assigned to this portal',
+        closeButtonId: 'pt-close-monster-btn',
+        add: {
+          rowClass: 'add-mapping-row',
+          selectId: 'pt-add-monster',
+          placeholder: '— Add monster to portal —',
+          options: available.map(m => ({ value: m.id, label: esc(m.name) })),
+          costInputId: 'pt-add-cost',
+          costPlaceholder: 'Point Cost',
+          weightInputId: 'pt-add-weight',
+          buttonId: 'pt-add-monster-btn',
+          closeLayout: 'split',
+        },
+      };
+    },
+    onPoolChange(mappingId, point_cost, weight) {
+      return apiCall(`/api/admin/portal-templates/${templateId}/monsters/${mappingId}`, 'PATCH', { point_cost, weight });
+    },
+    onRemove(mappingId) {
+      return apiCall(`/api/admin/portal-templates/${templateId}/monsters/${mappingId}`, 'DELETE');
+    },
+    onAddPool(monsterId, point_cost, weight) {
+      return apiCall(`/api/admin/portal-templates/${templateId}/monsters`, 'POST', {
+        monster_template_id: monsterId, point_cost, weight,
       });
-    });
-    container.querySelectorAll('.weight-input').forEach(input => {
-      input.addEventListener('change', async (e) => {
-        const mappingId = e.target.dataset.mappingId;
-        const weight = parseFloat(e.target.value);
-        const row = e.target.closest('tr');
-        const costInput = row.querySelector('.cost-input');
-        const point_cost = parseInt(costInput.value);
-        try {
-          await apiCall(`/api/admin/portal-templates/${templateId}/monsters/${mappingId}`, 'PATCH', { point_cost, weight });
-        } catch (err) { alert('Error updating: ' + err.message); }
-      });
-    });
-
-    // Remove handlers
-    container.querySelectorAll('[data-remove-mapping]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Remove this monster from the portal?')) return;
-        try {
-          await apiCall(`/api/admin/portal-templates/${templateId}/monsters/${btn.dataset.removeMapping}`, 'DELETE');
-          showPortalMonsterMappingEditor(templateId);
-        } catch (e) { alert('Error: ' + e.message); }
-      });
-    });
-
-    // Add handler
-    document.getElementById('pt-add-monster-btn').addEventListener('click', async () => {
-      const monsterId = parseInt(document.getElementById('pt-add-monster').value);
-      if (!monsterId) return;
-      const point_cost = parseInt(document.getElementById('pt-add-cost').value);
-      const weight = parseFloat(document.getElementById('pt-add-weight').value);
-      try {
-        await apiCall(`/api/admin/portal-templates/${templateId}/monsters`, 'POST', {
-          monster_template_id: monsterId, point_cost, weight,
-        });
-        showPortalMonsterMappingEditor(templateId);
-      } catch (e) { alert('Error: ' + e.message); }
-    });
-
-  } catch (e) {
-    container.innerHTML = `<p class="error">Error loading mappings: ${e.message}</p>`;
-  }
+    },
+  });
 }
 
 // ============================================================
@@ -1136,115 +1129,60 @@ async function showPortalMonsterMappingEditor(templateId) {
 
 async function showPortalLootMappingEditor(templateId) {
   const container = document.getElementById('pt-mapping-container');
-  container.innerHTML = '<p>Loading loot mappings...</p>';
-
-  try {
-    const [templateRes, lootRes, weaponRes] = await Promise.all([
-      apiCall(`/api/admin/portal-templates/${templateId}`),
-      apiCall(`/api/admin/portal-templates/${templateId}/loot`),
-      apiCall('/api/admin/weapon-templates'),
-    ]);
-    const template = templateRes.data;
-    const mappings = lootRes.data || [];
-    const allWeapons = weaponRes.data || [];
-
-    let html = `
-      <div class="form-card mapping-editor">
-        <h3>Loot Mappings — ${esc(template.name)}</h3>
-        <p class="muted">Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}</p>
-        <table>
-          <thead><tr><th>Weapon Template</th><th>LP Cost</th><th>Weight</th><th>Actions</th></tr></thead>
-          <tbody>
-    `;
-
-    mappings.forEach(m => {
-      html += `
-        <tr>
-          <td>${esc(m.weapon_template?.name || 'Unknown')}</td>
-          <td><input type="number" value="${m.lp_cost}" data-mapping-id="${m.id}" class="cost-input"></td>
-          <td><input type="number" step="0.1" value="${m.weight}" data-mapping-id="${m.id}" class="weight-input"></td>
-          <td><button class="btn btn-danger" data-remove-mapping="${m.id}">Remove</button></td>
-        </tr>
-      `;
-    });
-    if (mappings.length === 0) html += '<tr><td colspan="4" class="muted">No loot items assigned to this portal</td></tr>';
-    // Add weapon picker — show weapons NOT already in this portal's loot
-    const usedIds = mappings.map(m => m.weapon_template_id);
-    const available = allWeapons.filter(w => !usedIds.includes(w.id));
-    html += `
-      <tr class="add-attack-row">
-        <td>
-          <select id="pt-add-weapon">
-            <option value="">— Add weapon to loot pool —</option>
-            ${available.map(w => `<option value="${w.id}">${esc(w.name)}</option>`).join('')}
-          </select>
-        </td>
-        <td><input type="number" id="pt-add-lp-cost" placeholder="LP Cost" value="10"></td>
-        <td><input type="number" id="pt-add-loot-weight" placeholder="Weight" step="0.1" value="1.0"></td>
-        <td><button class="btn" id="pt-add-loot-btn">Add</button></td>
-      </tr>
-      </tbody></table>
-      <button class="btn btn-secondary" id="pt-close-loot-btn">Close</button>
-    </div>
-    `;
-    container.innerHTML = html;
-
-    document.getElementById('pt-close-loot-btn').addEventListener('click', () => { container.innerHTML = ''; });
-
-    // Cost and weight edit handlers
-    container.querySelectorAll('.cost-input').forEach(input => {
-      input.addEventListener('change', async (e) => {
-        const mappingId = e.target.dataset.mappingId;
-        const lp_cost = parseInt(e.target.value);
-        const row = e.target.closest('tr');
-        const weightInput = row.querySelector('.weight-input');
-        const weight = parseFloat(weightInput.value);
-        try {
-          await apiCall(`/api/admin/portal-templates/${templateId}/loot/${mappingId}`, 'PATCH', { lp_cost, weight });
-        } catch (err) { alert('Error updating: ' + err.message); }
+  return renderMappingEditor(container, {
+    loadingText: 'Loading loot mappings...',
+    errorText: 'Error loading loot mappings',
+    removeConfirm: 'Remove this loot item from the portal?',
+    refresh: () => showPortalLootMappingEditor(templateId),
+    async load() {
+      const [templateRes, lootRes, weaponRes] = await Promise.all([
+        apiCall(`/api/admin/portal-templates/${templateId}`),
+        apiCall(`/api/admin/portal-templates/${templateId}/loot`),
+        apiCall('/api/admin/weapon-templates'),
+      ]);
+      const template = templateRes.data;
+      const mappings = lootRes.data || [];
+      const allWeapons = weaponRes.data || [];
+      const usedIds = mappings.map(m => m.weapon_template_id);
+      const available = allWeapons.filter(w => !usedIds.includes(w.id));
+      return {
+        layout: 'pool',
+        title: `Loot Mappings — ${esc(template.name)}`,
+        subtitle: `Dice Pool: G:${template.green_dice_count} Y:${template.yellow_dice_count} R:${template.red_dice_count}`,
+        headHtml: '<th>Weapon Template</th><th>LP Cost</th><th>Weight</th><th>Actions</th>',
+        rows: mappings.map(m => ({
+          name: esc(m.weapon_template?.name || 'Unknown'),
+          cost: m.lp_cost,
+          weight: m.weight,
+          id: m.id,
+        })),
+        emptyText: 'No loot items assigned to this portal',
+        closeButtonId: 'pt-close-loot-btn',
+        add: {
+          rowClass: 'add-attack-row',
+          selectId: 'pt-add-weapon',
+          placeholder: '— Add weapon to loot pool —',
+          options: available.map(w => ({ value: w.id, label: esc(w.name) })),
+          costInputId: 'pt-add-lp-cost',
+          costPlaceholder: 'LP Cost',
+          weightInputId: 'pt-add-loot-weight',
+          buttonId: 'pt-add-loot-btn',
+          closeLayout: 'compact',
+        },
+      };
+    },
+    onPoolChange(mappingId, lp_cost, weight) {
+      return apiCall(`/api/admin/portal-templates/${templateId}/loot/${mappingId}`, 'PATCH', { lp_cost, weight });
+    },
+    onRemove(mappingId) {
+      return apiCall(`/api/admin/portal-templates/${templateId}/loot/${mappingId}`, 'DELETE');
+    },
+    onAddPool(weaponId, lp_cost, weight) {
+      return apiCall(`/api/admin/portal-templates/${templateId}/loot`, 'POST', {
+        weapon_template_id: weaponId, lp_cost, weight,
       });
-    });
-    container.querySelectorAll('.weight-input').forEach(input => {
-      input.addEventListener('change', async (e) => {
-        const mappingId = e.target.dataset.mappingId;
-        const weight = parseFloat(e.target.value);
-        const row = e.target.closest('tr');
-        const costInput = row.querySelector('.cost-input');
-        const lp_cost = parseInt(costInput.value);
-        try {
-          await apiCall(`/api/admin/portal-templates/${templateId}/loot/${mappingId}`, 'PATCH', { lp_cost, weight });
-        } catch (err) { alert('Error updating: ' + err.message); }
-      });
-    });
-
-    // Remove handlers
-    container.querySelectorAll('[data-remove-mapping]').forEach(btn => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Remove this loot item from the portal?')) return;
-        try {
-          await apiCall(`/api/admin/portal-templates/${templateId}/loot/${btn.dataset.removeMapping}`, 'DELETE');
-          showPortalLootMappingEditor(templateId);
-        } catch (e) { alert('Error: ' + e.message); }
-      });
-    });
-
-    // Add handler
-    document.getElementById('pt-add-loot-btn').addEventListener('click', async () => {
-      const weaponId = parseInt(document.getElementById('pt-add-weapon').value);
-      if (!weaponId) return;
-      const lp_cost = parseInt(document.getElementById('pt-add-lp-cost').value);
-      const weight = parseFloat(document.getElementById('pt-add-loot-weight').value);
-      try {
-        await apiCall(`/api/admin/portal-templates/${templateId}/loot`, 'POST', {
-          weapon_template_id: weaponId, lp_cost, weight,
-        });
-        showPortalLootMappingEditor(templateId);
-      } catch (e) { alert('Error: ' + e.message); }
-    });
-
-  } catch (e) {
-    container.innerHTML = `<p class="error">Error loading loot mappings: ${e.message}</p>`;
-  }
+    },
+  });
 }
 
 // ============================================================
