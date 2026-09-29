@@ -128,7 +128,8 @@ describe('Master clock visual fidelity (client contract)', () => {
   });
 
   it('live render follows engine array order and does not re-sort or rebuild a same-id tick', () => {
-    const render = fnBodyUntilNext(app, 'function renderQueue', ['function diffQueueForAnimation']);
+    const queueRender = read('js/battle/queue-render.js');
+    const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
     const ceremony = fnBodyUntilNext(app, 'async function playInsertCeremony', ['async function awaitTickVisuals']);
     assert.equal(render.includes('sortQueueRows'), false, 'renderQueue must not sort');
     assert.equal(ceremony.includes('sortQueueRows'), false, 'playInsertCeremony must not sort');
@@ -137,9 +138,9 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.equal(render.includes('clearQueueDom'), true, 'rebuild remains the fallback for a real shape change');
     const intro = app.indexOf('function playIntroCountdown');
     const afterIntro = app.indexOf('function appendFeedLine');
-    const def = app.indexOf('function sortQueueRows');
-    assert.ok(def > 0 && def < intro, 'sortQueueRows is defined for the intro theater only');
-    let from = def + 'function sortQueueRows'.length;
+    assert.ok(queueRender.includes('function sortQueueRows'), 'sortQueueRows is defined for the intro theater only');
+    assert.equal(app.includes('function sortQueueRows'), false, 'live battle-app.js does not redefine the intro sort');
+    let from = 0;
     while (true) {
       const at = app.indexOf('sortQueueRows(', from);
       if (at < 0) break;
@@ -163,7 +164,8 @@ describe('Master clock visual fidelity (client contract)', () => {
   });
 
   it('monster attack and cooldown stay one stable key', () => {
-    const keyFn = fnBodyUntilNext(app, 'function queueRowKey', ['const SUPABASE_URL']);
+    const queueRender = read('js/battle/queue-render.js');
+    const keyFn = fnBodyUntilNext(queueRender, 'function queueRowKey', ['function isMonsterQueueRow']);
     assert.match(keyFn, /row\.event === 'attack' \|\| row\.event === 'cooldown'/);
     assert.match(keyFn, /`m:\$\{row\.label\}`/);
   });

@@ -1,0 +1,443 @@
+/**
+ * Queue rendering subsystem (PC-77).
+ * Moved verbatim from battle-app.js: DOM render, stable-key reconciliation,
+ * exit-row cache, and the PC-56 prediction bar. No behavior change.
+ */
+import { debugLog } from '../battle-debug.js';
+import { computeTimingMarkers } from '../combat/tic-queue.js';
+
+// Exit animation duration for queue rows — MUST match the `.queue-row-exit`
+// / `.queue-row-lift` CSS in run.html. The battle clock holds the rebuild long
+// enough for the row to slide out AND the rows below to slide up before re-rendering.
+export const QUEUE_EXIT_MS = 280;
+// Genuine-removal sequence: slide fully out (QUEUE_EXIT_MS) → this gap →
+// remaining rows glide up TOGETHER (QUEUE_EXIT_MS again). See runQueueRemoval.
+export const QUEUE_REMOVE_GAP_MS = 100;
+// Insert ceremony durations — must match run.html (.queue-insert-gap / .queue-insert-bar / .queue-row-enter).
+export const QUEUE_GAP_MS = 300;
+export const QUEUE_WIPE_MS = 250;
+export const QUEUE_FLASH_MS = 150;
+export const QUEUE_ENTER_MS = 250;
+
+let queueBarInfo = null; // {kind:'bar',firstId,lastId} | null — PC-56 prediction bar
+export const QUEUE_FILL_STAGGER = 600; // ms between timing rows appearing (First → last, one at a time)
+export const QUEUE_FILL_MS = 700;      // per-row fade
+
+// Bug 4 fix: persistent cache for exit-animating queue rows (like deathCards for monsters)
+const exitingQueueRows = new Map(); // rowId -> { element, finished }
+
+export function setQueueBarInfo(info) {
+  queueBarInfo = info;
+}
+
+export function getQueueBarInfo() {
+  return queueBarInfo;
+}
+
+export function clearQueueBarInfo() {
+  queueBarInfo = null;
+}
+
+export function isQueueRowExiting(rowId) {
+  return exitingQueueRows.has(rowId);
+}
+
+/** Drop a row from the exit cache after groupLiftRemaining releases it. */
+export function forgetQueueRowExiting(rowId) {
+  exitingQueueRows.delete(rowId);
+}
+
+/** Stable identity for a queue row across renders: hands are singletons keyed
+ * by label (LH/RH) — their id regenerates every tick, so label is the only
+ * stable key. Monster attack and cooldown are one cycle keyed by label
+ * (`m:<label>`) so attack→cooldown→next attack is a successor replace, not a
+ * removal+insert. Other rows key on id. */
+export function queueRowKey(row) {
+  if (row.label === 'LH' || row.label === 'RH') return `h:${row.label}`;
+  if (row.label && (row.event === 'attack' || row.event === 'cooldown')) return `m:${row.label}`;
+  return `i:${row.id}`;
+}
+
+export function isMonsterQueueRow(row) {
+  return !!(row && row.event === 'attack' && row.label && row.label !== 'LH' && row.label !== 'RH');
+}
+
+function isMonsterCooldownRow(row) {
+  return !!(row && row.event === 'cooldown' && row.label && row.label !== 'LH' && row.label !== 'RH');
+}
+
+function monsterQueueName(row, monsters) {
+  const mon = (monsters || []).find(m => m.label === row.label);
+  if (mon && mon.name) return mon.name;
+  if (mon && mon.label) return mon.label;
+  return queueLabel(row);
+}
+
+/**
+ * Action Queue (next-up events column), per the design mockups: one row per
+ * queued event, `Label EventName | tics-until-change`, next event on top.
+ * Rows are countdowns to a state change: an attack landing, a hand freeing
+ * ("Ready"), a monster striking, a potion taking effect.
+ */
+export function renderQueue(bs, fill = false, onDone = null) {
+  debugLog('renderQueue', `fill=${fill} n_queue=${bs.queue?.length || 0} n_monsters=${bs.monsters?.length || 0}`);
+  const el = document.getElementById('queue');
+  if (!el) return;
+  // Same rows in the same engine order: rewrite readouts in place. Never rebuild
+  // and never move nodes — a tick must not re-slide rows that did not change slot.
+  const queue = bs.queue || [];
+  const currentRows = Array.from(el.querySelectorAll('.queue-row'));
+  const currentIds = currentRows.map(r => r.dataset.rowId);
+  const newIds = queue.map(r => r.id);
+  if (currentIds.length === newIds.length && currentIds.every((id, i) => id === newIds[i])) {
+    const monsters = bs.monsters || [];
+    queue.forEach((row, index) => {
+      updateQueueRowInPlace(currentRows[index], row, monsters, bs, index);
+    });
+    const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
+    if (titleEl) titleEl.textContent = 'Action Queue';
+    if (fill && onDone) {
+      const rows = Math.max(queue.length, 1);
+      setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+    }
+    return;
+  }
+  // Stable-key successor (hand phase, monster attack↔cooldown): relabel the
+  // existing node. Move a node only if its engine slot actually changed.
+  const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
+  const newKeys = queue.map(queueRowKey);
+  if (domKeys.size === newKeys.length && newKeys.every(k => domKeys.has(k))) {
+    const monsters = bs.monsters || [];
+    const nonRows = Array.from(el.children).filter(c => !c.classList.contains('queue-row'));
+    nonRows.forEach(c => c.remove());
+    queue.forEach((row, index) => {
+      const domEl = currentRows.find(r => r.dataset.stableKey === queueRowKey(row));
+      if (!domEl || !domEl.parentNode) return;
+      const rowsNow = Array.from(el.querySelectorAll('.queue-row'));
+      if (rowsNow[index] !== domEl) {
+        const ref = rowsNow[index] || null;
+        if (ref) el.insertBefore(domEl, ref);
+        else el.appendChild(domEl);
+      }
+      updateQueueRowInPlace(domEl, row, monsters, bs, index);
+    });
+    nonRows.forEach(c => el.appendChild(c));
+    const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
+    if (titleEl) titleEl.textContent = 'Action Queue';
+    if (fill && onDone) {
+      const rows = Math.max(queue.length, 1);
+      setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+    }
+    return;
+  }
+  clearQueueDom();
+  const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
+  if (titleEl) {
+    titleEl.textContent = 'Action Queue';
+  }
+  // queue already declared in no-flicker check above
+  if (fill && onDone) {
+    // Ceremony-intro: signal completion after the last row's fade lands, so the
+    // command window never waits on an animation that cannot start (empty queue).
+    const rows = Math.max(queue.length, 1);
+    setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+  }
+  if (queue.length === 0) return;
+  const monsters = bs.monsters || [];
+  queue.forEach((row, index) => {
+    if (!exitingQueueRows.has(row.id)) {
+      el.appendChild(buildQueueRow(row, monsters, bs, true, index));
+    }
+  });
+  // PC-56: Prediction bar — maps [minT, maxT] onto continuous tic → pixel interpolation
+  if (queueBarInfo && queueBarInfo.kind === 'bar' && queueBarInfo.firstId && queueBarInfo.lastId) {
+    const bar = document.createElement('div');
+    bar.className = 'prediction-bar';
+    // Read-only tic→pixel ladder for the PC-56 prediction bar. The copy-sort
+    // does not reorder the queue or the DOM (those stay in engine array order).
+    const rowEls = Array.from(el.querySelectorAll('.queue-row'));
+    const queueRect = el.getBoundingClientRect();
+    const ladder = rowEls.filter(r => r.dataset.tics !== undefined).map(r => {
+      const rect = r.getBoundingClientRect();
+      return { tics: Number(r.dataset.tics), top: rect.top - queueRect.top, bottom: rect.bottom - queueRect.top, height: rect.height };
+    });
+    ladder.sort((a, b) => a.tics - b.tics);
+    const gapPx = 2; // matches .queue-row margin-bottom
+    function yAtTics(t) {
+      if (ladder.length === 0) return 0;
+      const first = ladder[0], last = ladder[ladder.length - 1];
+      // Virtual extension above first row — proportional to tic distance
+      if (t <= first.tics) {
+        if (t === first.tics) return first.top;
+        const stepTics = ladder.length > 1 ? ladder[1].tics - first.tics : Math.max(first.tics, 1);
+        const frac = (first.tics - t) / stepTics;
+        return first.top - frac * (last.height + gapPx);
+      }
+      // Virtual extension below last row — proportional to tic distance
+      if (t >= last.tics) {
+        if (t === last.tics) return last.bottom;
+        const stepTics = ladder.length > 1 ? last.tics - ladder[ladder.length - 2].tics : Math.max(last.tics, 1);
+        const frac = (t - last.tics) / stepTics;
+        return last.bottom + frac * (last.height + gapPx);
+      }
+      // Between two rows — lerp across the gap
+      let i = 0;
+      while (i < ladder.length - 1 && ladder[i + 1].tics < t) i++;
+      const lo = ladder[i], hi = ladder[i + 1];
+      const frac = (t - lo.tics) / (hi.tics - lo.tics);
+      return lo.bottom + frac * (hi.top - lo.bottom);
+    }
+    const minT = Number(queueBarInfo.minT);
+    const maxT = Number(queueBarInfo.maxT);
+    let barTop = yAtTics(minT);
+    // Find clamping boundary for the bar top.
+    // When the timing range contains a single row (firstId == lastId), the bar
+    // floats in the gap above that row because yAtTics interpolates well above
+    // it. Snapping to the inside row's own bottom does nothing. Instead, snap
+    // to the row ABOVE the inside row so the bar is flush with both bounding
+    // row boxes, not protruding into the upper gap.
+    let topBoundEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.firstId);
+    if (queueBarInfo.hasInside && queueBarInfo.firstId === queueBarInfo.lastId) {
+      const idx = rowEls.findIndex(r => r.dataset.rowId === queueBarInfo.firstId);
+      if (idx > 0) topBoundEl = rowEls[idx - 1];
+    }
+    if (topBoundEl) {
+      const rect = topBoundEl.getBoundingClientRect();
+      barTop = Math.min(barTop, rect.bottom - queueRect.top - 3);
+    }
+    // When maxT lands exactly on a row's tics, bar bottom flushes with the box's bottom edge
+    const exactRow = ladder.find(r => r.tics === maxT);
+    let barBottom = exactRow ? exactRow.bottom : yAtTics(maxT);
+    // Find clamping boundary for the bar bottom — mirrors the top-side logic.
+    let bottomBoundEl = rowEls.find(r => r.dataset.rowId === queueBarInfo.lastId);
+    if (queueBarInfo.hasInside && queueBarInfo.firstId === queueBarInfo.lastId) {
+      const idx = rowEls.findIndex(r => r.dataset.rowId === queueBarInfo.lastId);
+      if (idx < rowEls.length - 1) bottomBoundEl = rowEls[idx + 1];
+    }
+    if (bottomBoundEl) {
+      const rect = bottomBoundEl.getBoundingClientRect();
+      const lastLadderTic = ladder.length > 0 ? ladder[ladder.length - 1].tics : 0;
+      if (queueBarInfo.hasInside === false && maxT > lastLadderTic) {
+        // Attack lands after all visible queue rows — show as ~1 row height below the last row
+        const rowH = ladder.length > 0 ? ladder[ladder.length - 1].height : 20;
+        barBottom = rect.bottom - queueRect.top + rowH + gapPx;
+      } else {
+        barBottom = Math.max(barBottom, rect.top - queueRect.top);
+      }
+    }
+    bar.style.top = `${barTop}px`;
+    bar.style.height = `${Math.max(4, barBottom - barTop + 3)}px`;
+    el.appendChild(bar);
+  }
+  if (fill) {
+    // Ceremony-intro fill: reveal rows in engine array order, top to bottom.
+    Array.from(el.children).forEach((row, i) => {
+      row.style.transition = `opacity ${QUEUE_FILL_MS}ms ease`;
+      row.style.opacity = '0';
+      setTimeout(() => { row.style.opacity = '1'; }, i * QUEUE_FILL_STAGGER);
+    });
+  }
+}
+
+// diff for resolve/enter animations (non-blocking)
+export function diffQueueForAnimation(oldBs, newBs) {
+  const oldRows = oldBs.queue || [];
+  const newRows = newBs.queue || [];
+  // Hand rows use stable label key (LH/RH singleton identity preserved across
+  // tics/state updates). Monster attack/cooldown share m:<label> so a phase
+  // change is a successor, not a removal+insert. This prevents value-update
+  // slide-out+slide-in.
+  const oldKeys = new Set(oldRows.map(queueRowKey));
+  const newKeys = new Set(newRows.map(queueRowKey));
+  return {
+    resolved: oldRows.filter(r => !newKeys.has(queueRowKey(r))).map(r => r.id),
+    added: newRows.filter(r => !oldKeys.has(queueRowKey(r))).map(r => ({
+      id: r.id,
+      isMonster: r.label !== 'LH' && r.label !== 'RH' && r.event === 'attack'
+    }))
+  };
+}
+
+// Bug 4 helpers: preserve exit-animating rows across renders (robust cache + clear)
+export function clearQueueDom() {
+  const el = document.getElementById('queue');
+  if (!el) return;
+  [...el.children].forEach(child => {
+    const id = child.dataset.rowId;
+    if (id && exitingQueueRows.has(id)) {
+      const entry = exitingQueueRows.get(id);
+      if (entry.finished) {
+        child.remove();
+        exitingQueueRows.delete(id);
+      }
+      // else keep it (still animating), do not remove or replace
+    } else {
+      child.remove();
+    }
+  });
+}
+
+export function markQueueRowExiting(rowId) {
+  const el = document.getElementById('queue');
+  if (!el) return;
+  const row = el.querySelector(`[data-row-id="${rowId}"]`);
+  if (!row) return;
+  row.classList.remove('queue-row-current');
+  row.classList.add('queue-row-exit'); // slides fully out but STAYS in flow (space not released yet)
+
+  if (!exitingQueueRows.has(rowId)) {
+    exitingQueueRows.set(rowId, { element: row, finished: false });
+  }
+  // Removal + sibling group-lift is owned by groupLiftRemaining() (rare it
+  // actually leaves the DOM after this). No auto-remove here so the rows below
+  // never jump — they glide up together as one unit after the exit+gap.
+}
+
+// Shared rail-row builder: used by renderQueue and the PC-64 intro countdown so
+// countdown rows are pixel-identical to the real queue (same sort, same DOM).
+// withMarkers=false omits PC-56 '>' timing markers (no selection during the intro).
+export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
+  const div = document.createElement('div');
+  div.className = 'queue-row';
+  if (index >= 0 && index < 3) {
+    div.classList.add('top-row');
+  }
+  div.dataset.rowId = row.id;
+  div.dataset.tics = row.tics;
+  div.dataset.stableKey = queueRowKey(row);
+  const nameSpan = document.createElement('span');
+  nameSpan.className = 'name';
+  // Ready placeholder rows: show the hand label and "Ready" — no tic countdown
+  if (row.event === 'ready') {
+    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    const ticSpan = document.createElement('span');
+    ticSpan.className = 'tic';
+    ticSpan.textContent = '—';
+    div.appendChild(nameSpan);
+    div.appendChild(ticSpan);
+    return div;
+  }
+  // Approach rows: show "L. Hand Ready" with tic count (approach still fires)
+  if (row.event === 'approach') {
+    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    const ticSpan = document.createElement('span');
+    ticSpan.className = 'tic';
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+    div.appendChild(nameSpan);
+    div.appendChild(ticSpan);
+    return div;
+  }
+  // Monster attack rows: show "<Monster name>'s <Attack>" (e.g. "Imp's Bite").
+  // No timing bar — canonical attack rows stay name + tic.
+  const isMonster = isMonsterQueueRow(row);
+  if (isMonster) {
+    const atkName = queueEventName(row, monsters, bs);
+    nameSpan.textContent = `${monsterQueueName(row, monsters)}'s ${atkName}`;
+  } else if (isMonsterCooldownRow(row)) {
+    // Clear row (player-style bar). Label "<Monster name> recovering".
+    nameSpan.textContent = `${monsterQueueName(row, monsters)} recovering`;
+  } else {
+    nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+  }
+  const ticSpan = document.createElement('span');
+  ticSpan.className = 'tic';
+  ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+  div.appendChild(nameSpan);
+  div.appendChild(ticSpan);
+  if (!isMonster) {
+    const bar = document.createElement('div');
+    bar.className = 'queue-bar';
+    div.appendChild(bar);
+  }
+  // PC-56: bar-only mode — no pin markers; the prediction bar is added by renderQueue
+  return div;
+}
+
+// In-place text/tics mutation for a same-logical-row update (Behavior A). Mirrors
+// buildQueueRow's output but reuses the existing DOM node so nothing slides or
+// flickers. Hand rows and monsters already carry .stableKey from buildQueueRow.
+export function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
+  div.dataset.rowId = row.id;
+  div.dataset.tics = row.tics;
+  div.classList.toggle('top-row', index >= 0 && index < 3);
+  const isMonster = isMonsterQueueRow(row);
+  const isRecovering = isMonsterCooldownRow(row);
+  const hasBar = !isMonster && row.event !== 'ready' && row.event !== 'approach';
+  let nameSpan = div.querySelector('.name');
+  let ticSpan = div.querySelector('.tic');
+  let bar = div.querySelector('.queue-bar');
+  if (!nameSpan) {
+    nameSpan = document.createElement('span');
+    nameSpan.className = 'name';
+    div.prepend(nameSpan);
+  }
+  if (!ticSpan) {
+    ticSpan = document.createElement('span');
+    ticSpan.className = 'tic';
+    div.appendChild(ticSpan);
+  }
+  if (row.event === 'ready') {
+    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    ticSpan.textContent = '—';
+  } else if (row.event === 'approach') {
+    nameSpan.textContent = `${queueLabel(row)} Ready`;
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+  } else if (isMonster) {
+    const atkName = queueEventName(row, monsters, bs);
+    nameSpan.textContent = `${monsterQueueName(row, monsters)}'s ${atkName}`;
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+  } else if (isRecovering) {
+    nameSpan.textContent = `${monsterQueueName(row, monsters)} recovering`;
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+  } else {
+    nameSpan.textContent = `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
+  }
+  if (hasBar && !bar) {
+    bar = document.createElement('div');
+    bar.className = 'queue-bar';
+    div.appendChild(bar);
+  } else if (!hasBar && bar) {
+    bar.remove();
+  }
+}
+
+// Intro theater mirror only (playIntroCountdown). Live render follows engine
+// array order and must not call this.
+export function sortQueueRows(queue) {
+  return [...queue].sort((a, b) => {
+    if ((a.tics ?? 0) !== (b.tics ?? 0)) return (a.tics ?? 0) - (b.tics ?? 0);
+    const aPlayer = a.label === 'LH' || a.label === 'RH' ? 0 : 1;
+    const bPlayer = b.label === 'LH' || b.label === 'RH' ? 0 : 1;
+    return aPlayer - bPlayer;
+  });
+}
+
+function queueLabel(row) {
+  if (row.label === 'LH') return 'L. Hand';
+  if (row.label === 'RH') return 'R. Hand';
+  // Monsters show as single-letter arena markers (A/B/C), like the mockups.
+  return String(row.label || '?').replace(/^Monster\s*/i, '');
+}
+
+function queueEventName(row, monsters, bs) {
+  if (row.event === 'approach') return '';
+  // Monster cooldown is a clear recovering row, not a hand-ready countdown.
+  if (isMonsterCooldownRow(row)) return 'recovering';
+  // A hand freeing is a state change — the queue counts down to "Ready".
+  if (row.event === 'cooldown' || row.event === 'recovery') return 'Ready';
+  if (row.event === 'drinking') {
+    const p = (bs.potions || {})[row.potionSlot];
+    return (p && p.template_name) ? p.template_name : 'Potion';
+  }
+  if (row.attackName) return row.attackName;
+  // Picked at commit (PC-72). Falls back to the primary attack for legacy rows.
+  if (row.monsterAttackName) return row.monsterAttackName;
+  // Monster attack rows carry no name — use the monster's primary attack.
+  const mon = monsters.find(m => m.label === row.label);
+  if (mon && Array.isArray(mon.attacks) && mon.attacks.length && mon.attacks[0].name) {
+    return mon.attacks[0].name;
+  }
+  return 'Attack';
+}
+

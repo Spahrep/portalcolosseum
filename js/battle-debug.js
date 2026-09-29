@@ -175,3 +175,10 @@
     };
   }
 })();
+
+// Named export for queue-render.js. Delegates to the live window.debugLog
+// binding — the IIFE above replaces that binding once config loads.
+export function debugLog(tag, msg) {
+  const fn = typeof window !== 'undefined' && window.debugLog;
+  if (typeof fn === 'function' && fn !== debugLog) fn(tag, msg);
+}
