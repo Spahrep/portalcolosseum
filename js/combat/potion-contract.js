@@ -22,17 +22,6 @@ export function potionPrePostTicks(weaponSpeed, potionSpeed) {
 }
 
 /**
- * @param {number} weaponSpeed
- * @param {number} potionSpeed
- * @returns {number}
- */
-export function potionTotalTicks(weaponSpeed, potionSpeed) {
-  const w = Math.max(0, Math.floor(Number(weaponSpeed) || 0));
-  const p = Math.max(0, Math.floor(Number(potionSpeed) || 0));
-  return w + p;
-}
-
-/**
  * @typedef {'A' | 'B'} PotionSlot
  */
 

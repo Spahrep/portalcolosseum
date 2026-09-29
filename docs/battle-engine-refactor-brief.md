@@ -1,7 +1,7 @@
 # Battle Engine Refactor Brief — enforce Peek → Process → Cleanup → Remove
 
 Status: **Draft for Grok** — companion to `docs/battle-engine-item-processing.md` (the official spec).
-Author: Hermes (Foreman), 2026-09-25. Every claim below is grounded in the current code; nothing invented.
+Author: Hermes (Foreman), 2026-09-25. §2 is a historical pre-PC-94 snapshot (see the note there); do not treat its uncorrected line citations as current code.
 
 ## 1. The contract to enforce
 
@@ -20,6 +20,8 @@ Visual discipline: visuals may run **in parallel inside a step**, but a step doe
 
 ## 2. Current code — what actually exists (verified)
 
+> **HISTORICAL — describes pre-refactor shape.** Written against the pre-PC-94 engine. Do not follow the line citations or step inventories below as a map of today's files. Corrected anchors (updated in place so they do not dangle): `tick()` is `js/combat/engine.js:295` and is Peek → Process → Cleanup → Remove (not remove-first); `handleFire` starts at `engine.js:77` (not :61); there is no `sortQueue` (order is fixed at insert, `js/combat/tic-queue.js:50`; the UI intro sort is `sortQueueRows` in `js/battle/queue-render.js:407`); `tickLoop` is `js/battle-app.js:1842` (the file ends at line 1955; the old `:2490` cite is past EOF). §3 restates this same snapshot, including the stale claim that `tick()` is remove-first.
+
 ### Server: `/tick` endpoint
 `api/combat/[...path].js:748-786` — `POST /api/combat/runs/:id/tick`:
 - resumes the engine from `run.battle_state` (line 761)
@@ -27,16 +29,18 @@ Visual discipline: visuals may run **in parallel inside a step**, but a step doe
 - persists `engine.state` + `player_hp` (lines 770-772)
 - returns `{ result, state }` (lines 774-785)
 
-### Engine: `engine.tick()` — `js/combat/engine.js:232-264`
-Current order (NOT the spec order):
-1. `removeHead(state.queue)` — **data detach FIRST** (line 237)
-2. advance remaining rows' tics by the consumed row's value (lines 248-253)
-3. `handleFire(head)` — the polymorphic dispatch (line 255)
-4. `sortQueue` (line 256)
-5. compute flags: `needsInput`, `playerReady`, `battleOver` (lines 259-263)
-6. return `{ narrate, row, feed, needsInput, playerReady, battleOver }`
+### Engine: `engine.tick()` — `js/combat/engine.js:295`
+Current order is Peek → Process → Cleanup → Remove (not remove-first). Remove pops the head last.
+1. `peek()` — read the head; return early if there is no actionable row (`engine.js:297`)
+2. advance remaining non-ready rows' tics by the head's value, before remove (`engine.js:305-311`)
+3. `process(head)` — polymorphic dispatch via `handleFire` (`engine.js:312`; `process` at :263)
+4. `cleanup()` — death / victory gate (`engine.js:313`; `cleanup` at :282)
+5. `remove()` — pop the head last (`engine.js:314`; `remove` at :259)
+6. return `{ narrate, row, feed, needsInput, playerReady, battleOver }` (`engine.js:318-319`)
 
-### Engine: `handleFire(row)` — `js/combat/engine.js:61-206`
+No `sortQueue`. Queue order is fixed at insert (`tic-queue.js:50`).
+
+### Engine: `handleFire(row)` — `js/combat/engine.js:77-226`
 This is the de-facto **Process** step — a big `if/else` dispatch on `row.event`:
 - `buff_expiry` (62-71) — remove buff, log
 - `winding` → `impact` (73-84) — carry attack data, add impact row
@@ -56,10 +60,10 @@ This is the de-facto **Process** step — a big `if/else` dispatch on `row.event
 - `peekHead` (33-41) — read head, skip `ready` placeholders
 - `removeHead` (43-53) — pop head, skip `ready` placeholders
 - `popNext` (17-31) — pop + tic-offset (legacy)
-- `sortQueue` (55-63) — player-first on ties
+- No `sortQueue`. Order is fixed at insert (`tic-queue.js:50`). UI intro sort is `sortQueueRows` (`js/battle/queue-render.js:407`).
 - `commitNewRow` (65-69), `addEvent` (10-15)
 
-### Client: `tickLoop` — `js/battle-app.js:2490-2601`
+### Client: `tickLoop` — `js/battle-app.js:1842-1953`
 - loops: pacing delay → `POST /tick` + `GET /runs/:id` in parallel → render HP/monsters/loadout → label-keyed queue diff → `runQueueRemoval` on resolved rows → space-creation preview → `renderQueue` (in `js/battle/queue-render.js`) → entry animations → typewriter `appendFeedLine` → break on `playerReady`/`needsInput`/`done`/`battleOver`.
 
 ### Client: visual choreography — `js/battle-app.js`

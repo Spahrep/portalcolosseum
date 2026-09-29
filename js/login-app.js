@@ -212,22 +212,6 @@ function startCooldown(seconds) {
   }, 1000);
 }
 
-/**
- * Stop the cooldown timer early (e.g. if the 429 window resets faster).
- */
-function stopCooldown() {
-  if (cooldownInterval) {
-    clearInterval(cooldownInterval);
-    cooldownInterval = null;
-  }
-  resetEmailCooldown = false;
-  cooldownSeconds = 0;
-  const resetLink = document.getElementById('reset-link');
-  resetLink.textContent = 'Reset it';
-  resetLink.style.opacity = '1';
-  resetLink.style.pointerEvents = 'auto';
-}
-
 async function sendResetEmail() {
   if (!supabase) {
     return showMessage('Authentication service not available. Please refresh the page.', 'error');

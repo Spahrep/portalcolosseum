@@ -143,7 +143,7 @@ Trigger: A queue row finishes processing (e.g. an attack resolves or a row is ca
 .queue-row-lift { transition: transform 280ms ease-in; }
 ```
 
-**JS hook (existing):** `markQueueRowExiting()` — detaches the row absolutely, runs the FLIP slide-up on the siblings, attaches `animationend`. Duration constants `QUEUE_EXIT_MS` (280) + `QUEUE_EXIT_BUFFER_MS` (60) in `js/battle/queue-render.js` must match the CSS. The battle clock holds re-render for `QUEUE_EXIT_MS + buffer` so slide-out + slide-up finish before the queue rebuilds (a shorter wait snaps the rows).
+**JS hook (existing):** `markQueueRowExiting()` — detaches the row absolutely, runs the FLIP slide-up on the siblings, attaches `animationend`. Duration constants `QUEUE_EXIT_MS` (280) and `QUEUE_REMOVE_GAP_MS` (100) in `js/battle/queue-render.js` must match the CSS. The wait fallback is `QUEUE_EXIT_MS + 50` (`js/battle-app.js:198`) so slide-out finishes before the queue rebuilds (a shorter wait snaps the rows).
 
 ---
 

@@ -4,7 +4,6 @@
  * exit-row cache, and the PC-56 prediction bar. No behavior change.
  */
 import { debugLog } from '../battle-debug.js';
-import { computeTimingMarkers } from '../combat/tic-queue.js';
 
 // Exit animation duration for queue rows — MUST match the `.queue-row-exit`
 // / `.queue-row-lift` CSS in run.html. The battle clock holds the rebuild long
@@ -28,10 +27,6 @@ const exitingQueueRows = new Map(); // rowId -> { element, finished }
 
 export function setQueueBarInfo(info) {
   queueBarInfo = info;
-}
-
-export function getQueueBarInfo() {
-  return queueBarInfo;
 }
 
 export function clearQueueBarInfo() {

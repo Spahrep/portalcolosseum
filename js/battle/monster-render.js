@@ -16,9 +16,6 @@ const MONSTER_FADE_MS = 1400;      // per-monster fade duration
 export function setMonstersPendingReveal(flag) {
   monstersPendingReveal = flag;
 }
-export function isMonstersPendingReveal() {
-  return monstersPendingReveal;
-}
 
 // PC-52r/PC-63: monster condition words color by severity everywhere they render.
 const BAND_CLASS = {
@@ -113,21 +110,6 @@ function triggerCritMonsterHit(letter) {
     card.classList.remove('monster-crit-hit');
     if (sprite) sprite.classList.remove('sprite-crit-flash');
   }, HIT_FEEDBACK.CRIT_FLASH_MS));
-}
-
-// PC-74 sprite-swap seam (sprites don't exist yet — documented hook only; future unique crit sprite swap slots in here)
-// Call setMonsterSprite(monsterId, 'crit') to mark a card for crit state (adds .crit class for CSS hook).
-// TODO: when crit sprites land, implement the 'crit' case to swap sprite.src or background.
-function setMonsterSprite(monsterId, state) {
-  // monsterId can be label or numeric id; find the card and toggle class
-  const cards = document.querySelectorAll('.monster-card');
-  for (const card of cards) {
-    if (card.dataset.id === String(monsterId) || card.dataset.letter === String(monsterId)) {
-      if (state === 'crit') card.classList.add('crit');
-      else card.classList.remove('crit');
-      return;
-    }
-  }
 }
 
 // Route engine feed lines to the right reaction. parseHitLine is the single
@@ -299,7 +281,6 @@ export {
   hideForReveal,
   revealMonsters,
   handleHitLine,
-  setMonsterSprite,
   bandClass,
   deathCards,
   MONSTER_DEATH_MS,

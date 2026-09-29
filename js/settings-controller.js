@@ -5,12 +5,6 @@ const SPEEDS = {
   fast:   { charMs: 5,  lineDelayMs: 300,  label: 'Fast', windupEnabled: true },
   instant: { charMs: 0, lineDelayMs: 0,    label: 'Instant', windupEnabled: false },
 };
-const FONT_SIZES = {
-  S: { scale: '0.85', label: 'Small' },
-  M: { scale: '1.0',  label: 'Medium' },
-  L: { scale: '1.3',  label: 'Large' },
-};
-
 const SPEED_KEYS = ['slow', 'normal', 'fast', 'instant'];
 const FONT_KEYS = ['S', 'M', 'L'];
 
@@ -37,7 +31,6 @@ function init() {
 // === Public API ===
 export function getSpeedPreset() { return SPEEDS[speedKey] || SPEEDS.normal; }
 export function getSpeedKey() { return speedKey; }
-export function getFontSizePreset() { return FONT_SIZES[fontSizeKey] || FONT_SIZES.M; }
 export function getFontSizeKey() { return fontSizeKey; }
 
 export function setSpeed(key) {

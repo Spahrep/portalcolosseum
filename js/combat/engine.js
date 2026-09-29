@@ -5,10 +5,10 @@
 // F2: winding → impact transition implemented so attacks deal damage and hands return to Ready.
 // F10: startBattle accepts optional initialPlayerHp for cross-battle HP carry.
 
-import { createQueue, commitNewRow, popNext, addEvent, peekHead, removeHead } from './tic-queue.js';
+import { createQueue, commitNewRow, addEvent, peekHead, removeHead } from './tic-queue.js';
 import { createPlayer, createMonster, isPlayerDead, isMonsterDead, applyDamage, swapHandWithBelt as swapHandWithBeltPure, PLAYER_MAX_HP } from './participants.js';
 import { getHpWord } from './hp-words.js';
-import { rollDamage, checkHit, resolveAttack, multiTargetReduction } from './damage.js';
+import { rollDamage, checkHit, resolveAttack } from './damage.js';
 import { POTION_SLOTS, ALL_EFFECT_TYPES, HAND_LABELS, POTION_PHASES, potionPrePostTicks } from './potion-contract.js';
 import { buildPotionPayload, applyPotionEffect } from './potion-effects.js';
 import { applyBuffs } from './buffs.js';

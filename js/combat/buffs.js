@@ -12,7 +12,3 @@ export function applyBuffs(buffs, currentTic, type) {
   }
   return mod;
 }
-
-export function expireBuffs(buffs, currentTic) {
-  return buffs.filter(b => b.endTic > currentTic);
-}

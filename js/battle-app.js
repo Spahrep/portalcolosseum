@@ -10,12 +10,12 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 import { computeTimingMarkers } from './combat/tic-queue.js';
 import { potionPrePostTicks } from './combat/potion-contract.js';
-import { getSpeedPreset, getSpeedKey, getFontSizePreset, getFontSizeKey, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
+import { getSpeedPreset, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
 import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.debug in Supabase
 import {
-  renderQueue, diffQueueForAnimation, clearQueueDom, markQueueRowExiting,
-  buildQueueRow, updateQueueRowInPlace, sortQueueRows,
-  setQueueBarInfo, getQueueBarInfo, clearQueueBarInfo, isQueueRowExiting,
+  renderQueue, diffQueueForAnimation, markQueueRowExiting,
+  buildQueueRow, sortQueueRows,
+  setQueueBarInfo, clearQueueBarInfo, isQueueRowExiting,
   queueRowKey, isMonsterQueueRow, forgetQueueRowExiting,
   QUEUE_EXIT_MS, QUEUE_REMOVE_GAP_MS, QUEUE_GAP_MS,
   QUEUE_WIPE_MS, QUEUE_FLASH_MS, QUEUE_ENTER_MS
@@ -23,17 +23,15 @@ import {
 
 import {
   clearTyping, typeFeedLines, renderFeed, populateFeedInstantly,
-  appendFeedLine, typeFeedLinesAsync, awaitNarration,
+  appendFeedLine, awaitNarration,
   bindFeedRender, getRenderedFeedLines, setRenderedFeedLines, addRenderedFeedLines,
   isTypingInProgress, setFeedPinned
 } from './battle/feed-render.js';
 import {
-  renderDice, updateCurrentDie, performSweepAnimation,
-  rollDiceAnimation, bindDiceRender
+  renderDice, bindDiceRender
 } from './battle/dice-render.js';
-import { renderMonsters, buildMonsterCard, appendNoMonsters, finishDeath,
-         hideForReveal, revealMonsters, handleHitLine, setMonsterSprite,
-         bandClass, setMonstersPendingReveal, isMonstersPendingReveal,
+import { renderMonsters, revealMonsters, handleHitLine,
+         bandClass, setMonstersPendingReveal,
          setSuppressHitFeedback, deathCards, MONSTER_DEATH_MS } from './battle/monster-render.js';
 
 // PC-78: feed and dice own their state. Hooks stay here (busy gate, hit
@@ -464,25 +462,6 @@ async function playInsertMarker(gap) {
   return marker;
 }
 
-async function settleEnteredRows(entries, preset) {
-  const queueEl = document.getElementById('queue');
-  if (!queueEl || !entries || entries.length === 0 || animationsSkipped(preset)) return;
-  const waits = [];
-  for (const entry of entries) {
-    const id = entry && entry.id != null ? entry.id : entry;
-    const rowEl = queueEl.querySelector(`[data-row-id="${id}"]`);
-    if (!rowEl) continue;
-    const isMon = isMonsterQueueRow(entry);
-    const cls = isMon ? 'queue-row-monster-enter' : 'queue-row-enter';
-    rowEl.classList.add(cls);
-    const timeout = isMon ? 450 : QUEUE_ENTER_MS + 80;
-    waits.push(waitForEvent(rowEl, 'animationend', timeout).then(() => {
-      rowEl.classList.remove('queue-row-enter', 'queue-row-monster-enter');
-    }));
-  }
-  await Promise.all(waits);
-}
-
 /**
  * Full insert ceremony: empty gap grows → marker wipes → flashes → real row settles.
  * Event-gated via waitForEvent. Instant / reduced-motion skips straight to render.
@@ -719,11 +698,6 @@ function renderLoadout(bs) {
   const rh = document.getElementById('loadout-rh');
   if (lh) lh.textContent = (wl.hand_l && wl.hand_l.name) || '—';
   if (rh) rh.textContent = (wl.hand_r && wl.hand_r.name) || '—';
-}
-
-async function animateQueueSpaceCreation(added, queueEl, preset) {
-  if (!added || added.length === 0 || !queueEl) return;
-  await playInsertCeremony(added, preset, null);
 }
 
 // PC-64: tic-0 countdown to the first decision point — theater over the
