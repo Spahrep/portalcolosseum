@@ -11,6 +11,7 @@
  */
 
 import { supabaseClient } from '../js/utils.js';
+import { persistRefreshCookie } from './session.js';
 
 // Supabase client instance (initialized via shared utils)
 let supabase;
@@ -51,12 +52,7 @@ async function checkExistingSession() {
       // User is already logged in - persist session cookie and redirect
       if (session.refresh_token) {
         try {
-          await fetch('/api/session', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: session.refresh_token })
-          });
+          await persistRefreshCookie(session);
         } catch (err) {
           console.error('Failed to persist session cookie:', err);
         }
@@ -153,12 +149,7 @@ async function signInWithEmail() {
       const session = data.session;
       if (session?.refresh_token) {
         try {
-          await fetch('/api/session', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: session.refresh_token })
-          });
+          await persistRefreshCookie(session);
         } catch (err) {
           console.error('Failed to persist session cookie:', err);
         }

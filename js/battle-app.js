@@ -8,6 +8,7 @@
  */
 
 import { supabaseClient } from '../js/utils.js';
+import { fillHudName } from './session.js';
 import { apiCall, checkAuth } from './combat/combat-api.js';
 import { computeTimingMarkers } from './combat/tic-queue.js';
 import { getSpeedPreset, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
@@ -1768,11 +1769,7 @@ async function init() {
 
   // PC-52: fill hud-name from session (front-end only, placeholder dock)
   const { data: { session } } = await supabase.auth.getSession();
-  const hudName = document.getElementById('hud-name');
-  if (hudName && session && session.user) {
-    const meta = session.user.user_metadata || {};
-    hudName.textContent = meta.username || meta.full_name || (session.user.email ? session.user.email.split('@')[0] : 'PLAYER');
-  }
+  fillHudName(session);
   // PC follow-up: global playerName for queue labels
   const hudNameEl = document.getElementById('hud-name');
   playerName = hudNameEl ? hudNameEl.textContent : 'Player';

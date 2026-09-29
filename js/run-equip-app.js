@@ -7,6 +7,7 @@
  */
 
 import { apiCall, checkAuth } from './combat/combat-api.js';
+import { fillHudName, redirectIfActiveRun } from './session.js';
 
 // Backpack and loadout hold ITEM objects: { kind: 'weapon'|'consumable', id, name }.
 // Identity is the instance id, never the name — two Wristblades are two distinct
@@ -564,27 +565,10 @@ async function init() {
   if (!session) return;
 
   // PC-52: fill hud-name from session (front-end only, placeholder dock)
-  const hudName = document.getElementById('hud-name');
-  if (hudName && session && session.user) {
-    const meta = session.user.user_metadata || {};
-    hudName.textContent = meta.username || meta.full_name || (session.user.email ? session.user.email.split('@')[0] : 'PLAYER');
-  }
+  fillHudName(session);
 
   // PC-50r: active-run bounce on load (equip screen only for brand-new runs)
-  try {
-    const res = await fetch('/api/combat/runs/active', {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (res.ok) {
-      const { run } = await res.json();
-      if (run && run.id) {
-        window.location.href = '/run.html?id=' + run.id;
-        return;
-      }
-    }
-  } catch (e) {
-    console.error('Active run check failed (soft):', e);
-  }
+  if (await redirectIfActiveRun(session.access_token)) return;
   try {
     await loadData();
   } catch (e) {

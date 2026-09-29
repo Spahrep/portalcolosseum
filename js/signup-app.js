@@ -20,6 +20,7 @@
  */
 
 import { supabaseClient } from '../js/utils.js';
+import { persistRefreshCookie } from './session.js';
 
 let supabase;
 
@@ -288,15 +289,7 @@ async function signUpWithEmail() {
     // can persist it and proceed directly.
     if (signUpData && signUpData.session) {
       // User is immediately confirmed — persist session and proceed
-      const refreshToken = signUpData.session.refresh_token;
-      if (refreshToken) {
-        await fetch('/api/session', {
-          method: 'POST',
-          credentials: 'include',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ refresh_token: refreshToken })
-        });
-      }
+      await persistRefreshCookie(signUpData.session);
       await markInviteKeyUsed();
       window.location.href = '/game';
     } else {
@@ -319,15 +312,10 @@ async function handleAuthCallback() {
   const { data: { session }, error } = await supabase.auth.getSession();
 
   if (session) {
-    // Persist the session via HttpOnly cookie through /api/session
-    const refreshToken = session.refresh_token;
-    if (refreshToken) {
-      const sessionResponse = await fetch('/api/session', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refreshToken })
-      });
+    // Persist the session via HttpOnly cookie through /api/session.
+    // response.ok check stays here — the shared POST does not log status.
+    if (session.refresh_token) {
+      const sessionResponse = await persistRefreshCookie(session);
       if (!sessionResponse.ok) {
         console.error('Failed to persist session:', sessionResponse.status);
       }

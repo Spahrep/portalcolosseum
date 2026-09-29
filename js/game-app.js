@@ -16,6 +16,13 @@
  */
 
 import { supabaseClient } from '../js/utils.js';
+import {
+  ensureSession,
+  fillHudName,
+  redirectIfActiveRun,
+  loadServerSettings,
+  logout as sessionLogout,
+} from './session.js';
 import { showNotReadyModal, highlightSpeedButtons, highlightFontButtons, initMenuSettings } from './settings-menu.js';
 
 // === SUPABASE CONFIGURATION ===
@@ -273,118 +280,26 @@ function resetBackground() {
 
 /**
  * Initialize the game page.
- * 1. Creates the Supabase client
- * 2. Checks for an active session (redirects to login if none)
- * 3. Initializes the game canvas context and town location navigation
+ * Session bootstrap (PKCE, cookie restore, fail-closed /login) is ensureSession.
+ * This function keeps the shared client for logout, then only town wiring.
  */
 async function initGame() {
-  // Initialize Supabase client with localStorage-backed PKCE storage
-  // This matches login-app.js and signup-app.js — the session must be
-  // stored in localStorage so the game page can read it after login redirect
-  // (same origin, same storage). The refresh_token is persisted separately
-  // via the /api/session Edge Function as an HttpOnly cookie.
-  // Security: tokens are short-lived access tokens; the refresh_token
-  // (long-lived) goes through HttpOnly cookies, not localStorage.
+  // Assign the shared PKCE singleton before the first await. initMenuSettings
+  // wires logout during DOMContentLoaded while this function is in flight;
+  // logout() reads `supabase` at click time, and the client must already exist.
   if (SUPABASE_URL) {
     supabase = supabaseClient();
   }
 
-  // Fail-closed auth check: session is persisted via localStorage (PKCE flow)
-  // with refresh_token also stored in HttpOnly cookie as a fallback.
-  let session = null;
-  if (supabase) {
-    try {
-      // First: check for a PKCE callback (code in URL query params)
-      if (window.location.search.includes('code=')) {
-        // PKCE auto-exchange happened via detectSessionInUrl — just need to
-        // pick up the session and persist the refresh token server-side
-        const { data: { session }, error: _error } = await supabase.auth.getSession();
-
-        if (session && session.refresh_token) {
-          // Persist the refresh token in an HttpOnly cookie via our Edge Function
-          await fetch('/api/session', {
-            method: 'POST',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ refresh_token: session.refresh_token })
-          });
-        }
-      }
-      // else: PKCE flow with localStorage-backed storage will have the
-      // session available directly — no need for cookie fallback here.
-
-      // Now check the session (from localStorage or PKCE callback exchange)
-      const { data: { session: storedSession }, error: _error } = await supabase.auth.getSession();
-      session = storedSession;
-
-      // === COOKIE-BASED SESSION RESTORATION (fallback) ===
-      // If localStorage session check failed, try restoring from the HttpOnly
-      // cookie via GET /api/session — the cookie survives localStorage clears
-      // and is XSS-safe (HttpOnly = JS can't read it).
-      // The GET endpoint exchanges the refresh_token for a fresh session.
-      if (!session && supabase) {
-        try {
-          const sessionResponse = await fetch('/api/session', {
-            method: 'GET',
-            credentials: 'include'
-          });
-          if (sessionResponse.ok) {
-            const { session: cookieSession } = await sessionResponse.json();
-            if (cookieSession && cookieSession.access_token) {
-              // Hydrate the Supabase client with the cookie-restored session
-              await supabase.auth.setSession({
-                access_token: cookieSession.access_token,
-                refresh_token: cookieSession.refresh_token,
-              });
-              session = cookieSession;
-            }
-          }
-        } catch (err) {
-          // Cookie-based restoration is a fallback — don't fail hard
-          console.error('Cookie session restore error:', err);
-        }
-      }
-
-      if (!session) {
-        // No active session - fail closed, redirect to login
-        window.location.href = '/login';
-        return;
-      }
-    } catch (error) {
-      // Fail closed on any error - redirect to login
-      console.error('Session check failed:', error);
-      window.location.href = '/login';
-      return;
-    }
-  } else {
-    // Supabase not initialized - fail closed, redirect to login
-    window.location.href = '/login';
-    return;
-  }
+  const session = await ensureSession({ redirectTo: '/login' });
+  if (!session) return;
 
   // PC-52: fill hud-name from session (front-end only, placeholder dock)
-  const hudName = document.getElementById('hud-name');
-  if (hudName && session && session.user) {
-    const meta = session.user.user_metadata || {};
-    hudName.textContent = meta.username || meta.full_name || (session.user.email ? session.user.email.split('@')[0] : 'PLAYER');
-  }
+  fillHudName(session);
 
   // PC-50r: auto-resume into active run (never show town to a player with an active run)
   // Fetch failure is soft (console + continue to town) — a redirect loop is worse.
-  try {
-    const res = await fetch('/api/combat/runs/active', {
-      headers: { Authorization: `Bearer ${session.access_token}` },
-    });
-    if (res.ok) {
-      const { run } = await res.json();
-      if (run && run.id) {
-        window.location.href = '/run.html?id=' + run.id;
-        return;
-      }
-    }
-  } catch (e) {
-    console.error('Active run check failed (soft):', e);
-  }
+  if (await redirectIfActiveRun(session.access_token)) return;
 
   // Load persisted settings from the server into localStorage
   // This runs asynchronously — the game doesn't block on it.
@@ -411,50 +326,13 @@ async function initGame() {
 }
 
 /**
- * Fetch settings from the server and merge into localStorage.
- * Server values win — they reflect the user's last confirmed choice across any device.
- * Fails silently on network/auth errors; localStorage cache survives.
- */
-async function loadServerSettings(tokenForHeader) {
-  if (!tokenForHeader) return;
-  try {
-    const res = await fetch('/api/user/profile', {
-      headers: { Authorization: `Bearer ${tokenForHeader}` },
-    });
-    if (!res.ok) return;
-    const { settings } = await res.json();
-    if (!settings) return;
-    // Merge each known setting into localStorage
-    if (settings.battle_text_speed) {
-      localStorage.setItem('pc_battle_text_speed', settings.battle_text_speed);
-    }
-  } catch (e) {
-    console.error('Settings fetch failed (soft):', e);
-  }
-}
-
-/**
  * Log out the current user.
  * Clears the Supabase session and the HttpOnly session cookie, then
- * redirects back to the login page.
+ * redirects back to the login page. Body lives in session.js; this
+ * wrapper closes over the page's shared client.
  */
-async function logout() {
-  if (supabase) {
-    try {
-      await supabase.auth.signOut();
-    } catch (error) {
-      console.error('Logout error:', error);
-    }
-  }
-  // Clear the HttpOnly session cookie via the Edge Function
-  try {
-    await fetch('/api/session', { method: 'DELETE', credentials: 'include' });
-  } catch (err) {
-    console.error('Cookie clear error:', err);
-  }
-  // Clear PKCE session from localStorage (code_verifier, session, etc.)
-  localStorage.removeItem('supabase.auth.token');
-  window.location.href = '/login';
+function logout() {
+  return sessionLogout(supabase);
 }
 
 // === ONBOARDING TUTORIAL (PC-11) ===

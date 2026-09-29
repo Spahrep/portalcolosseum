@@ -7,6 +7,7 @@
  */
 
 import { supabaseClient } from '../js/utils.js';
+import { persistRefreshCookie } from './session.js';
 
 // === SUPABASE CONFIGURATION ===
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
@@ -67,12 +68,7 @@ async function checkAdminSession() {
   // Persist session via HttpOnly cookie (same pattern as game-app.js)
   if (session.refresh_token) {
     try {
-      await fetch('/api/session', {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: session.refresh_token }),
-      });
+      await persistRefreshCookie(session);
     } catch (_err) { /* non-fatal */ }
   }
 
