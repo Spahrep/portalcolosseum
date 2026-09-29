@@ -9,7 +9,6 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.112.4';
 import { computeTimingMarkers } from './combat/tic-queue.js';
-import { potionPrePostTicks } from './combat/potion-contract.js';
 import { getSpeedPreset, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
 import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.debug in Supabase
 import {
@@ -33,6 +32,9 @@ import {
 import { renderMonsters, revealMonsters, handleHitLine,
          bandClass, setMonstersPendingReveal,
          setSuppressHitFeedback, deathCards, MONSTER_DEATH_MS } from './battle/monster-render.js';
+import {
+  escHtml, attackInfo, showInfo, buildRootActionRows,
+} from './battle/action-menu-rows.js';
 
 // PC-78: feed and dice own their state. Hooks stay here (busy gate, hit
 // feedback, ceremony) so the new modules do not import battle-app.js.
@@ -301,11 +303,22 @@ let introTimer = null; // PC-64: countdown interval for the battle-intro replay
 // PC-81: action-menu input is bound once. renderActionMenu publishes the live
 // cascade here; both handlers read it. Binding inside renderActionMenu leaked a
 // document mousemove listener and clobbered document.onkeydown on every decision.
+// PC-84: this module-scope binding is the input seam. Do not move it back inside
+// renderActionMenu. Row click/hover is bindActionMenuRowInput (still per painted
+// row — the document listeners stay once).
 let keyboardActive = false;
 let actionMenuLive = null; // { stack, renderStack, selectTop, back } | null
 
 function onActionMenuMouseMove() {
   keyboardActive = false;
+}
+
+/** Top-window row click/hover. Hover yields while an arrow key owns the cursor. */
+function bindActionMenuRowInput(el, lvl, ri, renderStack, selectTop) {
+  el.onclick = () => { lvl.activeIdx = ri; renderStack(); selectTop(); };
+  el.onmouseenter = () => {
+    if (!keyboardActive && lvl.activeIdx !== ri) { lvl.activeIdx = ri; renderStack(); }
+  };
 }
 
 function onActionMenuKeyDown(e) {
@@ -1122,15 +1135,6 @@ async function doSwap(runId, hand) {
   setBusy(false);
 }
 
-function escHtml(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
 /**
  * PC-63 DW cascading command menu — three-window modal cascade per the locked
  * spec (docs/battle-status-ui.md Cascading Window Spec; shared/CommandSelection.png):
@@ -1196,40 +1200,6 @@ function renderActionMenu(bs) {
   const hand = readyHands[0];
   const w = weapons[hand === 'LH' ? 'hand_l' : 'hand_r'];
   const handLineText = hand === 'LH' ? 'L.HAND' : 'R.HAND';
-
-  function potionFor(slot) {
-    return potions[slot === 'A' ? 'potion_a' : 'potion_b'] || potions[slot] || null;
-  }
-
-  function showInfo(text) {
-    const ar = document.getElementById('action-readout');
-    if (ar) ar.innerHTML = text || '';
-  }
-
-  function attackInfo(a, weapon) {
-    const src = weapon || w || {};
-    const base = src.base_damage != null ? src.base_damage : (src.damage || 0);
-    const range = src.damage_range != null ? src.damage_range : 0;
-    const multi = a.is_multi_target ? ' <span style="color:#ffaa66">[MULTI]</span>' : '';
-    const desc = a.description ? ` — ${escHtml(a.description)}` : '';
-    const weaponSpeed = src.speed || 0;
-    const pBase = (a.prepare_time || 0) + weaponSpeed;
-    const pVar = a.prepare_time_range || 0;
-    const cBase = (a.cooldown_time || 0) + weaponSpeed;
-    const cVar = a.cooldown_time_range || 0;
-    const pText = pVar > 0 ? `${pBase}-${pBase + pVar}` : `${pBase}`;
-    const cText = cVar > 0 ? `${cBase}-${cBase + cVar}` : `${cBase}`;
-    let h = `<div style="display:flex;flex-direction:column;gap:1px;width:100%;">`;
-    h += `<div style="color:#ffcc66;font-weight:bold;white-space:nowrap;">${escHtml(a.name)}${multi}</div>`;
-    h += `<div style="display:flex;flex-direction:column;gap:0;line-height:1.4;">`;
-    h += `<div><span style="color:#7a8ca6;">Damage:</span> ${base}±${range}</div>`;
-    h += `<div><span style="color:#7a8ca6;">Windup:</span> ${pText}t</div>`;
-    h += `<div><span style="color:#7a8ca6;">Cooldown:</span> ${cText}t</div>`;
-    h += `</div>`;
-    if (desc) h += `<div style="color:#556677;font-size:11px;margin-top:2px;">${desc}</div>`;
-    h += `</div>`;
-    return h;
-  }
 
   function setMarkers(attack) {
     const q = (lastBs && lastBs.queue) || [];
@@ -1386,8 +1356,7 @@ function renderActionMenu(bs) {
           + (ri === lvl.activeIdx ? ' active' : '');
         el.innerHTML = row.html;
         if (i === topIdx && !row.disabled) {
-          el.onclick = () => { lvl.activeIdx = ri; renderStack(); selectTop(); };
-          el.onmouseenter = () => { if (!keyboardActive && lvl.activeIdx !== ri) { lvl.activeIdx = ri; renderStack(); } };
+          bindActionMenuRowInput(el, lvl, ri, renderStack, selectTop);
         }
         win.appendChild(el);
       });
@@ -1442,79 +1411,19 @@ function renderActionMenu(bs) {
       return;
     }
     if (top.kind === 'target') {
-      if (top.attack) { showInfo(attackInfo(top.attack, top.weapon)); return; } // markers persist from the action pick
+      if (top.attack) { showInfo(attackInfo(top.attack, top.weapon, w)); return; } // markers persist from the action pick
       if (top.info) { showInfo(top.info); return; }
     }
     // confirm level: readout stays as the pending action until it executes
   }
 
   // ---- root command window rows (real per-weapon attacks via template mapping) ----
-  const rootRows = [];
-  if (w && w.id) {
-    (w.attacks || []).forEach(a => {
-      rootRows.push({
-        html: escHtml(a.name),
-        info: attackInfo(a),
-        attack: a,
-        enter() { pickTarget(a); }
-      });
-    });
-  } else {
-    const fistW = weapons.fist;
-    if (fistW && fistW.attacks && fistW.attacks.length > 0) {
-      const fist = fistW.attacks[0];
-      rootRows.push({
-        html: escHtml(fist.name),
-        info: attackInfo(fist, fistW),
-        attack: fist,
-        enter() { pickTarget(fist); }
-      });
-    } else {
-      // degrade without any numbers if server did not provide fist profile
-      const attack = { id: 1, name: 'Fist (unarmed)', is_multi_target: false, description: '' };
-      rootRows.push({
-        html: 'Fist (unarmed)',
-        info: '<strong>Fist (unarmed)</strong>',
-        attack,
-        enter() { pickTarget(attack); }
-      });
-    }
-  }
-  rootRows.push({ blank: true });
-  ['A', 'B'].forEach(slot => {
-    const p = potionFor(slot);
-    const used = p && p.used;
-    if (!p) {
-      rootRows.push({ html: `Pouch ${slot}: <span class="dw-dim">empty</span>`, info: `Pouch ${slot}: no potion in this slot`, disabled: true });
-      return;
-    }
-    if (used) {
-      rootRows.push({ html: `${escHtml(p.template_name)} <span class="dw-dim">(USED)</span>`, info: `Pouch ${slot}: already used`, disabled: true });
-      return;
-    }
-    rootRows.push({
-      html: escHtml(p.template_name),
-      info: `Pouch ${slot}: ${escHtml(p.template_name)} · ${escHtml(p.effect_label || '')}<br>`
-        + `<span style="color:#7a8ca6;">Windup:</span> ${potionPrePostTicks((w && w.speed) || 0, p.rolled_speed || 0)}t`,
-      potionTiming: {
-        prepare_time: potionPrePostTicks((w && w.speed) || 0, p.rolled_speed || 0),
-        prepare_time_range: 0,
-        name: escHtml(p.template_name)
-      },
-      enter() { pickPotion(slot, p); }
-    });
-  });
-  rootRows.push({ blank: true });
-  const swapDelay = belt && belt.id && w && w.id ? Math.max((w.speed || 2), (belt.speed || 2)) : null;
-  rootRows.push({
-    html: `Belt Loop: <span class="${belt && belt.id ? 'dw-weapon' : 'dw-dim'}">${escHtml(belt && belt.id ? belt.name : 'none')}</span>`,
-    info: belt && belt.id
-      ? `Belt swap (${hand}): swap ${escHtml(belt.name)} into hand · ${swapDelay} tics equip delay`
-      : 'No belt weapon equipped',
-    disabled: !belt || !belt.id,
-    beltSwap: true,
-    attack: belt && belt.id ? { prepare_time: swapDelay, prepare_time_range: 0, name: 'Belt Swap' } : null,
-    enter() { if (belt && belt.id) pickEquip(); }
+  // PC-84: row HTML lives in action-menu-rows.js. Callbacks keep the cascade here.
+  const rootRows = buildRootActionRows({
+    w, weapons, potions, belt, hand,
+    onPickTarget: pickTarget,
+    onPickPotion: pickPotion,
+    onPickEquip: pickEquip,
   });
   stack.push({ kind: 'action', tab: handLineText, rows: rootRows, activeIdx: 0 });
 
