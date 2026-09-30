@@ -400,9 +400,8 @@ function pinProcessedHead(head) {
 /**
  * Fired-head exit: slide the processed row out, then glide the rows below up.
  * Call only after narration + visuals. A `ready` pause is not a fired head.
- * A same-key successor (monster attack→cooldown, hand phase) stays the same
- * key in data — reseat that successor so renderQueue does not treat the
- * glide as a key-breaking rebuild.
+ * A same-key successor (monster winding→impact→cooldown, hand phase) stays the same
+ * key in data — renderQueue relabels that node in place. No exit slide.
  */
 async function animateFiredHeadExit(head, newQueue, bs) {
   if (!head || head.event === 'ready') return;
@@ -1896,8 +1895,9 @@ async function tickLoop(runId) {
       const visualsP = awaitTickVisuals(deathBefore);
       await Promise.all([narrateP, visualsP]);
 
-      // removeHead LAST — fired head slides out + queue glides up.
-      // Ready pauses are not a fired head. Same-key successors stay same-key.
+      // removeHead LAST — fired head slides out only when its key is gone.
+      // Ready pauses are not a fired head. Monster winding→impact→cooldown
+      // and hand phase changes stay the same key, so they do not exit-slide.
       await animateFiredHeadExit(processedHead, newQueue, bs);
 
       const oldKeys = new Set(oldQueue.map(queueRowKey));

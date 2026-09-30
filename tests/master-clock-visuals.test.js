@@ -165,10 +165,12 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.ok(clockCeremony >= 0 && clockRemove > clockCeremony, 'battle clock: attack ceremony before ready slide-out');
   });
 
-  it('monster attack and cooldown stay one stable key', () => {
+  it('monster winding, impact, and cooldown stay one stable key', () => {
     const queueRender = read('js/battle/queue-render.js');
-    const keyFn = fnBodyUntilNext(queueRender, 'function queueRowKey', ['function isMonsterQueueRow']);
-    assert.match(keyFn, /row\.event === 'attack' \|\| row\.event === 'cooldown'/);
+    const keyFn = fnBodyUntilNext(queueRender, 'function queueRowKey', ['function isMonsterLabel']);
+    assert.match(keyFn, /row\.event === 'winding'/);
+    assert.match(keyFn, /row\.event === 'impact'/);
+    assert.match(keyFn, /row\.event === 'cooldown'/);
     assert.match(keyFn, /`m:\$\{row\.label\}`/);
   });
 });
