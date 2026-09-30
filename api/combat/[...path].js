@@ -995,22 +995,31 @@ async function handle(request) {
           const monsters = monstersForLoot(persisted);
           if (monsters.length > 0) {
             const templateIds = [...new Set(monsters.map(m => m.template_id || m.id).filter(Boolean))];
-            // Fetch point_costs from portal_monster_mapping
-            const { data: monsterMappings } = await admin.from('portal_monster_mapping')
-              .select('monster_template_id, point_cost')
-              .eq('portal_template_id', run.portal_template_id)
-              .in('monster_template_id', templateIds);
-            const pointCostMap = {};
-            (monsterMappings || []).forEach(m => { pointCostMap[m.monster_template_id] = m.point_cost || 0; });
-            const depth = run.current_battle || 1;
-            const depthMult = [1.0, 1.1, 1.2, 1.3, 1.4][Math.min(depth - 1, 4)] || 1.0;
+            // Fetch loot_value from monster_template (PC-DEC-057)
+            const { data: lootTemplates } = await admin.from('monster_template')
+              .select('id, loot_value')
+              .in('id', templateIds);
+            const lootValueMap = {};
+            (lootTemplates || []).forEach(t => { lootValueMap[t.id] = t.loot_value || 0; });
+            // Fetch progress-keyed depth multipliers from game_config
+            const { data: cfg } = await admin.from('game_config').select('loot_depth_multipliers').eq('id', 1).single();
+            const multipliers = (cfg && cfg.loot_depth_multipliers) || [];
+            const totalBattles = run.total_battles || 5;
+            const battleNum = run.current_battle || 1;
+            const progress = totalBattles > 0 ? battleNum / totalBattles : 0;
+            let depthMult = 1.0;
+            for (const m of (multipliers || [])) {
+              if (m && typeof m.progress === 'number' && progress >= m.progress) depthMult = m.mult;
+            }
+            if (multipliers.length > 0 && depthMult === 1.0 && progress < (multipliers[0]?.progress || 0)) {
+              depthMult = multipliers[0].mult || 1.0;
+            }
             let lpBudget = 0;
             let combinedMinGold = 0;
             let combinedMaxGold = 0;
             for (const m of monsters) {
               const tId = m.template_id || m.id;
-              lpBudget += (pointCostMap[tId] || 0) * depthMult;
-              // Note: min/max_gold fetched below or assume from template later
+              lpBudget += (lootValueMap[tId] || 0) * depthMult;
             }
             // Fetch monster min/max gold (seed fixup makes them non-zero)
             const { data: monTemplates } = await admin.from('monster_template')
