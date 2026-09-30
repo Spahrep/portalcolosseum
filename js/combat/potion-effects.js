@@ -4,13 +4,26 @@
 import { PLAYER_MAX_HP } from './participants.js';
 import { createBuff } from './buffs.js';
 
-export function buildPotionPayload(potion, tic) {
+// PC-106: effect = floor + uniform(0..window), inclusive. Floor is the
+// guaranteed minimum. Window 0/missing returns the floor and consumes no RNG
+// so legacy potions stay byte-identical. rng is the engine's state.rng when
+// threaded; Math.random is the fallback for direct callers.
+function rollWindowEffect(rolledFloor, rolledWindow, rng) {
+  const floor = Number(rolledFloor) || 0;
+  const window = Number(rolledWindow) || 0;
+  if (window <= 0) return floor;
+  const roll = typeof rng === 'function' ? rng : Math.random;
+  return floor + Math.floor(roll() * (window + 1));
+}
+
+export function buildPotionPayload(potion, tic, rng) {
   if (!potion) {
     throw new Error('No potion');
   }
-  const { effect_type, rolled_floor, duration_ticks, template_name } = potion;
+  const { effect_type, rolled_floor, rolled_window, duration_ticks, template_name } = potion;
+  const effect = rollWindowEffect(rolled_floor, rolled_window, rng);
   if (effect_type === 'heal') {
-    return { type: 'heal', amount: rolled_floor, name: template_name };
+    return { type: 'heal', amount: effect, name: template_name };
   }
   // buff types: speed | accuracy | damage
   if (duration_ticks == null || duration_ticks <= 0) {
@@ -18,7 +31,7 @@ export function buildPotionPayload(potion, tic) {
   }
   return {
     type: effect_type,
-    value: rolled_floor,
+    value: effect,
     durationTicks: duration_ticks,
     endTic: tic + duration_ticks,
     name: template_name

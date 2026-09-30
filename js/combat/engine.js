@@ -92,12 +92,14 @@ function buildStateSnapshot(state) {
 // pre-crit tests consume no extra RNG. On crit: heal amount and buff value
 // × critEffectMultiplier, buff duration × critDurationMultiplier (rounded).
 // Heals have no duration — effect only.
+// PC-106: window roll happens first (inside buildPotionPayload) and consumes
+// RNG only when rolled_window > 0. Crit multiplies that rolled effect.
 function applyPotionWithCrit(state, potion, tic) {
+  const payload = buildPotionPayload(potion, tic, state.rng);
   const critChance = Number(potion?.crit_chance) || 0;
   const crit = critChance > 0 && state.rng() * 100 < critChance;
   const effectMult = crit ? (Number(potion?.critEffectMultiplier) || 1.5) : 1;
   const durMult = crit ? (Number(potion?.critDurationMultiplier) || 1.5) : 1;
-  const payload = buildPotionPayload(potion, tic);
   if (crit) {
     if (payload.type === 'heal') {
       payload.amount = Math.round(payload.amount * effectMult);
