@@ -121,7 +121,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - No 100% guaranteed drops (just very high weights)
 - Same item can drop multiple times (no stack cap for MVP)
 - Leftover LP below cheapest item cost is voided
-- **Stop-share (shipped):** early stop pays `portal_template.stop_share_tiers` via `computeStopShare` (`api/combat/[...path].js:152-165`, applied at `:1096-1128`): player-selected items up to `sel_items`, then a random slice of the remainder up to `rand_items`, gold scaled by `gold_pct`. Migration defaults: `supabase/migrations/20260924000000_stop_share_tiers.sql:4-12`. Full clear keeps the pool (`:153-154`). Death forfeits prize-pool weapons (`:1003-1010`).
+- **Stop-share (shipped, re-designed PC-DEC-056 2026-09-30):** early stop pays `portal_template.stop_share_tiers` via `computeStopShare` (`api/combat/[...path].js:213-227`, applied at `:1141-1185`): player-selected items up to `sel_items`, then a random slice of the remainder up to `rand_items`, gold scaled by `gold_pct`. Tiers are now **progress-keyed** (each entry `{progress, gold_pct, sel_items, rand_items}`, `progress` = fraction of run cleared) so they auto-scale to any portal length — not positional by fight number. Default accelerating curve: gold 15/30/50/70/100%, items 0/0/1/1/2 sel + 0/1/1/2/2 rand. Full clear keeps the pool (`:153-154`). Death forfeits prize-pool weapons (`:1003-1010`). Random picks are revealed with a roulette-style sweep (same theater as the dice ceremony) — a reveal, not a silent server pick. Migration: `supabase/migrations/20260930XXXXXX_stop_share_progress_tiers.sql`.
 - **Consumables are equipment-class loot** — take LP like weapons, template-costed, same portal/monster assignment
 
 ### Gold Drops

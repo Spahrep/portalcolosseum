@@ -214,8 +214,19 @@ function computeStopShare(battleNum, totalBattles, prizePool, tiers) {
   if (battleNum >= totalBattles) {
     return { gold: prizePool.gold || 0, weapon_ids: [...(prizePool.weapon_ids || [])], forfeited_weapon_ids: [] };
   }
-  const idx = Math.max(0, Math.min(battleNum - 1, tiers.length - 1));
-  const tier = tiers[idx] || { gold_pct: 0.2, sel_items: 0, rand_items: 0 };
+  // Progress-keyed (PC-DEC-056): pick the tier whose `progress` threshold the
+  // current battle meets. progress = fraction of the run cleared. Auto-scales
+  // to any portal length (5 fights, 8 fights, etc.) — not positional by fight
+  // number. If progress is below the first tier's threshold (e.g. battle 1 of
+  // an 8-fight portal = 12.5%), fall back to the FIRST (lowest) tier — the
+  // harshest share, since the player has barely started. If no tiers at all,
+  // use a sane default.
+  const progress = totalBattles > 0 ? battleNum / totalBattles : 0;
+  let tier = null;
+  for (const t of (tiers || [])) {
+    if (t && typeof t.progress === 'number' && progress >= t.progress) tier = t;
+  }
+  tier = tier || (tiers && tiers.length ? tiers[0] : null) || { gold_pct: 0.2, sel_items: 0, rand_items: 0 };
   const weapons = prizePool.weapon_ids || [];
   const totalWeapons = weapons.length;
   return {

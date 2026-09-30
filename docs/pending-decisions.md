@@ -463,6 +463,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Locked option A (strict player-mirror). Monsters are slower on purpose — do not retune the formula to be balance-neutral; template base_speed may be retuned later. Attack tics = mon.speed + rollStat(prepare_time, prepare_time_range). Cooldown tics = mon.speed + rollStat(cooldown_time, cooldown_time_range). Attack fire inserts that attack's cooldown; cooldown fire picks the next attack. Death-cancels-everything (PC-DEC-054) unchanged. Applied to battle-status-ui.md, action-visual-lifecycle.md, combat-engine-plan.md, attack-queue-animation-testing.md, current-design-status.md.
 
+- ID: PC-DEC-056
+  Date: 2026-09-30
+  Source: Discord thread "Resolve six open design rulings" (1554889161033650278)
+  Speaker: Spahrep
+  Verbatim: "I want these to be configurable, keep in mind later portals might have more combats, so we have to account for that. ... We want the player to want to push on, there has to be a carrot to go with the big downside of fail = get nothing"
+  Status: DECIDED
+  Notes: Stop-share tiers re-designed as a PROGRESS-keyed curve (not positional-by-fight-number), so it auto-scales to any portal length. Gold kept = accelerating curve 15/30/50/70/100% by progress (20/40/60/80/100% through the run); items kept = selected stays scarce until late (0/0/1/1/2 sel + 0/1/1/2/2 rand). Full clear = 100% always. The marginal reward grows as the run deepens (risk grows), which is the push-your-luck carrot. Config: `portal_template.stop_share_tiers` JSONB array, each entry `{progress, gold_pct, sel_items, rand_items}` where `progress` = fraction of run cleared (0.2/0.4/0.6/0.8/1.0). `computeStopShare` picks the tier whose `progress` threshold the current battle meets (was positional `tiers[battleNum-1]`). UX: player selects `sel_items` weapons (existing), then the `rand_items` random picks are revealed with a roulette-style sweep animation (same theater as the dice ceremony) — the random selection is a reveal, not a silent server pick. Applied to loot-prize-pool.md, current-design-status.md, migration 20260930XXXXXX_stop_share_progress_tiers.sql.
+
 ## Open
 
 - ID: PC-DEC-004
