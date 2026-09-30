@@ -178,10 +178,11 @@ function queueNextMonsterAttack(state, mon, labelForLog) {
   const atk = pickMonsterAttack(mon, state.rng);
   // PC-107: windup = mon.speed * prepare multiplier (not speed + flat ticks).
   // PC-110: round the multiplier result DOWN so frantic speeds never gain free ticks.
+  // PC-110b: floor at 1 tick so future speed buffs can never zero an attack.
   const prepare = rollMultiplier(atk?.prepare_time_multiplier ?? 1, atk?.prepare_time_multiplier_range ?? 0, state.rng);
-  const newRow = commitNewRow(state.queue, mon.label, 'winding', Math.floor(mon.speed * prepare));
+  const newRow = commitNewRow(state.queue, mon.label, 'winding', Math.max(1, Math.floor(mon.speed * prepare)));
   stampMonsterStrike(newRow, mon, atk);
-  newRow.cooldownTicks = Math.floor(mon.speed * rollMultiplier(atk?.cooldown_time_multiplier ?? 1, atk?.cooldown_time_multiplier_range ?? 0, state.rng));
+  newRow.cooldownTicks = Math.max(1, Math.floor(mon.speed * rollMultiplier(atk?.cooldown_time_multiplier ?? 1, atk?.cooldown_time_multiplier_range ?? 0, state.rng)));
   logLine(state, `${mon.name || mon.template_name || 'Monster'} ${labelForLog.replace('Monster ', '')} prepares ${atk?.name ? `a ${atk.name}` : 'an attack'}...`);
   return newRow;
 }
@@ -314,7 +315,7 @@ function resolveMonsterImpact(state, row, mon) {
     const atk = monsterAttackByName(mon, atkName);
     const cdTics = Number.isFinite(row.cooldownTicks)
       ? row.cooldownTicks
-      : Math.floor(mon.speed * rollMultiplier(atk?.cooldown_time_multiplier ?? 1, atk?.cooldown_time_multiplier_range ?? 0, state.rng));
+      : Math.max(1, Math.floor(mon.speed * rollMultiplier(atk?.cooldown_time_multiplier ?? 1, atk?.cooldown_time_multiplier_range ?? 0, state.rng)));
     addEvent(state.queue, mon.label, 'cooldown', cdTics);
   }
 }
