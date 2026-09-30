@@ -27,6 +27,105 @@ function rollStat(base, range) {
   return Math.max(1, b + delta);
 }
 
+/**
+ * Attack damage multiplier: uniform base ± range (even spread, EV at base).
+ * Range <= 0 returns base exactly. Do NOT reuse rollStat — it clamps >= 1,
+ * which would turn a 0.7 Quick Slash into 1.0. Clamp >= 0 so a wide range
+ * cannot invert damage (migration comment on base_damage_multiplier_range).
+ */
+export function rollMultiplier(base, range, rng = Math.random) {
+  const b = Number(base);
+  const safe = Number.isFinite(b) ? b : 1;
+  const v = Number(range) || 0;
+  if (v <= 0) return safe;
+  const rolled = safe + (rng() * 2 - 1) * v;
+  return Math.max(0, rolled);
+}
+
+/**
+ * Monsters that contribute loot. Persisted battle_state is engine.state,
+ * whose monsters live at state.monsters (full objects, including template_id).
+ * participants.monsters exists only on the in-memory getState() snapshot and
+ * is NOT what gets saved. Do not filter on .dead — death is current_hp <= 0,
+ * and killed monsters must still drop.
+ */
+export function monstersForLoot(persisted) {
+  const list = persisted && Array.isArray(persisted.monsters) ? persisted.monsters : [];
+  return list.filter(m => m);
+}
+
+/** DB used-flags mirror engine potion state. Spread into every battle_state persist. */
+export function potionUsedFlags(state) {
+  const pots = state && state.potions;
+  return {
+    consume_a_used: !!(pots && pots.A && pots.A.used),
+    consume_b_used: !!(pots && pots.B && pots.B.used)
+  };
+}
+
+/** X AP + Y gold. ap_cost is on portal_template; Y is entry_gold_cost (gold_cost alias). */
+export function entryCosts(template) {
+  const ap = Math.max(0, Number(template && template.ap_cost) || 0);
+  const goldRaw = template && (template.entry_gold_cost != null ? template.entry_gold_cost : template.gold_cost);
+  const gold = Math.max(0, Number(goldRaw) || 0);
+  return { ap, gold };
+}
+
+/**
+ * Deduct entry cost from profiles.gold / profiles.ap.
+ * Missing wallet columns are non-fatal (skipped) so an unmigrated DB still
+ * creates runs. Insufficient balance is a hard 400 — no run is inserted.
+ */
+export async function chargeRunEntry(admin, userId, template) {
+  const { ap: apCost, gold: goldCost } = entryCosts(template);
+  if (apCost === 0 && goldCost === 0) return { ok: true, charged: null };
+  let profile;
+  try {
+    const res = await admin.from('profiles').select('gold, ap').eq('id', userId).maybeSingle();
+    if (res.error) throw res.error;
+    profile = res.data;
+  } catch (e) {
+    console.error('entry cost profile read failed (non-fatal if wallet columns missing)', e);
+    return { ok: true, charged: null, skipped: true };
+  }
+  if (!profile || (profile.gold == null && profile.ap == null)) {
+    return { ok: true, charged: null, skipped: true };
+  }
+  const haveGold = Number.isFinite(Number(profile.gold)) ? Number(profile.gold) : 0;
+  const haveAp = Number.isFinite(Number(profile.ap)) ? Number(profile.ap) : 0;
+  if (haveGold < goldCost || haveAp < apCost) {
+    return { ok: false, status: 400, error: 'Not enough AP or gold to enter this portal' };
+  }
+  const next = { gold: haveGold - goldCost, ap: haveAp - apCost };
+  try {
+    const upd = await admin.from('profiles').update(next).eq('id', userId);
+    if (upd && upd.error) throw upd.error;
+  } catch (e) {
+    console.error('entry cost deduct failed', e);
+    return { ok: false, status: 500, error: 'Internal server error' };
+  }
+  return { ok: true, charged: { before: { gold: haveGold, ap: haveAp }, ap: apCost, gold: goldCost } };
+}
+
+export async function refundRunEntry(admin, userId, charged) {
+  if (!charged) return;
+  try {
+    const upd = await admin.from('profiles').update({
+      gold: charged.before.gold,
+      ap: charged.before.ap
+    }).eq('id', userId);
+    if (upd && upd.error) console.error('entry cost refund failed', upd.error);
+  } catch (e) {
+    console.error('entry cost refund failed', e);
+  }
+}
+
+let adminClientOverride = null;
+/** Test-only injection. Production leaves this null. */
+export function __setAdminClientForTests(client) {
+  adminClientOverride = client;
+}
+
 const CORS = {
   'Content-Type': 'application/json',
   'Access-Control-Allow-Origin': 'https://portalcolosseum.com',
@@ -67,6 +166,7 @@ function computeStopShare(battleNum, totalBattles, prizePool, tiers) {
 }
 
 function getAdminClient() {
+  if (adminClientOverride) return adminClientOverride;
   const url = process.env.SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) throw new Error('Missing server config');
@@ -205,8 +305,19 @@ async function handle(request) {
         }
       }
 
-      const { data: tmpl } = await admin.from('portal_template').select('fights, green_dice_count, yellow_dice_count, red_dice_count, green_faces, yellow_faces, red_faces').eq('id', portalTemplateIdNum).single();
+      // ap_cost exists; entry_gold_cost may not (guarded fallback).
+      const tmplCols = 'fights, green_dice_count, yellow_dice_count, red_dice_count, green_faces, yellow_faces, red_faces, ap_cost';
+      let tmplRes = await admin.from('portal_template').select(tmplCols + ', entry_gold_cost').eq('id', portalTemplateIdNum).single();
+      if (tmplRes.error || !tmplRes.data) {
+        tmplRes = await admin.from('portal_template').select(tmplCols).eq('id', portalTemplateIdNum).single();
+        if (tmplRes.data && tmplRes.data.entry_gold_cost == null) tmplRes.data.entry_gold_cost = 0;
+      }
+      const tmpl = tmplRes.data;
       if (!tmpl) return json({ error: 'Portal template not found' }, 404);
+
+      // PC-99: a run costs X AP + Y gold. Skip (don't 500) if wallet columns are absent.
+      const entryCharge = await chargeRunEntry(admin, user.id, tmpl);
+      if (!entryCharge.ok) return json({ error: entryCharge.error }, entryCharge.status || 400);
 
       // PC-64r2: player max HP comes from game_config.starting_hp, not a literal
       const maxPlayerHp = await startingHp(admin);
@@ -231,6 +342,7 @@ async function handle(request) {
         run = inserted;
       } catch (e) {
         // PC-50r: unique violation from the partial index (concurrent double-submit or race) → friendly 400
+        await refundRunEntry(admin, user.id, entryCharge.charged);
         if (e && (e.code === '23505' || e.message?.includes('23505') || e.details?.includes('idx_portal_run_one_active_per_user'))) {
           return json({ error: 'You already have an active run. End it before starting a new one.' }, 400);
         }
@@ -253,6 +365,7 @@ async function handle(request) {
           console.error('dice pool insert error', diceErr);
           // cleanup: delete the run so caller never sees a run with no dice
           await admin.from('portal_run').delete().eq('id', run.id);
+          await refundRunEntry(admin, user.id, entryCharge.charged);
           return json({ error: 'Internal server error' }, 500);
         }
       }
@@ -661,7 +774,7 @@ async function handle(request) {
 
       // Fetch attack early to know isMultiTarget for R2 single-target restriction
       const { data: attackRow } = await admin.from('attack')
-        .select('prepare_time, cooldown_time, prepare_time_range, cooldown_time_range, is_multi_target, base_damage_multiplier, name, crit_factor, crit_multiplier')
+        .select('prepare_time, cooldown_time, prepare_time_range, cooldown_time_range, is_multi_target, base_damage_multiplier, base_damage_multiplier_range, name, crit_factor, crit_multiplier')
         .eq('id', attackIdNum).single();
       const isMultiTarget = !!attackRow?.is_multi_target;
 
@@ -695,8 +808,8 @@ async function handle(request) {
       if (!weaponId) {
         const { data: config } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed, fist_crit_chance').eq('id', 1).single();
         if (!config) return json({ error: 'Game config missing' }, 500);
-        castTicks = rollStat(config.fist_prepare_time, config.fist_prepare_time_range);
-        cooldownTicks = rollStat(config.fist_cooldown_time, config.fist_cooldown_time_range);
+        castTicks = config.fist_speed + rollStat(config.fist_prepare_time, config.fist_prepare_time_range);
+        cooldownTicks = config.fist_speed + rollStat(config.fist_cooldown_time, config.fist_cooldown_time_range);
         playerDamage = config.fist_damage;
         playerAccuracy = config.fist_accuracy;
         playerCritChance = config.fist_crit_chance ?? 0;
@@ -718,7 +831,7 @@ async function handle(request) {
         const weaponSpeed = Number(weapon?.speed) || 0;
         castTicks = weaponSpeed + rollStat(attackRow?.prepare_time, attackRow?.prepare_time_range);
         cooldownTicks = weaponSpeed + rollStat(attackRow?.cooldown_time, attackRow?.cooldown_time_range);
-        const multiplier = attackRow?.base_damage_multiplier ?? 1;
+        const multiplier = rollMultiplier(attackRow?.base_damage_multiplier ?? 1, attackRow?.base_damage_multiplier_range);
 
         playerDamage = Math.round((weapon?.damage || 10) * multiplier);
         playerAccuracy = weapon?.accuracy;
@@ -765,10 +878,11 @@ async function handle(request) {
 
       const result = engine.tick();
 
-      // Persist state
+      // Persist state. A drink resolves on tick, so used-flags must land here
+      // or the potion comes back next fight when no later commit rewrites them.
       const newState = engine.getState();
       await admin.from('portal_run')
-        .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp })
+        .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp, ...potionUsedFlags(engine.state) })
         .eq('id', id).eq('user_id', user.id);
 
       return json({
@@ -822,7 +936,7 @@ async function handle(request) {
 
       try {
         if (s.monsters_dead && !s.player_dead) {
-          const monsters = (persisted?.participants?.monsters || []).filter(m => m && !m.dead);
+          const monsters = monstersForLoot(persisted);
           if (monsters.length > 0) {
             const templateIds = [...new Set(monsters.map(m => m.template_id || m.id).filter(Boolean))];
             // Fetch point_costs from portal_monster_mapping
@@ -970,9 +1084,9 @@ async function handle(request) {
           freshEngine.startBattle(participants, null, carryHp, await startingHp(admin));
           newBattleState = freshEngine.state;
           await admin.from('portal_run')
-            .update({ battle_state: newBattleState, current_battle: newBattle, player_hp: carryHp })
+            .update({ battle_state: newBattleState, current_battle: newBattle, player_hp: carryHp, prize_pool: prizePool })
             .eq('id', id).eq('user_id', user.id);
-          return json({ status: 'active', current_battle: newBattle, battle_state: { participants: freshEngine.getState().participants } });
+          return json({ status: 'active', current_battle: newBattle, prize_pool: prizePool, battle_state: { participants: freshEngine.getState().participants } });
         } else {
           // only complete if monsters_dead on final battle
           if (s.monsters_dead) {
@@ -1573,17 +1687,7 @@ async function handle(request) {
       };
     }
 
-    // PC-39 review fix: DB used-flags must mirror engine potion state whenever a
-    // battle_state that may have fired an effect is persisted. Without this, an
-    // in-battle drink flips used=true inside engine.state but the DB flag stays
-    // false, so the state route would show the potion as still drinkable.
-    function potionUsedFlags(state) {
-      const pots = state && state.potions;
-      return {
-        consume_a_used: !!(pots && pots.A && pots.A.used),
-        consume_b_used: !!(pots && pots.B && pots.B.used)
-      };
-    }
+    // potionUsedFlags is module-scoped and spread into commit and tick persists.
 
     async function rebuildBattleState(run, monsters, playerHp) {
       const potionLoadout = await buildPotionLoadout(run);
