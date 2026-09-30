@@ -1158,6 +1158,10 @@ async function handle(request) {
         const share = computeStopShare(run.current_battle || 1, run.total_battles || 5, prizePool, tiers);
         let awardedWeaponIds = [];
         let forfeitedWeaponIds = [];
+        // Exposed for the client roulette. Full clear has no split — both stay empty.
+        // Do not recompute the picks here; these are the same arrays the split already chose.
+        let selectedWeaponIds = [];
+        let randomWeaponIds = [];
         if (share.weapon_ids && share.weapon_ids.length > 0) {
           // full payout case (last battle)
           awardedWeaponIds = [...share.weapon_ids];
@@ -1169,6 +1173,8 @@ async function handle(request) {
           // random pick randCount from remaining
           const shuffled = [...remaining].sort(() => Math.random() - 0.5);
           const randomPicks = shuffled.slice(0, randCount);
+          selectedWeaponIds = selected;
+          randomWeaponIds = randomPicks;
           awardedWeaponIds = [...selected, ...randomPicks];
           forfeitedWeaponIds = (prizePool.weapon_ids || []).filter(id => !awardedWeaponIds.includes(id));
         }
@@ -1185,6 +1191,8 @@ async function handle(request) {
         const awardedLp = Math.floor((prizePool.lp_earned || 0) * goldPct);
         const awardedPool = {
           weapon_ids: awardedWeaponIds,
+          selected_weapon_ids: selectedWeaponIds,
+          random_weapon_ids: randomWeaponIds,
           gold: awardedGold,
           lp_earned: awardedLp
         };
