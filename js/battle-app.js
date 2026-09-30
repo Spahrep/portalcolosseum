@@ -23,8 +23,8 @@ import {
 } from './battle/queue-render.js';
 
 import {
-  clearTyping, typeFeedLines, renderFeed, populateFeedInstantly,
-  appendFeedLine, awaitNarration,
+  typeFeedLines, renderFeed, populateFeedInstantly,
+  appendFeedLine, awaitNarration, completeCurrentTypingLine,
   bindFeedRender, getRenderedFeedLines, setRenderedFeedLines, addRenderedFeedLines,
   isTypingInProgress, setFeedPinned
 } from './battle/feed-render.js';
@@ -32,9 +32,11 @@ import {
   renderDice, bindDiceRender
 } from './battle/dice-render.js';
 import { renderMonsters, revealMonsters, handleHitLine,
-         bandClass, setMonstersPendingReveal,
+         bandClass, setMonstersPendingReveal, syncArenaLetters, arenaLetterOf,
          setSuppressHitFeedback, deathCards, MONSTER_DEATH_MS } from './battle/monster-render.js';
 import { escapeHtml } from './pure-utils.js';
+import { potionCommitPayload } from './battle/potion-target.js';
+import { shouldPlayIntroCountdown, INTRO_COUNTDOWN_STEPS } from './battle/intro-countdown.js';
 import {
   attackInfo, showInfo, buildRootActionRows,
 } from './battle/action-menu-rows.js';
@@ -302,6 +304,7 @@ let shouldAnimateDice = false;
 // track is full (the fill's onDone removes intro-pending).
 let battleIntroPending = false;
 let introTimer = null; // PC-64: countdown interval for the battle-intro replay
+let introCountdownPlayed = false; // tic-0 3-2-1 plays once per battle start
 
 // PC-81: action-menu input is bound once. renderActionMenu publishes the live
 // cascade here; both handlers read it. Binding inside renderActionMenu leaked a
@@ -683,14 +686,18 @@ function finishBattleIntro() {
   const totalDelay = (queue.length * 200) + 350;
   setTimeout(() => {
     renderFeed([]);
-    // PC-91: Advance through approach phase until first decision point.
-    // tickLoop handles pacing, feed narration, queue updates, and only shows
-    // the action menu when a hand is Ready.
-    if (currentRunId) {
-      tickLoop(currentRunId).catch(err => console.error('tickLoop ceremony:', err));
-    } else {
-      renderActionMenu(lastBs);
-    }
+    // Tic-0 3-2-1 (or the intro-fires theater when the payload exists) plays
+    // once before the clock starts. A later tick must not replay it.
+    beginAfterIntro(() => {
+      // PC-91: Advance through approach phase until first decision point.
+      // tickLoop handles pacing, feed narration, queue updates, and only shows
+      // the action menu when a hand is Ready.
+      if (currentRunId) {
+        tickLoop(currentRunId).catch(err => console.error('tickLoop ceremony:', err));
+      } else {
+        renderActionMenu(lastBs);
+      }
+    });
   }, totalDelay);
 }
 
@@ -728,10 +735,47 @@ function renderLoadout(bs) {
 }
 
 // PC-64: tic-0 countdown to the first decision point — theater over the
-// authoritative state. Replays the approach: rows decrement per step, fires
-// reveal their feed lines and HP/rail updates in order, then the real state
-// snaps in and onDone() opens the command window.
+// authoritative state when an intro payload exists. Otherwise the battle
+// still opens with a 3-2-1 countdown (PC-102). DOM playback is not unit-tested;
+// shouldPlayIntroCountdown is.
+function beginAfterIntro(onDone) {
+  const tic = lastBs?.tic ?? 0;
+  if (!shouldPlayIntroCountdown(tic, introCountdownPlayed)) {
+    if (onDone) onDone();
+    return;
+  }
+  introCountdownPlayed = true;
+  playIntroCountdown(lastBs, lastBs?.intro || null, onDone);
+}
+
+function playThreeTwoOne(onDone) {
+  const steps = INTRO_COUNTDOWN_STEPS;
+  const preset = getSpeedPreset();
+  if (!preset || preset.charMs === 0) {
+    steps.forEach(n => appendFeedLine(n));
+    if (onDone) onDone();
+    return;
+  }
+  let i = 0;
+  clearIntroTimer();
+  const step = () => {
+    if (i >= steps.length) {
+      introTimer = null;
+      if (onDone) onDone();
+      return;
+    }
+    appendFeedLine(steps[i]);
+    i++;
+    introTimer = setTimeout(step, 800);
+  };
+  step();
+}
+
 function playIntroCountdown(bs, intro, onDone) {
+  if (!intro || !Array.isArray(intro.rows)) {
+    playThreeTwoOne(onDone);
+    return;
+  }
   document.body.classList.remove('queue-filling'); // timing track appears
   const el = document.getElementById('queue');
   if (el) el.innerHTML = '';
@@ -795,6 +839,7 @@ function playIntroCountdown(bs, intro, onDone) {
 function clearIntroTimer() {
   if (introTimer) {
     clearInterval(introTimer);
+    clearTimeout(introTimer);
     introTimer = null;
   }
 }
@@ -1302,7 +1347,9 @@ function renderActionMenu(bs) {
   const monsters = (bs.monsters || []).filter(m => !m.dead);
   const potions = bs.potions || {};
   const belt = weapons.belt || null;
-  const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  // Stable arena letters — not the living-array index. Sync from the full
+  // roster (including the dead) so a kill cannot relabel the survivors.
+  syncArenaLetters(bs.monsters || []);
 
   // PC-52r: an empty hand is a Ready hand — it always has legal actions
   // (potion, Fist unarmed attack), so the queue never waits on an impossible action.
@@ -1390,22 +1437,31 @@ function renderActionMenu(bs) {
         kind: 'target',
         attack: a,
         weapon,
-        rows: monsters.map((m, i) => ({
-          html: `<span class="dw-letter">${LETTERS[i]}</span>: ${escapeHtml(m.name)} - <span class="${bandClass(m)}">${escapeHtml(m.hp_word || m.hpWord || 'Healthy')}</span>`,
-          monster: m,
-          letter: LETTERS[i]
-        }))
+        rows: monsters.map((m) => {
+          const letter = arenaLetterOf(m);
+          return {
+            html: `<span class="dw-letter">${letter}</span>: ${escapeHtml(m.name)} - <span class="${bandClass(m)}">${escapeHtml(m.hp_word || m.hpWord || 'Healthy')}</span>`,
+            monster: m,
+            letter
+          };
+        })
       });
     }
     renderStack();
   }
 
   function pickPotion(slot, p) {
+    // Hand-target step. The open menu's hand is the drink target — do not
+    // offer the other hand, and do not reuse a stale hand from a previous menu.
+    const drinkHand = hand;
+    const handLabel = drinkHand === 'LH' ? 'L.HAND' : 'R.HAND';
     stack.push({
-      kind: 'confirm',
+      kind: 'target',
+      potion: p,
       slot,
-      text: `Use <strong>${escapeHtml(p.template_name)}</strong> (${escapeHtml(p.effect_label || '')})?`,
-      rows: yesNoRows(() => usePotion(currentRunId, slot))
+      hand: drinkHand,
+      info: `Drink on ${handLabel}`,
+      rows: [{ html: handLabel, label: handLabel, hand: drinkHand }]
     });
     renderStack();
   }
@@ -1429,10 +1485,11 @@ function renderActionMenu(bs) {
     }
     if (lvl.kind === 'target') {
       if (lvl.potion) {
+        const drinkHand = row.hand || lvl.hand || hand;
         stack.push({
           kind: 'confirm',
           text: `Use <strong>${escapeHtml(lvl.potion.template_name)}</strong> (${escapeHtml(lvl.potion.effect_label || '')}) on ${row.label}?`,
-          rows: yesNoRows(() => usePotion(currentRunId, lvl.slot))
+          rows: yesNoRows(() => usePotion(currentRunId, lvl.slot, drinkHand))
         });
       } else {
         const live = monsters.filter(m => (m.current_hp ?? 1) > 0).map(m => m.id);
@@ -1573,12 +1630,14 @@ function renderActionMenu(bs) {
 
 
 
-async function usePotion(runId, slot) {
+async function usePotion(runId, slot, openHand) {
   try {
     await commitThenTick(runId, () => {
-      const payload = { slot };
+      // Opening hand wins. A stale other-hand argument is ignored inside
+      // potionCommitPayload.
+      const payload = potionCommitPayload(openHand, slot);
       return apiCall(`/runs/${runId}/use-potion`, 'POST', payload);
-    }, { message: `Potion ${slot} used` });
+    }, { message: `Potion ${slot} used on ${openHand}` });
   } catch (e) {
     showMessage(e.message, true);
   }
@@ -1616,6 +1675,11 @@ async function loadBattle(runId) {
     setMonstersPendingReveal(willRoll);
     battleIntroPending = willRoll;
     if (!willRoll) shouldAnimateDice = false; // no roll playing — consume the flag
+    // A new battle at tic 0 gets one countdown. Commits (prevBs set, not a
+    // fresh presentation) must not replay it.
+    if ((bs.tic ?? 0) === 0 && (battleIntroPending || !prevBs)) {
+      introCountdownPlayed = false;
+    }
     // PC-64: the tic-0 countdown only plays when the ceremony runs AND the engine
     // captured fires (a battle that started pre-PC-64 has no intro to replay).
     const introPlays = battleIntroPending && bs.intro?.fires?.length > 0;
@@ -1650,7 +1714,11 @@ async function loadBattle(runId) {
       // Ceremony-intro: die still rolling — command window + timing track stay hidden.
       document.body.classList.add('intro-pending', 'queue-filling');
     } else {
-      renderActionMenu(bs);
+      // Tic-0 battle start with no dice ceremony still plays 3-2-1 before the
+      // command window. The ceremony path plays it from finishBattleIntro.
+      const showMenu = () => renderActionMenu(bs);
+      const countdownFirst = (bs.tic ?? 0) === 0 && !prevBs;
+      if (!countdownFirst) showMenu();
       // PC-DEC-045c: fresh page load in a mid-battle run shows history instantly;
       // incremental commit updates typewriter new lines.
       // prevBs distinguishes: on fresh page prevBs is null, on commit it's set.
@@ -1695,6 +1763,7 @@ async function loadBattle(runId) {
           });
         }
       }
+      if (countdownFirst) beginAfterIntro(showMenu);
     }
 
 
@@ -1795,26 +1864,22 @@ async function init() {
   await loadBattle(runId);
   setupEndRunButton(runId);
 
-  // PC-DEC-044: wire TEXT SPEED cycling control (now via controller)
-  const speedEl = document.getElementById('text-speed');
-  if (speedEl) {
-    const SPEED_CYCLE = ['normal', 'slow', 'instant'];
-    speedEl.onclick = () => {
-      const current = getSpeedKey();
-      const idx = SPEED_CYCLE.indexOf(current);
-      const next = SPEED_CYCLE[(idx + 1) % SPEED_CYCLE.length] || 'normal';
-      setSpeed(next);
-    };
-    // initial label
-    const p = getSpeedPreset();
-    speedEl.textContent = `TEXT SPEED: ${p.label}`;
+  // PC-DEC-044 / PC-102: TEXT SPEED on the battle screen (Standard / Slow / Instant).
+  // Mid-battle changes feed the typewriter preset (getSpeedPreset is read per character).
+  function paintTextSpeed() {
+    const key = getSpeedKey();
+    document.querySelectorAll('.text-speed-opt').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.speed === key);
+    });
   }
-
-  // Speed subscriber: update UI label on external changes
-  onSpeedChange((key) => {
-    const p = getSpeedPreset();
-    if (speedEl) speedEl.textContent = `TEXT SPEED: ${p.label}`;
+  document.querySelectorAll('.text-speed-opt').forEach(btn => {
+    btn.onclick = (ev) => {
+      ev.stopPropagation();
+      setSpeed(btn.dataset.speed);
+    };
   });
+  paintTextSpeed();
+  onSpeedChange(() => paintTextSpeed());
 
   // Font size subscriber + initial class on .queue-panel
   onFontSizeChange((key) => {
@@ -1830,12 +1895,13 @@ async function init() {
     panel.classList.add(`queue-size-${getFontSizeKey()}`);
   }
 
-  // PC-DEC-044: click message log to instantly complete pending typing
+  // PC-DEC-044: click message log to finish the CURRENT line only.
+  // completeCurrentTypingLine does not drop still-queued feed entries.
   const msgBox = document.getElementById('message-box');
   if (msgBox) {
     msgBox.onclick = () => {
       if (isTypingInProgress()) {
-        clearTyping();
+        completeCurrentTypingLine();
       }
     };
     // DO-2 scroll-pinning: toggle pinned flag; typing only auto-scrolls while pinned

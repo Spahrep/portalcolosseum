@@ -371,3 +371,33 @@ describe('battle/end loot reads persisted.monsters and continue saves prize_pool
     assert.equal(bodyJson.prize_pool.gold, 13);
   });
 });
+
+describe('POST /use-potion honors the open menu hand', () => {
+  it('queues the drink on RH when the menu says RH, even if LH is also ready', async () => {
+    const run = {
+      id: 1, user_id: 'user-1', status: 'active', player_hp: 800,
+      consume_a_used: false, consume_a_id: 9, consume_b_used: false, consume_b_id: null,
+      hand_l_weapon_id: null, hand_r_weapon_id: null,
+      battle_state: readyBattle({
+        potions: {
+          A: { used: false, effect_type: 'heal', rolled_floor: 10, rolled_window: 0, rolled_speed: 2, template_name: 'Health Potion', crit_chance: 0 },
+          B: null,
+        },
+        monsters: [{ id: 1, label: 'A', name: 'Wolf', current_hp: 20, max_hp: 20, speed: 5, damage: 1, accuracy: 50 }],
+      }),
+    };
+    const admin = mockAdmin((snap) => {
+      if (snap.table === 'portal_run' && snap.op === 'select') return { data: run };
+      if (snap.table === 'portal_run' && snap.op === 'update') return { data: null };
+      return { data: null };
+    });
+    __setAdminClientForTests(admin);
+    const res = await POST(post('/runs/1/use-potion', { slot: 'A', hand: 'RH' }));
+    assert.equal(res.status, 200, await res.clone().text());
+    const upd = admin.calls.find(c => c.table === 'portal_run' && c.op === 'update');
+    const drinking = upd.payload.battle_state.queue.find(r => r.event === 'drinking');
+    assert.equal(drinking.label, 'RH');
+    assert.equal(upd.payload.battle_state.player.hands.RH.state, 'drinking');
+    assert.equal(upd.payload.battle_state.player.hands.LH.state, 'Ready');
+  });
+});

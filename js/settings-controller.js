@@ -1,11 +1,7 @@
-// === Canonical enums ===
-const SPEEDS = {
-  slow:   { charMs: 45, lineDelayMs: 1800, label: 'Slow', windupEnabled: true },
-  normal: { charMs: 25, lineDelayMs: 1500, label: 'Normal', windupEnabled: true },
-  fast:   { charMs: 5,  lineDelayMs: 300,  label: 'Fast', windupEnabled: true },
-  instant: { charMs: 0, lineDelayMs: 0,    label: 'Instant', windupEnabled: false },
-};
-const SPEED_KEYS = ['slow', 'normal', 'fast', 'instant'];
+// === Canonical enums (PC-DEC-044 / PC-102: Standard 15/s, Slow 10/s, Instant) ===
+import { TEXT_SPEEDS, normalizeSpeedKey } from './battle/text-speed.js';
+
+const SPEEDS = TEXT_SPEEDS;
 const FONT_KEYS = ['S', 'M', 'L'];
 
 // === Module state (single source of truth) ===
@@ -21,9 +17,8 @@ function init() {
   const savedSpeed = localStorage.getItem('pc_battle_text_speed');
   const savedFont = localStorage.getItem('pc_queue_font_size');
 
-  // Speed: accept lowercase or legacy uppercase
-  const speedMap = { STANDARD: 'normal', SLOW: 'slow', INSTANT: 'instant', standard: 'normal', slow: 'slow', instant: 'instant', normal: 'normal', fast: 'fast' };
-  speedKey = speedMap[savedSpeed] || 'normal';
+  // Speed: accept lowercase, legacy uppercase, and the retired 'fast' key.
+  speedKey = normalizeSpeedKey(savedSpeed) || 'normal';
 
   fontSizeKey = FONT_KEYS.includes(savedFont) ? savedFont : 'M';
 }
@@ -34,7 +29,7 @@ export function getSpeedKey() { return speedKey; }
 export function getFontSizeKey() { return fontSizeKey; }
 
 export function setSpeed(key) {
-  const mapped = { STANDARD: 'normal', SLOW: 'slow', INSTANT: 'instant' }[key] || key;
+  const mapped = normalizeSpeedKey(key) || key;
   if (!SPEEDS[mapped]) return;
   if (mapped === speedKey) return;
   speedKey = mapped;
