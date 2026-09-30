@@ -16,22 +16,22 @@ const SLOT2 = 30;
 const ATTACKS = {
   [SLOT0]: {
     id: SLOT0, name: 'Attack', is_multi_target: false,
-    prepare_time: 2, cooldown_time: 3, prepare_time_range: 1, cooldown_time_range: 0,
+    prepare_time_multiplier: 2, cooldown_time_multiplier: 3, prepare_time_multiplier_range: 1, cooldown_time_multiplier_range: 0,
     description: 'basic swing', base_damage_multiplier: 1, crit_factor: 1, crit_multiplier: 2,
   },
   [SLOT1]: {
     id: SLOT1, name: 'Quick Slash', is_multi_target: false,
-    prepare_time: 1, cooldown_time: 1, prepare_time_range: 0, cooldown_time_range: 1,
+    prepare_time_multiplier: 1, cooldown_time_multiplier: 0.5, prepare_time_multiplier_range: 0, cooldown_time_multiplier_range: 1,
     description: 'fast', base_damage_multiplier: 0.7, crit_factor: 1.1, crit_multiplier: 2,
   },
   [SLOT2]: {
     id: SLOT2, name: 'Whirlwind', is_multi_target: true,
-    prepare_time: 4, cooldown_time: 5, prepare_time_range: 1, cooldown_time_range: 1,
+    prepare_time_multiplier: 1.8, cooldown_time_multiplier: 2, prepare_time_multiplier_range: 0.4, cooldown_time_multiplier_range: 0.5,
     description: 'spin', base_damage_multiplier: 0.9, crit_factor: 1.2, crit_multiplier: 2.5,
   },
   [MAPPED_NOT_GRANTED]: {
     id: MAPPED_NOT_GRANTED, name: 'Mapped Only', is_multi_target: false,
-    prepare_time: 9, cooldown_time: 9, prepare_time_range: 0, cooldown_time_range: 0,
+    prepare_time_multiplier: 2.2, cooldown_time_multiplier: 2.2, prepare_time_multiplier_range: 0, cooldown_time_multiplier_range: 0,
     description: 'should never appear', base_damage_multiplier: 2, crit_factor: 1, crit_multiplier: 2,
   },
 };
@@ -259,10 +259,10 @@ describe('PC-101 granted weapon slots', () => {
     assert.deepEqual(attackIdsFrom(attacks), [SLOT0, SLOT2]);
     const spin = attacks.find(a => a.id === SLOT2);
     assert.equal(spin.name, 'Whirlwind');
-    assert.equal(spin.prepare_time, 4);
-    assert.equal(spin.cooldown_time, 5);
-    assert.equal(spin.prepare_time_range, 1);
-    assert.equal(spin.cooldown_time_range, 1);
+    assert.equal(spin.prepare_time_multiplier, 1.8);
+    assert.equal(spin.cooldown_time_multiplier, 2);
+    assert.equal(spin.prepare_time_multiplier_range, 0.4);
+    assert.equal(spin.cooldown_time_multiplier_range, 0.5);
     assert.equal(spin.base_damage_multiplier, 0.9);
     assert.equal(spin.crit_factor, 1.2);
     assert.equal(spin.crit_multiplier, 2.5);

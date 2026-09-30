@@ -228,7 +228,7 @@ describe('POST /commit unarmed fist_speed and multiplier range', () => {
       battle_state: readyBattle(),
     };
     const admin = mockAdmin(commitResponder(run, {
-      attack: { prepare_time: 1, cooldown_time: 1, prepare_time_range: 0, cooldown_time_range: 0, is_multi_target: false, base_damage_multiplier: 1, name: 'Fist', crit_factor: 1, crit_multiplier: 2 },
+      attack: { is_multi_target: false, base_damage_multiplier: 1, name: 'Fist', crit_factor: 1, crit_multiplier: 2 },
       config: { fist_speed: 6, fist_prepare_time: 2, fist_prepare_time_range: 0, fist_cooldown_time: 3, fist_cooldown_time_range: 0, fist_damage: 4, fist_accuracy: 50, fist_crit_chance: 0 },
     }));
     __setAdminClientForTests(admin);
@@ -247,7 +247,6 @@ describe('POST /commit unarmed fist_speed and multiplier range', () => {
       battle_state: readyBattle(),
     };
     const attack = {
-      prepare_time: 1, prepare_time_range: 0, cooldown_time: 1, cooldown_time_range: 0,
       is_multi_target: false, base_damage_multiplier: 1.5, base_damage_multiplier_range: 0,
       name: 'Heavy Chop', crit_factor: 1, crit_multiplier: 2,
     };
@@ -284,8 +283,6 @@ describe('POST /commit unarmed fist_speed and multiplier range', () => {
       battle_state: readyBattle(),
     };
     const attack = {
-      prepare_time: 99, prepare_time_range: 9,
-      cooldown_time: 99, cooldown_time_range: 9,
       prepare_time_multiplier: 1.5, prepare_time_multiplier_range: 0,
       cooldown_time_multiplier: 2, cooldown_time_multiplier_range: 0,
       is_multi_target: false, base_damage_multiplier: 1, base_damage_multiplier_range: 0,

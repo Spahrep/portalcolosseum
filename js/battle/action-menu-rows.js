@@ -29,10 +29,10 @@ export function attackInfo(a, weapon, fallbackWeapon) {
   const multi = a.is_multi_target ? ' <span style="color:#ffaa66">[MULTI]</span>' : '';
   const desc = a.description ? ` — ${escapeHtml(a.description)}` : '';
   const weaponSpeed = src.speed || 0;
-  const pBase = (a.prepare_time || 0) + weaponSpeed;
-  const pVar = a.prepare_time_range || 0;
-  const cBase = (a.cooldown_time || 0) + weaponSpeed;
-  const cVar = a.cooldown_time_range || 0;
+  const pBase = Math.round(weaponSpeed * (a.prepare_time_multiplier ?? 1));
+  const pVar = Math.round(weaponSpeed * (a.prepare_time_multiplier_range ?? 0));
+  const cBase = Math.round(weaponSpeed * (a.cooldown_time_multiplier ?? 1));
+  const cVar = Math.round(weaponSpeed * (a.cooldown_time_multiplier_range ?? 0));
   const pText = pVar > 0 ? `${pBase}-${pBase + pVar}` : `${pBase}`;
   const cText = cVar > 0 ? `${cBase}-${cBase + cVar}` : `${cBase}`;
   let h = `<div style="display:flex;flex-direction:column;gap:1px;width:100%;">`;
