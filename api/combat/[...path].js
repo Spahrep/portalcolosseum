@@ -828,7 +828,7 @@ async function handle(request) {
 
       // Fetch attack early to know isMultiTarget for R2 single-target restriction
       const { data: attackRow } = await admin.from('attack')
-        .select('prepare_time, cooldown_time, prepare_time_range, cooldown_time_range, prepare_time_multiplier, prepare_time_multiplier_range, cooldown_time_multiplier, cooldown_time_multiplier_range, is_multi_target, base_damage_multiplier, base_damage_multiplier_range, name, crit_factor, crit_multiplier')
+        .select('prepare_time_multiplier, prepare_time_multiplier_range, cooldown_time_multiplier, cooldown_time_multiplier_range, is_multi_target, base_damage_multiplier, base_damage_multiplier_range, name, crit_factor, crit_multiplier')
         .eq('id', attackIdNum).single();
       const isMultiTarget = !!attackRow?.is_multi_target;
 
@@ -1564,7 +1564,7 @@ async function handle(request) {
       let attacks = [];
       try {
         const mapRes = await admin.from('monster_template_attack_mapping')
-          .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time, prepare_time_range, cooldown_time_range, prepare_time_multiplier, prepare_time_multiplier_range, cooldown_time_multiplier, cooldown_time_multiplier_range)')
+          .select('attack:attack_id (id, name, is_multi_target, prepare_time_multiplier, prepare_time_multiplier_range, cooldown_time_multiplier, cooldown_time_multiplier_range)')
           .eq('monster_template_id', id);
         if (mapRes.data) {
           attacks = mapRes.data.map(m => m.attack).filter(Boolean);

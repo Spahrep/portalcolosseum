@@ -181,8 +181,8 @@ function buildPopupHtml(item) {
         const rows = w.attacks.map(a => {
           const bits = [];
           if (a.base_damage_multiplier != null) bits.push(`×${a.base_damage_multiplier} damage`);
-          if (a.prepare_time != null) bits.push(`cast ${a.prepare_time}`);
-          if (a.cooldown_time != null) bits.push(`cooldown ${a.cooldown_time}`);
+          if (a.prepare_time_multiplier != null) bits.push(`cast ${Math.round((w.speed ?? 0) * (a.prepare_time_multiplier ?? 1))}`);
+          if (a.cooldown_time_multiplier != null) bits.push(`cooldown ${Math.round((w.speed ?? 0) * (a.cooldown_time_multiplier ?? 1))}`);
           if (a.is_multi_target) bits.push('multi-target');
           bits.push(`Crit ${Math.round((w.crit_chance ?? 5) * (a.crit_factor ?? 1))}% ×${a.crit_multiplier ?? 2}`);
           let row = `<div class="attack-row"><strong>${a.name}</strong>`;

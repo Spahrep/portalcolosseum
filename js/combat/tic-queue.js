@@ -101,8 +101,8 @@ export function commitNewRow(queue, label, event, tics) {
 //   null — empty queue or no attack
 export function computeTimingMarkers(queue, attack, weaponSpeed = 0) {
   if (!queue || queue.length === 0 || !attack) return null;
-  const minT = Number(weaponSpeed) + Number(attack.prepare_time || attack.prepareTime || 0);
-  const range = Number(attack.prepare_time_range || attack.prepareTimeRange || 0);
+  const minT = Number(weaponSpeed) * Number(attack.prepare_time_multiplier ?? 1);
+  const range = Number(weaponSpeed) * Number(attack.prepare_time_multiplier_range ?? 0);
   const maxT = minT + range;
   // Read-only copy-sort for the PC-56 prediction bar. Not the queue order.
   const barOrder = [...queue].sort((a, b) => a.tics - b.tics);

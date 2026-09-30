@@ -1692,7 +1692,7 @@ function renderActionMenu(bs) {
           setMarkers(row.attack);
         }
       } else if (row.potionTiming) {
-        // Potion: prepare_time already includes weapon speed via potionPrePostTicks
+        // Potion windup already includes weapon speed via potionPrePostTicks
         const q = (lastBs && lastBs.queue) || [];
         setQueueBarInfo(computeTimingMarkers(q, row.potionTiming, 0));
         renderQueue(lastBs);
