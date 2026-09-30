@@ -114,7 +114,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 ## Loot & Prize Pool (documented in loot-prize-pool.md)
 
 ### Equipment Drops
-- **Loot Point (LP) budget** system — each monster contributes LP based on monster point value + portal depth (deeper = more LP, rewarding risk)
+- **Loot Point (LP) budget** system — **`LP = Σ(monster.loot_value) × depth_mult(progress)`** (PC-DEC-057, Spahrep 2026-09-30). Each monster has a `loot_value` INDEPENDENT of `point_cost` (decouples fight difficulty from loot quality — enables Metal Slime archetype). `depth_mult` is a progress-keyed, accelerating multiplier (fraction of run cleared, auto-scales to any portal length) so deeper fights yield more LP, rewarding risk. All values config-driven (tuning knobs). Stacks with the stop-share curve: going further earns more AND keeps more.
 - **Loot table** = monster-specific pool + portal-shared pool
 - Each drop has independent **cost** (LP consumed) and **weight** (selection probability)
 - **Algorithm**: filter affordable items → weighted random pick → subtract cost → re-filter → repeat until LP exhausted or 10-item cap
@@ -132,7 +132,6 @@ This file captures the current state of design decisions for Portal Colosseum. I
 
 ### Deferred (Post-MVP)
 - Stack caps on materials
-- Final LP formula (monster points × portal depth)
 - Gold spread tuning (sigma value)
 - Exact weight/cost/min-max values per item/monster
 

@@ -12,10 +12,11 @@ Equipment drops use a **Loot Point (LP) budget** system. Each combat contributes
 
 #### Loot Points (LP)
 
-- Each monster has a base **Loot Point value** (e.g., Dragon = 100, Glimmerling = 5)
-- Total LP for a fight is calculated by: `LP = f(monster_point_value, portal_depth)`
-- **Portal depth** = how far into the portal this fight is (1st fight vs last fight). Deeper fights yield more LP, rewarding players for pushing further despite lower HP and higher risk
-- Exact LP formula to be determined later
+- Each monster has a **`loot_value`** — the base LP it contributes when killed. This is **INDEPENDENT of `point_cost`** (the encounter budget): it decouples "how hard is the fight" from "how good is the loot" (PC-DEC-057, Spahrep 2026-09-30). A normal monster's `loot_value` roughly tracks its `point_cost`; a special monster (e.g. Metal Slime) can have a low `point_cost` (cheap/weak) but a huge `loot_value` (jackpot).
+- Total LP for a fight: **`LP = Σ(monster.loot_value) × depth_mult(progress)`**.
+- **`depth_mult`** is a **progress-keyed, accelerating multiplier** (fraction of the run cleared, like the stop-share curve PC-DEC-056) — so it auto-scales to any portal length and the last fight is worth the most. Deeper fights yield more LP, rewarding players for pushing further despite lower HP and higher risk. The reward grows as the risk grows — the push-your-luck carrot.
+- **All values are config-driven** (`game_config` / `portal_template`) so they're tuning knobs — tone the curve up or down without a code change (Spahrep 2026-09-30).
+- The depth multiplier and the stop-share curve **stack**: going further earns more (depth mult) AND keeps more (stop-share).
 
 #### Loot Tables
 

@@ -471,6 +471,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Stop-share tiers re-designed as a PROGRESS-keyed curve (not positional-by-fight-number), so it auto-scales to any portal length. Gold kept = accelerating curve 15/30/50/70/100% by progress (20/40/60/80/100% through the run); items kept = selected stays scarce until late (0/0/1/1/2 sel + 0/1/1/2/2 rand). Full clear = 100% always. The marginal reward grows as the run deepens (risk grows), which is the push-your-luck carrot. Config: `portal_template.stop_share_tiers` JSONB array, each entry `{progress, gold_pct, sel_items, rand_items}` where `progress` = fraction of run cleared (0.2/0.4/0.6/0.8/1.0). `computeStopShare` picks the tier whose `progress` threshold the current battle meets (was positional `tiers[battleNum-1]`). UX: player selects `sel_items` weapons (existing), then the `rand_items` random picks are revealed with a roulette-style sweep animation (same theater as the dice ceremony) — the random selection is a reveal, not a silent server pick. Applied to loot-prize-pool.md, current-design-status.md, migration 20260930XXXXXX_stop_share_progress_tiers.sql.
 
+- ID: PC-DEC-057
+  Date: 2026-09-30
+  Source: Discord thread "Resolve six open design rulings" (1554889161033650278)
+  Speaker: Spahrep
+  Verbatim: "Yes, let's go with a sepreate loot value field. But what do you think about having a multiplier the deeper you go in a run. This way the loot his larger the later you go, and the later you go the lower your HP will be and hence more risk yes?" + "Ok, as long as we do it via config so we can tone it up or down, you already get to keep more loot for going further."
+  Status: DECIDED
+  Notes: LP formula re-designed. LP = Σ(monster.loot_value) × depth_mult(progress). (1) NEW per-monster `loot_value` field, INDEPENDENT of `point_cost` (encounter budget) — decouples "how hard is the fight" from "how good is the loot", which is what enables a Metal Slime archetype (low point_cost = cheap/weak, high loot_value = jackpot). (2) Depth multiplier is PROGRESS-KEYED (fraction of run cleared, like stop-share PC-DEC-056) so it auto-scales to any portal length, and ACCELERATING (last fight worth most, matching the risk). (3) ALL values live in config (game_config / portal_template) so they're tuning knobs — Spahrep: "as long as we do it via config so we can tone it up or down". The stop-share curve (PC-DEC-056) already rewards going further (keep more); the depth multiplier rewards going further (earn more) — the two stack. Metal Slime archetype (high evasion, low HP, flees, jackpot loot) documented as a concrete monster design enabled by the loot_value field. Applied to loot-prize-pool.md, current-design-status.md, combat-system.md, migration 20260930XXXXXX_loot_value_and_depth_mult.sql.
+
 ## Open
 
 - ID: PC-DEC-004
