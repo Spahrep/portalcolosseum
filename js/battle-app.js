@@ -414,9 +414,10 @@ async function animateFiredHeadExit(head, newQueue, bs) {
     }
     return;
   }
-  // Same-key successor (countdown / phase change): update the existing node in
-  // place via renderQueue's stable-key branch — no exit slide, no rebuild.
-  if (successor) return;
+  // A fired head always slides out + glides up, even with a same-key successor
+  // (monster attack→cooldown, hand phase change). The successor is NOT rebuilt —
+  // renderQueue's stable-key branch relabels the existing node in place, so the
+  // slide-out here never causes a phantom re-slide on pure countdown ticks.
   const row = findQueueRowByIdentity(head);
   if (!row) return;
   const id = row.dataset.rowId || head.id;
