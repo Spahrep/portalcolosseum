@@ -3,6 +3,14 @@
 -- ±3σ clamp is base ± range (combat-system.md: damage/speed/accuracy bell).
 -- Idempotent: CREATE OR REPLACE the (int, int) signature callers already use.
 -- Do not apply here — PM applies after review.
+--
+-- Apply fix (2026-09-30): the live DB already has normal_int(integer,integer)
+-- whose second parameter is named `range` (reserved). CREATE OR REPLACE cannot
+-- rename an existing parameter (42P13), so DROP first. CASCADE also drops the
+-- old generate_weapon/generate_monster that depend on it; they are recreated
+-- by the later migrations in this batch (20260930120100 / 20260930120200).
+
+DROP FUNCTION IF EXISTS public.normal_int(integer, integer) CASCADE;
 
 CREATE OR REPLACE FUNCTION public.normal_int(base integer, p_range integer)
 RETURNS integer
