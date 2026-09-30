@@ -1001,6 +1001,7 @@ function showPortalTemplateForm(id = null) {
         <div class="form-group"><label>Encounters (fights)</label><input id="pt-fights" type="number" value="${t.fights ?? 5}"></div>
         <div class="form-group"><label>Max Enemies Per Encounter</label><input id="pt-max_enemies" type="number" value="${t.max_enemies ?? 5}"></div>
         <div class="form-group"><label>AP Cost</label><input id="pt-ap_cost" type="number" value="${t.ap_cost ?? 0}"></div>
+        <div class="form-group"><label>Entry Gold Cost</label><input id="pt-entry_gold_cost" type="number" value="${t.entry_gold_cost ?? 0}"></div>
         <div class="form-group"><label>Unlock Gold Cost</label><input id="pt-unlock_gold_cost" type="number" value="${t.unlock_gold_cost ?? 0}"></div>
         <div class="form-group"><label>Green Dice Count</label><input id="pt-green_dice_count" type="number" value="${t.green_dice_count ?? 4}"></div>
         <div class="form-group"><label>Yellow Dice Count</label><input id="pt-yellow_dice_count" type="number" value="${t.yellow_dice_count ?? 3}"></div>
@@ -1021,6 +1022,7 @@ function showPortalTemplateForm(id = null) {
         fights: parseInt(val('pt-fights')),
         max_enemies: parseInt(val('pt-max_enemies')),
         ap_cost: parseInt(val('pt-ap_cost')),
+        entry_gold_cost: parseInt(val('pt-entry_gold_cost')),
         unlock_gold_cost: parseInt(val('pt-unlock_gold_cost')),
         green_dice_count: parseInt(val('pt-green_dice_count')),
         yellow_dice_count: parseInt(val('pt-yellow_dice_count')),
