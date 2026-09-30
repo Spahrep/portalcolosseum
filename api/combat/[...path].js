@@ -1520,6 +1520,7 @@ async function handle(request) {
       }
       let weapons = [];
       let monsters = [];
+      let consumables = [];
       try {
         const wRes = await admin.from('weapon_template').select('id, name').order('id');
         if (wRes.error) throw wRes.error;
@@ -1536,7 +1537,15 @@ async function handle(request) {
         console.error('monster_template query error', e);
         return json({ error: 'Internal server error' }, 500);
       }
-      return json({ weapons, monsters });
+      try {
+        const cRes = await admin.from('consumable_template').select('id, name, effect_type').order('id');
+        if (cRes.error) throw cRes.error;
+        consumables = cRes.data || [];
+      } catch (e) {
+        console.error('consumable_template query error', e);
+        return json({ error: 'Internal server error' }, 500);
+      }
+      return json({ weapons, monsters, consumables });
     }
 
     // GET /templates/monster/<id> — player-accessible monster template view
@@ -2272,6 +2281,205 @@ async function handle(request) {
           return json({ error: 'Internal server error' }, 500);
         }
         return json({ instance_id, template_name: tmpl.name, floor: f, window: w, speed: sp, crit_chance: c, grade });
+      }
+
+      // 15. POST /dev/give-consumable (PC-110) — grant rolled consumable(s) to the caller (inventory only, no run/equip)
+      if (path === '/dev/give-consumable') {
+        const body = await request.json().catch(() => ({}));
+        const templateId = parseInt(body.template_id, 10);
+        let count = parseInt(body.count, 10);
+        if (isNaN(templateId) || templateId <= 0) return json({ error: 'Invalid template_id' }, 400);
+        if (isNaN(count) || count < 1) count = 1;
+        count = Math.min(count, 25);
+        let tmpl;
+        try {
+          const tRes = await admin.from('consumable_template').select('id, name, floor_base, floor_delta, window_base, window_delta, speed_base, speed_delta, crit_base, crit_range').eq('id', templateId).single();
+          tmpl = tRes.data;
+          if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
+        } catch (e) {
+          return json({ error: 'consumable template not found' }, 404);
+        }
+        // Same uniform roll + z-grade as generate_consumable_instance. Used only when
+        // the RPC cannot insert (service_role auth.uid() is NULL and raises). No migration.
+        function rollConsumableForCaller() {
+          const floorBase = Number(tmpl.floor_base) || 0;
+          const floorDelta = Number(tmpl.floor_delta) || 0;
+          const windowBase = Number(tmpl.window_base) || 0;
+          const windowDelta = Number(tmpl.window_delta) || 0;
+          const speedBase = Number(tmpl.speed_base) || 0;
+          const speedDelta = Number(tmpl.speed_delta) || 0;
+          const critBase = Number(tmpl.crit_base) || 0;
+          const critRange = Number(tmpl.crit_range) || 0;
+          const rolled_floor = floorBase + Math.floor(Math.random() * (floorDelta + 1));
+          const rolled_window = windowBase + Math.floor(Math.random() * (windowDelta + 1));
+          const rolled_speed = speedBase + Math.floor(Math.random() * (speedDelta + 1));
+          const crit_chance = critRange <= 0
+            ? Math.max(0, critBase)
+            : Math.max(0, critBase + Math.floor(Math.random() * (critRange * 2 + 1)) - critRange);
+          const expEV = floorBase + (floorDelta / 2) + ((windowBase + windowDelta) / 2) / 2;
+          const sigma = Math.max((windowBase + windowDelta) / 2, 1);
+          const z = ((rolled_floor + rolled_window / 2) - expEV) / sigma;
+          const grade = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
+          return { rolled_floor, rolled_window, rolled_speed, crit_chance, grade };
+        }
+        const granted = [];
+        for (let i = 0; i < count; i++) {
+          let instanceId = null;
+          let fromRpc = false;
+          try {
+            const rpcRes = await admin.rpc('generate_consumable_instance', { p_template_id: templateId });
+            if (rpcRes.error) throw rpcRes.error;
+            instanceId = rpcRes.data;
+            fromRpc = true;
+          } catch (e) {
+            console.error('generate_consumable_instance error', e);
+          }
+          if (fromRpc && !instanceId) return json({ error: 'generation returned no id' }, 500);
+          if (!fromRpc) {
+            const rolled = rollConsumableForCaller();
+            try {
+              const iRes = await admin.from('consumable_instance').insert({
+                user_id: user.id,
+                template_id: tmpl.id,
+                rolled_floor: rolled.rolled_floor,
+                rolled_window: rolled.rolled_window,
+                rolled_speed: rolled.rolled_speed,
+                crit_chance: rolled.crit_chance,
+                grade: rolled.grade
+              }).select('id, rolled_floor, rolled_window, rolled_speed, grade').single();
+              if (iRes.error || !iRes.data) throw iRes.error || new Error('insert failed');
+              granted.push({
+                instance_id: iRes.data.id,
+                rolled_floor: iRes.data.rolled_floor,
+                rolled_window: iRes.data.rolled_window,
+                rolled_speed: iRes.data.rolled_speed,
+                grade: iRes.data.grade
+              });
+            } catch (e) {
+              console.error('consumable_instance insert error', e);
+              return json({ error: 'Failed to generate consumable' }, 500);
+            }
+            continue;
+          }
+          let inst;
+          try {
+            const iRes = await admin.from('consumable_instance')
+              .select('id, rolled_floor, rolled_window, rolled_speed, grade, user_id')
+              .eq('id', instanceId)
+              .maybeSingle();
+            inst = iRes.data;
+            if (iRes.error) throw iRes.error;
+          } catch (e) {
+            console.error('consumable_instance fetch error', e);
+            return json({ error: 'Internal server error' }, 500);
+          }
+          if (!inst) return json({ error: 'generation returned no id' }, 500);
+          // RPC stamps auth.uid(). Reassign when that is not the caller so the
+          // grant lands in the caller's inventory.
+          if (inst.user_id !== user.id) {
+            try {
+              const uRes = await admin.from('consumable_instance').update({ user_id: user.id }).eq('id', instanceId);
+              if (uRes && uRes.error) throw uRes.error;
+            } catch (e) {
+              console.error('consumable_instance reassign error', e);
+              return json({ error: 'Internal server error' }, 500);
+            }
+          }
+          granted.push({
+            instance_id: inst.id,
+            rolled_floor: inst.rolled_floor,
+            rolled_window: inst.rolled_window,
+            rolled_speed: inst.rolled_speed,
+            grade: inst.grade
+          });
+        }
+        return json({ template_name: tmpl.name, granted });
+      }
+
+      // 16. POST /dev/give-weapon-self (PC-110) — roll + insert weapon_instance for the caller
+      if (path === '/dev/give-weapon-self') {
+        const body = await request.json().catch(() => ({}));
+        const templateId = parseInt(body.template_id, 10);
+        let count = parseInt(body.count, 10);
+        if (isNaN(templateId) || templateId <= 0) return json({ error: 'Invalid template_id' }, 400);
+        if (isNaN(count) || count < 1) count = 1;
+        count = Math.min(count, 25);
+        let tmpl;
+        try {
+          const tRes = await admin.from('weapon_template').select('id, name, slot_0_attack_id, base_damage, damage_range, base_speed, speed_range, base_accuracy, accuracy_range').eq('id', templateId).single();
+          tmpl = tRes.data;
+          if (tRes.error || !tmpl) throw tRes.error || new Error('not found');
+        } catch (e) {
+          return json({ error: 'weapon template not found' }, 404);
+        }
+        const granted = [];
+        for (let i = 0; i < count; i++) {
+          const d = rollStat(tmpl.base_damage, tmpl.damage_range);
+          const s = rollStat(tmpl.base_speed, tmpl.speed_range);
+          const a = rollStat(tmpl.base_accuracy, tmpl.accuracy_range);
+          const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
+          const zs = tmpl.speed_range ? (tmpl.base_speed - s) / tmpl.speed_range : 0;
+          const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
+          const z = (zd + zs + za) / 3;
+          const g = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
+          try {
+            const iRes = await admin.from('weapon_instance').insert({
+              user_id: user.id,
+              template_id: tmpl.id,
+              slot_0_attack_id: tmpl.slot_0_attack_id || 1,
+              damage: d,
+              speed: s,
+              accuracy: a,
+              grade: g
+            }).select('id, damage, speed, accuracy, grade').single();
+            if (iRes.error) throw iRes.error;
+            granted.push({ instance_id: iRes.data.id, damage: d, speed: s, accuracy: a, grade: g });
+          } catch (e) {
+            console.error('weapon_instance insert error', e);
+            return json({ error: 'Internal server error' }, 500);
+          }
+        }
+        return json({ template_id: templateId, template_name: tmpl.name, granted });
+      }
+
+      // 17. POST /dev/del-item (PC-110) — delete an owned instance and clear run loadout pointers
+      if (path === '/dev/del-item') {
+        const body = await request.json().catch(() => ({}));
+        const kind = body.kind;
+        const instanceId = parseInt(body.instance_id, 10);
+        if (kind !== 'weapon' && kind !== 'consumable') return json({ error: 'Invalid kind' }, 400);
+        if (isNaN(instanceId) || instanceId <= 0) return json({ error: 'Invalid instance_id' }, 400);
+        const table = kind === 'weapon' ? 'weapon_instance' : 'consumable_instance';
+        let inst;
+        try {
+          const iRes = await admin.from(table).select('id').eq('id', instanceId).eq('user_id', user.id).maybeSingle();
+          inst = iRes.data;
+          if (iRes.error) throw iRes.error;
+        } catch (e) {
+          console.error('del-item ownership query error', e);
+          return json({ error: 'Internal server error' }, 500);
+        }
+        if (!inst) return json({ error: kind + ' not found in your inventory' }, 404);
+        const cols = kind === 'weapon'
+          ? ['hand_l_weapon_id', 'hand_r_weapon_id', 'belt_weapon_id']
+          : ['consume_a_id', 'consume_b_id'];
+        for (const col of cols) {
+          try {
+            const uRes = await admin.from('portal_run').update({ [col]: null }).eq(col, instanceId).eq('user_id', user.id);
+            if (uRes && uRes.error) throw uRes.error;
+          } catch (e) {
+            console.error('del-item pointer clear error', e);
+            return json({ error: 'Internal server error' }, 500);
+          }
+        }
+        try {
+          const dRes = await admin.from(table).delete().eq('id', instanceId).eq('user_id', user.id);
+          if (dRes && dRes.error) throw dRes.error;
+        } catch (e) {
+          console.error('del-item delete error', e);
+          return json({ error: 'Internal server error' }, 500);
+        }
+        return json({ deleted: true, kind, instance_id: instanceId });
       }
 
       return json({ error: 'unknown dev command' }, 404);

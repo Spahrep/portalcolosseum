@@ -463,6 +463,11 @@ function renderAll() {
 function setupKeyboard() {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
+      const overlay = document.getElementById('admin-overlay');
+      if (overlay && !overlay.hidden) {
+        overlay.hidden = true;
+        return;
+      }
       selectedIndex = null;
       popupEl.style.display = 'none';
       clearHighlights();
@@ -558,6 +563,375 @@ function setupCancelButton() {
   }
 }
 
+// PC-110: admin-only generate + delete on the loadout screen.
+// The button and panel are created only after POST /dev/grant returns dev_mode.
+const SLOT_INDEX = { LH: 0, RH: 1, BL: 2, C1: 3, C2: 4 };
+const WEAPON_SLOTS = ['LH', 'RH', 'BL', 'backpack'];
+const CONSUMABLE_SLOTS = ['C1', 'C2', 'backpack'];
+let adminBusy = false;
+let pendingDelete = null;
+let adminTemplates = { weapons: [], consumables: [] };
+
+function apiErrorText(e) {
+  let message = e && e.message ? e.message : 'request failed';
+  try {
+    const parsed = JSON.parse(message);
+    if (parsed && parsed.error) message = parsed.error;
+  } catch (_) { /* not JSON */ }
+  return message;
+}
+
+function setAdminStatus(text, isError) {
+  const el = document.getElementById('admin-status');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('error', !!isError);
+}
+
+function firstEmptySlot(kind) {
+  if (kind === 'weapon') {
+    if (!loadout[0]) return 'LH';
+    if (!loadout[1]) return 'RH';
+    if (!loadout[2]) return 'BL';
+    return 'backpack';
+  }
+  if (!loadout[3]) return 'C1';
+  if (!loadout[4]) return 'C2';
+  return 'backpack';
+}
+
+function placeNewItem(item, slot) {
+  const target = slot || firstEmptySlot(item.kind);
+  const idx = SLOT_INDEX[target];
+  const kindOk = item.kind === 'weapon' ? (idx != null && idx <= 2) : (idx != null && idx >= 3);
+  if (target === 'backpack' || !kindOk) {
+    backpack.push(item);
+    return target === 'backpack' ? 'backpack' : firstEmptySlot(item.kind);
+  }
+  const displaced = loadout[idx];
+  loadout[idx] = item;
+  if (displaced) backpack.push(displaced);
+  return target;
+}
+
+function ownedKey(item) { return `${item.kind}:${item.id}`; }
+
+async function syncOwned(place) {
+  const prev = new Set([
+    ...loadout.filter(Boolean).map(ownedKey),
+    ...backpack.map(ownedKey)
+  ]);
+  const [wRes, cRes] = await Promise.all([
+    apiCall('/weapons'),
+    apiCall('/consumables')
+  ]);
+  const weapons = wRes.weapons || [];
+  const consumables = cRes.consumables || [];
+  weaponsById = {};
+  weapons.forEach(w => { if (w && w.id) weaponsById[w.id] = w; });
+  consumablesById = {};
+  consumables.forEach(c => { if (c && c.id) consumablesById[c.id] = c; });
+  const weaponItems = weapons.filter(w => w && w.id).map(w => ({ kind: 'weapon', id: w.id, name: w.name, grade: w.grade || null }));
+  const consumableItems = consumables.filter(c => c && c.id).map(c => ({ kind: 'consumable', id: c.id, name: c.template_name, grade: c.grade || null }));
+  const all = [...weaponItems, ...consumableItems];
+  const byKey = {};
+  all.forEach(item => { byKey[ownedKey(item)] = item; });
+  const owned = new Set(Object.keys(byKey));
+  for (let i = 0; i < 5; i++) {
+    if (loadout[i] && !owned.has(ownedKey(loadout[i]))) loadout[i] = null;
+    else if (loadout[i]) loadout[i] = byKey[ownedKey(loadout[i])];
+  }
+  backpack = backpack.filter(item => owned.has(ownedKey(item))).map(item => byKey[ownedKey(item)]);
+  const newcomers = all.filter(item => !prev.has(ownedKey(item)));
+  let placed = null;
+  newcomers.forEach((item, idx) => {
+    if (place && idx === 0 && place.kind === item.kind) placed = placeNewItem(item, place.slot);
+    else backpack.push(item);
+  });
+  renderAll();
+  const overlay = document.getElementById('admin-overlay');
+  if (overlay && !overlay.hidden) {
+    renderAdminTemplates();
+    renderAdminDeleteList();
+  }
+  return placed;
+}
+
+function fillSlotSelect(select, options, selected) {
+  select.innerHTML = '';
+  options.forEach(opt => {
+    const o = document.createElement('option');
+    o.value = opt;
+    o.textContent = opt;
+    if (opt === selected) o.selected = true;
+    select.appendChild(o);
+  });
+}
+
+function renderTemplateRows(container, templates, kind) {
+  container.innerHTML = '';
+  const list = Array.isArray(templates) ? templates : [];
+  if (!list.length) {
+    const empty = document.createElement('div');
+    empty.className = 'admin-empty';
+    empty.textContent = 'No templates';
+    container.appendChild(empty);
+    return;
+  }
+  const options = kind === 'weapon' ? WEAPON_SLOTS : CONSUMABLE_SLOTS;
+  list.forEach(tpl => {
+    const row = document.createElement('div');
+    row.className = 'admin-row';
+    const nameBtn = document.createElement('button');
+    nameBtn.type = 'button';
+    nameBtn.className = 'admin-name';
+    nameBtn.textContent = tpl.name || ('#' + tpl.id);
+    const select = document.createElement('select');
+    select.className = 'admin-slot';
+    fillSlotSelect(select, options, firstEmptySlot(kind));
+    const gen = document.createElement('button');
+    gen.type = 'button';
+    gen.className = 'admin-gen';
+    gen.textContent = 'GENERATE';
+    const go = () => generateFromTemplate(kind, tpl, select.value);
+    nameBtn.onclick = go;
+    gen.onclick = go;
+    row.appendChild(nameBtn);
+    row.appendChild(select);
+    row.appendChild(gen);
+    container.appendChild(row);
+  });
+}
+
+function renderAdminTemplates() {
+  const data = adminTemplates || { weapons: [], consumables: [] };
+  const wBox = document.getElementById('admin-weapons');
+  const cBox = document.getElementById('admin-consumables');
+  if (wBox) renderTemplateRows(wBox, data.weapons, 'weapon');
+  if (cBox) renderTemplateRows(cBox, data.consumables, 'consumable');
+}
+
+function inventoryForDelete() {
+  const labels = ['LH', 'RH', 'BL', 'C1', 'C2'];
+  const rows = [];
+  loadout.forEach((item, i) => { if (item) rows.push({ item, where: labels[i] }); });
+  backpack.forEach(item => { rows.push({ item, where: 'backpack' }); });
+  return rows;
+}
+
+function renderAdminDeleteList() {
+  const box = document.getElementById('admin-delete-list');
+  const delBtn = document.getElementById('admin-delete-btn');
+  if (!box) return;
+  const selectedKey = pendingDelete ? ownedKey(pendingDelete.item) + '@' + pendingDelete.where : null;
+  box.innerHTML = '';
+  const rows = inventoryForDelete();
+  if (!rows.length) {
+    const empty = document.createElement('div');
+    empty.className = 'admin-empty';
+    empty.textContent = 'Inventory empty';
+    box.appendChild(empty);
+    pendingDelete = null;
+    if (delBtn) delBtn.disabled = true;
+    const confirm = document.getElementById('admin-confirm');
+    if (confirm) confirm.hidden = true;
+    return;
+  }
+  let stillSelected = false;
+  rows.forEach(row => {
+    const el = document.createElement('div');
+    el.className = 'admin-del-row';
+    const key = ownedKey(row.item) + '@' + row.where;
+    if (key === selectedKey) {
+      el.classList.add('selected');
+      stillSelected = true;
+      pendingDelete = row;
+    }
+    el.textContent = `${row.where}  ${row.item.name}  #${row.item.id}`;
+    el.onclick = () => {
+      pendingDelete = row;
+      const confirm = document.getElementById('admin-confirm');
+      if (confirm) confirm.hidden = true;
+      renderAdminDeleteList();
+    };
+    box.appendChild(el);
+  });
+  if (!stillSelected) pendingDelete = null;
+  if (delBtn) delBtn.disabled = !pendingDelete || adminBusy;
+}
+
+async function generateFromTemplate(kind, tpl, slot) {
+  if (adminBusy || !tpl || !tpl.id) return;
+  adminBusy = true;
+  setAdminStatus('Rolling...');
+  try {
+    const path = kind === 'weapon' ? '/dev/give-weapon-self' : '/dev/give-consumable';
+    const res = await apiCall(path, 'POST', { template_id: tpl.id });
+    const placed = await syncOwned({ kind, slot: slot || firstEmptySlot(kind) });
+    const name = (res && res.template_name) || tpl.name || 'item';
+    setAdminStatus(`Granted ${name} → ${placed || slot || 'backpack'}`);
+  } catch (e) {
+    setAdminStatus(apiErrorText(e), true);
+  } finally {
+    adminBusy = false;
+    renderAdminDeleteList();
+  }
+}
+
+function askDelete() {
+  if (!pendingDelete || adminBusy) return;
+  const confirm = document.getElementById('admin-confirm');
+  const label = document.getElementById('admin-confirm-label');
+  if (!confirm || !label) return;
+  label.textContent = `Delete ${pendingDelete.item.name} (${pendingDelete.where})?`;
+  confirm.hidden = false;
+}
+
+async function confirmDelete() {
+  if (!pendingDelete || adminBusy) return;
+  const target = pendingDelete;
+  adminBusy = true;
+  setAdminStatus('Deleting...');
+  try {
+    await apiCall('/dev/del-item', 'POST', { kind: target.item.kind, instance_id: target.item.id });
+    pendingDelete = null;
+    const confirm = document.getElementById('admin-confirm');
+    if (confirm) confirm.hidden = true;
+    await syncOwned(null);
+    setAdminStatus(`Deleted ${target.item.name}`);
+  } catch (e) {
+    setAdminStatus(apiErrorText(e), true);
+  } finally {
+    adminBusy = false;
+    renderAdminDeleteList();
+  }
+}
+
+async function openAdminPanel() {
+  const overlay = document.getElementById('admin-overlay');
+  if (!overlay) return;
+  overlay.hidden = false;
+  setAdminStatus('Loading templates...');
+  try {
+    adminTemplates = await apiCall('/dev/templates');
+    setAdminStatus('');
+    renderAdminTemplates();
+    renderAdminDeleteList();
+  } catch (e) {
+    setAdminStatus(apiErrorText(e), true);
+  }
+}
+
+function buildAdminOverlay() {
+  const overlay = document.createElement('div');
+  overlay.id = 'admin-overlay';
+  overlay.className = 'admin-overlay';
+  overlay.hidden = true;
+  const panel = document.createElement('div');
+  panel.className = 'admin-panel';
+  panel.addEventListener('click', (ev) => ev.stopPropagation());
+
+  const head = document.createElement('div');
+  head.className = 'admin-head';
+  const title = document.createElement('div');
+  title.className = 'panel-title';
+  title.textContent = 'ADMIN';
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'cancel-btn';
+  close.style.marginLeft = '0';
+  close.textContent = 'CLOSE';
+  close.onclick = () => { overlay.hidden = true; };
+  head.appendChild(title);
+  head.appendChild(close);
+
+  const status = document.createElement('div');
+  status.id = 'admin-status';
+  status.className = 'admin-status';
+
+  const wTitle = document.createElement('div');
+  wTitle.className = 'admin-section-title';
+  wTitle.textContent = 'GENERATE WEAPON';
+  const wBox = document.createElement('div');
+  wBox.id = 'admin-weapons';
+
+  const cTitle = document.createElement('div');
+  cTitle.className = 'admin-section-title';
+  cTitle.textContent = 'GENERATE CONSUMABLE';
+  const cBox = document.createElement('div');
+  cBox.id = 'admin-consumables';
+
+  const dTitle = document.createElement('div');
+  dTitle.className = 'admin-section-title';
+  dTitle.textContent = 'DELETE INVENTORY';
+  const dBox = document.createElement('div');
+  dBox.id = 'admin-delete-list';
+  const delBtn = document.createElement('button');
+  delBtn.type = 'button';
+  delBtn.id = 'admin-delete-btn';
+  delBtn.className = 'admin-del';
+  delBtn.textContent = 'DELETE SELECTED';
+  delBtn.disabled = true;
+  delBtn.onclick = askDelete;
+
+  const confirm = document.createElement('div');
+  confirm.id = 'admin-confirm';
+  confirm.className = 'admin-confirm';
+  confirm.hidden = true;
+  const label = document.createElement('span');
+  label.id = 'admin-confirm-label';
+  const yes = document.createElement('button');
+  yes.type = 'button';
+  yes.className = 'admin-yes';
+  yes.textContent = 'YES';
+  yes.onclick = confirmDelete;
+  const no = document.createElement('button');
+  no.type = 'button';
+  no.className = 'admin-no';
+  no.textContent = 'NO';
+  no.onclick = () => { confirm.hidden = true; };
+  confirm.appendChild(label);
+  confirm.appendChild(yes);
+  confirm.appendChild(no);
+
+  panel.appendChild(head);
+  panel.appendChild(status);
+  panel.appendChild(wTitle);
+  panel.appendChild(wBox);
+  panel.appendChild(cTitle);
+  panel.appendChild(cBox);
+  panel.appendChild(dTitle);
+  panel.appendChild(dBox);
+  panel.appendChild(delBtn);
+  panel.appendChild(confirm);
+  overlay.appendChild(panel);
+  overlay.addEventListener('click', () => { overlay.hidden = true; });
+  document.body.appendChild(overlay);
+}
+
+async function setupAdminPanel() {
+  if (document.getElementById('admin-btn')) return;
+  let dev;
+  try {
+    dev = await apiCall('/dev/grant', 'POST', {});
+  } catch (_) {
+    return;
+  }
+  if (!dev || dev.dev_mode !== true) return;
+  const bottom = document.getElementById('bottom-bar');
+  if (!bottom) return;
+  const btn = document.createElement('button');
+  btn.id = 'admin-btn';
+  btn.className = 'admin-btn';
+  btn.type = 'button';
+  btn.textContent = 'ADMIN';
+  const note = bottom.querySelector('.note');
+  if (note) bottom.insertBefore(btn, note);
+  else bottom.appendChild(btn);
+  buildAdminOverlay();
+  btn.onclick = () => { openAdminPanel(); };
+}
+
 async function init() {
   popupEl = document.getElementById('info-popup');
   // checkAuth creates the shared PKCE client (supabaseClient) before getSession.
@@ -574,6 +948,11 @@ async function init() {
   } catch (e) {
     console.error('Data load failed', e);
     // fallback to empty
+  }
+  // Admin button is injected only after /dev/grant confirms is_admin.
+  // Non-admins: no button, no panel, no /dev/templates fetch.
+  try { await setupAdminPanel(); } catch (e) {
+    console.error('Admin panel setup failed', e);
   }
   renderAll();
   setupKeyboard();
