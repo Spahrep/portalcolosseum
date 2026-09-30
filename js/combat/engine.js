@@ -26,12 +26,25 @@ function pickMonsterAttack(mon, rng) {
 
 // Option A: mon.speed plays the weaponSpeed role. Same contract as the API
 // rollStat — range <= 0 consumes no RNG and returns base (clamped >= 1).
+// Damage and accuracy still use rollStat. Timing does not.
 function rollStat(base, range, rng) {
   const b = Number(base) || 1;
   const v = Number(range) || 0;
   if (v <= 0) return Math.max(1, b);
   const delta = Math.floor(rng() * (v * 2 + 1)) - v;
   return Math.max(1, b + delta);
+}
+
+// PC-107: attack prepare/cooldown are multipliers on speed, not flat ticks.
+// Mirrors api/combat rollMultiplier: range <= 0 consumes no RNG and returns
+// base exactly. Clamp >= 0 (not >= 1) so a 0.7 Quick Slash stays 0.7.
+export function rollMultiplier(base, range, rng = Math.random) {
+  const b = Number(base);
+  const safe = Number.isFinite(b) ? b : 1;
+  const v = Number(range) || 0;
+  if (v <= 0) return safe;
+  const rolled = safe + (rng() * 2 - 1) * v;
+  return Math.max(0, rolled);
 }
 
 function monsterAttackByName(mon, name) {
@@ -163,10 +176,11 @@ function monsterStrikeLabel(mon, row) {
 // labelForLog is the original expression's label (mon.label vs row.label).
 function queueNextMonsterAttack(state, mon, labelForLog) {
   const atk = pickMonsterAttack(mon, state.rng);
-  const prepare = rollStat(atk?.prepare_time, atk?.prepare_time_range, state.rng);
-  const newRow = commitNewRow(state.queue, mon.label, 'winding', mon.speed + prepare);
+  // PC-107: windup = mon.speed * prepare multiplier (not speed + flat ticks).
+  const prepare = rollMultiplier(atk?.prepare_time_multiplier ?? 1, atk?.prepare_time_multiplier_range ?? 0, state.rng);
+  const newRow = commitNewRow(state.queue, mon.label, 'winding', mon.speed * prepare);
   stampMonsterStrike(newRow, mon, atk);
-  newRow.cooldownTicks = mon.speed + rollStat(atk?.cooldown_time, atk?.cooldown_time_range, state.rng);
+  newRow.cooldownTicks = mon.speed * rollMultiplier(atk?.cooldown_time_multiplier ?? 1, atk?.cooldown_time_multiplier_range ?? 0, state.rng);
   logLine(state, `${mon.name || mon.template_name || 'Monster'} ${labelForLog.replace('Monster ', '')} prepares ${atk?.name ? `a ${atk.name}` : 'an attack'}...`);
   return newRow;
 }
@@ -299,7 +313,7 @@ function resolveMonsterImpact(state, row, mon) {
     const atk = monsterAttackByName(mon, atkName);
     const cdTics = Number.isFinite(row.cooldownTicks)
       ? row.cooldownTicks
-      : mon.speed + rollStat(atk?.cooldown_time, atk?.cooldown_time_range, state.rng);
+      : mon.speed * rollMultiplier(atk?.cooldown_time_multiplier ?? 1, atk?.cooldown_time_multiplier_range ?? 0, state.rng);
     addEvent(state.queue, mon.label, 'cooldown', cdTics);
   }
 }
@@ -639,7 +653,7 @@ export function createEngine(rng = Math.random) {
       A: normalizePotion(participants.loadout?.consume_a),
       B: normalizePotion(participants.loadout?.consume_b)
     };
-    // First winding at mon.speed + prepare; cooldownTicks stored on that row.
+    // First winding at mon.speed * prepare multiplier; cooldownTicks stored on that row.
     state.monsters.forEach(mon => {
       if (!isMonsterDead(mon)) {
         queueNextMonsterAttack(state, mon, mon.label);

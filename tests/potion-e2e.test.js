@@ -138,6 +138,10 @@ describe('Potion E2E parity (PC-39)', () => {
   it('buff duration/endTic parity: lands after pre, endTic correct, formatBuffs matches', () => {
     const eng = createEngine(seededRNG(103));
     const p = makeParticipants({ ...buffPotion });
+    // Default multiplier is 1, so a speed-5 monster winds at tic 5 and would
+    // hit during this potion's windup. Keep it behind the drink so the
+    // snapshot stays about buff timing, not monster cadence.
+    p.monsters[0].speed = 12;
     eng.startBattle(p);
     eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 4 });

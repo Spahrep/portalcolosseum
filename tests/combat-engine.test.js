@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { getHpWord, HP_BANDS } from '../js/combat/hp-words.js';
 import { createQueue, commitNewRow, popNext, computeTimingMarkers, peekHead, addEvent } from '../js/combat/tic-queue.js';
-import createEngine, { resumeEngine } from '../js/combat/engine.js';
+import createEngine, { resumeEngine, rollMultiplier } from '../js/combat/engine.js';
 import { swapHandWithBelt } from '../js/combat/participants.js';
 
 function seededRNG(seed = 42) {
@@ -459,6 +459,32 @@ describe('rollStat contract (range 0 unchanged, range N within bounds)', () => {
   });
 });
 
+describe('rollMultiplier contract (range 0 = base, range N within [base-N, base+N] clamped >=0)', () => {
+  it('range 0 or falsy returns base exactly, including sub-1 multipliers', () => {
+    assert.equal(rollMultiplier(1.5, 0), 1.5);
+    assert.equal(rollMultiplier(0.7, 0), 0.7);
+    assert.equal(rollMultiplier(1.5, null), 1.5);
+    assert.equal(rollMultiplier(1.5, undefined), 1.5);
+    assert.equal(rollMultiplier(1.5, -3), 1.5);
+  });
+
+  it('range N stays inside [base-N, base+N] and clamps at 0, not 1', () => {
+    assert.equal(rollMultiplier(1.5, 0.2, () => 0), 1.3);
+    assert.equal(rollMultiplier(1.5, 0.2, () => 1), 1.7);
+    assert.equal(rollMultiplier(1.5, 0.2, () => 0.5), 1.5);
+    assert.equal(rollMultiplier(0.1, 1, () => 0), 0);
+    const base = 1.5;
+    const v = 0.4;
+    const seen = new Set();
+    for (let i = 0; i < 40; i++) {
+      const r = rollMultiplier(base, v);
+      assert.ok(r >= 0 && r >= base - v - 1e-9 && r <= base + v + 1e-9, `rollMultiplier(${base},${v})=${r} out of range`);
+      seen.add(r);
+    }
+    assert.ok(seen.size > 1, 'should produce a spread');
+  });
+});
+
 describe('PC-56 timing markers (computeTimingMarkers)', () => {
   // Mockup semantics (dw-app.js:220-261): single '>' on first row tics >= maxT
   // when nothing strictly inside (minT < tics < maxT); bounding pair (last
@@ -604,9 +630,9 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.ok(approachRows.some(r => r.label === 'LH' && r.tics === 4));
     assert.ok(approachRows.some(r => r.label === 'RH' && r.tics === 6));
     const monsterRow = state.queue.find(r => r.label === 'A' && r.event === 'winding');
-    // no attacks on the fixture → rollStat(prepare) defaults to 1
-    assert.equal(monsterRow.tics, 9, 'monster winding at speed + default prepare (8+1)');
-    assert.equal(monsterRow.cooldownTicks, 9, 'stored cooldown is speed + default cooldown (8+1)');
+    // no attacks on the fixture → multiplier defaults to 1, so tics = speed
+    assert.equal(monsterRow.tics, 8, 'monster winding at speed * default multiplier (8*1)');
+    assert.equal(monsterRow.cooldownTicks, 8, 'stored cooldown is speed * default multiplier (8*1)');
     // no advance: no Ready feed lines yet
     assert.ok(!state.feed.some(l => l.includes('Ready')));
   });
@@ -647,7 +673,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const eng = createEngine(seededRNG(7));
     eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 100 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 5, accuracy: 100, label: 'A' }]
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 100, label: 'A' }]
     });
     const state = eng.advanceToNextDecision();
     const lhIdx = state.feed.findIndex(l => l.includes('LH Ready'));
@@ -682,8 +708,8 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const monRow = state.queue.find(r => r.label === 'A' && r.event === 'winding');
     assert.ok(lhRow && lhRow.tics === 4, 'LH approach at weapon speed 4');
     assert.ok(rhRow && rhRow.tics === 6, 'RH approach at weapon speed 6');
-    assert.ok(monRow && monRow.tics === 3, 'monster winding at speed + default prepare (2+1)');
-    assert.equal(monRow.cooldownTicks, 3, 'stored cooldown is speed + default cooldown (2+1)');
+    assert.ok(monRow && monRow.tics === 2, 'monster winding at speed * default multiplier (2*1)');
+    assert.equal(monRow.cooldownTicks, 2, 'stored cooldown is speed * default multiplier (2*1)');
     // no fires resolved during start
     assert.ok(!state.feed.some(l => l.includes('hits player')));
     assert.ok(!state.feed.some(l => l.includes('Ready')));
@@ -720,7 +746,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const monIdx = q.findIndex(r => r.label === 'A' && r.event === 'winding');
     const lhIdx = q.findIndex(r => r.label === 'LH' && r.event === 'approach');
     assert.ok(monIdx !== -1 && lhIdx !== -1);
-    assert.ok(monIdx < lhIdx, 'monster row before LH approach (3 < 4)');
+    assert.ok(monIdx < lhIdx, 'monster row before LH approach (2 < 4)');
     // advance resolves monster hits then hands ready
     const after = eng.advanceToNextDecision();
     const hits = after.feed.filter(l => l.includes('A hits player'));
@@ -737,11 +763,11 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 1, accuracy: 100, label: 'A' }]
     });
     const monRow = eng.state.queue.find(r => r.label === 'A' && r.event === 'winding');
-    assert.equal(monRow.tics, 2, 'monster first winding at speed + prepare (1+1)');
+    assert.equal(monRow.tics, 1, 'monster first winding at speed * default multiplier (1*1)');
     assert.ok(eng.state.queue.findIndex(r => r.label === 'A' && r.event === 'winding') < eng.state.queue.findIndex(r => r.label === 'LH'));
     const after = eng.advanceToNextDecision();
     const hits = after.feed.filter(l => l.includes('A hits player'));
-    assert.equal(hits.length, 2, 'follow-up ordering key is still ahead of the approach rows');
+    assert.equal(hits.length, 4, 'speed * 1 cycles still land before the slower approach rows');
     assert.equal(after.participants.player.hands.LH.state, 'Ready');
   });
 
@@ -749,7 +775,7 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 100 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 4, accuracy: 100, label: 'A' }]
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 5, accuracy: 100, label: 'A' }]
     });
     const q = state.queue;
     const lhIdx = q.findIndex(r => r.label === 'LH' && r.event === 'approach');
@@ -859,7 +885,11 @@ describe('monster winding lifecycle (PC-97)', () => {
     prepare_time: 2,
     prepare_time_range: 0,
     cooldown_time: 4,
-    cooldown_time_range: 0
+    cooldown_time_range: 0,
+    prepare_time_multiplier: 2,
+    prepare_time_multiplier_range: 0,
+    cooldown_time_multiplier: 3,
+    cooldown_time_multiplier_range: 0
   };
 
   function slowHandsBattle(seed = 3) {
@@ -875,12 +905,12 @@ describe('monster winding lifecycle (PC-97)', () => {
     return eng;
   }
 
-  it('startBattle seeds first winding at speed + prepare and stores cooldown', () => {
+  it('startBattle seeds first winding at speed * prepare multiplier and stores cooldown', () => {
     const eng = slowHandsBattle();
     const row = eng.state.queue.find(r => r.label === 'A' && r.event === 'winding');
     assert.ok(row, 'first winding row seeded');
-    assert.equal(row.tics, 5, 'mon.speed 3 + prepare 2');
-    assert.equal(row.cooldownTicks, 7, 'mon.speed 3 + cooldown 4 stored on the row');
+    assert.equal(row.tics, 6, 'mon.speed 3 * prepare multiplier 2');
+    assert.equal(row.cooldownTicks, 9, 'mon.speed 3 * cooldown multiplier 3 stored on the row');
     assert.equal(row.monsterAttackName, 'Bite');
     assert.equal(row.damage, 10);
     assert.equal(row.accuracy, 100);
@@ -902,7 +932,7 @@ describe('monster winding lifecycle (PC-97)', () => {
     assert.equal(monRows[0].event, 'impact');
     assert.equal(monRows[0].tics, 0);
     assert.equal(monRows[0].monsterAttackName, 'Bite');
-    assert.equal(monRows[0].cooldownTicks, 7);
+    assert.equal(monRows[0].cooldownTicks, 9);
     assert.equal(monRows[0].damage, 10);
     assert.equal(monRows[0].accuracy, 100);
     assert.equal(monRows[0].critChance, 0);
@@ -922,14 +952,14 @@ describe('monster winding lifecycle (PC-97)', () => {
     const monRows = eng.state.queue.filter(r => r.label === 'A');
     assert.equal(monRows.length, 1);
     assert.equal(monRows[0].event, 'cooldown');
-    assert.equal(monRows[0].tics, 7, 'stored cooldownTicks, not a re-seeded winding');
+    assert.equal(monRows[0].tics, 9, 'stored cooldownTicks, not a re-seeded winding');
     assert.equal(eng.state.queue.some(r => r.label === 'A' && r.event === 'winding'), false);
     assert.equal(eng.state.queue.some(r => r.label === 'A' && r.event === 'impact'), false);
-    assert.deepEqual(fires[1].after, { event: 'cooldown', tics: 7 });
+    assert.deepEqual(fires[1].after, { event: 'cooldown', tics: 9 });
     assert.equal(fires[1].event, 'impact');
   });
 
-  it('cooldown fire inserts the next winding at speed + prepare', () => {
+  it('cooldown fire inserts the next winding at speed * prepare multiplier', () => {
     const eng = slowHandsBattle();
     const fires = [];
     eng.stepQueue(fires); // winding → impact
@@ -944,13 +974,13 @@ describe('monster winding lifecycle (PC-97)', () => {
     const cooldownFire = fires.find(f => f.label === 'A' && f.event === 'cooldown');
     const next = eng.state.queue.find(r => r.label === 'A' && r.event === 'winding');
     assert.ok(next, 'successor winding exists');
-    assert.equal(next.tics, 5, 'mon.speed 3 + prepare 2');
-    assert.equal(next.cooldownTicks, 7);
+    assert.equal(next.tics, 6, 'mon.speed 3 * prepare multiplier 2');
+    assert.equal(next.cooldownTicks, 9);
     assert.equal(next.monsterAttackName, 'Bite');
     assert.equal(next.damage, 10);
     assert.equal(eng.state.queue.filter(r => r.label === 'A' && r.event === 'cooldown').length, 0);
     assert.ok(eng.state.feed.filter(l => l.includes('prepares a Bite')).length >= 2);
-    assert.deepEqual(cooldownFire.after, { event: 'winding', tics: 5 });
+    assert.deepEqual(cooldownFire.after, { event: 'winding', tics: 6 });
     assert.equal(cooldownFire.event, 'cooldown');
   });
 
@@ -965,7 +995,7 @@ describe('monster winding lifecycle (PC-97)', () => {
         attacks: [bite]
       }]
     });
-    // One named attack: pick consumes 1 rng. prepare/cooldown ranges are 0.
+    // One named attack: pick consumes 1 rng. multiplier ranges are 0.
     assert.equal(draws, 1, 'seed rolls the attack pick only');
     const seeded = draws;
     const hpBefore = eng.state.player.hp;
@@ -982,10 +1012,10 @@ describe('monster winding lifecycle (PC-97)', () => {
     const ranged = {
       id: 1,
       name: 'Bite',
-      prepare_time: 4,
-      prepare_time_range: 2,
-      cooldown_time: 6,
-      cooldown_time_range: 3
+      prepare_time_multiplier: 1.4,
+      prepare_time_multiplier_range: 0.3,
+      cooldown_time_multiplier: 1.6,
+      cooldown_time_multiplier_range: 0.4
     };
     function run() {
       const eng = createEngine(seededRNG(11));
@@ -993,7 +1023,7 @@ describe('monster winding lifecycle (PC-97)', () => {
         loadout: { hand_l_speed: 40, hand_r_speed: 40 },
         monsters: [{
           id: 1, max_hp: 200, damage: 8, speed: 3, accuracy: 80, label: 'A', name: 'Wolf',
-          attacks: [ranged, { id: 2, name: 'Claw', prepare_time: 1, prepare_time_range: 1, cooldown_time: 2, cooldown_time_range: 1 }]
+          attacks: [ranged, { id: 2, name: 'Claw', prepare_time_multiplier: 0.8, prepare_time_multiplier_range: 0.2, cooldown_time_multiplier: 1.1, cooldown_time_multiplier_range: 0.2 }]
         }]
       });
       for (let i = 0; i < 12; i++) eng.tick();
@@ -1017,7 +1047,7 @@ describe('monster winding lifecycle (PC-97)', () => {
     assert.ok(a.queue.some(r => r.label === 'A' && (r.event === 'winding' || r.event === 'impact' || r.event === 'cooldown')));
   });
 
-  it('missing cooldownTicks falls back to speed + rollStat at impact', () => {
+  it('missing cooldownTicks falls back to speed * cooldown multiplier at impact', () => {
     const eng = slowHandsBattle();
     const row = eng.state.queue.find(r => r.label === 'A' && r.event === 'winding');
     delete row.cooldownTicks;
@@ -1027,6 +1057,6 @@ describe('monster winding lifecycle (PC-97)', () => {
     eng.stepQueue();
     const cd = eng.state.queue.find(r => r.label === 'A');
     assert.equal(cd.event, 'cooldown');
-    assert.equal(cd.tics, 7, 'fallback uses this attack cooldown_time');
+    assert.equal(cd.tics, 9, 'fallback uses speed * cooldown multiplier (3*3)');
   });
 });
