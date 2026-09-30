@@ -5,6 +5,7 @@
  */
 import { debugLog } from '../battle-debug.js';
 import { parseHitLine } from '../combat/hit-feedback.js';
+import { assignArenaLetters, letterForMonster } from './arena-letters.js';
 
 // PC-51: monsters stay hidden while the dice roll ceremony plays, then
 // fade in one at a time. Set in the battle render when a roll will run;
@@ -54,6 +55,8 @@ const MONSTER_DEATH_MS = 1200;
 // from this map (keyed by monster id) in their original arena position while
 // the animation plays, so a fast follow-up action can't cut the beat short.
 const deathCards = new Map(); // monster id -> { el, timer }
+// Stable A/B/C assigned at first sight. Survives deaths so B is not relabeled A.
+let arenaLetters = new Map();
 
 function triggerWindowShake() {
   const el = document.querySelector('.container');
@@ -129,6 +132,15 @@ function handleHitLine(line) {
   }
 }
 
+function syncArenaLetters(monsters) {
+  arenaLetters = assignArenaLetters(monsters || [], arenaLetters);
+  return arenaLetters;
+}
+
+function arenaLetterOf(monster) {
+  return letterForMonster(monster, arenaLetters);
+}
+
 function renderMonsters(monsters) {
   const container = document.getElementById('monsters');
   if (!container) return;
@@ -147,6 +159,7 @@ function renderMonsters(monsters) {
     if (!child.classList.contains('monster-dying')) child.remove();
   });
   const list = monsters || [];
+  syncArenaLetters(list);
   if (list.length === 0) {
     // No monsters in the new state — sweep any lingering death cards.
     for (const entry of deathCards.values()) {
@@ -188,11 +201,12 @@ function renderMonsters(monsters) {
 function buildMonsterCard(m, dying) {
   const card = document.createElement('div');
   card.className = 'monster-card' + (dying ? ' monster-dying' : '');
-  // PC-70: letter = the monster's arena key from its label (feed lines use
-  // the raw label: "Monster A" / "A" / "Monster #12"). Same normalization as
-  // parseHitLine + queueLabel. Index order is NOT the contract — labels are
-  // "next free A-Z" at spawn and drift from array order when monsters die.
-  card.dataset.letter = String(m.label || '').replace(/^Monster\s*/i, '');
+  // Stable arena letter (assigned at battle start, not the living-array index).
+  // Damage-report feed lines use the same letter via the engine label, which
+  // assignArenaLetters prefers so the card and the hit line agree.
+  // Card DOM itself is not unit-tested — letterForMonster is.
+  const letter = letterForMonster(m, arenaLetters);
+  card.dataset.letter = letter;
   card.style.cssText = 'background:rgba(0,0,0,0.4);border:2px solid #4a90d9;padding:8px 10px;margin-bottom:6px;';
   const sprite = document.createElement('div');
   sprite.className = 'monster-sprite';
@@ -200,7 +214,7 @@ function buildMonsterCard(m, dying) {
   sprite.textContent = m.name ? m.name.substring(0, 3).toUpperCase() : 'MON';
   const name = document.createElement('div');
   name.style.cssText = 'color:#ffcc66;font-size:11px;text-align:center;';
-  name.textContent = m.name || 'Monster';
+  name.textContent = m.name ? `${letter}: ${m.name}` : letter;
   const hp = document.createElement('div');
   hp.style.cssText = 'margin-top:4px;text-align:center;';
   if (dying) {
@@ -284,4 +298,6 @@ export {
   bandClass,
   deathCards,
   MONSTER_DEATH_MS,
+  syncArenaLetters,
+  arenaLetterOf,
 };

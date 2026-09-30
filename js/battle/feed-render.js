@@ -5,6 +5,7 @@
  */
 import { debugLog } from '../battle-debug.js';
 import { getSpeedPreset } from '../settings-controller.js';
+import { nextTypingStateAfterClick } from './feed-skip.js';
 
 // setBusy + handleHitLine stay in battle-app.js. Bound here (and overridable
 // via typeFeedLines params) so this module does not import battle-app.js.
@@ -23,6 +24,14 @@ let typingInProgress = false;
 let typingTimeouts = [];
 let typingSetBusy = false; // track if *this* typing batch set the busy gate
 let feedPinned = true; // DO-2: auto-scroll only while pinned; user scroll-up pauses for the batch
+// Click-to-complete state. A click finishes the current line only; these
+// fields let that path continue the still-queued lines instead of dropping them.
+let typingLines = [];
+let typingLineIndex = 0;
+let typingLineEl = null;
+let typingLineText = '';
+let typingPhase = 'idle'; // 'chars' | 'delay' | 'idle'
+let typingOnComplete = null;
 // Feed lines already displayed in #message-box. The box is NOT a pure feed
 // mirror — it also holds the battle-complete panel, "Advancing..." and
 // "Attack committed" system lines — so the incremental feed diff must track
@@ -56,6 +65,10 @@ export function clearTyping() {
   typingTimeouts.forEach(t => clearTimeout(t));
   typingTimeouts = [];
   typingInProgress = false;
+  typingPhase = 'idle';
+  typingLineEl = null;
+  typingLineText = '';
+  typingOnComplete = null;
   if (typingSetBusy) {
     setBusy(false);
     document.body.classList.remove('command-hidden');
@@ -63,13 +76,116 @@ export function clearTyping() {
   }
 }
 
+function cancelTypingTimers() {
+  typingTimeouts.forEach(t => clearTimeout(t));
+  typingTimeouts = [];
+}
+
+function finishTypingBatch() {
+  typingInProgress = false;
+  typingPhase = 'idle';
+  typingLineEl = null;
+  typingLineText = '';
+  if (typingSetBusy) {
+    setBusy(false);
+    document.body.classList.remove('command-hidden');
+    typingSetBusy = false;
+  }
+  const done = typingOnComplete;
+  typingOnComplete = null;
+  if (done) done();
+}
+
+function typeNextLine() {
+  if (typingLineIndex >= typingLines.length) {
+    finishTypingBatch();
+    return;
+  }
+  const box = document.getElementById('message-box');
+  if (!box) {
+    typingLineIndex = typingLines.length;
+    finishTypingBatch();
+    return;
+  }
+  const lineText = typingLines[typingLineIndex];
+  typingLineText = lineText;
+  typingPhase = 'chars';
+  // PC-70: the hit reaction fires as the line STARTS typing — impact lands
+  // with the message, not after it finishes narrating.
+  handleHitLine(lineText);
+  const div = document.createElement('div');
+  div.className = 'msg-line';
+  box.appendChild(div);
+  typingLineEl = div;
+  if (feedPinned) box.scrollTop = box.scrollHeight;
+  const preset = getSpeedPreset();
+  if (preset.charMs === 0) {
+    div.textContent = lineText;
+    typingLineIndex++;
+    typeNextLine();
+    return;
+  }
+  let charIndex = 0;
+  function typeChar() {
+    const speed = getSpeedPreset();
+    if (speed.charMs === 0) {
+      div.textContent = lineText;
+      // Instant mid-batch: dump the rest so the preset actually takes effect.
+      for (let j = typingLineIndex + 1; j < typingLines.length; j++) appendFeedLine(typingLines[j]);
+      typingLineIndex = typingLines.length;
+      typeNextLine();
+      return;
+    }
+    if (charIndex < lineText.length) {
+      div.textContent = lineText.slice(0, charIndex + 1);
+      charIndex++;
+      if (feedPinned) box.scrollTop = box.scrollHeight;
+      const t = setTimeout(typeChar, speed.charMs);
+      typingTimeouts.push(t);
+    } else {
+      typingPhase = 'delay';
+      typingLineIndex++;
+      const t = setTimeout(typeNextLine, speed.lineDelayMs);
+      typingTimeouts.push(t);
+    }
+  }
+  typeChar();
+}
+
+/**
+ * Click-to-complete. Finishes the line currently on screen and continues the
+ * typewriter for still-queued lines. Does NOT call clearTyping and does NOT
+ * mark unread lines shown — those lines must still render.
+ * Browser DOM; the decision itself is nextTypingStateAfterClick (unit-tested).
+ */
+export function completeCurrentTypingLine() {
+  if (!typingInProgress) return false;
+  const next = nextTypingStateAfterClick({
+    lines: typingLines,
+    lineIndex: typingLineIndex,
+    phase: typingPhase,
+  });
+  cancelTypingTimers();
+  if (next.finishCurrent && typingLineEl && typingLineText != null) {
+    typingLineEl.textContent = next.finishedText != null ? next.finishedText : typingLineText;
+  }
+  typingLineIndex = next.lineIndex;
+  typingPhase = next.phase === 'done' ? 'idle' : 'chars';
+  if (next.done) {
+    finishTypingBatch();
+    return true;
+  }
+  typeNextLine();
+  return true;
+}
+
 export function typeFeedLines(lines, onComplete, setBusyParam, handleHitLineParam) {
   // setBusy and handleHitLine stay in battle-app.js — passed in to avoid a circular import.
   if (typeof setBusyParam === 'function') setBusy = setBusyParam;
   if (typeof handleHitLineParam === 'function') handleHitLine = handleHitLineParam;
   // Latest-feed-wins: a commit/Enter can land mid-batch (keyboard path bypasses the
-  // disabled buttons). If a batch is already typing, complete it instantly first so
-  // only ONE typing loop runs at a time — same skip semantics as click-to-complete.
+  // disabled buttons). Abort the previous loop so only ONE typing loop runs.
+  // Click-to-complete does NOT use this path — it calls completeCurrentTypingLine.
   if (typingInProgress) clearTyping();
   const box = document.getElementById('message-box');
   if (!box) {
@@ -83,43 +199,14 @@ export function typeFeedLines(lines, onComplete, setBusyParam, handleHitLinePara
     return;
   }
   typingInProgress = true;
+  typingLines = lines;
+  typingLineIndex = 0;
+  typingPhase = 'chars';
+  typingOnComplete = onComplete || null;
   setBusy(true); // gate action menu during typing per spec
   document.body.classList.add('command-hidden');
   typingSetBusy = true;
   feedPinned = true; // start pinned for this batch; scroll-up will unpin for remainder of batch
-  let lineIndex = 0;
-  function typeNextLine() {
-    if (lineIndex >= lines.length) {
-      typingInProgress = false;
-      setBusy(false);
-      document.body.classList.remove('command-hidden');
-      if (onComplete) onComplete();
-      return;
-    }
-    const lineText = lines[lineIndex];
-    // PC-70: the hit reaction fires as the line STARTS typing — impact lands
-    // with the message, not after it finishes narrating.
-    handleHitLine(lineText);
-    const div = document.createElement('div');
-    div.className = 'msg-line';
-    box.appendChild(div);
-    if (feedPinned) box.scrollTop = box.scrollHeight;
-    let charIndex = 0;
-    function typeChar() {
-      if (charIndex < lineText.length) {
-        div.textContent = lineText.slice(0, charIndex + 1);
-        charIndex++;
-        if (feedPinned) box.scrollTop = box.scrollHeight;
-        const t = setTimeout(typeChar, preset.charMs);
-        typingTimeouts.push(t);
-      } else {
-        lineIndex++;
-        const t = setTimeout(typeNextLine, preset.lineDelayMs);
-        typingTimeouts.push(t);
-      }
-    }
-    typeChar();
-  }
   typeNextLine();
 }
 

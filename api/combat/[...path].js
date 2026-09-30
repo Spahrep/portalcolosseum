@@ -1187,8 +1187,18 @@ async function handle(request) {
       const inBattle = !!engine.state.player && engine.state.monsters.some(m => (m.current_hp || 0) > 0);
       const params = { phase: inBattle ? 'in-battle' : 'between-fights' };
       if (inBattle) {
-        const hand = ['LH', 'RH'].find(h => engine.state.player?.hands?.[h]?.state === 'Ready');
-        if (!hand) return json({ error: 'No free hand' }, 400);
+        const requested = String(body.hand || '').toUpperCase();
+        let hand;
+        if (requested === 'LH' || requested === 'RH') {
+          // The open menu names the hand. Do not fall back to the other ready hand.
+          if (engine.state.player?.hands?.[requested]?.state !== 'Ready') {
+            return json({ error: 'Hand not ready' }, 400);
+          }
+          hand = requested;
+        } else {
+          hand = ['LH', 'RH'].find(h => engine.state.player?.hands?.[h]?.state === 'Ready');
+          if (!hand) return json({ error: 'No free hand' }, 400);
+        }
         const weaponId = hand === 'LH' ? run.hand_l_weapon_id : run.hand_r_weapon_id;
         let weaponSpeed = 0;
         if (weaponId) {
