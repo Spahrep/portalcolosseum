@@ -276,6 +276,55 @@ describe('POST /commit unarmed fist_speed and multiplier range', () => {
       Math.random = orig;
     }
   });
+
+  it('scales armed cast and cooldown by the attack timing multipliers, ignoring flat ticks', async () => {
+    const run = {
+      id: 1, user_id: 'user-1', status: 'active', player_hp: 1000,
+      hand_l_weapon_id: 42, hand_r_weapon_id: null,
+      battle_state: readyBattle(),
+    };
+    const attack = {
+      prepare_time: 99, prepare_time_range: 9,
+      cooldown_time: 99, cooldown_time_range: 9,
+      prepare_time_multiplier: 1.5, prepare_time_multiplier_range: 0,
+      cooldown_time_multiplier: 2, cooldown_time_multiplier_range: 0,
+      is_multi_target: false, base_damage_multiplier: 1, base_damage_multiplier_range: 0,
+      name: 'Heavy Chop', crit_factor: 1, crit_multiplier: 2,
+    };
+    const weapon = { damage: 10, accuracy: 80, speed: 20, crit_chance: 0 };
+    const admin = mockAdmin(commitResponder(run, { attack, weapon }));
+    __setAdminClientForTests(admin);
+    const res = await POST(post('/runs/1/commit', { hand: 'LH', attack_id: 1, target_ids: [1] }));
+    assert.equal(res.status, 200, await res.clone().text());
+    const select = admin.calls.find(c => c.table === 'attack');
+    assert.match(select.cols, /prepare_time_multiplier/);
+    assert.match(select.cols, /prepare_time_multiplier_range/);
+    assert.match(select.cols, /cooldown_time_multiplier/);
+    assert.match(select.cols, /cooldown_time_multiplier_range/);
+    const upd = admin.calls.find(c => c.table === 'portal_run' && c.op === 'update');
+    const winding = upd.payload.battle_state.queue.find(r => r.event === 'winding');
+    assert.equal(winding.tics, 20 * 1.5);
+    assert.equal(winding.cooldownTicks, 20 * 2);
+    assert.notEqual(winding.tics, 20 + 99);
+
+    attack.prepare_time_multiplier_range = 0.2;
+    attack.cooldown_time_multiplier_range = 0.4;
+    const orig = Math.random;
+    try {
+      Math.random = () => 0;
+      admin.calls.length = 0;
+      const ranged = await POST(post('/runs/1/commit', { hand: 'LH', attack_id: 1, target_ids: [1] }));
+      assert.equal(ranged.status, 200, await ranged.clone().text());
+      const upd2 = admin.calls.filter(c => c.table === 'portal_run' && c.op === 'update').pop();
+      const winding2 = upd2.payload.battle_state.queue.find(r => r.event === 'winding');
+      assert.equal(winding2.tics, 20 * rollMultiplier(1.5, 0.2, () => 0));
+      assert.equal(winding2.cooldownTicks, 20 * rollMultiplier(2, 0.4, () => 0));
+      assert.ok(winding2.tics >= 20 * (1.5 - 0.2) - 1e-9 && winding2.tics <= 20 * (1.5 + 0.2) + 1e-9);
+      assert.ok(winding2.cooldownTicks >= 0);
+    } finally {
+      Math.random = orig;
+    }
+  });
 });
 
 describe('POST /tick writes consume_*_used when a drinking row lands', () => {

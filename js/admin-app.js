@@ -235,7 +235,7 @@ async function renderAttacks(container) {
     <button class="btn" id="create-attack-btn">+ Create New Attack</button>
     <div id="attack-form-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Dmg Mult</th><th>Mult Range</th><th>Prep</th><th>Prep Range</th><th>Cooldown</th><th>Cooldown Range</th><th>Multi?</th><th>Weight</th><th>Crit Factor</th><th>Crit Mult</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Dmg Mult</th><th>Mult Range</th><th>Prep</th><th>Prep Range</th><th>Prep Mult</th><th>Prep Mult Range</th><th>Cooldown</th><th>Cooldown Range</th><th>CD Mult</th><th>CD Mult Range</th><th>Multi?</th><th>Weight</th><th>Crit Factor</th><th>Crit Mult</th><th>Actions</th></tr></thead>
       <tbody id="attacks-tbody"></tbody>
     </table>
   `;
@@ -251,8 +251,12 @@ async function renderAttacks(container) {
       <td>${a.base_damage_multiplier_range ?? 0}</td>
       <td>${a.prepare_time}</td>
       <td>${a.prepare_time_range ?? 0}</td>
+      <td>${a.prepare_time_multiplier ?? 1}</td>
+      <td>${a.prepare_time_multiplier_range ?? 0}</td>
       <td>${a.cooldown_time}</td>
       <td>${a.cooldown_time_range ?? 0}</td>
+      <td>${a.cooldown_time_multiplier ?? 1}</td>
+      <td>${a.cooldown_time_multiplier_range ?? 0}</td>
       <td>${a.is_multi_target ? '✓' : ''}</td>
       <td>${a.weight}</td>
       <td>${a.crit_factor ?? 1.0}</td>
@@ -290,8 +294,12 @@ function showAttackForm(id = null) {
       </div>
       <div class="form-group"><label>Prepare Time</label><input id="f-prepare_time" type="number" value="${attack.prepare_time ?? 10}"></div>
       <div class="form-group"><label>Prep Time Range (±)</label><input id="f-prepare_time_range" type="number" value="${attack.prepare_time_range ?? 0}"></div>
+      <div class="form-group"><label>Prepare Mult</label><input id="f-prepare_time_multiplier" type="number" step="0.1" value="${attack.prepare_time_multiplier ?? 1.0}"></div>
+      <div class="form-group"><label>Prep Mult Range (±)</label><input id="f-prepare_time_multiplier_range" type="number" step="0.1" value="${attack.prepare_time_multiplier_range ?? 0}"></div>
       <div class="form-group"><label>Cooldown Time</label><input id="f-cooldown_time" type="number" value="${attack.cooldown_time ?? 10}"></div>
       <div class="form-group"><label>Cooldown Time Range (±)</label><input id="f-cooldown_time_range" type="number" value="${attack.cooldown_time_range ?? 0}"></div>
+      <div class="form-group"><label>Cooldown Mult</label><input id="f-cooldown_time_multiplier" type="number" step="0.1" value="${attack.cooldown_time_multiplier ?? 1.0}"></div>
+      <div class="form-group"><label>Cooldown Mult Range (±)</label><input id="f-cooldown_time_multiplier_range" type="number" step="0.1" value="${attack.cooldown_time_multiplier_range ?? 0}"></div>
       <div class="form-group"><label><input id="f-is_multi_target" type="checkbox" ${attack.is_multi_target ? 'checked' : ''}> Multi Target</label></div>
       <div class="form-group"><label>Weight</label><input id="f-weight" type="number" step="0.1" value="${attack.weight ?? 1.0}"></div>
       <div class="form-group"><label>Crit Factor (× chance)</label><input id="f-crit_factor" type="number" step="0.1" value="${attack.crit_factor ?? 1.0}"></div>
@@ -326,8 +334,12 @@ function showAttackForm(id = null) {
       base_damage_multiplier_range: parseFloat(val('f-base_damage_multiplier_range')),
       prepare_time: parseInt(val('f-prepare_time')),
       prepare_time_range: parseInt(val('f-prepare_time_range')),
+      prepare_time_multiplier: parseFloat(val('f-prepare_time_multiplier')),
+      prepare_time_multiplier_range: parseFloat(val('f-prepare_time_multiplier_range')),
       cooldown_time: parseInt(val('f-cooldown_time')),
       cooldown_time_range: parseInt(val('f-cooldown_time_range')),
+      cooldown_time_multiplier: parseFloat(val('f-cooldown_time_multiplier')),
+      cooldown_time_multiplier_range: parseFloat(val('f-cooldown_time_multiplier_range')),
       is_multi_target: document.getElementById('f-is_multi_target').checked,
       weight: parseFloat(val('f-weight')),
       crit_factor: parseFloat(val('f-crit_factor')),
