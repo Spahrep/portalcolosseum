@@ -29,7 +29,7 @@ import {
   isTypingInProgress, setFeedPinned
 } from './battle/feed-render.js';
 import {
-  renderDice, bindDiceRender
+  renderDice, bindDiceRender, performSweepAnimation
 } from './battle/dice-render.js';
 import { renderMonsters, revealMonsters, handleHitLine,
          bandClass, setMonstersPendingReveal, syncArenaLetters, arenaLetterOf,
@@ -963,6 +963,11 @@ function ensureAdvanceOverlayStyles() {
   background: #112a44;
   box-shadow: 0 0 6px rgba(102,255,153,0.3);
 }
+.advance-weapon.highlight {
+  box-shadow: 0 0 0 3px #ffffff, 0 0 8px rgba(255,255,255,0.55);
+  transform: scale(1.04);
+  z-index: 2;
+}
 .advance-btn-row {
   display: flex;
   gap: 12px;
@@ -1123,6 +1128,7 @@ function renderLootChoices(runData, currentTier, content, overlay, runId) {
       const wEl = document.createElement('div');
       wEl.textContent = nameById[wid] || `Weapon #${wid}`;
       wEl.className = 'advance-weapon';
+      wEl.dataset.weaponId = String(wid);
       wEl.onclick = () => {
         const isSel = selectedIds.includes(wid);
         if (isSel) {
@@ -1145,7 +1151,7 @@ function renderLootChoices(runData, currentTier, content, overlay, runId) {
   const extractBtn = document.createElement('button');
   extractBtn.textContent = 'EXTRACT & LEAVE';
   extractBtn.className = 'action-btn advance-extract';
-  extractBtn.onclick = () => extractAndLeave(runId, selectedIds, content, extractBtn);
+  extractBtn.onclick = () => extractAndLeave(runId, selectedIds, content, extractBtn, runData);
 
   const fightBtn = document.createElement('button');
   fightBtn.textContent = 'FIGHT ON';
@@ -1163,32 +1169,126 @@ function renderLootChoices(runData, currentTier, content, overlay, runId) {
   content.appendChild(note);
 }
 
-async function extractAndLeave(runId, selectedIds, content, extractBtn) {
+async function extractAndLeave(runId, selectedIds, content, extractBtn, runData) {
   if (busy) return;
   setBusy(true);
   extractBtn.disabled = true;
   try {
     const payload = { choice: 'stop', selected_weapon_ids: selectedIds };
     const res = await apiCall(`/runs/${runId}/battle/end`, 'POST', payload);
-    // Show extraction summary
-    content.innerHTML = `
-          <div class="advance-extracted-title">You extracted with:</div>
-          <div class="advance-extracted-box">
-            Gold: ${res.awarded_pool?.gold || 0}<br>
-            Weapons: ${(res.awarded_pool?.weapon_ids || []).length}<br>
-            LP: ${res.awarded_pool?.lp_earned || 0}
-          </div>
-        `;
-    const townBtn = document.createElement('button');
-    townBtn.textContent = 'Return to town';
-    townBtn.className = 'action-btn advance-town';
-    townBtn.onclick = () => { window.location.href = '/game.html'; };
-    content.appendChild(townBtn);
+    const pool = res.awarded_pool || {};
+    const randomIds = Array.isArray(pool.random_weapon_ids) ? pool.random_weapon_ids : [];
+    if (randomIds.length > 0) {
+      await revealRandomLoot(content, runData, pool, res.prize_pool);
+    }
+    showExtractionSummary(content, pool);
   } catch (e) {
     showMessage(e.message, true);
     setBusy(false);
     extractBtn.disabled = false;
   }
+}
+
+// PC-104: theater over the server's already-chosen random picks. Selected
+// rows are confirmed before the first hop. Landing index comes from the
+// id, never a client re-roll. performSweepAnimation is the dice roulette.
+function revealRandomLoot(content, runData, awarded, prizePool) {
+  const selectedIds = Array.isArray(awarded.selected_weapon_ids) ? awarded.selected_weapon_ids : [];
+  const randomIds = (awarded.random_weapon_ids || []).filter(id => id != null);
+  const nameById = {};
+  (runData?.prize_weapons || []).forEach(w => {
+    if (w && w.id != null) nameById[w.id] = w.name;
+  });
+  let els = Array.from(content.querySelectorAll('.advance-weapon[data-weapon-id]'));
+  const domIds = new Set(els.map(el => Number(el.dataset.weaponId)));
+  const missing = randomIds.some(id => !domIds.has(Number(id)));
+  if (els.length === 0 || missing) {
+    content.querySelectorAll('.advance-weapons').forEach(n => n.remove());
+    const built = mountLootRoulette(orderedLootIds(prizePool, runData, selectedIds, randomIds), nameById, selectedIds);
+    content.appendChild(built.wrap);
+    els = built.els;
+  } else {
+    confirmSelectedLoot(els, selectedIds);
+    const label = content.querySelector('.advance-weapons-label');
+    if (label) label.textContent = 'Revealing random share...';
+  }
+  content.querySelectorAll('.advance-btn-row, .advance-note, .advance-or').forEach(n => n.remove());
+  return sweepLootPicks(els, randomIds);
+}
+
+function orderedLootIds(prizePool, runData, selectedIds, randomIds) {
+  const ids = [];
+  const seen = new Set();
+  const push = (id) => {
+    if (id == null || seen.has(Number(id))) return;
+    seen.add(Number(id));
+    ids.push(id);
+  };
+  const fromPrize = (prizePool && prizePool.weapon_ids) || (runData && runData.prize_pool && runData.prize_pool.weapon_ids) || [];
+  fromPrize.forEach(push);
+  randomIds.forEach(push);
+  selectedIds.forEach(push);
+  return ids;
+}
+
+function confirmSelectedLoot(els, selectedIds) {
+  els.forEach(el => {
+    el.onclick = null;
+    el.style.cursor = 'default';
+    const id = Number(el.dataset.weaponId);
+    el.classList.toggle('is-selected', selectedIds.some(s => Number(s) === id));
+  });
+}
+
+function mountLootRoulette(poolIds, nameById, selectedIds) {
+  const wrap = document.createElement('div');
+  wrap.className = 'advance-weapons';
+  const label = document.createElement('div');
+  label.className = 'advance-weapons-label';
+  label.textContent = 'Revealing random share...';
+  wrap.appendChild(label);
+  const els = poolIds.map(wid => {
+    const wEl = document.createElement('div');
+    wEl.className = 'advance-weapon';
+    wEl.dataset.weaponId = String(wid);
+    wEl.textContent = nameById[wid] || `Weapon #${wid}`;
+    wEl.style.cursor = 'default';
+    if (selectedIds.some(id => Number(id) === Number(wid))) wEl.classList.add('is-selected');
+    wrap.appendChild(wEl);
+    return wEl;
+  });
+  return { wrap, els };
+}
+
+function sweepLootPicks(els, randomIds) {
+  let chain = Promise.resolve();
+  randomIds.forEach(id => {
+    const targetIndex = els.findIndex(el => Number(el.dataset.weaponId) === Number(id));
+    if (targetIndex < 0) return;
+    chain = chain.then(() => new Promise(resolve => {
+      performSweepAnimation(els, targetIndex, (landed) => {
+        if (landed) landed.classList.add('is-selected');
+        resolve();
+      });
+    }));
+  });
+  return chain;
+}
+
+function showExtractionSummary(content, pool) {
+  content.innerHTML = `
+          <div class="advance-extracted-title">You extracted with:</div>
+          <div class="advance-extracted-box">
+            Gold: ${pool?.gold || 0}<br>
+            Weapons: ${(pool?.weapon_ids || []).length}<br>
+            LP: ${pool?.lp_earned || 0}
+          </div>
+        `;
+  const townBtn = document.createElement('button');
+  townBtn.textContent = 'Return to town';
+  townBtn.className = 'action-btn advance-town';
+  townBtn.onclick = () => { window.location.href = '/game.html'; };
+  content.appendChild(townBtn);
 }
 
 async function fightOn(runId, overlay, fightBtn) {
