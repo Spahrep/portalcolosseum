@@ -2,7 +2,8 @@
 // Pure ESM. Ordered list of {id, label, event, tics}.
 // `tics` is an ordering key only: each new row is spliced into tics-ascending
 // position once, at insert, and the array is never globally re-sorted.
-// Ties: player rows (LH/RH) before other labels, then stable (after equals).
+// Ties at the same tic (§7): status/buff/expiry first, then other, then ready.
+// Within a category: LH before RH before monsters. Equal rank stays stable.
 // Head = first non-ready row in that frozen array order.
 // F5: collision-free IDs via crypto.randomUUID().
 
@@ -10,19 +11,36 @@ export function createQueue() {
   return [];
 }
 
-function isPlayerLabel(label) {
-  return label === 'LH' || label === 'RH';
+// §7 categories. buff_expiry is inserted with label null and must still sort first.
+function tieCategory(entry) {
+  if (entry.event === 'ready') return 2;
+  const event = entry.event || '';
+  if (event === 'buff_expiry' || event === 'status' || event === 'buff' || event === 'dot' || event === 'expiry') {
+    return 0;
+  }
+  return 1;
+}
+
+// LH before RH before monsters (and any other label, including null) inside a category.
+function labelRank(label) {
+  if (label === 'LH') return 0;
+  if (label === 'RH') return 1;
+  return 2;
 }
 
 // Index where `entry` belongs. Does not sort the existing rows.
 function orderedInsertIndex(queue, entry) {
   const entryTics = entry.tics ?? 0;
-  const entryPlayer = isPlayerLabel(entry.label);
+  const entryCat = tieCategory(entry);
+  const entryRank = labelRank(entry.label);
   for (let i = 0; i < queue.length; i++) {
     const row = queue[i];
     const rowTics = row.tics ?? 0;
     if (entryTics < rowTics) return i;
-    if (entryTics === rowTics && entryPlayer && !isPlayerLabel(row.label)) return i;
+    if (entryTics !== rowTics) continue;
+    const rowCat = tieCategory(row);
+    if (entryCat < rowCat) return i;
+    if (entryCat === rowCat && entryRank < labelRank(row.label)) return i;
   }
   return queue.length;
 }

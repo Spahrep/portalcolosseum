@@ -115,15 +115,20 @@ describe('Heal effects (PC-39)', () => {
     assert.ok(!healLine.includes('healed 50'));
   });
 
-  it('engine in-battle: zero-HP edge — heals from 0 without NaN', () => {
+  it('engine in-battle: hp 0 is death, so a queued drink does not resolve', () => {
     const eng = createEngine(seededRNG(203));
     eng.startBattle(makeParticipants(healPotion(100)));
     eng.advanceToNextDecision();
     eng.state.player.hp = 0;
     eng.commitPotion('A', { weaponSpeed: 0 });
-    const s = stepUntil(eng, st => st.feed.some(l => l.includes('healed 100')));
-    assert.equal(eng.state.player.hp, 100);
-    assert.ok(Number.isFinite(eng.state.player.hp));
-    assert.ok(s.feed.some(l => l.includes('healed 100')));
+    const ticBefore = eng.state.tic;
+    stepUntil(eng, st => st.feed.some(l => l.includes('healed 100')));
+    const snap = eng.getState();
+    assert.equal(snap.player_dead, true);
+    assert.equal(snap.battle_over, true);
+    assert.equal(eng.state.player.hp, 0, 'a dead player is not healed by a later queue row');
+    assert.equal(eng.state.tic, ticBefore, 'stepQueue stops once the player is dead');
+    assert.equal(eng.state.potions.A.used, false);
+    assert.equal(snap.feed.some(l => l.includes('healed 100')), false);
   });
 });

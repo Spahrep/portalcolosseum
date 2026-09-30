@@ -37,14 +37,14 @@ describe('Sorted-insert queue (tics are an ordering key)', () => {
     assert.deepEqual(q.map(r => r.label), ['B', 'A'], 'peekHead must not reorder');
   });
 
-  it('any insert order stays tics-ascending, player rows first on ties, then stable', () => {
+  it('any insert order stays tics-ascending; same tic is LH before RH before monsters', () => {
     const q = createQueue();
     commitNewRow(q, 'M', 'attack', 5);
     commitNewRow(q, 'RH', 'cooldown', 5);
     commitNewRow(q, 'LH', 'winding', 5);
     commitNewRow(q, 'Z', 'attack', 3);
-    // Z(3) ahead of the tie. RH then LH are both player rows, so RH stays ahead of LH.
-    assert.deepEqual(q.map(r => r.label), ['Z', 'RH', 'LH', 'M']);
+    // Z(3) ahead of the tie. Within the tie, LH before RH before monsters.
+    assert.deepEqual(q.map(r => r.label), ['Z', 'LH', 'RH', 'M']);
     assert.equal(peekHead(q).label, 'Z');
   });
 

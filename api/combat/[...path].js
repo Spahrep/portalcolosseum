@@ -695,8 +695,8 @@ async function handle(request) {
       if (!weaponId) {
         const { data: config } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed, fist_crit_chance').eq('id', 1).single();
         if (!config) return json({ error: 'Game config missing' }, 500);
-        castTicks = rollStat(config.fist_prepare_time, config.fist_prepare_time_range);
-        cooldownTicks = rollStat(config.fist_cooldown_time, config.fist_cooldown_time_range);
+        castTicks = config.fist_speed + rollStat(config.fist_prepare_time, config.fist_prepare_time_range);
+        cooldownTicks = config.fist_speed + rollStat(config.fist_cooldown_time, config.fist_cooldown_time_range);
         playerDamage = config.fist_damage;
         playerAccuracy = config.fist_accuracy;
         playerCritChance = config.fist_crit_chance ?? 0;

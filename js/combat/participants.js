@@ -39,7 +39,8 @@ export function createMonster(instance, templateName = 'mob') {
 }
 
 export function isPlayerDead(player) {
-  return player.hp < 0;
+  // applyDamage clamps at 0, so a killing blow sits at exactly 0 — same rule as monsters.
+  return player.hp <= 0;
 }
 
 export function isMonsterDead(monster) {

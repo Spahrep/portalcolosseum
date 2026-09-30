@@ -111,21 +111,6 @@ function applyPotionWithCrit(state, potion, tic) {
   return { result, crit };
 }
 
-// Sweep used by stepOnce and the tick Process phase. Not the buff_expiry queue
-// event — that path matches by name and bumps buffs.expired. buffs.js has no
-// expireBuffs helper; this is the one both call sites share.
-function expireDueBuffs(state) {
-  const stillActive = [];
-  for (const b of state.buffs) {
-    if (b.endTic <= state.tic) {
-      logLine(state, `${b.name} buff expired`);
-    } else {
-      stillActive.push(b);
-    }
-  }
-  state.buffs = stillActive;
-}
-
 function removeReadyPlaceholder(queue, hand) {
   const readyRow = queue.find(r => r.label === hand && r.event === 'ready');
   if (readyRow) {
@@ -227,6 +212,11 @@ function handleHandFire(state, row) {
           const tgtMon = state.monsters.find(m => m.label === r.target);
           if (tgtMon && isMonsterDead(tgtMon)) {
             logLine(state, `${r.target} is defeated`);
+            // PC-DEC-054: every queued row for the killed monster leaves now,
+            // in the same process that logs the defeat — not as a later no-op.
+            for (let i = state.queue.length - 1; i >= 0; i--) {
+              if (state.queue[i].label === tgtMon.label) state.queue.splice(i, 1);
+            }
           }
         } else {
           logLine(state, `${row.label} ${row.attackName || 'attack'} misses`);
@@ -348,10 +338,11 @@ function handleFire(state, row) {
   }
 }
 
+// Expiry is only the buff_expiry queue item (action-visual-lifecycle §5).
+// A fire must not sweep other due buffs as a side effect.
 function fireAndExpireBuffs(state, row) {
   const feedBefore = state.feed.length;
   handleFire(state, row);
-  expireDueBuffs(state);
   return feedBefore;
 }
 
@@ -525,8 +516,11 @@ export function createEngine(rng = Math.random) {
       return { done: true };
     }
     const head = row;  // do not remove yet — remove LAST
-    // Advance tics by the row's value (before remove)
-    applyTickCost(state.queue, head.tics);
+    // Live clock: the head's tic cost advances the absolute battle tic
+    // before process. stepQueue is a separate clock and already does this.
+    const ticCost = head.tics;
+    state.tic += ticCost;
+    applyTickCost(state.queue, ticCost);
     const result = process(head);
     const cleanupResult = cleanup();
     remove();  // pop head LAST, after process/cleanup
