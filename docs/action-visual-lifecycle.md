@@ -14,7 +14,9 @@
 
 3. **An item must be 100% complete before removal.** All sub-actions (typewriter, visuals, animations) must finish before the item is popped and the next one surfaces.
 
-4. **Tics are display values, not a timing mechanism.** The queue is a linked list ordered at INSERTION time — no global sort, no re-ordering. Tics help the player read timing but do NOT drive processing.
+4. **Tics are the insert-time ordering key, not a display-only label.** Each new row is spliced into tics-ascending position once, at insert (`orderedInsertIndex`, `js/combat/tic-queue.js:32-50`, called from `addEvent` at `:50`). The array is never globally re-sorted after that. Head is the first non-ready row in that frozen order (`tic-queue.js:54-61`). Same-tic ties: status/buff/expiry first, then other events, then `ready`; within a category, LH before RH before monsters (`tic-queue.js:14-29`).
+
+   **Superseded (do not reapply):** "tics are display-only; insertion order drives; no global sort; no re-ordering." That wording (this rule, §7, §10, and the Glossary `Tic` entry) described FIFO append. It is superseded by the sorted-insert contract in `docs/workorder-2026-09-28-queue-sorted-insert.md`. The contradictory FIFO workorder `docs/workorder-2026-09-28-queue-insertion-order.md` does not match the shipped engine. A global re-sort on every peek/remove is also not what ships — order is fixed at insert.
 
 ---
 
@@ -54,15 +56,17 @@ MasterClock.start():
 | Event | Owner | Description | Sub-actions (in order) |
 |---|---|---|---|
 | `ready` | Player hand | Player's turn to act | Preview → Wait for commit → Narrate → Visuals → Insert winding → Remove |
-| `ready` | Monster | Monster's turn to act | AI picks attack → Narrate → Visuals → Insert winding → Remove |
-| `winding` | Any | Attack preparation | Narrate → Visuals → Insert impact → Remove |
-| `impact` | Any | Attack execution | Engine resolves → Narrate + Visuals (parallel) → Insert cooldown → Remove |
-| `cooldown` | Player hand | Recovery | Narrate → Visuals → Insert ready → Remove |
-| `cooldown` | Monster | Recovering after the attack that just fired | Silent successor → when it fires, insert next attack (`mon.speed + rollStat(prepare_time, prepare_time_range)`) → Remove |
+| `winding` | Player hand | Attack preparation | Narrate → Visuals → Insert `impact` → Remove |
+| `winding` | Monster | Preparation. Seeded at battle start and again when cooldown fires. Tics = `mon.speed + rollStat(prepare_time, prepare_time_range)`. Does not deal damage. | Log "prepares…" → Insert `impact` at 0, carrying the strike → Remove |
+| `impact` | Player hand | Attack execution | Engine resolves → Narrate + Visuals (parallel) → Insert cooldown → Remove |
+| `impact` | Monster | Damage lands. Hit/damage/crit roll once, from the strike carried off `winding`. | Engine resolves → Narrate + Visuals (parallel) → If still alive, insert `cooldown` at stored `cooldownTicks` → Remove |
+| `cooldown` | Player hand | Recovery | Narrate → Visuals → Insert `ready` → Remove |
+| `cooldown` | Monster | Recovering after the impact that just fired | When it fires, pick the next attack and insert `winding` → Remove |
 | `drinking` | Player hand | Potion consumption | Narrate → Visuals → Apply effect → Insert recovery → Remove |
 | `recovery` | Player hand | Post-potion cooldown | Narrate → Visuals → Insert ready → Remove |
-| `attack` | Monster | Windup (`mon.speed + rollStat(prepare_time, prepare_time_range)`) | Engine resolves → Narrate + Visuals (parallel) → Insert this attack's cooldown (`mon.speed + rollStat(cooldown_time, cooldown_time_range)`) → Remove |
 | Buff expiry | System | Buff wears off | Typewriter only → Remove |
+
+Monster events are `winding` / `impact` / `cooldown` only (`js/combat/engine.js:305-318`). `queueNextMonsterAttack` inserts `winding` (`engine.js:165`); `handleMonsterFire` inserts `impact` at 0 (`engine.js:313`); `resolveMonsterImpact` inserts `cooldown` (`engine.js:301`). There is no monster `ready` row and no live `attack` event. A persisted pre-PC-97 `attack` row is resolved as `impact` so an in-flight strike still lands (`engine.js:315-318`) — new rows are not inserted as `attack`. Player attacks stay `winding` / `impact` / `cooldown` on the hand (`engine.js:179-232`); the word "attack" in player sections below means the player's chosen strike, not a queue event.
 
 ---
 
@@ -171,56 +175,54 @@ When the first `ready` token surfaces → player's turn begins.
 
 ## 2. Monster Attack Lifecycle
 
-### Phase 1: Monster Turn — "Giant Rat Ready" at top
+Monsters do not use a `ready` token or an `attack` event. The cycle is `winding` → `impact` → `cooldown` → next `winding` (`js/combat/engine.js:305-318`).
+
+### Phase 1: Seed winding — battle start, and again when cooldown fires
+
+`startBattle` calls `queueNextMonsterAttack` for each living monster (`js/combat/engine.js:640-644`). The same function runs when a monster `cooldown` row fires (`engine.js:310-311`).
 
 **Sub-actions (sequential):**
 
-1. **Monster AI** picks an attack by weighted random from the monster's template attacks (e.g., Bite 40%, Power Attack 30%, Toxic Fang 20%, Run Away 10%). Rolls.
+1. `pickMonsterAttack` selects an attack (`engine.js:163`).
+2. Engine inserts a `winding` row at `mon.speed + rollStat(prepare_time, prepare_time_range)` and stores `cooldownTicks = mon.speed + rollStat(cooldown_time, cooldown_time_range)` on that row (`engine.js:164-167`).
+3. Feed: "<Monster> prepares a <attackName>..." (`engine.js:168`).
+4. The `winding` card animates into the UI Action Queue at its sorted-insert position.
+5. There is no monster `ready` row to remove.
 
-2. **Typewriter:** "Giant Rat prepares a Power Attack..." (character by character)
+### Phase 2: Winding fires, then impact, then cooldown
 
-3. **Visuals:** The `winding` attack card animates into the UI Action Queue at its sorted position.
+Option A (Spahrep 2026-09-28) still holds: `mon.speed` is added into both the prepare and the cooldown, same shape as `weapon.speed + attack.<prepare|cooldown>_time`. PC-97 split the old combined monster `attack` row into `winding` then `impact`. Winding does not deal damage (`js/combat/engine.js:306-307`).
 
-4. **Engine inserts** `winding` (or `attack`) row with selected attack's data.
+- `winding` tics = `mon.speed + rollStat(prepare_time, prepare_time_range)` (`engine.js:165`)
+- `cooldown` tics = stored `cooldownTicks` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)` (`engine.js:167`, inserted at `engine.js:301`)
 
-5. **Remove** the `ready` item.
+**When the `winding` row fires** (`engine.js:312-314`):
 
-6. **Master Clock ticks** → next item.
+1. Insert an `impact` row at 0 tics and carry the strike (name, damage, accuracy, crit, `cooldownTicks`). No damage roll here.
+2. **Remove** the `winding` item. The impact stays a same-key successor (`m:<label>`).
 
-### Phase 2: Monster Attack Fires — "Giant Rat: Power Attack" at top
+**When the `impact` row fires** (`resolveMonsterImpact`, `engine.js:266-302`):
 
-Option A (Spahrep 2026-09-28): monsters mirror the player lifecycle. `mon.speed` is added
-into both phases, same shape as `weapon.speed + attack.<prepare|cooldown>_time`.
-
-- attack tics = `mon.speed + rollStat(prepare_time, prepare_time_range)`
-- cooldown tics = `mon.speed + rollStat(cooldown_time, cooldown_time_range)`
-
-**Sub-actions when the `attack` row fires:**
-
-1. **Engine resolves** (unchanged):
-   - Rolls damage (±3)
+1. **Engine resolves** (rolls once, from the carried strike — does not re-pick the attack):
+   - Rolls damage
    - Checks accuracy
    - If hit: applies to player HP
    - If crit: multiplies damage
 2. **(Parallel — both must finish):**
-   - **Typewriter:** "Giant Rat Power Attack hits player for 12 damage!" (or "misses" / "CRITICAL!")
+   - **Typewriter:** "<Monster> <attackName> hits player for N damage!" (or "misses" / "CRITICAL!")
    - **Visuals:** Damage numbers on player, health bar depletion, shake/hit feedback
-3. If still alive: insert a `cooldown` successor for **this** attack (stored `cooldownTicks`,
-   not the next attack). Label on the rail: "<Monster name> recovering", with the player-style
-   timing bar.
-4. **Remove** the current `attack` item (slide-out + glide-up). The cooldown stays a same-key successor in data (`m:<label>`); the fired attack row slides out and the rows below glide up together. Not a key-breaking remove+add.
+3. If still alive: insert a `cooldown` successor at the stored `cooldownTicks` (`engine.js:296-301`). Label on the rail: "<Monster name> recovering", with the player-style timing bar.
+4. **Remove** the `impact` item (slide-out + glide-up). The cooldown stays a same-key successor (`m:<label>`).
 5. **Master Clock ticks** → next item.
 
-**Sub-actions when the `cooldown` row fires:**
+**When the `cooldown` row fires** (`engine.js:310-311`):
 
-1. `pickMonsterAttack` selects the next attack.
-2. Insert a new `attack` row at `mon.speed + rollStat(next.prepare_time, prepare_time_range)`
-   and store `cooldownTicks = mon.speed + rollStat(next.cooldown_time, cooldown_time_range)`.
-3. Feed: "<Monster> prepares a <attackName>..."
-4. **Remove** the cooldown item (slide-out + glide-up). The next attack stays a same-key successor in data (`m:<label>`); the fired cooldown row slides out and the queue glides up.
-5. **Master Clock ticks** → next item.
+1. `queueNextMonsterAttack` selects the next attack and inserts a new `winding` row (same formula as Phase 1).
+2. Feed: "<Monster> prepares a <attackName>..."
+3. **Remove** the cooldown item (slide-out + glide-up). The next `winding` stays a same-key successor (`m:<label>`).
+4. **Master Clock ticks** → next item.
 
-Last attack of a dead monster inserts nothing (death-cancels-everything, PC-DEC-054).
+Last strike of a dead monster inserts no cooldown (`engine.js:296`). Death still cancels every queued row for that monster (PC-DEC-054).
 
 ### Phase 3: Monster Death
 
@@ -228,7 +230,7 @@ Trigger: An attack brings monster's HP to 0.
 
 1. Damage narration + visuals execute as normal.
 2. Additional: monster card fades/slides out.
-3. No new attack row is inserted (monster dead).
+3. No cooldown and no next `winding` are inserted (monster dead; `js/combat/engine.js:296`).
 4. `cancelQueuedAttacksOnDeadTargets()`: player hands winding attacks on this monster → cancelled to cooldown.
 5. If all monsters dead → battle_over = true, Master Clock stops.
 
@@ -288,16 +290,16 @@ Trigger: A buff's `endTic` reaches current tic.
 
 ## 6. Timing Bar Visual Specification
 
-Every non-ready row has a timing bar that visualizes countdown progress, except monster `attack` rows and approach rows. Monster `cooldown` ("recovering") uses the same player-style bar.
+Every non-ready player row has a timing bar that visualizes countdown progress, except approach rows. Monster `winding` / `impact` rows (and a legacy persisted `attack` row) are name + tic only — no bar (`js/battle/queue-render.js:60-62`, `:345-346`). Monster `cooldown` ("recovering") uses the same player-style bar (`queue-render.js:350-351`).
 
 | Event | Bar behavior |
 |---|---|
-| `winding` | Starts empty, fills left→right. At fire: full. |
-| `cooldown` | Same — fills from empty to full. |
+| `winding` (player) | Starts empty, fills left→right. At fire: full. |
+| `cooldown` (player) | Same — fills from empty to full. |
 | `drinking` | Same — fills from empty to full. |
 | `recovery` | Same — fills from empty to full. |
 | `ready` | No bar — shows `—` instead of tic count. |
-| `attack` (monster) | No bar — tic count label only. |
+| `winding` / `impact` (monster) | No bar — tic count label only. Legacy `attack` rows are the same. |
 | `cooldown` (monster) | Same player-style fill — "<Monster name> recovering". |
 
 **Bar formula:** `width% = (1 - tics / initialTics) × 100`
@@ -316,10 +318,10 @@ Every non-ready row has a timing bar that visualizes countdown progress, except 
 | `drinking` | "L. Hand Health Potion" | tic count | Timing bar |
 | `recovery` | "L. Hand Ready" | tic count | Timing bar |
 | `ready` | "L. Hand Ready" | — | None |
-| `attack` (monster) | "Giant Rat's Power Attack" | tic count | None |
+| `winding` / `impact` (monster) | "<Monster name>'s <Attack>" | tic count | None |
 | `cooldown` (monster) | "Giant Rat recovering" | tic count | Timing bar |
 
-**Ordering:** The queue is ordered at INSERTION time — never globally re-sorted. Each item is placed at its correct position when added. For items at the same tic:
+**Ordering:** Each new row is spliced into tics-ascending position once at insert (`orderedInsertIndex`, `js/combat/tic-queue.js:32-50`). The array is never globally re-sorted after that. **Superseded:** "ordered at INSERTION time" / FIFO append — see Core Rule 4 and `docs/workorder-2026-09-28-queue-sorted-insert.md`. For items at the same tic:
 1. Status effects / buffs / DOTs / expiries go first (inserted before anything else at that tic)
 2. `ready` tokens go last among items at that tic (inserted after all status/effect items)
 
@@ -338,7 +340,9 @@ MasterClock.tick():
   │   • For windup: insert impact row
   │   • For impact: roll accuracy/damage/crit, apply to target HP
   │   • For cooldown/recovery: insert ready token
-  │   • For monster ready: AI picks attack, insert winding row
+  │   • For monster winding: insert impact (no damage)
+  │   • For monster impact: roll accuracy/damage/crit, apply to player HP, insert cooldown
+  │   • For monster cooldown: pick next attack, insert winding
   │   • For buff expiry: remove buff from state
   │   • For DOT: resolve damage tick, insert next DOT tick
   │
@@ -377,16 +381,16 @@ Certain sub-actions can overlap. The Master Clock treats them as a group that al
 
 ## 10. Queue Order & Tic Display
 
-**The queue is a linked list, ordered at insertion time.** Each item is placed at the correct position when added — no global re-sort ever runs. The Master Clock always processes the item at the front (head) of the queue.
+**Each new row is placed by tics at insert, then the order is frozen.** `addEvent` splices the row at `orderedInsertIndex` (`js/combat/tic-queue.js:32-50`): tics ascending, then tie category, then LH / RH / monster. No global re-sort runs on peek, remove, or tick. The Master Clock processes the first non-ready row in that frozen array (`tic-queue.js:54-61`). Countdown subtracts the head's tics from the other rows (`js/combat/engine.js:123-127` and `:542-547`) and does not reorder them.
 
 Tics are set when the item is inserted:
-- `winding` = castTicks (from weapon params)
-- `cooldown` = cooldownTicks (from weapon params)
-- `ready` = 0 (always surfaces immediately)
-- Monster `attack` = `mon.speed + rollStat(prepare_time, prepare_time_range)`
-- Monster `cooldown` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)`
+- Player `winding` = castTicks (from weapon params)
+- Player `cooldown` = cooldownTicks (from weapon params)
+- `ready` = 0
+- Monster `winding` = `mon.speed + rollStat(prepare_time, prepare_time_range)` (`engine.js:165`)
+- Monster `cooldown` = stored `cooldownTicks` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)` (`engine.js:167`, inserted at `engine.js:301`)
 
-**Tics are display values only.** They help the player read timing. They do NOT drive processing order — insertion order does. The timing bar formula uses `tics / initialTics` to show progress. The bar reflects the item's position in the queue order.
+**Superseded:** "Tics are display values only. They do NOT drive processing order — insertion order does." Tics are the ordering key at insert (sorted-insert workorder `docs/workorder-2026-09-28-queue-sorted-insert.md`). They are also the countdown readout. The timing bar formula uses `tics / initialTics` to show progress.
 
 **Important:** Buff expiry, DOT ticks, and other status effects are their own queue items. They sit in the queue alongside attacks and ready tokens. When they reach the front, they process (typewriter "X buff expired", resolve DOT damage), pop off, and the next item surfaces. They do NOT fire "at the same time" as anything else — the queue forces a linear sequence.
 
@@ -397,11 +401,11 @@ Tics are set when the item is inserted:
 ### Multiple ready hands surface simultaneously
 If both LH and RH have `ready` rows at tic=0, LH (player-first sort) surfaces first. The Master Clock shows LH Ready, waits for player choice. After commit + sub-actions, the next Master Clock tick surfaces RH Ready.
 
-### Monster and player ready at same tic
-Player-first sort: player hand ready surfaces first. Monster ready waits.
+### Monster and player rows at the same tic
+Same-tic ties: status/buff/expiry first, then other events, then `ready`; within a category, LH before RH before monsters (`js/combat/tic-queue.js:14-29`, `:41-43`). There is no monster `ready` row.
 
-### Monster AI rolls when ready token surfaces
-The master clock, when it sees a monster's `ready` token at top, calls the AI sub-action (pick weighted random). This is a blocking sub-step before the typewriter/visuals.
+### Monster attack is picked when winding is inserted
+`queueNextMonsterAttack` picks the attack and inserts `winding` at battle start and when cooldown fires (`js/combat/engine.js:162-169`, `:310-311`). Not on a `ready` token.
 
 ### Cancel-into-cooldown (PC-68)
 When a player hand's winding attack is cancelled because all targets died: the `winding` item processes as normal (narrate "RH attack cancelled — target already defeated"), but instead of inserting an `impact` row, engine inserts a `cooldown` row. That cooldown is the next item to surface.
@@ -422,6 +426,6 @@ On reload, `loadState()` restores queue + state. Master Clock starts fresh. No p
 - **removeHead:** Pop the processed item off the front of the queue. Only called AFTER all sub-actions (narration, visuals) are complete.
 - **Sub-action:** A single step within an item's processing (e.g., "typewriter narrates", "AI picks attack", "remove item"). Some can run in parallel (typewriter + screen shake), some must be sequential.
 - **UI Action Queue:** The visual rendering of the engine's queue on screen. The front item is "currently happening" — its sub-actions are executing.
-- **Ready token:** A `ready` event row at the front of the queue. Indicates the hand/monster's turn. Surfaces when all lifecycle phases for the previous action complete.
-- **Tic:** Display-only countdown value. Helps the player read timing. Set at insertion time, never drives processing order.
+- **Ready token:** A player-hand `ready` event row. Indicates that hand's turn. Surfaces when that hand's cooldown or recovery completes (`js/combat/engine.js:172-176`). Monsters do not get a `ready` row.
+- **Tic:** Insert-time ordering key and countdown readout. Set when the row is inserted; `orderedInsertIndex` (`js/combat/tic-queue.js:32-50`) places the row by tics ascending. Does not re-sort the queue later. **Superseded:** "display-only, never drives processing order" (Core Rule 4; `docs/workorder-2026-09-28-queue-sorted-insert.md`).
 - **Typewriter:** Character-by-character text reveal in the message box, paced by text speed preset.

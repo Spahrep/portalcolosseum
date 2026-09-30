@@ -1,4 +1,4 @@
-# Current Design Status (as of 2026-09-28)
+# Current Design Status (as of 2026-09-30)
 
 This file captures the current state of design decisions for Portal Colosseum. It is intended as a living reference until decisions are moved into more permanent documents.
 
@@ -25,7 +25,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Consumables modify one stat (HP heal / Speed / Accuracy / Damage), template-based with floor+window (+only deltas per consumables.md LOCKED model)
 - Each potion rolls an **effect value** AND a **drink speed** (pill vs 4L jug)
 - Grade (D–S) assigned after generation, same standard-deviation system as weapons (20hp potion = A, 22hp = S)
-- **Use requires a hand free of cooldown** (may be holding a weapon): total drink time = **weapon-in-hand speed + consumable speed** (ruled PC-DEC-013, Spahrep 2026-09-16); how that total splits pre/post-effect is still TBD
+- **Use requires a hand free of cooldown** (may be holding a weapon): total drink time = **weapon-in-hand speed + consumable speed** (ruled PC-DEC-013, Spahrep 2026-09-16). The pre/post split that ships is equal halves: each of pre and post is `ceil((weaponSpeed + potionSpeed) / 2)` (`js/combat/potion-contract.js:18-21`, applied at `js/combat/engine.js:453-454`). Not a new design lock — this is the shipped formula.
 - **Cooldowns live on hands, never weapons**; the other hand keeps attacking while one drinks
 - Buffs apply to the **player** (both hands), flat values, additive stacking, separate end tics
 - Pre-time uninterruptible (disruption PMVP); no throw mechanic (PMVP FF-style idea)
@@ -65,11 +65,11 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Every pending event is a row: `Label | EventName | TicsUntil`, sorted by tics, next event on top
 - **Every row = countdown to a state change** — attack landing, hand freeing, buff expiry
 - Hand rows: one row per hand at a time. Each phase transition replaces the processed head with a **new successor row** (`winding→impact→cooldown→ready`, or `drinking→recovery→ready`) inserted at its tics-out — mechanically a remove + a new insert, NOT an in-place morph. The stable-key renderer animates the swap so it reads as "the same row transforming" (hand rows carry a stable key `h:LH`/`h:RH`)
-- Monster rows: one row per monster at a time. Attack fires, then a cooldown successor (`mon.speed + rollStat(cooldown_time, cooldown_time_range)`); the next attack is picked only when that cooldown fires (`mon.speed + rollStat(prepare_time, prepare_time_range)`). Stable key `m:<label>` so the phase change is a successor replace, not an exit (option A, PC-DEC-055).
+- Monster rows: one row per monster at a time. Events are `winding` → `impact` → `cooldown` → next `winding` (`js/combat/engine.js:305-318`). `winding` is seeded at `mon.speed + rollStat(prepare_time, prepare_time_range)` and does not deal damage (`engine.js:165`, `:312-314`); `impact` resolves and inserts `cooldown` at the stored `cooldownTicks` (`engine.js:296-301`); the next attack is picked only when that cooldown fires (`engine.js:310-311`). Stable key `m:<label>` so the phase change is a successor replace, not an exit (option A, PC-DEC-055; split by PC-97).
 - Pre/cooldown profiles can be any mix (short pre + long cd, etc.) — sorting handles all of them
 - **Ties resolve player-first**, always (no same-tic mutual kills). **Kill-cancel (PC-DEC-046, DarkJester 2026-09-17, shipped 48ddd58):** when an attack impact kills a monster, any other hand still winding an attack whose targets are ALL dead is cancelled straight into its own move's cooldown at the kill tic — no corpse whiff, no redirect for explicit targets. Multi-target attacks survive partial kills (cancel only when every queued target is dead); auto-target attacks still redirect to the first living monster. **Death-cancels-everything (PC-DEC-054, Spahrep 2026-09-21):** when a monster is killed, ALL of its queued attacks are removed from the queue immediately — a dead monster never attacks again, even on the tic it died. Decided by Spahrep, 2026-09-21.
 - **DW cascading command selection is the combat command mechanism** (PC-DEC-010; full visual spec 2026-09-16 — PC-DEC-021..027, image `shared/CommandSelection.png`): three cascading windows (action → target → confirm), hand-name tab on the window border, Esc backs one level, root window NOT closable (Delay/Defend PMVP), potions follow the same flow, keyboard-first + mouse, palette not locked (theming PMVP). Detailed spec in battle-status-ui.md
-- **Initial turn order (PC-DEC-032, shipped as PC-64; monster phase timing updated PC-DEC-055)**: at combat start each hand gets one **approach** row on the timing rail at its weapon's instance speed (unarmed = `game_config.fist_speed`); each living monster seeds an attack row at `mon.speed + rollStat(prepare_time, prepare_time_range)` (not raw speed). When a hand's approach row hits 0 it becomes Ready and the player picks their action then. `startBattle` advances to the first decision point — a faster monster acts first. Ties → player first. Deterministic — supersedes PC-DEC-021's roll (1..speed). Attack timing formula for hands unchanged; the approach row is initial placement only. Monster cycle is attack then cooldown (option A: `mon.speed` added into both phases). **Presentation (PC-DEC-039, Decided by Spahrep, 2026-09-17)**: the battle is presented from Tic 0 and progresses until the first entity acts — tic-0 countdown intro, no jump to the decision point (shipped on branch pc-64-battle-intro)
+- **Initial turn order (PC-DEC-032, shipped as PC-64; monster phase timing updated PC-DEC-055)**: at combat start each hand gets one **approach** row on the timing rail at its weapon's instance speed (unarmed = `game_config.fist_speed`); each living monster seeds a `winding` row at `mon.speed + rollStat(prepare_time, prepare_time_range)` (not raw speed; `js/combat/engine.js:640-644`). When a hand's approach row hits 0 it becomes Ready and the player picks their action then. `startBattle` advances to the first decision point — a faster monster acts first. Ties → player first. Deterministic — supersedes PC-DEC-021's roll (1..speed). Attack timing formula for hands unchanged; the approach row is initial placement only. Monster cycle is `winding` → `impact` → `cooldown` (option A: `mon.speed` added into both prepare and cooldown; PC-97 split the old combined attack row). **Presentation (PC-DEC-039, Decided by Spahrep, 2026-09-17)**: the battle is presented from Tic 0 and progresses until the first entity acts — tic-0 countdown intro, no jump to the decision point (shipped on branch pc-64-battle-intro)
 - **Both-hands-ready order (PC-DEC-028)**: faster base attack (lowest equipped-weapon speed) opens first; equal speed → left hand first. Deterministic — the hand-switch chip was never asked for and is removed (PC-63)
 - **Timing preview**: ">" timing markers shipped (PC-56); the full preview band (cast range + hand-free range) is PMVP — committed rows are permanent numbers, never ranges
 - **Battle log typewriter (PC-DEC-044, decided by Spahrep 2026-09-17, tuned by the gamedesigner persona; shipped main 321d73a)**: MESSAGE LOG entries type out character-by-character with a beat after each line (1000ms default) instead of appearing all at once; only new entries animate (incremental diff — never re-types history), the action menu stays inert until a batch finishes (click the log to complete instantly), and a TEXT SPEED control (Standard/Slow/Instant) in the log title row sets the pacing per-browser via localStorage. Pure client-side presentation — no API/DB change. Built as PC-66.
@@ -109,7 +109,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - **Death = kicked out, prize pool forfeited; brought items never lost**
 - **No inventory access between fights** — 5-item loadout (Hand L/R, BL, C1/C2) locked at entry
 - Entry costs: X AP + Y gold, deeper portals cost more (P2 = 4×Y example)
-- **SCHEMA (2026-09-10):** `portal_run` table created — loadout FKs (hand_l/r_weapon_id, belt_weapon_id, consume_a/b_id), current_battle, total_battles, player_hp, battle_state jsonb. Consume A/B currently FK to weapon_instance as PLACEHOLDER until consumable tables exist (consumables skipped for now).
+- **SCHEMA (2026-09-10, consumable FKs shipped 2026-09-11):** `portal_run` loadout FKs (hand_l/r_weapon_id, belt_weapon_id, consume_a/b_id), current_battle, total_battles, player_hp, battle_state jsonb. Consume A/B were a weapon_instance placeholder; they now FK to `consumable_instance` (`supabase/migrations/20260911130000_consumable_instances.sql:68-78`). Consumable use ships: the engine seeds `consume_a`/`consume_b` (`js/combat/engine.js:635-639`) and applies effects in `js/combat/potion-effects.js:28`.
 
 ## Loot & Prize Pool (documented in loot-prize-pool.md)
 
@@ -121,6 +121,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - No 100% guaranteed drops (just very high weights)
 - Same item can drop multiple times (no stack cap for MVP)
 - Leftover LP below cheapest item cost is voided
+- **Stop-share (shipped):** early stop pays `portal_template.stop_share_tiers` via `computeStopShare` (`api/combat/[...path].js:152-165`, applied at `:1096-1128`): player-selected items up to `sel_items`, then a random slice of the remainder up to `rand_items`, gold scaled by `gold_pct`. Migration defaults: `supabase/migrations/20260924000000_stop_share_tiers.sql:4-12`. Full clear keeps the pool (`:153-154`). Death forfeits prize-pool weapons (`:1003-1010`).
 - **Consumables are equipment-class loot** — take LP like weapons, template-costed, same portal/monster assignment
 
 ### Gold Drops
@@ -137,10 +138,10 @@ This file captures the current state of design decisions for Portal Colosseum. I
 
 ## Run Start & Inventory (Decided 2026-09-11)
 
-- CLI: `inventory` shows everything assigned to the player (weapons today; consumables when they exist). `/inventory` accepted as an ungated alias; legacy `gear` kept as an alias.
+- CLI: `inventory` shows weapons and consumables assigned to the player (`public/test/cli/cli-app.js:1018-1022`, via `GET /consumables` at `api/combat/[...path].js:1367-1368`). `/inventory` accepted as an ungated alias; legacy `gear` kept as an alias.
 - Rule: inventory should only ever be assigned to a player; the run records its own loadout.
 - Run start: show dice → pick loadout (LH/RH/Belt/Consumables) → random die draw + roll → generate monsters for battle 1 (monsters assigned to the first battle; battle assigned to the portal).
-- Status: loadout columns live on `portal_run` (consume_a/b placeholders on weapon_instance); dice pool materialized at creation; draw/roll/monster generation = Slice 3, unbuilt.
+- Status (shipped): loadout columns live on `portal_run`; `consume_a_id`/`consume_b_id` FK to `consumable_instance` (`supabase/migrations/20260911130000_consumable_instances.sql:68-78`). Dice pool is materialized at run creation (`api/combat/[...path].js:353-363`). Draw, roll, and monster generation ship: `drawRandomDie` / `rollDieFace` / `selectMonsterGroup` (`js/combat/dice.js:11-24`), wired for battle 1 at run create (`api/combat/[...path].js:373-386`) and for later battles on `/battle/end` continue (`api/combat/[...path].js:1022-1047`).
 - Docs: encounter-system.md §Run Start · inventory-slots.md · combat-engine-plan.md §portal_run Integration
 
 ## Run UX Flow (documented in run-ux-flow.md) — NEW 2026-09-13
@@ -148,26 +149,24 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - Run start is a **three-phase gate**: preamble (`run new`; inventory/inspect/ready/help only, run NOT created) → `ready` (existing loadout pick → assembled recap + neutral lock note) → `confirm` (creates the run).
 - `inspect #` during preamble = item inspect (client-side from /weapons + /consumables payloads); monster inspect unchanged in-run.
 - After every battle **win**, CLI offers continue/stop explicitly (bare `continue`/`stop` commands; `battle end X` alias stays). Offer once per battle.
-- Loot + consumables NOT implemented (2026-09-13) — pool line is honest ("The prize pool has grown"), no fake numbers.
+- Loot generation and consumable use ship. `POST /battle/end` builds `prize_pool` via `generateLoot` (`api/combat/[...path].js:902-983`, `js/combat/loot.js:39`) — weapon drops and gold. Early stop pays `portal_template.stop_share_tiers` (`api/combat/[...path].js:152-165`, `:1096-1128`). Consumable use ships (`js/combat/potion-effects.js:28`, `js/combat/engine.js:452-461`). The CLI after-battle line is still the placeholder "The prize pool has grown." (`public/test/cli/cli-app.js:95`) — presentation, not an unbuilt loot system. `generateLoot` returns weapon template ids only (`js/combat/loot.js:39-50`); consumable prize-pool drops are not in that function.
 - Web CLI only (native CLI purged, PC-DEC-041 2026-09-17); `run new` flags + `--quiet`/`--json` bypass the interactive gate.
 
 ## Open / Undocumented Points
 
-1. **Loot Rules on Stop** — exact % of prize pool kept when stopping early; how random selection works (uniform? weighted by rarity?)
-2. **Multi-Enemy Attack Balance** — how much less damage cleave/whirlwind do per target; fixed or scales with weapon quality. Higher priority since encounters are confirmed multi-monster groups. (Parked 2026-09-16 — future design decision, not a conflict.)
-3. **Wizard Tent Healing Model** — AP and/or gold, hourly drip, or 1×/day full heal (see ap-economy.md)
-4. **Belt Loop Swap Timing** — formula RULED (PC-DEC-031, DarkJester 2026-09-15: delay that hand by the longer of the two weapons' speeds; shipped PC-54 as max(speeds), hand must be Ready). Remaining open: whether the swapped-in weapon can attack immediately or needs a draw tic. Decided by DarkJester, 2026-09-15.
-5. **Consumable Use Formula** — total time = weapon-in-hand speed + consumable speed (ruled PC-DEC-013, Spahrep 2026-09-16); pre/post split of that total + duration numbers per template still TBD
-6. **Shop Numbers** — refresh timer, reroll base/multiplier, price curve exact values, whether reroll counter resets on shop refresh
-7. **Encounter System Open Questions** (see encounter-system.md)
+1. **Multi-Enemy Attack Balance** — how much less damage cleave/whirlwind do per target; fixed or scales with weapon quality. Higher priority since encounters are confirmed multi-monster groups. (Parked 2026-09-16 — future design decision, not a conflict.)
+2. **Wizard Tent Healing Model** — AP and/or gold, hourly drip, or 1×/day full heal (see ap-economy.md)
+3. **Belt Loop Swap Timing** — formula RULED (PC-DEC-031, DarkJester 2026-09-15: delay that hand by the longer of the two weapons' speeds; shipped PC-54 as max(speeds), hand must be Ready). Remaining open: whether the swapped-in weapon can attack immediately or needs a draw tic. Decided by DarkJester, 2026-09-15.
+4. **Shop Numbers** — refresh timer, reroll base/multiplier, price curve exact values, whether reroll counter resets on shop refresh
+5. **Encounter System Open Questions** (see encounter-system.md)
    - Does the player see exact dice face values, or just colors?
    - 5th monster absorption: RULED (PC-DEC-052, Spahrep 2026-09-21) — programmatically pick the monster with the maximum cost ≤ remaining points; no template upgrade. No open remainder.
    - Dice pool size and composition per portal tier (database configuration)
    - Face value calibration (actual numbers, not the example 10/20/30)
    - Point-to-loot relationship: does higher point budget yield better loot? (Note: loot now uses LP budget system, separate from encounter point budget)
-8. **Starting Equipment** — same for all players, decided later; likely changes per season
-9. **AP Refund on Completion** — pondering only; see ap-economy.md
+6. **Starting Equipment** — same for all players, decided later; likely changes per season
+7. **AP Refund on Completion** — pondering only; see ap-economy.md
 
 ---
 
-**Next Priority**: Lock the consumable pre/post split — the last timing unknown (the total, weapon speed + consumable speed, is ruled PC-DEC-013; belt-loop swap timing is ruled PC-DEC-031, with only the swapped-in draw-tic question open) — then the shop numbers (refresh, reroll base/multiplier). After that the item/economy design is complete enough to hand to implementation.
+**Next Priority**: Shop numbers (refresh, reroll base/multiplier) are still open. The consumable pre/post split ships as equal halves (`js/combat/potion-contract.js:18-21`). Belt-loop swap timing is ruled PC-DEC-031, with only the swapped-in draw-tic question open.

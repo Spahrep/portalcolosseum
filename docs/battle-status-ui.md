@@ -225,22 +225,17 @@ commit Slash (cast 4, cd 1)
   lights up (gold) + footer stamp. This beat is the player's only notice signal after a
   dormant row — it matters more the longer the cooldown was.
 
-### Monster Rows (Attack then Cooldown, Per-Cycle Successor)
+### Monster Rows (`winding` → `impact` → `cooldown`)
 
 Monsters mirror the player attack lifecycle (option A, Spahrep 2026-09-28). `mon.speed`
-plays the `weaponSpeed` role. A cycle is two successor rows, not one:
+plays the `weaponSpeed` role. PC-97 split the old combined attack row into three successor
+events (`js/combat/engine.js:305-318`):
 
-- attack tics = `mon.speed + rollStat(attack.prepare_time, prepare_time_range)`
-- cooldown tics = `mon.speed + rollStat(attack.cooldown_time, cooldown_time_range)`
+- `winding` tics = `mon.speed + rollStat(prepare_time, prepare_time_range)` (`engine.js:165`). Does not deal damage (`engine.js:312-314`).
+- `impact` is inserted at 0 and resolves hit/damage/crit once (`engine.js:266-302`).
+- `cooldown` tics = stored `cooldownTicks` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)` (`engine.js:167`, inserted at `engine.js:301`).
 
-The attack row fires (damage resolves), then a **new** cooldown row is inserted at that
-attack's stored cooldown. When the cooldown fires, the next attack is picked and a **new**
-attack row is inserted at its prepare. One row per monster at a time — attack, then
-cooldown — rendered in place via the stable key `m:<label>` (same successor-replace as
-hands). Monster attack rows stay name + tic, no bar. The cooldown row is a clear row:
-label `<Monster name> recovering`, player-style timing bar. Monsters are slower on purpose
-(`mon.speed` is added into both phases). Death still cancels every queued row for that
-monster (PC-DEC-054).
+When cooldown fires, the next attack is picked and a new `winding` row is inserted (`engine.js:310-311`). One row per monster at a time, rendered in place via the stable key `m:<label>`. Monster `winding` / `impact` rows stay name + tic, no bar (`js/battle/queue-render.js:60-62`). The cooldown row is a clear row: label `<Monster name> recovering`, player-style timing bar. There is no live monster `attack` event; a persisted pre-PC-97 `attack` row resolves as `impact` (`engine.js:315-318`). Death still cancels every queued row for that monster (PC-DEC-054).
 
 ## Tie Resolution
 

@@ -42,7 +42,7 @@ Locked structure (Spahrep 2026-09-13): after every battle **win**, the CLI offer
 
 - Detection: existing `turnPromptFromState` already prints "The battle is over. The crowd roars." on `battle_over`. Extend it: on victory (battle_over && !player_dead) print the offer with battle N of total, current HP, and the choice. Guard against re-offering on later commits (offer once per battle).
 - Bare `continue` / `stop` become top-level commands (existing `battle end continue|stop` stays as an alias). Continue → next battle (API already does this); stop → run ends (status `abandoned` today).
-- **Loot is NOT implemented (2026-09-13)** — the offer's pool line stays honest: "The prize pool has grown." No fake numbers, no loot claims. The stop-share % / actual loot lines land with the loot system.
+- **Loot generation ships** (`generateLoot`, `js/combat/loot.js:39`, called from `POST /battle/end` at `api/combat/[...path].js:983`). Early stop pays `stop_share_tiers` (`api/combat/[...path].js:1096-1128`). The CLI offer line is still the placeholder "The prize pool has grown." (`public/test/cli/cli-app.js:95`) — that copy has not been replaced with pool numbers.
 
 ```
 Battle 2 of 5 complete. Your HP: 38/52.

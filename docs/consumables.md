@@ -42,7 +42,7 @@
   5. Hand R free again
 - **Cooldowns live on HANDS, never on weapons.** The potion's "cooldown" IS pre + post, costed by the weapon in that hand.
 - The **other hand keeps attacking** the whole time — drinking locks one hand, not the turn.
-- Formula shape: pre/post scale with the weapon in hand AND the potion's own speed. Exact formula TBD.
+- Formula that ships: pre and post are each `ceil((weaponSpeed + potionSpeed) / 2)` (`js/combat/potion-contract.js:18-21`, applied at `js/combat/engine.js:453-454`). Total is still weapon-in-hand speed + consumable speed (PC-DEC-013). This records the shipped split, not a new verbal lock.
 - Weapon speed does triple duty: attack rate, potion timing, and swap timing (ruled PC-DEC-031: swapped hand delayed by the longer of the two weapons' speeds).
 
 ## Buffs & Debuffs
@@ -79,10 +79,13 @@
 - Potions usable during or between fights; belt loop (weapon swap) also usable between fights.
 - Starting loadout: same for everyone, decided later, will likely change with each season.
 
+## Shipped timing (code, not a new verbal lock)
+
+- Pre/post split ships as equal halves: each of pre and post is `ceil((weaponSpeed + potionSpeed) / 2)` (`js/combat/potion-contract.js:18-21`, applied at `js/combat/engine.js:453-454`).
+- Buff duration is `consumable_template.duration_ticks` (heals null). Seeds: Damage/Swift/Accuracy Tonic = 8 (`supabase/migrations/20260914143600_consumables_v2_pc37.sql:36-56`).
+
 ## TBD / PMVP
 
-- Exact pre/post formula (f(weapon speed, potion speed))
-- Exact duration numbers per template
 - **Shop pricing key: RESOLVED — price keys off expected value = `floor + window/2`** (see "Both dimensions are strict goods" above). Remaining: exact price curve numbers.
 - Multiple stats per consumable (PMVP)
 - Throw mechanic (PMVP — inherits Floor + Window, `+`-only)
