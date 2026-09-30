@@ -882,10 +882,6 @@ describe('monster winding lifecycle (PC-97)', () => {
   const bite = {
     id: 1,
     name: 'Bite',
-    prepare_time: 2,
-    prepare_time_range: 0,
-    cooldown_time: 4,
-    cooldown_time_range: 0,
     prepare_time_multiplier: 2,
     prepare_time_multiplier_range: 0,
     cooldown_time_multiplier: 3,

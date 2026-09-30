@@ -128,7 +128,7 @@ export async function refundRunEntry(admin, userId, charged) {
  */
 const SLOT_ATTACK_KEYS = ['slot_0_attack_id', 'slot_1_attack_id', 'slot_2_attack_id', 'slot_3_attack_id', 'slot_4_attack_id'];
 const SLOT_ATTACK_SELECT = SLOT_ATTACK_KEYS.join(', ');
-const ATTACK_MENU_COLUMNS = 'id, name, is_multi_target, prepare_time, cooldown_time, prepare_time_range, cooldown_time_range, prepare_time_multiplier, prepare_time_multiplier_range, cooldown_time_multiplier, cooldown_time_multiplier_range, description, base_damage_multiplier, crit_factor, crit_multiplier';
+const ATTACK_MENU_COLUMNS = 'id, name, is_multi_target, prepare_time_multiplier, prepare_time_multiplier_range, cooldown_time_multiplier, cooldown_time_multiplier_range, description, base_damage_multiplier, crit_factor, crit_multiplier';
 
 export function grantedSlotAttackIds(instance) {
   if (!instance) return [];
@@ -150,10 +150,6 @@ function shapeMenuAttack(a, style) {
     id: a.id,
     name: a.name,
     is_multi_target: !!a.is_multi_target,
-    prepare_time: a.prepare_time || 3,
-    cooldown_time: a.cooldown_time || 2,
-    prepare_time_range: a.prepare_time_range || 0,
-    cooldown_time_range: a.cooldown_time_range || 0,
     prepare_time_multiplier: a.prepare_time_multiplier ?? 1,
     prepare_time_multiplier_range: a.prepare_time_multiplier_range ?? 0,
     cooldown_time_multiplier: a.cooldown_time_multiplier ?? 1,
@@ -587,10 +583,6 @@ async function handle(request) {
             id: a.id,
             name: a.name,
             is_multi_target: !!a.is_multi_target,
-            prepare_time: a.prepare_time || 3,
-            cooldown_time: a.cooldown_time || 2,
-            prepare_time_range: a.prepare_time_range || 0,
-            cooldown_time_range: a.cooldown_time_range || 0,
             prepare_time_multiplier: a.prepare_time_multiplier ?? 1,
             prepare_time_multiplier_range: a.prepare_time_multiplier_range ?? 0,
             cooldown_time_multiplier: a.cooldown_time_multiplier ?? 1,
@@ -888,9 +880,8 @@ async function handle(request) {
           return json({ error: 'Attack not on equipped weapon' }, 403);
         }
 
-        // PC-107: attack timing is a pure multiplier on weapon speed.
-        // 1.0 = exactly weapon speed. Flat prepare_time/cooldown_time are no
-        // longer added. rollMultiplier range 0 returns base exactly and
+        // PC-107/108: attack timing is a pure multiplier on weapon speed.
+        // 1.0 = exactly weapon speed. rollMultiplier range 0 returns base exactly and
         // clamps >= 0 (not >= 1), so a 0.7 Quick Slash stays fast.
         const weaponSpeed = Number(weapon?.speed) || 0;
         castTicks = weaponSpeed * rollMultiplier(attackRow?.prepare_time_multiplier ?? 1, attackRow?.prepare_time_multiplier_range ?? 0);
