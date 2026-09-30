@@ -354,8 +354,8 @@ describe('battle/end loot reads persisted.monsters and continue saves prize_pool
       }
       if (snap.table === 'monster_template') {
         return { data: [
-          { id: 7, min_gold: 5, max_gold: 5 },
-          { id: 8, min_gold: 5, max_gold: 5 },
+          { id: 7, min_gold: 5, max_gold: 5, loot_value: 4 },
+          { id: 8, min_gold: 5, max_gold: 5, loot_value: 6 },
         ] };
       }
       if (snap.table === 'portal_loot_mapping' || snap.table === 'monster_loot_mapping') return { data: [] };
@@ -368,8 +368,8 @@ describe('battle/end loot reads persisted.monsters and continue saves prize_pool
     __setAdminClientForTests(admin);
     const res = await POST(post('/runs/1/battle/end', { choice: 'continue' }));
     assert.equal(res.status, 200, await res.clone().text());
-    const lootQuery = admin.calls.find(c => c.table === 'portal_monster_mapping' && c.filters.some(f => f[0] === 'in'));
-    assert.ok(lootQuery, 'loot must query mappings for the fight monsters');
+    const lootQuery = admin.calls.find(c => c.table === 'monster_template' && c.filters.some(f => f[0] === 'in'));
+    assert.ok(lootQuery, 'loot must query monster_template for the fight monsters');
     const ids = lootQuery.filters.find(f => f[0] === 'in')[2];
     assert.deepEqual([...ids].sort(), [7, 8]);
     const upd = admin.calls.find(c => c.table === 'portal_run' && c.op === 'update');
