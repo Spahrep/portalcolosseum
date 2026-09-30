@@ -120,6 +120,67 @@ export async function refundRunEntry(admin, userId, charged) {
   }
 }
 
+/**
+ * Attacks this weapon instance actually rolled.
+ * Slot 0 is the template base attack (NOT NULL, always granted).
+ * Slots 1-4 are granted only when slot_N_attack_id is set — the template
+ * mapping is the pool the roll drew from, not the combat menu.
+ */
+const SLOT_ATTACK_KEYS = ['slot_0_attack_id', 'slot_1_attack_id', 'slot_2_attack_id', 'slot_3_attack_id', 'slot_4_attack_id'];
+const SLOT_ATTACK_SELECT = SLOT_ATTACK_KEYS.join(', ');
+const ATTACK_MENU_COLUMNS = 'id, name, is_multi_target, prepare_time, cooldown_time, prepare_time_range, cooldown_time_range, description, base_damage_multiplier, crit_factor, crit_multiplier';
+
+export function grantedSlotAttackIds(instance) {
+  if (!instance) return [];
+  const ids = [];
+  const seen = new Set();
+  for (const key of SLOT_ATTACK_KEYS) {
+    const raw = instance[key];
+    if (raw == null || raw === '') continue;
+    const id = Number(raw);
+    if (!Number.isFinite(id) || id <= 0 || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
+}
+
+function shapeMenuAttack(a, style) {
+  return {
+    id: a.id,
+    name: a.name,
+    is_multi_target: !!a.is_multi_target,
+    prepare_time: a.prepare_time || 3,
+    cooldown_time: a.cooldown_time || 2,
+    prepare_time_range: a.prepare_time_range || 0,
+    cooldown_time_range: a.cooldown_time_range || 0,
+    description: style === 'weapons' ? (a.description ?? null) : (a.description || ''),
+    base_damage_multiplier: style === 'weapons' ? (a.base_damage_multiplier ?? null) : (a.base_damage_multiplier ?? 1),
+    crit_factor: a.crit_factor ?? 1,
+    crit_multiplier: a.crit_multiplier ?? 2
+  };
+}
+
+async function loadGrantedAttacks(admin, instances, style) {
+  const list = Array.isArray(instances) ? instances : [];
+  const unique = [...new Set(list.flatMap(grantedSlotAttackIds))];
+  const byId = {};
+  if (unique.length) {
+    try {
+      const res = await admin.from('attack').select(ATTACK_MENU_COLUMNS).in('id', unique);
+      if (res && res.error) throw res.error;
+      for (const row of (res && res.data) || []) {
+        if (row && row.id != null) byId[Number(row.id)] = row;
+      }
+    } catch (e) {
+      console.error('granted slot attack load error', e);
+    }
+  }
+  return function attacksOf(inst) {
+    return grantedSlotAttackIds(inst).map(id => byId[id]).filter(Boolean).map(a => shapeMenuAttack(a, style));
+  };
+}
+
 let adminClientOverride = null;
 /** Test-only injection. Production leaves this null. */
 export function __setAdminClientForTests(client) {
@@ -536,23 +597,15 @@ async function handle(request) {
       let weaponRows = [];
       if (weaponIds.length) {
         const res = await admin.from('weapon_instance')
-          .select('id, damage, speed, accuracy, grade, crit_chance, template_id, weapon_template:template_id (name, base_damage, damage_range)')
+          .select('id, damage, speed, accuracy, grade, crit_chance, template_id, ' + SLOT_ATTACK_SELECT + ', weapon_template:template_id (name, base_damage, damage_range)')
           .in('id', weaponIds);
         weaponRows = res.data || [];
       }
       const weaponById = Object.fromEntries(weaponRows.map(w => [w.id, w]));
-      async function weaponInfo(weaponId) {
+      const attacksOf = await loadGrantedAttacks(admin, weaponRows, 'battle');
+      function weaponInfo(weaponId) {
         const w = weaponById[weaponId];
         if (!w) return null;
-        let attacks = [];
-        try {
-          const mapRes = await admin.from('weapon_template_attack_mapping')
-            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time, prepare_time_range, cooldown_time_range, description, base_damage_multiplier)')
-            .eq('weapon_template_id', w.template_id);
-          if (mapRes.data) attacks = mapRes.data.map(m => m.attack).filter(Boolean);
-        } catch (e) {
-          console.error('attack mapping error for weapon', w.id, e);
-        }
         return {
           id: w.id,
           name: w.weapon_template?.name || 'Unknown',
@@ -563,17 +616,7 @@ async function handle(request) {
           crit_chance: w.crit_chance ?? 0,
           base_damage: w.weapon_template?.base_damage ?? null,
           damage_range: w.weapon_template?.damage_range ?? null,
-          attacks: attacks.map(a => ({
-            id: a.id,
-            name: a.name,
-            is_multi_target: !!a.is_multi_target,
-            prepare_time: a.prepare_time || 3,
-            cooldown_time: a.cooldown_time || 2,
-            prepare_time_range: a.prepare_time_range || 0,
-            cooldown_time_range: a.cooldown_time_range || 0,
-            description: a.description || '',
-            base_damage_multiplier: a.base_damage_multiplier ?? 1
-          }))
+          attacks: attacksOf(w)
         };
       }
       const [handL, handR, beltW] = await Promise.all([weaponInfo(run.hand_l_weapon_id), weaponInfo(run.hand_r_weapon_id), weaponInfo(run.belt_weapon_id)]);
@@ -816,18 +859,20 @@ async function handle(request) {
         playerCritMultiplier = 2.0;
         attackName = 'Fist';
       } else {
-        const { data: wInst } = await admin.from('weapon_instance').select('template_id').eq('id', weaponId).single();
-        if (!wInst) return json({ error: 'Weapon instance not found' }, 404);
-        const { count: mapCount } = await admin.from('weapon_template_attack_mapping')
-          .select('*', { count: 'exact', head: true })
-          .eq('weapon_template_id', wInst.template_id).eq('attack_id', attackIdNum);
-        if (!mapCount) return json({ error: 'Attack not on equipped weapon' }, 403);
+        // Same granted-slot set the weapon menu shows. Mapping membership is not
+        // a grant — a mapped attack the roll skipped must 403.
+        const { data: weapon } = await admin.from('weapon_instance')
+          .select('damage, accuracy, speed, crit_chance, ' + SLOT_ATTACK_SELECT)
+          .eq('id', weaponId).single();
+        if (!weapon) return json({ error: 'Weapon instance not found' }, 404);
+        if (!grantedSlotAttackIds(weapon).includes(attackIdNum)) {
+          return json({ error: 'Attack not on equipped weapon' }, 403);
+        }
 
         // Spahrep 2026-09-17: total attack timing = weapon speed + the attack's own
         // rolled pre/post. The attack's prepare/cooldown (and ranges) are kept as-is;
         // the weapon's base speed is added into each computation. rollStat clamps >=1,
         // range 0 returns base exactly.
-        const { data: weapon } = await admin.from('weapon_instance').select('damage, accuracy, speed, crit_chance').eq('id', weaponId).single();
         const weaponSpeed = Number(weapon?.speed) || 0;
         castTicks = weaponSpeed + rollStat(attackRow?.prepare_time, attackRow?.prepare_time_range);
         cooldownTicks = weaponSpeed + rollStat(attackRow?.cooldown_time, attackRow?.cooldown_time_range);
@@ -1327,7 +1372,7 @@ async function handle(request) {
       let instances;
       try {
         const res = await admin.from('weapon_instance')
-          .select('id, damage, speed, accuracy, grade, crit_chance, template_id, weapon_template:template_id (name)')
+          .select('id, damage, speed, accuracy, grade, crit_chance, template_id, ' + SLOT_ATTACK_SELECT + ', weapon_template:template_id (name)')
           .eq('user_id', user.id)
           .order('id');
         instances = res.data;
@@ -1336,20 +1381,10 @@ async function handle(request) {
         console.error('weapons query error', e);
         return json({ error: 'Internal server error' }, 500);
       }
-      // join attacks via weapon_template_attack_mapping → attack
+      // Attacks are the instance's granted slots, not the template mapping pool.
+      const attacksOf = await loadGrantedAttacks(admin, instances || [], 'weapons');
       const weapons = [];
       for (const inst of (instances || [])) {
-        let attacks = [];
-        try {
-          const mapRes = await admin.from('weapon_template_attack_mapping')
-            .select('attack:attack_id (id, name, is_multi_target, prepare_time, cooldown_time, prepare_time_range, cooldown_time_range, base_damage_multiplier, description)')
-            .eq('weapon_template_id', inst.template_id);
-          if (mapRes.data) {
-            attacks = mapRes.data.map(m => m.attack).filter(Boolean);
-          }
-        } catch (e) {
-          console.error('attack mapping error for template', inst.template_id, e);
-        }
         weapons.push({
           id: inst.id,
           name: inst.weapon_template?.name || 'Unknown',
@@ -1358,17 +1393,7 @@ async function handle(request) {
           accuracy: inst.accuracy ?? null,
           grade: inst.grade ?? null,
           crit_chance: inst.crit_chance ?? 0,
-          attacks: attacks.map(a => ({
-            id: a.id,
-            name: a.name,
-            is_multi_target: !!a.is_multi_target,
-            prepare_time: a.prepare_time || 3,
-            cooldown_time: a.cooldown_time || 2,
-            prepare_time_range: a.prepare_time_range || 0,
-            cooldown_time_range: a.cooldown_time_range || 0,
-            base_damage_multiplier: a.base_damage_multiplier ?? null,
-            description: a.description ?? null
-          }))
+          attacks: attacksOf(inst)
         });
       }
       return json({ weapons });

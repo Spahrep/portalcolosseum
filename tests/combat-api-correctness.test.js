@@ -204,11 +204,19 @@ describe('POST /commit unarmed fist_speed and multiplier range', () => {
       if (snap.table === 'portal_run' && snap.op === 'select') return { data: run };
       if (snap.table === 'portal_run' && snap.op === 'update') return { data: null };
       if (snap.table === 'game_config') return { data: config };
-      if (snap.table === 'weapon_instance' && snap.single && String(snap.cols).includes('template_id')) {
-        return { data: { template_id: 3 } };
+      if (snap.table === 'weapon_instance') {
+        return {
+          data: {
+            template_id: 3,
+            slot_0_attack_id: 1,
+            slot_1_attack_id: null,
+            slot_2_attack_id: null,
+            slot_3_attack_id: null,
+            slot_4_attack_id: null,
+            ...(weapon || {}),
+          },
+        };
       }
-      if (snap.table === 'weapon_template_attack_mapping') return { count: 1 };
-      if (snap.table === 'weapon_instance') return { data: weapon };
       return { data: null };
     };
   }
