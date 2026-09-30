@@ -884,8 +884,8 @@ async function handle(request) {
         // 1.0 = exactly weapon speed. rollMultiplier range 0 returns base exactly and
         // clamps >= 0 (not >= 1), so a 0.7 Quick Slash stays fast.
         const weaponSpeed = Number(weapon?.speed) || 0;
-        castTicks = weaponSpeed * rollMultiplier(attackRow?.prepare_time_multiplier ?? 1, attackRow?.prepare_time_multiplier_range ?? 0);
-        cooldownTicks = weaponSpeed * rollMultiplier(attackRow?.cooldown_time_multiplier ?? 1, attackRow?.cooldown_time_multiplier_range ?? 0);
+        castTicks = Math.floor(weaponSpeed * rollMultiplier(attackRow?.prepare_time_multiplier ?? 1, attackRow?.prepare_time_multiplier_range ?? 0));
+        cooldownTicks = Math.floor(weaponSpeed * rollMultiplier(attackRow?.cooldown_time_multiplier ?? 1, attackRow?.cooldown_time_multiplier_range ?? 0));
         const multiplier = rollMultiplier(attackRow?.base_damage_multiplier ?? 1, attackRow?.base_damage_multiplier_range);
 
         playerDamage = Math.round((weapon?.damage || 10) * multiplier);
