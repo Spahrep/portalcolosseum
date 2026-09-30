@@ -479,6 +479,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: LP formula re-designed. LP = Σ(monster.loot_value) × depth_mult(progress). (1) NEW per-monster `loot_value` field, INDEPENDENT of `point_cost` (encounter budget) — decouples "how hard is the fight" from "how good is the loot", which is what enables a Metal Slime archetype (low point_cost = cheap/weak, high loot_value = jackpot). (2) Depth multiplier is PROGRESS-KEYED (fraction of run cleared, like stop-share PC-DEC-056) so it auto-scales to any portal length, and ACCELERATING (last fight worth most, matching the risk). (3) ALL values live in config (game_config / portal_template) so they're tuning knobs — Spahrep: "as long as we do it via config so we can tone it up or down". The stop-share curve (PC-DEC-056) already rewards going further (keep more); the depth multiplier rewards going further (earn more) — the two stack. Metal Slime archetype (high evasion, low HP, flees, jackpot loot) documented as a concrete monster design enabled by the loot_value field. Applied to loot-prize-pool.md, current-design-status.md, combat-system.md, migration 20260930XXXXXX_loot_value_and_depth_mult.sql.
 
+- ID: PC-DEC-058
+  Date: 2026-09-30
+  Source: Discord thread "Resolve six open design rulings" (1554889161033650278)
+  Speaker: Spahrep
+  Verbatim: (ruling on #3 — potion window) "the label promises a range the effect doesn't deliver. Should the effect roll within the range, or should the label just show the floor?"
+  Status: DECIDED
+  Notes: Potion effect must roll within `[floor, floor + window]` at use time — `effect = rolled_floor + uniform(0..rolled_window)`. The floor stays the guaranteed minimum (never violated); the window is the upside. This matches the label ("X+, up to Y") and the price (EV = floor + window/2). The current code is floor-locked (`js/combat/potion-effects.js` `buildPotionPayload` uses `rolled_floor` directly) — a genuine bug where the player pays for upside they can never receive. Crit multiplies the final effect (unchanged). Applied to consumables.md, current-design-status.md, ticket PC-106.
+
 ## Open
 
 - ID: PC-DEC-004
