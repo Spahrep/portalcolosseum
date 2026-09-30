@@ -119,7 +119,8 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.match(exitFn, /head\.event === 'ready'/, 'a ready pause is not a fired-head slide');
     assert.match(exitFn, /runQueueRemoval/, 'fired head uses slide-out + group-lift');
     assert.match(exitFn, /queueRowKey/, 'same-key successor is recognized, not dropped');
-    assert.match(exitFn, /reseatSameKeySuccessor/);
+    assert.match(exitFn, /if \(successor\) return;/, 'same-key successor updates in place — no exit slide, no rebuild');
+    assert.equal(exitFn.includes('reseatSameKeySuccessor'), false, 'exit path must not rebuild a same-key successor node');
     assert.match(loop, /newQueue\.filter\(r => !oldKeys\.has\(queueRowKey\(r\)\)\)/, 'added stays key-based');
     assert.match(loop, /runQueueRemoval/); // non-head path still slides
     const ceremonyAt = loop.indexOf('playInsertCeremony');
@@ -155,7 +156,7 @@ describe('Master clock visual fidelity (client contract)', () => {
     const removeAt = commit.indexOf('runQueueRemoval');
     const ceremonyAt = commit.indexOf('playInsertCeremony');
     assert.ok(ceremonyAt >= 0 && removeAt > ceremonyAt, 'attack lands, then ready row slides out');
-    assert.match(commit, /await Promise.all\(\[narrateP, visualP\]\)/);
+    assert.match(commit, /await Promise\.all\(\[narrateP, visualP\]\)/);
     const insert = fnBodyUntilNext(app, 'async _runInsert()', ['class BattleClock', 'async _runResolve()', 'async _renderNew()']);
     assert.equal(insert.includes('resolved.length === 0'), false);
     const renderNew = fnBodyUntilNext(app, 'async _renderNew()', ['/** All done']);

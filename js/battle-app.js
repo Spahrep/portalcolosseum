@@ -415,11 +415,13 @@ async function animateFiredHeadExit(head, newQueue, bs) {
     }
     return;
   }
+  // Same-key successor (countdown / phase change): update the existing node in
+  // place via renderQueue's stable-key branch — no exit slide, no rebuild.
+  if (successor) return;
   const row = findQueueRowByIdentity(head);
   if (!row) return;
   const id = row.dataset.rowId || head.id;
   await runQueueRemoval([id]);
-  if (successor) reseatSameKeySuccessor(successor, newQueue, bs);
 }
 
 /** Put a same-key successor back in the DOM at its engine slot, without an
