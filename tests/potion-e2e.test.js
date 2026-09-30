@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import createEngine, { resumeEngine } from '../js/combat/engine.js';
+import { buildPotionPayload } from '../js/combat/potion-effects.js';
 import {
   mapPotionFeedLine,
   formatPotionSummary,
@@ -211,5 +212,84 @@ describe('Potion E2E parity (PC-39)', () => {
     const meta = { slot: 'A', phase: 'in-battle', hand: 'LH', potion_used: true, player_hp: s.participants.player.hp, state: s };
     const transcript = buildTranscript(s, meta, []);
     assert.deepEqual(transcript, buffExpirySnapshot);
+  });
+});
+
+describe('PC-106: potion effect rolls within the window', () => {
+  const FLOOR = 100;
+  const WINDOW = 20;
+
+  function constantRng(value) {
+    return () => value;
+  }
+
+  it('payload: every offset in [0, window] is reachable; floor is the minimum', () => {
+    const seen = new Set();
+    for (let offset = 0; offset <= WINDOW; offset++) {
+      const rng = constantRng((offset + 0.5) / (WINDOW + 1));
+      const heal = buildPotionPayload({
+        effect_type: 'heal', rolled_floor: FLOOR, rolled_window: WINDOW, template_name: 'Heal'
+      }, 0, rng);
+      const buff = buildPotionPayload({
+        effect_type: 'speed', rolled_floor: FLOOR, rolled_window: WINDOW,
+        duration_ticks: 4, template_name: 'Swift'
+      }, 7, rng);
+      assert.equal(heal.amount, FLOOR + offset);
+      assert.equal(buff.value, FLOOR + offset);
+      assert.ok(heal.amount >= FLOOR && heal.amount <= FLOOR + WINDOW);
+      seen.add(heal.amount);
+    }
+    assert.equal(seen.size, WINDOW + 1);
+  });
+
+  it('payload: missing or zero window is the floor and consumes no RNG', () => {
+    const boom = () => { throw new Error('rng consumed'); };
+    const missing = buildPotionPayload({
+      effect_type: 'heal', rolled_floor: FLOOR, template_name: 'Heal'
+    }, 0, boom);
+    const zero = buildPotionPayload({
+      effect_type: 'heal', rolled_floor: FLOOR, rolled_window: 0, template_name: 'Heal'
+    }, 0, boom);
+    assert.equal(missing.amount, FLOOR);
+    assert.equal(zero.amount, FLOOR);
+  });
+
+  it('engine: rolled_window flows through and heal stays in [floor, floor+window]', () => {
+    const draws = [];
+    const eng = createEngine(() => {
+      draws.push(1);
+      return 0.5;
+    });
+    eng.startBattle(makeParticipants({
+      effect_type: 'heal', rolled_floor: FLOOR, rolled_window: WINDOW,
+      rolled_speed: 2, template_name: 'Heal'
+    }));
+    assert.equal(eng.state.potions.A.rolled_window, WINDOW);
+    eng.state.player.hp = 100;
+    const before = draws.length;
+    eng.commitPotion('A', { phase: 'between-fights' });
+    const healed = eng.state.player.hp - 100;
+    assert.ok(healed >= FLOOR && healed <= FLOOR + WINDOW, `healed ${healed} outside window`);
+    // 0.5 * 21 = 10.5 → floor + 10
+    assert.equal(healed, FLOOR + 10);
+    assert.equal(draws.length - before, 1, 'window roll consumes exactly one draw when crit is absent');
+  });
+
+  it('engine: crit multiplies the rolled effect, not the floor', () => {
+    let n = 0;
+    const eng = createEngine(() => {
+      n += 1;
+      // first draw: window offset 20 (ceiling); second: crit passes
+      return n === 1 ? 0.999 : 0.001;
+    });
+    eng.startBattle(makeParticipants({
+      effect_type: 'heal', rolled_floor: FLOOR, rolled_window: WINDOW, rolled_speed: 2,
+      template_name: 'Heal', crit_chance: 100, critEffectMultiplier: 1.5
+    }));
+    eng.state.player.hp = 100;
+    eng.commitPotion('A', { phase: 'between-fights' });
+    // round(120 * 1.5) = 180, not round(100 * 1.5) = 150
+    assert.equal(eng.state.player.hp, 280);
+    assert.ok(eng.state.feed.some(l => l.includes('healed 180 CRITICAL!')));
   });
 });
