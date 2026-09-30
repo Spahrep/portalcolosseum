@@ -143,13 +143,42 @@ function applyTickCost(queue, ticCost) {
   }
 }
 
-// Shared by startBattle seeding and the monster cooldown → next attack morph.
+// Strike inputs live on the winding row so impact resolves them once.
+// Stamping does not roll — rollStat/pick already ran, and damage/hit/crit
+// roll at impact only (a second roll here would desync seeded streams).
+function stampMonsterStrike(row, mon, atk) {
+  row.monsterAttackName = atk?.name || null;
+  row.damage = mon.damage;
+  row.accuracy = mon.accuracy;
+  row.damageRange = 3;
+  const atkForCrit = atk || monsterAttackByName(mon, row.monsterAttackName);
+  row.critChance = (Number(mon.crit_chance ?? mon.critChance) || 0) * (Number(atkForCrit?.crit_factor) || 1);
+  row.critMultiplier = Number(atkForCrit?.crit_multiplier) || 2.0;
+}
+
+function carryMonsterStrike(from, to) {
+  to.monsterAttackName = from.monsterAttackName ?? null;
+  to.cooldownTicks = from.cooldownTicks;
+  to.damage = from.damage;
+  to.accuracy = from.accuracy;
+  to.damageRange = from.damageRange;
+  to.critChance = from.critChance;
+  to.critMultiplier = from.critMultiplier;
+}
+
+function monsterStrikeLabel(mon, row) {
+  return mon.name
+    ? `${mon.name} ${row.label.replace(/^Monster /i, '')}`
+    : row.label;
+}
+
+// Shared by startBattle seeding and the monster cooldown → next winding morph.
 // labelForLog is the original expression's label (mon.label vs row.label).
 function queueNextMonsterAttack(state, mon, labelForLog) {
   const atk = pickMonsterAttack(mon, state.rng);
   const prepare = rollStat(atk?.prepare_time, atk?.prepare_time_range, state.rng);
-  const newRow = commitNewRow(state.queue, mon.label, 'attack', mon.speed + prepare);
-  newRow.monsterAttackName = atk?.name || null;
+  const newRow = commitNewRow(state.queue, mon.label, 'winding', mon.speed + prepare);
+  stampMonsterStrike(newRow, mon, atk);
   newRow.cooldownTicks = mon.speed + rollStat(atk?.cooldown_time, atk?.cooldown_time_range, state.rng);
   logLine(state, `${mon.name || mon.template_name || 'Monster'} ${labelForLog.replace('Monster ', '')} prepares ${atk?.name ? `a ${atk.name}` : 'an attack'}...`);
   return newRow;
@@ -244,47 +273,59 @@ function handleHandFire(state, row) {
   }
 }
 
+function resolveMonsterImpact(state, row, mon) {
+  // PC-72: use the strike carried from winding. Do not re-pick or re-roll
+  // prepare/cooldown. Damage/hit/crit roll here, once.
+  const atkName = row.monsterAttackName || null;
+  const base = Number.isFinite(row.damage) ? row.damage : mon.damage;
+  const accuracy = Number.isFinite(row.accuracy) ? row.accuracy : mon.accuracy;
+  const range = Number.isFinite(row.damageRange) ? row.damageRange : 3;
+  let dmg = rollDamage(base, range, state.rng);
+  if (checkHit(accuracy, state.rng)) {
+    // Crit rolls only after a hit and only when chance > 0, so a stored 0
+    // (or a legacy row with no crit) consumes no extra RNG.
+    let critChance = row.critChance;
+    let critMultiplier = row.critMultiplier;
+    if (critChance == null) {
+      const atkForCrit = (mon.attacks || []).find(a => a && a.name === atkName);
+      critChance = (Number(mon.crit_chance ?? mon.critChance) || 0) * (Number(atkForCrit?.crit_factor) || 1);
+      critMultiplier = Number(atkForCrit?.crit_multiplier) || 2.0;
+    }
+    let crit = false;
+    if (critChance > 0 && state.rng() * 100 < critChance) {
+      dmg = Math.round(dmg * (Number(critMultiplier) || 2.0));
+      crit = true;
+    }
+    applyDamage(state.player, dmg);
+    const monLabel = monsterStrikeLabel(mon, row);
+    logLine(state, `${monLabel} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}${crit ? ' CRITICAL!' : ''}`);
+  } else {
+    const monLabel = monsterStrikeLabel(mon, row);
+    logLine(state, `${monLabel} ${atkName ? atkName + ' ' : ''}misses`);
+  }
+  if (!isMonsterDead(mon)) {
+    const atk = monsterAttackByName(mon, atkName);
+    const cdTics = Number.isFinite(row.cooldownTicks)
+      ? row.cooldownTicks
+      : mon.speed + rollStat(atk?.cooldown_time, atk?.cooldown_time_range, state.rng);
+    addEvent(state.queue, mon.label, 'cooldown', cdTics);
+  }
+}
+
 function handleMonsterFire(state, row) {
-  // Monster lifecycle (option A): attack → cooldown → next attack.
-  // Do not let a cooldown row fall through into attack resolution.
+  // Monster lifecycle: winding → impact → cooldown → next winding.
+  // Winding does not deal damage. Cooldown must not fall through into resolution.
   const mon = state.monsters.find(m => m.label === row.label);
   if (mon && !isMonsterDead(mon)) {
     if (row.event === 'cooldown') {
       queueNextMonsterAttack(state, mon, row.label);
-    } else if (row.event === 'attack') {
-      // PC-72: use pre-selected attack from commit time (row.monsterAttackName)
-      const atkName = row.monsterAttackName || null;
-      let dmg = rollDamage(mon.damage, 3, state.rng);
-      if (checkHit(mon.accuracy, state.rng)) {
-        // PC-72: monster crit — mon.critChance (from generate_monster payload)
-        // × pickedAttack.crit_factor, same formula as the player side. Roll
-        // only after a hit lands (misses can't crit) and only when the final
-        // chance is > 0, so legacy states/tests consume no extra RNG.
-        const atkForCrit = (mon.attacks||[]).find(a => a && a.name === atkName);
-        const finalCritChance = (Number(mon.crit_chance ?? mon.critChance) || 0) * (Number(atkForCrit?.crit_factor) || 1);
-        let crit = false;
-        if (finalCritChance > 0 && state.rng() * 100 < finalCritChance) {
-          dmg = Math.round(dmg * (Number(atkForCrit?.crit_multiplier) || 2.0));
-          crit = true;
-        }
-        applyDamage(state.player, dmg);
-        const monLabel = mon.name
-          ? `${mon.name} ${row.label.replace(/^Monster /i, '')}`
-          : row.label;
-        logLine(state, `${monLabel} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}${crit ? ' CRITICAL!' : ''}`);
-      } else {
-        const monLabel = mon.name
-          ? `${mon.name} ${row.label.replace(/^Monster /i, '')}`
-          : row.label;
-        logLine(state, `${monLabel} ${atkName ? atkName + ' ' : ''}misses`);
-      }
-      if (!isMonsterDead(mon)) {
-        const atk = monsterAttackByName(mon, atkName);
-        const cdTics = Number.isFinite(row.cooldownTicks)
-          ? row.cooldownTicks
-          : mon.speed + rollStat(atk?.cooldown_time, atk?.cooldown_time_range, state.rng);
-        addEvent(state.queue, mon.label, 'cooldown', cdTics);
-      }
+    } else if (row.event === 'winding') {
+      const impactRow = addEvent(state.queue, row.label, 'impact', 0);
+      carryMonsterStrike(row, impactRow);
+    } else if (row.event === 'impact' || row.event === 'attack') {
+      // 'attack' is the pre-PC-97 combined row. Resolve it as impact so a
+      // persisted in-flight strike still lands instead of vanishing.
+      resolveMonsterImpact(state, row, mon);
     }
   }
 }
@@ -525,10 +566,16 @@ export function createEngine(rng = Math.random) {
       const mon = state.monsters.find(m => m.label === row.label);
       let after = null;
       // Read the successor already inserted by handleFire — do not roll again.
-      if (mon && !isMonsterDead(mon) && (row.event === 'attack' || row.event === 'cooldown')) {
-        const nextEvent = row.event === 'attack' ? 'cooldown' : 'attack';
-        const successor = state.queue.find(r => r.label === row.label && r.event === nextEvent);
-        if (successor) after = { event: nextEvent, tics: successor.tics };
+      if (mon && !isMonsterDead(mon)) {
+        const nextEvent = row.event === 'winding' ? 'impact'
+          : row.event === 'impact' ? 'cooldown'
+          : row.event === 'attack' ? 'cooldown'
+          : row.event === 'cooldown' ? 'winding'
+          : null;
+        if (nextEvent) {
+          const successor = state.queue.find(r => r.label === row.label && r.event === nextEvent);
+          if (successor) after = { event: nextEvent, tics: successor.tics };
+        }
       }
       captureFires.push({
         tic: state.tic,
@@ -596,6 +643,7 @@ export function createEngine(rng = Math.random) {
       A: normalizePotion(participants.loadout?.consume_a),
       B: normalizePotion(participants.loadout?.consume_b)
     };
+    // First winding at mon.speed + prepare; cooldownTicks stored on that row.
     state.monsters.forEach(mon => {
       if (!isMonsterDead(mon)) {
         queueNextMonsterAttack(state, mon, mon.label);

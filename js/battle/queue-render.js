@@ -44,21 +44,26 @@ export function forgetQueueRowExiting(rowId) {
 
 /** Stable identity for a queue row across renders: hands are singletons keyed
  * by label (LH/RH) — their id regenerates every tick, so label is the only
- * stable key. Monster attack and cooldown are one cycle keyed by label
- * (`m:<label>`) so attack→cooldown→next attack is a successor replace, not a
- * removal+insert. Other rows key on id. */
+ * stable key. Monster winding, impact, legacy attack, and cooldown are one
+ * cycle keyed by label (`m:<label>`) so winding→impact→cooldown→next winding
+ * is a successor replace, not a removal+insert. Other rows key on id. */
 export function queueRowKey(row) {
   if (row.label === 'LH' || row.label === 'RH') return `h:${row.label}`;
-  if (row.label && (row.event === 'attack' || row.event === 'cooldown')) return `m:${row.label}`;
+  if (row.label && (row.event === 'winding' || row.event === 'impact' || row.event === 'attack' || row.event === 'cooldown')) return `m:${row.label}`;
   return `i:${row.id}`;
 }
 
+function isMonsterLabel(row) {
+  return !!(row && row.label && row.label !== 'LH' && row.label !== 'RH');
+}
+
+/** Canonical monster attack rows: name + tic, no timing bar. */
 export function isMonsterQueueRow(row) {
-  return !!(row && row.event === 'attack' && row.label && row.label !== 'LH' && row.label !== 'RH');
+  return isMonsterLabel(row) && (row.event === 'winding' || row.event === 'impact' || row.event === 'attack');
 }
 
 function isMonsterCooldownRow(row) {
-  return !!(row && row.event === 'cooldown' && row.label && row.label !== 'LH' && row.label !== 'RH');
+  return isMonsterLabel(row) && row.event === 'cooldown';
 }
 
 function monsterQueueName(row, monsters) {
@@ -97,7 +102,7 @@ export function renderQueue(bs, fill = false, onDone = null) {
     }
     return;
   }
-  // Stable-key successor (hand phase, monster attack↔cooldown): relabel the
+  // Stable-key successor (hand phase, monster winding↔impact↔cooldown): relabel the
   // existing node. Move a node only if its engine slot actually changed.
   const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
   const newKeys = queue.map(queueRowKey);
@@ -239,8 +244,8 @@ export function diffQueueForAnimation(oldBs, newBs) {
   const oldRows = oldBs.queue || [];
   const newRows = newBs.queue || [];
   // Hand rows use stable label key (LH/RH singleton identity preserved across
-  // tics/state updates). Monster attack/cooldown share m:<label> so a phase
-  // change is a successor, not a removal+insert. This prevents value-update
+  // tics/state updates). Monster winding/impact/cooldown share m:<label> so a
+  // phase change is a successor, not a removal+insert. This prevents value-update
   // slide-out+slide-in.
   const oldKeys = new Set(oldRows.map(queueRowKey));
   const newKeys = new Set(newRows.map(queueRowKey));
@@ -248,7 +253,7 @@ export function diffQueueForAnimation(oldBs, newBs) {
     resolved: oldRows.filter(r => !newKeys.has(queueRowKey(r))).map(r => r.id),
     added: newRows.filter(r => !oldKeys.has(queueRowKey(r))).map(r => ({
       id: r.id,
-      isMonster: r.label !== 'LH' && r.label !== 'RH' && r.event === 'attack'
+      isMonster: isMonsterQueueRow(r)
     }))
   };
 }
@@ -337,7 +342,7 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
     div.appendChild(ticSpan);
     return div;
   }
-  // Monster attack rows: show "<Monster name>'s <Attack>" (e.g. "Imp's Bite").
+  // Monster winding/impact (and legacy attack): "<Monster name>'s <Attack>".
   // No timing bar — canonical attack rows stay name + tic.
   const isMonster = isMonsterQueueRow(row);
   if (isMonster) {
@@ -439,9 +444,9 @@ function queueEventName(row, monsters, bs) {
     return (p && p.template_name) ? p.template_name : 'Potion';
   }
   if (row.attackName) return row.attackName;
-  // Picked at commit (PC-72). Falls back to the primary attack for legacy rows.
+  // Picked at winding seed (PC-72 / PC-97). Falls back to the primary attack.
   if (row.monsterAttackName) return row.monsterAttackName;
-  // Monster attack rows carry no name — use the monster's primary attack.
+  // Monster winding/impact rows with no stored name — use the primary attack.
   const mon = monsters.find(m => m.label === row.label);
   if (mon && Array.isArray(mon.attacks) && mon.attacks.length && mon.attacks[0].name) {
     return mon.attacks[0].name;

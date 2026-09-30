@@ -439,6 +439,19 @@ function narrateFeed(feedLines, participants = null) {
 // Queue events shown in the state dump, humanized (engine sends raw event names).
 const QUEUE_ACTION_LABELS = { cooldown: 'Ready', winding: 'Casting', impact: 'Attack', attack: 'Attack', approach: 'Approach' };
 
+// Monster winding/impact are canonical attack rows (name + tic). Cooldown is
+// "<Monster> recovering". Hand rows stay on QUEUE_ACTION_LABELS.
+function monsterQueueLabel(q, monsters) {
+  if (!q || !q.label || q.label === 'LH' || q.label === 'RH') return null;
+  const mon = (monsters || []).find(m => m.label === q.label);
+  const monName = mon ? (mon.name || mon.label) : q.label;
+  if (q.event === 'winding' || q.event === 'impact' || q.event === 'attack') {
+    return `${monName}'s ${q.monsterAttackName || 'Attack'}`;
+  }
+  if (q.event === 'cooldown') return `${monName} recovering`;
+  return null;
+}
+
 function turnPromptFromState(stateObj) {
   const s = stateObj && stateObj.state ? stateObj.state : stateObj;
   if (!s) {
@@ -528,12 +541,8 @@ function printStateFromRun(run) {
     lines.push('monsters: none');
   }
   const queueLine = (bs.queue || []).slice(0, 4).map(q => {
-    if (q.event === 'attack' && q.label) {
-      const mon = (bs.monsters || []).find(m => m.label === q.label);
-      const monName = mon ? (mon.name || mon.label) : q.label;
-      const atkName = q.monsterAttackName || 'Attack';
-      return `${q.tics ?? 0} - ${monName}'s ${atkName}`;
-    }
+    const monLabel = monsterQueueLabel(q, bs.monsters);
+    if (monLabel) return `${q.tics ?? 0} - ${monLabel}`;
     return `${q.tics ?? 0} - ${q.label || '?'}: ${QUEUE_ACTION_LABELS[q.event] || (q.event ? q.event[0].toUpperCase() + q.event.slice(1) : '?')}`;
   }).join(' | ');
   lines.push(`queue: ${queueLine || 'empty'}`);
@@ -1703,11 +1712,10 @@ function updateSidePanelsFromRun(run) {
       let html = '';
       queue.slice(0, 8).forEach(q => {
         const tics = q.tics ?? 0;
+        const monLabel = monsterQueueLabel(q, bs.monsters);
         let label, ev;
-        if (q.event === 'attack' && q.label) {
-          const mon = (bs.monsters || []).find(m => m.label === q.label);
-          const monName = mon ? (mon.name || mon.label) : q.label;
-          label = `${monName}'s ${q.monsterAttackName || 'Attack'}`;
+        if (monLabel) {
+          label = monLabel;
           ev = '';
         } else {
           label = q.label || '?';
