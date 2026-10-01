@@ -120,7 +120,7 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.match(exitFn, /runQueueRemoval/, 'fired head uses slide-out + group-lift');
     assert.match(exitFn, /queueRowKey/, 'same-key successor is recognized, not dropped');
     assert.equal(exitFn.includes('if (successor) return;'), false, 'a fired head slides out even with a same-key successor');
-    assert.equal(exitFn.includes('reseatSameKeySuccessor'), false, 'exit path must not rebuild a same-key successor node');
+    assert.match(exitFn, /reseatSameKeySuccessor\(successor, newQueue, bs\)/, 'exit path re-seats the same-key successor in place (no enter slide) so renderQueue does not full-rebuild and re-slide it');
     assert.match(loop, /newQueue\.filter\(r => !oldKeys\.has\(queueRowKey\(r\)\)\)/, 'added stays key-based');
     assert.match(loop, /runQueueRemoval/); // non-head path still slides
     const ceremonyAt = loop.indexOf('playInsertCeremony');

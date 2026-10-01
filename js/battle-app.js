@@ -403,8 +403,10 @@ function pinProcessedHead(head) {
 /**
  * Fired-head exit: slide the processed row out, then glide the rows below up.
  * Call only after narration + visuals. A `ready` pause is not a fired head.
- * A same-key successor (monster winding→impact→cooldown, hand phase) stays the same
- * key in data — renderQueue relabels that node in place. No exit slide.
+ * A same-key successor (monster winding→impact→cooldown, hand phase) shares the
+ * same stable key in data — after the fired row slides out, the successor is
+ * re-seated in place (no enter slide) so renderQueue relabels it without a
+ * phantom re-slide.
  */
 async function animateFiredHeadExit(head, newQueue, bs) {
   if (!head || head.event === 'ready') return;
@@ -418,13 +420,16 @@ async function animateFiredHeadExit(head, newQueue, bs) {
     return;
   }
   // A fired head always slides out + glides up, even with a same-key successor
-  // (monster attack→cooldown, hand phase change). The successor is NOT rebuilt —
-  // renderQueue's stable-key branch relabels the existing node in place, so the
-  // slide-out here never causes a phantom re-slide on pure countdown ticks.
+  // (monster attack→cooldown, hand phase change). runQueueRemoval removes the
+  // shared-key node from the DOM, so the same-key successor must be re-seated
+  // (no enter slide) before renderQueue runs — otherwise renderQueue's stable-key
+  // guard fails and the whole queue full-rebuilds, re-sliding the successor back
+  // in (the "slides out then back in" bug for hand cooldown→ready).
   const row = findQueueRowByIdentity(head);
   if (!row) return;
   const id = row.dataset.rowId || head.id;
   await runQueueRemoval([id]);
+  if (successor) reseatSameKeySuccessor(successor, newQueue, bs);
 }
 
 /** Put a same-key successor back in the DOM at its engine slot, without an
