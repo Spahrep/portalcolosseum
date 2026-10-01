@@ -225,12 +225,12 @@ describe('POST /dev/give-consumable', () => {
 });
 
 describe('POST /dev/give-weapon-self', () => {
-  it('inserts a rolled weapon_instance for the caller, not a looked-up username', async () => {
+  it('rolls via generate_weapon RPC for the caller, not a looked-up username', async () => {
     const admin = mockAdmin((snap) => {
       if (snap.table === 'profiles') return { data: { is_admin: true } };
       if (snap.table === 'weapon_template') return { data: SWORD };
-      if (snap.table === 'weapon_instance' && snap.op === 'insert') {
-        return { data: { id: 55, damage: snap.payload.damage, speed: snap.payload.speed, accuracy: snap.payload.accuracy, grade: snap.payload.grade } };
+      if (snap.op === 'rpc' && snap.table === 'rpc:generate_weapon') {
+        return { data: { id: 55, damage: 12, speed: 6, accuracy: 70, grade: 'C' } };
       }
       return { data: null };
     });
@@ -238,18 +238,27 @@ describe('POST /dev/give-weapon-self', () => {
     const res = await POST(req('POST', '/dev/give-weapon-self', { template_id: 3 }));
     assert.equal(res.status, 200);
     const body = await res.json();
+    assert.equal(body.template_id, 3);
     assert.equal(body.template_name, 'Short Sword');
     assert.equal(body.granted.length, 1);
-    assert.equal(body.granted[0].instance_id, 55);
-    assert.equal(body.granted[0].grade, 'C');
-    const ins = admin.calls.find(c => c.op === 'insert');
-    assert.equal(ins.payload.user_id, 'user-1');
-    assert.equal(ins.payload.template_id, 3);
-    assert.equal(ins.payload.damage, 12);
-    assert.equal(ins.payload.speed, 6);
-    assert.equal(ins.payload.accuracy, 70);
-    assert.equal(ins.payload.slot_0_attack_id, 1);
+    assert.deepEqual(body.granted[0], { instance_id: 55, damage: 12, speed: 6, accuracy: 70, grade: 'C' });
+    const rpc = admin.calls.find(c => c.op === 'rpc');
+    assert.equal(rpc.table, 'rpc:generate_weapon');
+    assert.deepEqual(rpc.payload, { p_template_id: 3, p_user_id: 'user-1' });
+    assert.equal(admin.calls.some(c => c.op === 'insert'), false);
     assert.equal(admin.calls.filter(c => c.table === 'profiles').length, 1);
+  });
+
+  it('500s when generate_weapon returns no id', async () => {
+    const admin = mockAdmin((snap) => {
+      if (snap.table === 'profiles') return { data: { is_admin: true } };
+      if (snap.table === 'weapon_template') return { data: SWORD };
+      if (snap.op === 'rpc') return { data: { damage: 12, grade: 'C' } };
+      return { data: null };
+    });
+    __setAdminClientForTests(admin);
+    const res = await POST(req('POST', '/dev/give-weapon-self', { template_id: 3 }));
+    assert.equal(res.status, 500);
   });
 
   it('404s a missing weapon template', async () => {
@@ -261,6 +270,7 @@ describe('POST /dev/give-weapon-self', () => {
     const res = await POST(req('POST', '/dev/give-weapon-self', { template_id: 9 }));
     assert.equal(res.status, 404);
     assert.equal(admin.calls.some(c => c.op === 'insert'), false);
+    assert.equal(admin.calls.some(c => c.op === 'rpc'), false);
   });
 });
 

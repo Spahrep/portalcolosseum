@@ -1632,30 +1632,15 @@ async function handle(request) {
       } catch (e) {
         return { error: 'weapon template not found', status: 404 };
       }
-      // insert weapon_instance — byte-for-byte grant pattern (slot_0_attack_id NOT NULL)
+      // Persist via generate_weapon so special attack slots are rolled, not just slot_0.
       let inst;
       try {
-        const d = rollStat(tmpl.base_damage, tmpl.damage_range);
-        const s = rollStat(tmpl.base_speed, tmpl.speed_range);
-        const a = rollStat(tmpl.base_accuracy, tmpl.accuracy_range);
-        const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
-        const zs = tmpl.speed_range ? (tmpl.base_speed - s) / tmpl.speed_range : 0;
-        const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
-        const z = (zd + zs + za) / 3;
-        const g = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
-        const iRes = await adminClient.from('weapon_instance').insert({
-          user_id: userId,
-          template_id: tmpl.id,
-          slot_0_attack_id: tmpl.slot_0_attack_id,
-          damage: d,
-          speed: s,
-          accuracy: a,
-          grade: g
-        }).select('id, damage, speed, accuracy, grade').single();
-        inst = iRes.data;
-        if (iRes.error) throw iRes.error;
+        const rpcRes = await adminClient.rpc('generate_weapon', { p_template_id: tmpl.id, p_user_id: userId });
+        if (rpcRes.error) throw rpcRes.error;
+        inst = rpcRes.data;
+        if (!inst || !inst.id) throw new Error('generate_weapon returned no id');
       } catch (e) {
-        console.error('weapon_instance insert error', e);
+        console.error('generate_weapon error', e);
         return { error: 'Internal server error', status: 500 };
       }
       // map slot to column
@@ -2086,7 +2071,7 @@ async function handle(request) {
         } catch (e) {
           return json({ error: 'user not found' }, 404);
         }
-        // template lookup + roll logic (reused from createAndEquipWeapon)
+        // template lookup (404 + name); stats and special slots come from generate_weapon
         let tmpl;
         try {
           const tRes = await admin.from('weapon_template').select('id, name, slot_0_attack_id, base_damage, damage_range, base_speed, speed_range, base_accuracy, accuracy_range').eq('id', templateId).single();
@@ -2097,28 +2082,14 @@ async function handle(request) {
         }
         const granted = [];
         for (let i = 0; i < count; i++) {
-          const d = rollStat(tmpl.base_damage, tmpl.damage_range);
-          const s = rollStat(tmpl.base_speed, tmpl.speed_range);
-          const a = rollStat(tmpl.base_accuracy, tmpl.accuracy_range);
-          const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
-          const zs = tmpl.speed_range ? (tmpl.base_speed - s) / tmpl.speed_range : 0;
-          const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
-          const z = (zd + zs + za) / 3;
-          const g = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
           try {
-            const iRes = await admin.from('weapon_instance').insert({
-              user_id: target.id,
-              template_id: tmpl.id,
-              slot_0_attack_id: tmpl.slot_0_attack_id || 1,
-              damage: d,
-              speed: s,
-              accuracy: a,
-              grade: g
-            }).select('id, damage, speed, accuracy, grade').single();
-            if (iRes.error) throw iRes.error;
-            granted.push({ instance_id: iRes.data.id, damage: d, speed: s, accuracy: a, grade: g });
+            const rpcRes = await admin.rpc('generate_weapon', { p_template_id: tmpl.id, p_user_id: target.id });
+            if (rpcRes.error) throw rpcRes.error;
+            const inst = rpcRes.data;
+            if (!inst || !inst.id) throw new Error('generate_weapon returned no id');
+            granted.push({ instance_id: inst.id, damage: inst.damage, speed: inst.speed, accuracy: inst.accuracy, grade: inst.grade });
           } catch (e) {
-            console.error('weapon_instance insert error', e);
+            console.error('generate_weapon error', e);
             return json({ error: 'Internal server error' }, 500);
           }
         }
@@ -2158,29 +2129,15 @@ async function handle(request) {
           console.error('starter check error', e);
           return json({ error: 'Internal server error' }, 500);
         }
-        // roll + insert one (reuse logic)
-        const d = rollStat(tmpl.base_damage, tmpl.damage_range);
-        const s = rollStat(tmpl.base_speed, tmpl.speed_range);
-        const a = rollStat(tmpl.base_accuracy, tmpl.accuracy_range);
-        const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
-        const zs = tmpl.speed_range ? (tmpl.base_speed - s) / tmpl.speed_range : 0;
-        const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
-        const z = (zd + zs + za) / 3;
-        const g = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
+        // persist via generate_weapon so special attack slots are rolled
         try {
-          const iRes = await admin.from('weapon_instance').insert({
-            user_id: target.id,
-            template_id: tmpl.id,
-            slot_0_attack_id: tmpl.slot_0_attack_id || 1,
-            damage: d,
-            speed: s,
-            accuracy: a,
-            grade: g
-          }).select('id, damage, speed, accuracy, grade').single();
-          if (iRes.error) throw iRes.error;
-          return json({ granted: true, instance: { instance_id: iRes.data.id, damage: d, speed: s, accuracy: a, grade: g } });
+          const rpcRes = await admin.rpc('generate_weapon', { p_template_id: tmpl.id, p_user_id: target.id });
+          if (rpcRes.error) throw rpcRes.error;
+          const inst = rpcRes.data;
+          if (!inst || !inst.id) throw new Error('generate_weapon returned no id');
+          return json({ granted: true, instance: { instance_id: inst.id, damage: inst.damage, speed: inst.speed, accuracy: inst.accuracy, grade: inst.grade } });
         } catch (e) {
-          console.error('weapon_instance insert error', e);
+          console.error('generate_weapon error', e);
           return json({ error: 'Internal server error' }, 500);
         }
       }
@@ -2396,7 +2353,7 @@ async function handle(request) {
         return json({ template_name: tmpl.name, granted });
       }
 
-      // 16. POST /dev/give-weapon-self (PC-110) — roll + insert weapon_instance for the caller
+      // 16. POST /dev/give-weapon-self (PC-110) — generate_weapon RPC for the caller
       if (path === '/dev/give-weapon-self') {
         const body = await request.json().catch(() => ({}));
         const templateId = parseInt(body.template_id, 10);
@@ -2414,28 +2371,14 @@ async function handle(request) {
         }
         const granted = [];
         for (let i = 0; i < count; i++) {
-          const d = rollStat(tmpl.base_damage, tmpl.damage_range);
-          const s = rollStat(tmpl.base_speed, tmpl.speed_range);
-          const a = rollStat(tmpl.base_accuracy, tmpl.accuracy_range);
-          const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
-          const zs = tmpl.speed_range ? (tmpl.base_speed - s) / tmpl.speed_range : 0;
-          const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
-          const z = (zd + zs + za) / 3;
-          const g = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
           try {
-            const iRes = await admin.from('weapon_instance').insert({
-              user_id: user.id,
-              template_id: tmpl.id,
-              slot_0_attack_id: tmpl.slot_0_attack_id || 1,
-              damage: d,
-              speed: s,
-              accuracy: a,
-              grade: g
-            }).select('id, damage, speed, accuracy, grade').single();
-            if (iRes.error) throw iRes.error;
-            granted.push({ instance_id: iRes.data.id, damage: d, speed: s, accuracy: a, grade: g });
+            const rpcRes = await admin.rpc('generate_weapon', { p_template_id: tmpl.id, p_user_id: user.id });
+            if (rpcRes.error) throw rpcRes.error;
+            const inst = rpcRes.data;
+            if (!inst || !inst.id) throw new Error('generate_weapon returned no id');
+            granted.push({ instance_id: inst.id, damage: inst.damage, speed: inst.speed, accuracy: inst.accuracy, grade: inst.grade });
           } catch (e) {
-            console.error('weapon_instance insert error', e);
+            console.error('generate_weapon error', e);
             return json({ error: 'Internal server error' }, 500);
           }
         }
