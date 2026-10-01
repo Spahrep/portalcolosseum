@@ -661,8 +661,8 @@ function finishBattleIntro() {
   const totalDelay = (queue.length * 200) + 350;
   setTimeout(() => {
     renderFeed([]);
-    // Tic-0 3-2-1 (or the intro-fires theater when the payload exists) plays
-    // once before the clock starts. A later tick must not replay it.
+    // Battles open straight to the first decision point — no 3-2-1 countdown
+    // (removed 2026-10-01). beginAfterIntro resolves immediately.
     beginAfterIntro(() => {
       // PC-91: Advance through approach phase until first decision point.
       // tickLoop handles pacing, feed narration, queue updates, and only shows
@@ -709,10 +709,9 @@ function renderLoadout(bs) {
   if (rh) rh.textContent = (wl.hand_r && wl.hand_r.name) || '—';
 }
 
-// PC-64: tic-0 countdown to the first decision point — theater over the
-// authoritative state when an intro payload exists. Otherwise the battle
-// still opens with a 3-2-1 countdown (PC-102). DOM playback is not unit-tested;
-// shouldPlayIntroCountdown is.
+// Battle-start entry point. The 3-2-1 countdown was removed (Spahrep 2026-10-01),
+// so shouldPlayIntroCountdown is always false and onDone runs immediately —
+// the battle opens straight to the first decision point.
 function beginAfterIntro(onDone) {
   const tic = lastBs?.tic ?? 0;
   if (!shouldPlayIntroCountdown(tic, introCountdownPlayed)) {
@@ -1789,8 +1788,7 @@ async function loadBattle(runId) {
       // Ceremony-intro: die still rolling — command window + timing track stay hidden.
       document.body.classList.add('intro-pending', 'queue-filling');
     } else {
-      // Tic-0 battle start with no dice ceremony still plays 3-2-1 before the
-      // command window. The ceremony path plays it from finishBattleIntro.
+      // Tic-0 battle start with no dice ceremony opens straight to the command window.
       const showMenu = () => renderActionMenu(bs);
       const countdownFirst = (bs.tic ?? 0) === 0 && !prevBs;
       if (!countdownFirst) showMenu();

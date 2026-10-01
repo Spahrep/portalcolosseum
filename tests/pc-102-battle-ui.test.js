@@ -118,9 +118,9 @@ describe('PC-102 potion hand target', () => {
 });
 
 describe('PC-102 intro countdown and text speed', () => {
-  it('plays 3-2-1 once when tic is 0', () => {
+  it('never plays the 3-2-1 countdown (battles open to the first decision)', () => {
     assert.deepEqual(INTRO_COUNTDOWN_STEPS, ['3', '2', '1']);
-    assert.equal(shouldPlayIntroCountdown(0, false), true);
+    assert.equal(shouldPlayIntroCountdown(0, false), false);
     assert.equal(shouldPlayIntroCountdown(0, true), false);
     assert.equal(shouldPlayIntroCountdown(4, false), false);
   });

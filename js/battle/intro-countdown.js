@@ -1,9 +1,11 @@
 /**
- * Tic-0 battle-start countdown. The 3-2-1 intro plays once when a battle
- * starts at tic 0. It does not replay on later ticks or after it has run.
+ * Battle-start countdown. Disabled: the 3-2-1 intro was an unrequested
+ * addition (Spahrep 2026-10-01) and no longer plays. Battles open straight
+ * to the first decision point. shouldPlayIntroCountdown always returns false
+ * so beginAfterIntro() calls onDone() immediately.
  */
 export const INTRO_COUNTDOWN_STEPS = ['3', '2', '1'];
 
-export function shouldPlayIntroCountdown(tic, alreadyPlayed) {
-  return !alreadyPlayed && (tic ?? 0) === 0;
+export function shouldPlayIntroCountdown(_tic, _alreadyPlayed) {
+  return false;
 }
