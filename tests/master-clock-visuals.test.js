@@ -114,21 +114,21 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.match(settle, /waitForEvent\(rowEl, 'animationend'/);
   });
 
-it('tickLoop pins the head through narration, then silently pops it (no exit slide)', () => {
+  it('tickLoop pins the head through narration, then enemy heads slide out', () => {
     const loop = fnBody(app, 'tickLoop');
     const post = loop.indexOf('/tick');
     const pin = loop.indexOf('pinProcessedHead(processedHead)');
     const narrate = loop.indexOf('awaitNarration(');
     const both = loop.indexOf('await Promise.all([narrateP, visualsP])');
-    const pop = loop.indexOf('silentPopHead(processedHead');
-    assert.ok(post >= 0 && pin > post && narrate > pin && both > narrate && pop > both,
-      'order is POST → pin → narrate → await both → silent pop');
-    assert.equal(loop.includes('animateFiredHeadExit'), false, 'fired head is not an exit slide');
-    const popFn = fnBodyUntilNext(app, 'function silentPopHead', ['function measuredRowHeight']);
-    assert.match(popFn, /queueRowKey/, 'same-key successor is recognized, not dropped');
-    assert.match(popFn, /row\.remove\(\)/, 'head is removed silently');
-    assert.equal(popFn.includes('runQueueRemoval'), false, 'silent pop does not slide out or group-lift');
-    assert.match(loop, /newQueue\.filter\(r => !oldKeys\.has\(queueRowKey\(r\)\)\)/, 'added stays key-based');
+    const release = loop.indexOf('releaseProcessedHead(processedHead');
+    assert.ok(post >= 0 && pin > post && narrate > pin && both > narrate && release > both,
+      'order is POST → pin → narrate → await both → release head');
+    const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
+    assert.match(releaseFn, /isEnemyQueueHead/);
+    assert.match(releaseFn, /runQueueRemoval/);
+    assert.match(releaseFn, /reseatSameKeySuccessor/);
+    const popFn = fnBodyUntilNext(app, 'function silentPopHead', ['function isEnemyQueueHead']);
+    assert.equal(popFn.includes('runQueueRemoval'), false, 'player silent pop does not slide');
     assert.match(loop, /runQueueRemoval/); // non-head path still slides
     const ceremonyAt = loop.indexOf('playInsertCeremony');
     const readyRemove = loop.indexOf('runQueueRemoval([c.ready.id])');

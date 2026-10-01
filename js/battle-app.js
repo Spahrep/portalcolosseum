@@ -402,10 +402,10 @@ function pinProcessedHead(head) {
 }
 
 /**
- * Head removal is a silent pop — no exit slide. A same-key successor (hand
- * phase change) stays in the DOM so renderQueue can relabel it in place.
- * The processed head stays pinned through narration + visuals; this runs
- * after those finish and removes it without animating the top item out.
+ * Head removal for a player hand is a silent pop — no exit slide. A same-key
+ * successor stays in the DOM so renderQueue can relabel it in place.
+ * An enemy row at the top slides out, then its same-key successor is seated
+ * again with no enter animation so the queue does not rebuild and re-slide.
  */
 function silentPopHead(head, newQueue) {
   if (!head) return;
@@ -419,6 +419,41 @@ function silentPopHead(head, newQueue) {
     if (head.id != null) exitingQueueRows.delete(head.id);
     row.remove();
   }
+}
+
+function isEnemyQueueHead(row) {
+  if (!row || row.label === 'LH' || row.label === 'RH') return false;
+  return queueRowKey(row).startsWith('m:');
+}
+
+function reseatSameKeySuccessor(head, newQueue, bs) {
+  if (!head) return;
+  const key = queueRowKey(head);
+  const successor = (newQueue || []).find(r => queueRowKey(r) === key);
+  if (!successor) return;
+  const queueEl = document.getElementById('queue');
+  if (!queueEl) return;
+  if (successor.id != null && queueEl.querySelector(`[data-row-id="${successor.id}"]`)) return;
+  const monsters = (bs && bs.monsters) || [];
+  const node = buildQueueRow(successor, monsters, bs, false);
+  const rows = Array.from(queueEl.querySelectorAll('.queue-row'));
+  const idx = insertIndexFor(successor, rows, newQueue);
+  const ref = rows[idx] || null;
+  if (ref) queueEl.insertBefore(node, ref);
+  else queueEl.appendChild(node);
+}
+
+async function releaseProcessedHead(head, newQueue, bs, preset) {
+  if (!head) return;
+  if (!isEnemyQueueHead(head) || animationsSkipped(preset)) {
+    silentPopHead(head, newQueue);
+    return;
+  }
+  const row = findQueueRowByIdentity(head);
+  if (!row) return;
+  const id = row.dataset.rowId || head.id;
+  await runQueueRemoval([id]);
+  reseatSameKeySuccessor(head, newQueue, bs);
 }
 
 function measuredRowHeight(queueEl) {
@@ -2054,12 +2089,9 @@ async function tickLoop(runId) {
       const visualsP = awaitTickVisuals(deathBefore);
       await Promise.all([narrateP, visualsP]);
 
-      // removeHead LAST — silent pop, no exit slide. The processed head stays
-      // pinned through narration + visuals, then is removed without animating
-      // the top item out. A same-key successor (hand phase change, monster
-      // winding→impact→cooldown) stays in the DOM so renderQueue relabels it
-      // in place — no re-slide.
-      silentPopHead(processedHead, newQueue);
+      // Enemy head slides off the top, then its next phase is seated with no
+      // enter slide. Player heads stay a silent pop.
+      await releaseProcessedHead(processedHead, newQueue, bs, preset);
 
       const oldKeys = new Set(oldQueue.map(queueRowKey));
       const newKeys = new Set(newQueue.map(queueRowKey));
