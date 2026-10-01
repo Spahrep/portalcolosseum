@@ -104,6 +104,7 @@ describe('Heal effects (PC-39)', () => {
     const eng = createEngine(seededRNG(202));
     eng.startBattle(makeParticipants(healPotion(50)));
     eng.state.player.hp = 990;
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 }); // pre = ceil((0+2)/2) = 1
     // Drinking row is behind already-queued rows. Walk insertion order until it fires.
     const s = stepUntil(eng, st => st.feed.some(l => l.includes('healed')));

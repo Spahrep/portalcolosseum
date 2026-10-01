@@ -629,9 +629,11 @@ function setBusy(state) {
   });
 }
 
-// Ceremony-intro: once every monster is in, the timing track fills in from
-// First (next) to last; the command window appears only after the track is
-// full (the fill's onDone). Idempotent via the flag.
+// Ceremony-intro: once every monster is in, the tic-0 timing track fills in
+// one row at a time. Battle start does not run the clock (PC-DEC-060), so no
+// hand is Ready yet. Do not replay intro.fires — that skip types both hands
+// Ready before the player can act. After the track is full, tickLoop plays
+// whatever is next, including a monster cooldown that comes before either hand.
 function finishBattleIntro() {
   debugLog('finishBattleIntro', `pending=${battleIntroPending}`);
   if (!battleIntroPending) return;
@@ -649,19 +651,12 @@ function finishBattleIntro() {
   const queue = lastBs ? lastBs.queue || [] : [];
   const monsters = lastBs ? lastBs.monsters || [] : [];
 
+  // willReplay is false for a new battle: intro.fires is empty. Do not take
+  // a replay branch even if a stale payload still carries fires.
   const intro = lastBs && lastBs.intro;
-  const willReplay = !!(intro && Array.isArray(intro.rows) && Array.isArray(intro.fires) && intro.fires.length > 0 && !introAlreadySeen());
+  const willReplay = !!(intro && Array.isArray(intro.fires) && intro.fires.length > 0 && !introAlreadySeen());
   if (willReplay) {
-    // Dice landed. Replay the seeded advance, then open the menu.
-    // Do not slide in the already-advanced queue — that skips the windups.
-    document.body.classList.add('intro-pending');
-    document.body.classList.remove('queue-filling');
-    const openMenu = () => {
-      document.body.classList.remove('intro-pending', 'queue-filling');
-      renderActionMenu(lastBs);
-    };
-    beginAfterIntro(openMenu);
-    return;
+    debugLog('finishBattleIntro', 'ignoring intro.fires — replay is the skip');
   }
 
   queue.forEach((row, i) => {
@@ -676,9 +671,8 @@ function finishBattleIntro() {
 
   const totalDelay = (queue.length * 200) + 350;
   setTimeout(() => {
-    renderFeed([]);
-    // No intro payload (legacy battle): 3-2-1 stays gone. Legacy approaches
-    // still need the tick loop to reach a Ready hand.
+    // Dice ceremony text stays. Do not renderFeed([]) — that wipes the box.
+    // Do not type a pre-advanced feed or both Ready lines.
     beginAfterIntro(() => {
       if (currentRunId && !handReadyIn(lastBs)) {
         tickLoop(currentRunId).catch(err => console.error('tickLoop ceremony:', err));
@@ -741,8 +735,10 @@ function renderLoadout(bs) {
 }
 
 // Battle-start entry point. The 3-2-1 countdown stays gone (Spahrep 2026-10-01).
-// A populated intro replays the master-clock advance as live events, then onDone
-// opens the command window. shouldPlayIntroCountdown remains hard-false.
+// PC-DEC-060: do not replay intro.fires. That replay skips monster actions and
+// types both hands Ready before the player can act. shouldPlayIntroCountdown
+// remains hard-false. A fresh battle paints the tic-0 queue in finishBattleIntro
+// and then tickLoop.
 function beginAfterIntro(onDone) {
   const tic = lastBs?.tic ?? 0;
   if (shouldPlayIntroCountdown(tic, introCountdownPlayed)) {
@@ -759,6 +755,8 @@ function beginAfterIntro(onDone) {
     if (onDone) onDone();
     return;
   }
+  // Non-empty fires is a pre-advanced skip. Do not type those lines.
+  // playIntroCountdown returns without replaying.
   introCountdownPlayed = true;
   markIntroSeen();
   playIntroCountdown(lastBs, intro, onDone);
@@ -788,77 +786,12 @@ function playThreeTwoOne(onDone) {
 }
 
 function playIntroCountdown(bs, intro, onDone) {
-  // 3-2-1 stays gone. Missing intro opens the menu; it does not fall back to the countdown.
-  if (!intro || !Array.isArray(intro.rows) || !Array.isArray(intro.fires)) {
-    if (onDone) onDone();
-    return;
-  }
-  document.body.classList.add('intro-pending');
-  document.body.classList.remove('queue-filling');
-  const el = document.getElementById('queue');
-  if (el) el.innerHTML = '';
-  const monsters = bs.monsters || [];
-  const rail = intro.rows.map(r => ({
-    id: r.id,
-    label: r.label,
-    event: r.event,
-    tics: r.tics,
-    monsterAttackName: r.monsterAttackName || null
-  }));
-  // Seeded engine order. Do not re-sort — that is not the master clock.
-  rail.forEach((row, i) => {
-    if (!el) return;
-    const node = buildQueueRow(row, monsters, bs, false, i);
-    node.classList.add(isMonsterQueueRow(row) ? 'queue-row-monster-enter' : 'queue-row-enter');
-    node.style.animationDelay = `${i * 80}ms`;
-    el.appendChild(node);
-  });
-  const maxHp = bs.player && bs.player.max_hp;
-  renderPlayerHP({ player_hp: intro.hpStart, max_hp: maxHp });
-  setIntroTicLabel(0);
-
-  const seedLines = Array.isArray(intro.seedFeed) ? intro.seedFeed.slice() : [];
-  const preset = getSpeedPreset();
-  const instant = !preset || preset.charMs === 0;
-  if (instant || intro.fires.length > 80) {
-    seedLines.forEach(line => appendFeedLine(line));
-    for (const fire of intro.fires) {
-      applyIntroFire(rail, fire);
-      introFireLines(fire).forEach(line => appendFeedLine(line));
-    }
-    addRenderedFeedLines(seedLines.length + intro.fires.reduce((n, f) => n + introFireLines(f).length, 0));
-    clearIntroTimer();
-    finishIntroSnap(bs, onDone);
-    return;
-  }
-
-  const gap = Math.max(90, preset.charMs * 4);
-  let k = 0;
-  clearIntroTimer();
-  const typeThen = (lines, next) => {
-    if (!lines.length) {
-      introTimer = setTimeout(next, gap);
-      return;
-    }
-    typeFeedLines(lines, () => {
-      addRenderedFeedLines(lines.length);
-      introTimer = setTimeout(next, gap);
-    }, setBusy, handleHitLine);
-  };
-  const step = () => {
-    if (k >= intro.fires.length) {
-      clearIntroTimer();
-      finishIntroSnap(bs, onDone);
-      return;
-    }
-    const fire = intro.fires[k++];
-    applyIntroFire(rail, fire);
-    paintIntroRail(el, rail, monsters, bs, fire.label);
-    setIntroTicLabel(fire.tic);
-    renderPlayerHP({ player_hp: fire.hp, max_hp: maxHp });
-    typeThen(introFireLines(fire), step);
-  };
-  typeThen(seedLines, step);
+  // 3-2-1 stays gone. Do not replay intro.fires — that skip types both hands
+  // Ready before the player can act (PC-DEC-060). A fresh battle has empty
+  // fires; finishBattleIntro paints the tic-0 queue and tickLoop plays it.
+  void bs;
+  void intro;
+  if (onDone) onDone();
 }
 
 function introFireLines(fire) {

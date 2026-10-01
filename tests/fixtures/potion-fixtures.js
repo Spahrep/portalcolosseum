@@ -1,8 +1,9 @@
 // tests/fixtures/potion-fixtures.js
 // Potion fixture objects and exact CLI parity snapshot strings for PC-39 e2e tests.
 // Queue order is the ordering key (tics ascending, player rows first on ties).
-// Default hand approach (1) is ahead of a speed-5 monster attack (6), so the
-// hands surface before that monster action.
+// PC-DEC-060: battle start does not log a tic-0 prepares line. Default hand
+// approach (1) is ahead of a speed-5 monster cooldown, so the hands surface
+// before that monster action.
 
 export const healPotion = {
   id: 1,
@@ -29,7 +30,6 @@ export const buffPotion = {
 };
 
 export const inBattleHealSnapshot = [
-  "tic 0 — mob A prepares an attack...",
   "tic 1 — LH Ready",
   "tic 1 — RH Ready",
   "Your left hand drinks Heal Potion...",
@@ -40,7 +40,6 @@ export const inBattleHealSnapshot = [
 ];
 
 export const betweenFightsHealSnapshot = [
-  "tic 0 — mob A prepares an attack...",
   "tic 1 — LH Ready",
   "tic 1 — RH Ready",
   "You drink potion a — healed 100.",
@@ -49,7 +48,6 @@ export const betweenFightsHealSnapshot = [
 ];
 
 export const overhealSnapshot = [
-  "tic 0 — mob A prepares an attack...",
   "tic 1 — LH Ready",
   "tic 1 — RH Ready",
   "Your left hand drinks Heal Potion...",
@@ -58,7 +56,6 @@ export const overhealSnapshot = [
 ];
 
 export const buffLandSnapshot = [
-  "tic 0 — mob A prepares an attack...",
   "tic 1 — LH Ready",
   "tic 1 — RH Ready",
   "Your left hand drinks Dmg Potion...",
@@ -68,7 +65,6 @@ export const buffLandSnapshot = [
 ];
 
 export const buffExpirySnapshot = [
-  "tic 0 — mob A prepares an attack...",
   "tic 1 — LH Ready",
   "tic 1 — RH Ready",
   "Your left hand drinks Dmg Potion...",

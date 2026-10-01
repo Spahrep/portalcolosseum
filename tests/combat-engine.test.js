@@ -111,6 +111,7 @@ describe('PC-66: event-driven time-skip', () => {
     });
     // Both hands approach-ready; commit both with slow 38+38 cycles (run 75's
     // weapons). The old per-tic loop capped at 50 tics mid-gap and stranded.
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 1, [1], { castTicks: 38, cooldownTicks: 38, playerDamage: 5, attackName: 'Attack' });
     eng.commitAttack('RH', 1, [1], { castTicks: 38, cooldownTicks: 38, playerDamage: 5, attackName: 'Attack' });
     eng.advanceToNextDecision();
@@ -135,6 +136,7 @@ describe('Engine core (deterministic seeded)', () => {
   it('commitAttack advances and produces feed', () => {
     const eng = createEngine(seededRNG(99));
     eng.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A' }] });
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 42, [1]);
     eng.advanceToNextDecision();
     assert.ok(eng.state.feed.length > 0 || eng.state.queue.length > 0);
@@ -175,6 +177,7 @@ describe('Data-driven engine parameterization', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
     });
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 99, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 25, isMultiTarget: false });
     const row = eng.state.queue.find(r => r.label === 'LH');
     assert.ok(row && (row.tics === 5 || row.tics === 4 || row.event === 'winding'));
@@ -186,6 +189,7 @@ describe('Data-driven engine parameterization', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
     });
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 42, isMultiTarget: false });
     const row = eng.state.queue.find(r => r.label === 'LH');
     assert.ok(row && row.damage === 42);
@@ -202,6 +206,7 @@ describe('Data-driven engine parameterization', () => {
         { id: 2, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'B' }
       ]
     });
+    eng.advanceToNextDecision();
     eng.commitAttack('RH', 7, [1, 2], { castTicks: 2, cooldownTicks: 1, playerDamage: 30, isMultiTarget: true });
     assert.ok(eng.state.queue.length > 0);
     const row = eng.state.queue.find(r => r.label === 'RH');
@@ -227,6 +232,7 @@ describe('Data-driven engine parameterization', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A' }]
     });
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 5, [1], { castTicks: 4, cooldownTicks: 2, playerDamage: 20, isMultiTarget: false });
     const snap = JSON.parse(JSON.stringify(eng.state));
     const resumed = resumeEngine(snap, seededRNG(55));
@@ -259,6 +265,7 @@ describe('F16 end-to-end attack lifecycle + security', () => {
     });
     const initialHp = eng.state.monsters[0].current_hp;
     // commit with short cast to resolve quickly
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 99, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, isMultiTarget: false });
     // advance enough to resolve winding -> impact
     for (let i = 0; i < 5; i++) eng.advanceToNextDecision();
@@ -274,6 +281,7 @@ describe('F16 end-to-end attack lifecycle + security', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
     });
+    eng.advanceToNextDecision();
     eng.commitAttack('RH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
     for (let i = 0; i < 6; i++) eng.advanceToNextDecision();
     const hands = eng.state.player.hands;
@@ -286,6 +294,7 @@ describe('F16 end-to-end attack lifecycle + security', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A' }]
     });
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 42, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 15, isMultiTarget: false });
     for (let i = 0; i < 8; i++) eng.advanceToNextDecision();
     const stuck = eng.state.queue.find(r => r.label === 'LH' && r.event === 'winding' && r.tics === 0);
@@ -298,7 +307,9 @@ describe('F16 end-to-end attack lifecycle + security', () => {
     const eng2 = createEngine(seededRNG(2));
     eng1.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [{ id: 1, max_hp: 50, damage: 5, speed: 4, accuracy: 60, label: 'A' }] });
     eng2.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [{ id: 1, max_hp: 50, damage: 5, speed: 4, accuracy: 60, label: 'A' }] });
+    eng1.advanceToNextDecision();
     eng1.commitAttack('LH', 1, [1], { castTicks: 2, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
+    eng2.advanceToNextDecision();
     eng2.commitAttack('RH', 2, [1], { castTicks: 2, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
     const ids1 = eng1.state.queue.map(r => r.id);
     const ids2 = eng2.state.queue.map(r => r.id);
@@ -321,6 +332,7 @@ describe('F16 end-to-end attack lifecycle + security', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
     });
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
     eng.commitAttack('RH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
     for (let i = 0; i < 10; i++) eng.advanceToNextDecision();
@@ -337,6 +349,7 @@ describe('F16 end-to-end attack lifecycle + security', () => {
       loadout: { hand_l: 1, hand_r: 2 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A', attacks: [{id:5, name:'quick attack'}] }]
     });
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 42, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 12, isMultiTarget: false, attackName: 'Quick Jab' });
     eng.advanceToNextDecision();
     assert.ok(eng.state.feed.some(l => l.includes('Quick Jab')), 'player attack name in feed');
@@ -370,6 +383,7 @@ describe('Player attack accuracy (weapon_instance.accuracy wiring)', () => {
       monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
     });
     const initialHp = eng.state.monsters[0].current_hp;
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, playerAccuracy: 70, isMultiTarget: false });
     // Committed chain sits behind already-queued rows. Walk insertion order until cooldown completes.
     for (let i = 0; i < 20 && eng.state.player.hands.LH.state !== 'Ready'; i++) eng.stepQueue();
@@ -387,6 +401,7 @@ describe('Player attack accuracy (weapon_instance.accuracy wiring)', () => {
       monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
     });
     const initialHp = eng.state.monsters[0].current_hp;
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, playerAccuracy: 70, isMultiTarget: false });
     for (let i = 0; i < 5; i++) eng.advanceToNextDecision();
     assert.ok(eng.state.monsters[0].current_hp < initialHp, 'hit: damage applied');
@@ -402,6 +417,7 @@ describe('Player attack accuracy (weapon_instance.accuracy wiring)', () => {
       monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
     });
     const initialHp = eng.state.monsters[0].current_hp;
+    eng.advanceToNextDecision();
     eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, isMultiTarget: false });
     for (let i = 0; i < 5; i++) eng.advanceToNextDecision();
     assert.ok(eng.state.monsters[0].current_hp < initialHp, 'default 100: still hits');
@@ -607,66 +623,85 @@ describe('PC-54 belt swap (swapHandWithBelt + engine wiring)', () => {
 });
 
 describe('PC-64 initial turn order (hand approach rows)', () => {
-  it('startBattle seeds approach rows at weapon speed in intro; live state is the first decision', () => {
+  it('startBattle seeds approach rows and one monster cooldown; the clock stays at tic 0', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 8, accuracy: 70, label: 'A' }]
     });
-    // Seed (tic 0) lives on intro.rows. The returned queue has already advanced.
-    const approachRows = state.intro.rows.filter(r => r.event === 'approach');
+    assert.equal(state.tic, 0);
+    assert.equal(state.participants.player.hands.LH.state, 'Approach');
+    assert.equal(state.participants.player.hands.RH.state, 'Approach');
+    const approachRows = state.queue.filter(r => r.event === 'approach');
     assert.equal(approachRows.length, 2);
     assert.ok(approachRows.some(r => r.label === 'LH' && r.tics === 4));
     assert.ok(approachRows.some(r => r.label === 'RH' && r.tics === 6));
-    const monsterRow = state.intro.rows.find(r => r.label === 'A' && r.event === 'winding');
-    assert.equal(monsterRow.tics, 8, 'monster winding at speed * default multiplier (8*1)');
-    assert.equal(monsterRow.cooldownTicks, 8, 'stored cooldown is speed * default multiplier (8*1)');
-    assert.equal(state.participants.player.hands.LH.state, 'Ready');
-    assert.equal(state.participants.player.hands.RH.state, 'Ready');
-    assert.ok(state.feed.some(l => l.includes('Ready')));
-    assert.equal(state.queue.some(r => r.event === 'approach'), false);
+    const monsterRows = state.queue.filter(r => r.label === 'A');
+    assert.equal(monsterRows.length, 1);
+    assert.equal(monsterRows[0].event, 'cooldown');
+    assert.equal(monsterRows[0].tics, 8, 'one cooldown row at mon.speed');
+    assert.equal(state.queue.some(r => r.event === 'winding'), false);
+    assert.equal(state.feed.some(l => l.includes('prepares')), false);
+    assert.equal(state.feed.some(l => l.includes('Ready')), false);
+    assert.deepEqual(state.intro.fires, []);
+    assert.equal(state.intro.rows.length, state.queue.length);
   });
 
-  it('commitAttack succeeds at the first decision startBattle already reached', () => {
+  it('stepping to the first hand Ready leaves the slower hand on approach', () => {
     const eng = createEngine(seededRNG(7));
     eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 100 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 100, accuracy: 70, label: 'A' }]
     });
+    let guard = 0;
+    while (eng.state.player.hands.LH.state !== 'Ready' && guard < 10) {
+      eng.stepQueue();
+      guard++;
+    }
     assert.equal(eng.state.player.hands.LH.state, 'Ready');
-    assert.equal(eng.state.player.hands.RH.state, 'Ready');
-    eng.commitAttack('RH', 1, [1]);
-    assert.ok(eng.state.queue.length > 0 || eng.state.feed.length > 0);
+    assert.equal(eng.state.player.hands.RH.state, 'Approach');
+    assert.ok(eng.state.queue.some(r => r.label === 'RH' && r.event === 'approach'));
+    eng.commitAttack('LH', 1, [1]);
+    assert.ok(eng.state.queue.some(r => r.label === 'LH' && r.event === 'winding'));
   });
 
-  it('monster-first: a faster monster windup resolves during startBattle, before the player is ready', () => {
+  it('a faster monster stays on cooldown at start; firing it inserts winding before either hand is Ready', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
     });
-    const hits = state.feed.filter(l => l.includes('A hits player'));
-    assert.ok(hits.length >= 1, 'monster attacked during the advance');
-    const firstHitIdx = state.feed.findIndex(l => l.includes('A hits player'));
-    const firstReadyIdx = state.feed.findIndex(l => l.includes('Ready'));
-    assert.ok(firstHitIdx !== -1 && firstReadyIdx !== -1);
-    assert.ok(firstHitIdx < firstReadyIdx, 'monster hit lands before the player hand becomes ready');
-    assert.equal(state.participants.player.hands.LH.state, 'Ready');
-    assert.ok(state.tic > 3);
-    assert.ok(state.intro.fires.some(f => f.label === 'A' && f.event === 'winding'));
-    assert.ok(state.participants.player.hp < state.intro.hpStart);
+    const mon = state.queue.find(r => r.label === 'A');
+    assert.equal(mon.event, 'cooldown');
+    assert.equal(mon.tics, 2);
+    assert.equal(state.tic, 0);
+    assert.equal(state.feed.some(l => l.includes('prepares')), false);
+    assert.equal(state.participants.player.hands.LH.state, 'Approach');
+    assert.equal(state.participants.player.hands.RH.state, 'Approach');
+    let guard = 0;
+    while (!eng.state.queue.some(r => r.label === 'A' && r.event === 'winding') && guard < 10) {
+      eng.stepQueue();
+      guard++;
+    }
+    assert.ok(eng.state.queue.some(r => r.label === 'A' && r.event === 'winding'));
+    assert.ok(eng.state.feed.some(l => l.includes('prepares')));
+    assert.equal(eng.state.player.hands.LH.state, 'Approach');
+    assert.equal(eng.state.player.hands.RH.state, 'Approach');
+    assert.equal(eng.state.feed.some(l => l.includes('Ready')), false);
   });
 
-  it('lower ordering key acts first: LH approach (5) fires before the monster attack (6)', () => {
+  it('lower ordering key acts first: LH approach (5) fires before the monster cooldown (6)', () => {
     const eng = createEngine(seededRNG(7));
-    const state = eng.startBattle({
+    eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 100 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 100, label: 'A' }]
     });
-    const lhIdx = state.feed.findIndex(l => l.includes('LH Ready'));
-    const hitIdx = state.feed.findIndex(l => l.includes('A hits player'));
-    assert.ok(lhIdx !== -1 && hitIdx !== -1);
-    assert.ok(lhIdx < hitIdx, 'LH approach key 5 is ahead of the monster attack key 6');
+    eng.stepQueue();
+    assert.equal(eng.state.player.hands.LH.state, 'Ready');
+    assert.equal(eng.state.player.hands.RH.state, 'Approach');
+    assert.ok(eng.state.feed.some(l => l.includes('LH Ready')));
+    assert.equal(eng.state.feed.some(l => l.includes('prepares')), false);
+    assert.ok(eng.state.queue.some(r => r.label === 'A' && r.event === 'cooldown'));
   });
 
   it('unarmed hand: fist speed from loadout is the seeded approach position', () => {
@@ -675,15 +710,17 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
       loadout: { hand_l: null, hand_r: null, hand_l_speed: 6, hand_r_speed: 6 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 100, accuracy: 70, label: 'A' }]
     });
-    const lh = state.intro.rows.find(r => r.label === 'LH' && r.event === 'approach');
-    const rh = state.intro.rows.find(r => r.label === 'RH' && r.event === 'approach');
+    const lh = state.queue.find(r => r.label === 'LH' && r.event === 'approach');
+    const rh = state.queue.find(r => r.label === 'RH' && r.event === 'approach');
     assert.equal(lh.tics, 6);
     assert.equal(rh.tics, 6);
-    assert.equal(state.participants.player.hands.LH.state, 'Ready');
-    assert.equal(state.participants.player.hands.RH.state, 'Ready');
+    assert.equal(state.tic, 0);
+    assert.equal(state.participants.player.hands.LH.state, 'Approach');
+    assert.equal(state.participants.player.hands.RH.state, 'Approach');
+    assert.equal(state.feed.some(l => l.includes('Ready')), false);
   });
 
-  it('startBattle populates intro {rows, fires, hpStart} and returns the advanced queue', () => {
+  it('startBattle intro fires stay empty and the live queue is the tic-0 seed', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
@@ -691,21 +728,23 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     }, null, 450, 1500);
     assert.ok(state.intro, 'intro snapshot present');
     assert.ok(Array.isArray(state.intro.rows) && state.intro.rows.length >= 3);
-    assert.ok(Array.isArray(state.intro.fires) && state.intro.fires.length > 0);
+    assert.deepEqual(state.intro.fires, []);
     assert.equal(state.intro.hpStart, 450);
-    const lhRow = state.intro.rows.find(r => r.event === 'approach' && r.label === 'LH');
-    const rhRow = state.intro.rows.find(r => r.event === 'approach' && r.label === 'RH');
-    const monRow = state.intro.rows.find(r => r.label === 'A' && r.event === 'winding');
+    assert.equal(state.tic, 0);
+    const lhRow = state.queue.find(r => r.event === 'approach' && r.label === 'LH');
+    const rhRow = state.queue.find(r => r.event === 'approach' && r.label === 'RH');
+    const monRow = state.queue.find(r => r.label === 'A');
     assert.ok(lhRow && lhRow.tics === 4, 'LH approach at weapon speed 4');
     assert.ok(rhRow && rhRow.tics === 6, 'RH approach at weapon speed 6');
-    assert.ok(monRow && monRow.tics === 2, 'monster winding at speed * default multiplier (2*1)');
-    assert.equal(monRow.cooldownTicks, 2, 'stored cooldown is speed * default multiplier (2*1)');
-    assert.ok(state.feed.some(l => l.includes('hits player')));
-    assert.equal(state.participants.player.hands.LH.state, 'Ready');
-    assert.equal(state.queue.some(r => r.event === 'approach'), false);
+    assert.equal(monRow.event, 'cooldown');
+    assert.equal(monRow.tics, 2, 'monster cooldown at mon.speed');
+    assert.equal(state.feed.some(l => l.includes('prepares')), false);
+    assert.equal(state.feed.some(l => l.includes('Ready')), false);
+    assert.equal(state.participants.player.hands.LH.state, 'Approach');
+    assert.equal(state.participants.player.hands.RH.state, 'Approach');
   });
 
-  it('config-driven max HP flows into player; a slower monster does not hit before the decision', () => {
+  it('config-driven max HP flows into player; a slower monster does not hit at tic 0', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
@@ -714,6 +753,8 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.equal(state.participants.player.hp, 1500);
     assert.equal(state.participants.player.max_hp, 1500);
     assert.equal(state.intro.hpStart, 1500);
+    assert.equal(state.tic, 0);
+    assert.equal(state.feed.some(l => l.includes('hits')), false);
   });
 
   it('HP carry does not override config-driven max', () => {
@@ -725,53 +766,59 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.equal(state.participants.player.hp, 450);
     assert.equal(state.intro.hpStart, 450);
     assert.equal(state.participants.player.max_hp, 1500);
+    assert.equal(state.tic, 0);
   });
 
-  it('monster-first: intro.rows shows the monster ahead of approach; the advance resolves the hit', () => {
+  it('monster cooldown sits ahead of slower approach rows at tic 0', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 4, hand_r_speed: 6 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
     });
-    const q = state.intro.rows;
-    const monIdx = q.findIndex(r => r.label === 'A' && r.event === 'winding');
+    const q = state.queue;
+    const monIdx = q.findIndex(r => r.label === 'A' && r.event === 'cooldown');
     const lhIdx = q.findIndex(r => r.label === 'LH' && r.event === 'approach');
     assert.ok(monIdx !== -1 && lhIdx !== -1);
-    assert.ok(monIdx < lhIdx, 'monster row before LH approach (2 < 4)');
-    const hits = state.feed.filter(l => l.includes('A hits player'));
-    assert.ok(hits.length >= 1, 'monster attacked during the advance');
-    const firstHitIdx = state.feed.findIndex(l => l.includes('A hits player'));
-    const firstReadyIdx = state.feed.findIndex(l => l.includes('Ready'));
-    assert.ok(firstHitIdx < firstReadyIdx, 'monster hit lands before the player hand becomes ready');
+    assert.ok(monIdx < lhIdx, 'monster cooldown before LH approach (2 < 4)');
+    assert.equal(state.feed.some(l => l.includes('prepares')), false);
+    assert.equal(state.feed.some(l => l.includes('Ready')), false);
+    assert.equal(state.tic, 0);
   });
 
-  it('a lower-key follow-up stays ahead of slower approach rows', () => {
+  it('a faster monster cooldown fires before either hand is Ready', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 8, hand_r_speed: 9 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 1, accuracy: 100, label: 'A' }]
     });
-    const monRow = state.intro.rows.find(r => r.label === 'A' && r.event === 'winding');
-    assert.equal(monRow.tics, 1, 'monster first winding at speed * default multiplier (1*1)');
-    assert.ok(state.intro.rows.findIndex(r => r.label === 'A' && r.event === 'winding') < state.intro.rows.findIndex(r => r.label === 'LH'));
-    const hits = state.feed.filter(l => l.includes('A hits player'));
-    assert.equal(hits.length, 4, 'speed * 1 cycles still land before the slower approach rows');
-    assert.equal(state.participants.player.hands.LH.state, 'Ready');
+    const monRow = state.queue.find(r => r.label === 'A');
+    assert.equal(monRow.event, 'cooldown');
+    assert.equal(monRow.tics, 1);
+    assert.ok(state.queue.findIndex(r => r.label === 'A') < state.queue.findIndex(r => r.label === 'LH'));
+    assert.equal(state.participants.player.hands.LH.state, 'Approach');
+    eng.stepQueue();
+    assert.ok(eng.state.queue.some(r => r.label === 'A' && r.event === 'winding'));
+    assert.ok(eng.state.feed.some(l => l.includes('prepares')));
+    assert.equal(eng.state.player.hands.LH.state, 'Approach');
+    assert.equal(eng.state.player.hands.RH.state, 'Approach');
+    assert.equal(eng.state.feed.some(l => l.includes('Ready')), false);
   });
 
-  it('same ordering key places the player approach ahead of the monster attack', () => {
+  it('same ordering key places the player approach ahead of the monster cooldown', () => {
     const eng = createEngine(seededRNG(7));
     const state = eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 5, hand_r_speed: 100 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 5, accuracy: 100, label: 'A' }]
     });
-    const q = state.intro.rows;
+    const q = state.queue;
     const lhIdx = q.findIndex(r => r.label === 'LH' && r.event === 'approach');
-    const monIdx = q.findIndex(r => r.label === 'A' && r.event === 'winding');
+    const monIdx = q.findIndex(r => r.label === 'A' && r.event === 'cooldown');
     assert.ok(lhIdx !== -1 && monIdx !== -1);
     assert.ok(lhIdx < monIdx, 'player row is ahead of a non-player row at the same ordering key');
     assert.equal(q[lhIdx].tics, q[monIdx].tics);
     assert.equal(q[monIdx].tics, 5);
+    assert.equal(state.tic, 0);
+    assert.equal(state.feed.some(l => l.includes('Ready')), false);
   });
 
   it('loadState clears intro so a mid-battle resume does not replay', () => {
@@ -781,15 +828,17 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 2, accuracy: 100, label: 'A' }]
     });
     const persisted = JSON.parse(JSON.stringify(eng.state));
-    assert.ok(persisted.intro && persisted.intro.rows && persisted.intro.fires, 'intro is persisted with the fresh battle');
+    assert.ok(persisted.intro && persisted.intro.rows && Array.isArray(persisted.intro.fires), 'intro is persisted with the fresh battle');
+    assert.equal(persisted.intro.fires.length, 0);
+    assert.equal(persisted.tic, 0);
     const fresh = createEngine(seededRNG(7));
     fresh.loadState(persisted);
     assert.equal(fresh.state.intro, undefined, 'loadState drops intro');
     const state2 = fresh.getState();
     assert.equal(state2.intro, null, 'getState coerces the cleared intro to null');
-    assert.ok(state2.queue.length >= 1, 'advanced queue survives reload');
-    assert.equal(state2.participants.player.hands.LH.state, 'Ready');
-    assert.ok(state2.tic > 0, 'resume keeps the advanced clock');
+    assert.ok(state2.queue.length >= 1, 'tic-0 queue survives reload');
+    assert.equal(state2.participants.player.hands.LH.state, 'Approach');
+    assert.equal(state2.tic, 0, 'resume keeps the unadvanced clock');
   });
 });
 
@@ -831,6 +880,7 @@ describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
         { id: 2, max_hp: 500, damage: 8, speed: 5, accuracy: 70, label: 'B' }
       ]
     });
+    eng.advanceToNextDecision();
     eng.commitAttack('RH', 2, [2], { castTicks: 3, cooldownTicks: 3, playerDamage: 100 });
     eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
     // commitAttack no longer auto-processes — advance until RH fires
@@ -853,6 +903,7 @@ describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
         { id: 2, max_hp: 500, damage: 8, speed: 5, accuracy: 70, label: 'B' }
       ]
     });
+    eng.advanceToNextDecision();
     eng.commitAttack('RH', 2, [1, 2], { castTicks: 3, cooldownTicks: 3, playerDamage: 100, isMultiTarget: true });
     eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 2, playerDamage: 100 });
     // commitAttack no longer auto-processes — advance until RH fires
@@ -885,21 +936,38 @@ describe('monster winding lifecycle (PC-97)', () => {
         attacks: [bite]
       }]
     });
-    // startBattle advances to the first decision. These tests step the seeded winding.
-    const intro = eng.state.intro;
-    eng.state.tic = 0;
-    eng.state.queue = intro.rows.map(r => ({ ...r }));
-    eng.state.player.hands.LH.state = 'Approach';
-    eng.state.player.hands.RH.state = 'Approach';
-    eng.state.player.hp = intro.hpStart;
-    eng.state.feed = [...(intro.seedFeed || [])];
+    // PC-DEC-060: tic 0 seed is one cooldown at mon.speed. Callers that step a
+    // winding row fire that cooldown first.
     return eng;
   }
 
-  it('startBattle seeds first winding at speed * prepare multiplier and stores cooldown', () => {
+  function afterOpeningCooldown(seed = 3) {
+    const eng = slowHandsBattle(seed);
+    eng.stepQueue();
+    return eng;
+  }
+
+  it('startBattle seeds one cooldown at mon.speed, not a winding row or a prepares line', () => {
     const eng = slowHandsBattle();
+    assert.equal(eng.state.tic, 0);
+    assert.equal(eng.state.player.hands.LH.state, 'Approach');
+    assert.equal(eng.state.player.hands.RH.state, 'Approach');
+    const rows = eng.state.queue.filter(r => r.label === 'A');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].event, 'cooldown');
+    assert.equal(rows[0].tics, 3, 'cooldown at mon.speed');
+    assert.equal(eng.state.queue.some(r => r.event === 'winding'), false);
+    assert.equal(eng.state.feed.some(l => l.includes('prepares')), false);
+    assert.equal(eng.state.feed.some(l => l.includes('Ready')), false);
+    assert.deepEqual(eng.state.intro.fires, []);
+  });
+
+  it('opening cooldown fire inserts winding and the prepares line before either hand is Ready', () => {
+    const eng = slowHandsBattle();
+    const fires = [];
+    eng.stepQueue(fires);
     const row = eng.state.queue.find(r => r.label === 'A' && r.event === 'winding');
-    assert.ok(row, 'first winding row seeded');
+    assert.ok(row, 'winding inserted when the cooldown fires');
     assert.equal(row.tics, 6, 'mon.speed 3 * prepare multiplier 2');
     assert.equal(row.cooldownTicks, 9, 'mon.speed 3 * cooldown multiplier 3 stored on the row');
     assert.equal(row.monsterAttackName, 'Bite');
@@ -907,12 +975,15 @@ describe('monster winding lifecycle (PC-97)', () => {
     assert.equal(row.accuracy, 100);
     assert.equal(row.critChance, 0);
     assert.ok(eng.state.feed.some(l => l.includes('prepares a Bite')));
-    assert.equal(eng.state.queue.filter(r => r.label === 'A' && r.event === 'cooldown').length, 0);
-    assert.equal(eng.state.queue.some(r => r.label === 'A' && r.event === 'impact'), false);
+    assert.equal(eng.state.feed.some(l => l.includes('Ready')), false);
+    assert.equal(eng.state.player.hands.LH.state, 'Approach');
+    assert.equal(eng.state.player.hands.RH.state, 'Approach');
+    assert.equal(fires[0].event, 'cooldown');
+    assert.deepEqual(fires[0].after, { event: 'winding', tics: 6 });
   });
 
   it('winding fire inserts impact and deals no damage', () => {
-    const eng = slowHandsBattle();
+    const eng = afterOpeningCooldown();
     const hpBefore = eng.state.player.hp;
     const fires = [];
     eng.stepQueue(fires);
@@ -933,7 +1004,7 @@ describe('monster winding lifecycle (PC-97)', () => {
   });
 
   it('impact fire resolves damage and inserts cooldown, not the next winding', () => {
-    const eng = slowHandsBattle();
+    const eng = afterOpeningCooldown();
     const hpBefore = eng.state.player.hp;
     const fires = [];
     eng.stepQueue(fires);
@@ -951,7 +1022,7 @@ describe('monster winding lifecycle (PC-97)', () => {
   });
 
   it('cooldown fire inserts the next winding at speed * prepare multiplier', () => {
-    const eng = slowHandsBattle();
+    const eng = afterOpeningCooldown();
     const fires = [];
     eng.stepQueue(fires); // winding → impact
     eng.stepQueue(fires); // impact → cooldown
@@ -986,17 +1057,13 @@ describe('monster winding lifecycle (PC-97)', () => {
         attacks: [bite]
       }]
     });
-    // Seed is one attack pick. The advance then rolls impacts, so the absolute
-    // draw count after startBattle is no longer 1. Rewind and measure the
-    // winding/impact delta — winding must not roll, impact rolls damage+hit once.
-    const intro = eng.state.intro;
-    assert.equal(intro.rows.find(r => r.label === 'A').monsterAttackName, 'Bite');
-    eng.state.tic = 0;
-    eng.state.queue = intro.rows.map(r => ({ ...r }));
-    eng.state.player.hands.LH.state = 'Approach';
-    eng.state.player.hands.RH.state = 'Approach';
-    eng.state.player.hp = intro.hpStart;
-    eng.state.feed = [...(intro.seedFeed || [])];
+    // Opening seed consumes no RNG. The cooldown fire picks the attack.
+    // Measure the winding/impact delta after that — winding must not roll,
+    // impact rolls damage+hit once.
+    assert.equal(eng.state.queue.find(r => r.label === 'A').event, 'cooldown');
+    assert.equal(draws, 0, 'startBattle does not pick an attack');
+    eng.stepQueue();
+    assert.equal(eng.state.queue.find(r => r.label === 'A').monsterAttackName, 'Bite');
     const seeded = draws;
     const hpBefore = eng.state.player.hp;
     eng.stepQueue();
@@ -1048,7 +1115,7 @@ describe('monster winding lifecycle (PC-97)', () => {
   });
 
   it('missing cooldownTicks falls back to speed * cooldown multiplier at impact', () => {
-    const eng = slowHandsBattle();
+    const eng = afterOpeningCooldown();
     const row = eng.state.queue.find(r => r.label === 'A' && r.event === 'winding');
     delete row.cooldownTicks;
     eng.stepQueue();

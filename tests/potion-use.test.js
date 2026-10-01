@@ -115,6 +115,7 @@ describe('Potion use (PC-39)', () => {
     const eng = createEngine(seededRNG(10));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 40, rolled_speed: 2, template_name: 'Heal' }));
     eng.state.player.hp = 900;
+    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     const afterPre = stepUntil(eng, s => s.feed.some(l => l.includes('healed')));
     // effect should have fired

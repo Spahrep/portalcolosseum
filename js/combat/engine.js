@@ -172,8 +172,8 @@ function monsterStrikeLabel(mon, row) {
     : row.label;
 }
 
-// Shared by startBattle seeding and the monster cooldown → next winding morph.
-// labelForLog is the original expression's label (mon.label vs row.label).
+// Shared by the monster cooldown → next winding morph.
+// Not called at battle start (PC-DEC-060). labelForLog is the fired row's label.
 function queueNextMonsterAttack(state, mon, labelForLog) {
   const atk = pickMonsterAttack(mon, state.rng);
   // PC-107: windup = mon.speed * prepare multiplier (not speed + flat ticks).
@@ -663,10 +663,12 @@ export function createEngine(rng = Math.random) {
       A: normalizePotion(participants.loadout?.consume_a),
       B: normalizePotion(participants.loadout?.consume_b)
     };
-    // First winding at mon.speed * prepare multiplier; cooldownTicks stored on that row.
+    // PC-DEC-060: one cooldown row per living monster at instance speed.
+    // Same shape as a hand approach. Not a winding row. No feed line.
+    // queueNextMonsterAttack runs only when a cooldown later fires.
     state.monsters.forEach(mon => {
       if (!isMonsterDead(mon)) {
-        queueNextMonsterAttack(state, mon, mon.label);
+        commitNewRow(state.queue, mon.label, 'cooldown', mon.speed);
       }
     });
     // PC-64: initial approach rows for hands at weapon instance speed (default 1 if missing)
@@ -676,16 +678,12 @@ export function createEngine(rng = Math.random) {
     state.player.hands.RH.state = 'Approach';
     commitNewRow(state.queue, 'LH', 'approach', handLSpeed);
     commitNewRow(state.queue, 'RH', 'approach', handRSpeed);
-    // PC-DEC-032/039: the battle is seeded at tic 0, then the master clock
-    // runs to the first decision point so a faster monster genuinely acts
-    // first. intro is the tic-0 snapshot the client replays; loadState drops
-    // it so a mid-battle resume does not replay.
+    // PC-DEC-060: do not run the clock. Tic stays 0. Both hands stay Approach.
+    // intro.fires stays empty so the client does not replay a pre-advanced battle.
+    // The live queue IS the tic-0 seed.
     const hpStart = state.player.hp;
     const seededRows = state.queue.map(r => ({ ...r }));
-    const seedFeed = state.feed.slice();
-    const fires = [];
-    advanceToNextDecision(fires);
-    state.intro = { rows: seededRows, fires, hpStart, seedFeed };
+    state.intro = { rows: seededRows, fires: [], hpStart, seedFeed: [] };
     return getState();
   }
 
