@@ -173,7 +173,7 @@ Trigger: Returning to a battle mid-fight (page reload or resume). All existing q
 ## 4. Edge Cases
 
 ### Row at top of queue (current item)
-The processed head stays pinned (`.queue-row-current`) while its typewriter line and hit/death visuals run. Both are awaited before removal. Removal of a fired head (attack, winding, impact, cooldown — including monster attack→cooldown) is a **slide-out + glide-up** (`runQueueRemoval` / `.queue-row-exit` + `groupLiftRemaining`), not a silent pop. A same-key successor stays the same key in data (`h:LH` / `m:<label>`); the animation does not turn it into a key-breaking remove+add. A plain `ready` pause is not a fired-head slide. Genuine **non-head** removals still slide out and group-lift.
+The processed head stays pinned (`.queue-row-current`) while its typewriter line and hit/death visuals run. Both are awaited before removal. Removal of a fired head (attack, winding, impact, cooldown — including monster attack→cooldown) is a **silent pop** (`silentPopHead`), not an exit slide. A same-key successor stays the same key in data (`h:LH` / `m:<label>`), so the node stays in the DOM and `renderQueue` relabels it in place — no re-slide. A plain `ready` pause is not a fired head. Genuine **non-head** removals still slide out and group-lift.
 
 ### Multiple rows inserted simultaneously
 Each row follows the 5-stage sequence independently. The spacer grows for each row sequentially. Avoid batching — the queue processes one item at a time per the Master Clock model (`action-visual-lifecycle.md §1`).
@@ -195,10 +195,10 @@ When charMs=0 and lineDelayMs=0 (Instant preset), skip all 5 insert stages. Inse
 | Stage 3: Bar grows in | ✅ Done | `.queue-insert-bar.wipe` / `queue-insert-wipe` (width 0→100%, 250ms). Distinct from `.queue-bar`. |
 | Stage 4: Flash | ✅ Done | `.queue-insert-bar.flash` / `insert-flash` (150ms), `waitForEvent(animationend)` |
 | Stage 5: Row appears | ✅ Done | gap replaced by `.queue-row-enter` / `.queue-row-monster-enter`, `waitForEvent` |
-| Exit animation | ✅ Done | Fired head and non-head: `runQueueRemoval()` + `.queue-row-exit` + group-lift. Head stays pinned through narration, then slides out. |
+| Exit animation | ✅ Done | Fired head: silent pop (`silentPopHead`). Non-head: `runQueueRemoval()` + `.queue-row-exit` + group-lift. Head stays pinned through narration, then is removed silently. |
 | Staggered entry (resume) | ⚠️ Partial | Only on fresh battle load, skip on resume |
 | Hand-ready commit split | ✅ Done | `playCommitArrival()` — attack ceremony first, then ready row slides out, then `/tick` |
-| Master-clock order | ✅ Done | `tickLoop`: pin head → typewriter ∥ visuals → await both → slide-out + glide → ceremony → next `/tick` |
+| Master-clock order | ✅ Done | `tickLoop`: pin head → typewriter ∥ visuals → await both → silent pop → ceremony → next `/tick` |
 
 ---
 

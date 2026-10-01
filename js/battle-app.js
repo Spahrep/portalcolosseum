@@ -401,53 +401,23 @@ function pinProcessedHead(head) {
 }
 
 /**
- * Fired-head exit: slide the processed row out, then glide the rows below up.
- * Call only after narration + visuals. A `ready` pause is not a fired head.
- * A same-key successor (monster winding→impact→cooldown, hand phase) shares the
- * same stable key in data — after the fired row slides out, the successor is
- * re-seated in place (no enter slide) so renderQueue relabels it without a
- * phantom re-slide.
+ * Head removal is a silent pop — no exit slide. A same-key successor (hand
+ * phase change) stays in the DOM so renderQueue can relabel it in place.
+ * The processed head stays pinned through narration + visuals; this runs
+ * after those finish and removes it without animating the top item out.
  */
-async function animateFiredHeadExit(head, newQueue, bs) {
-  if (!head || head.event === 'ready') return;
-  const key = queueRowKey(head);
-  const successor = (newQueue || []).find(r => queueRowKey(r) === key);
-  if (animationsSkipped(getSpeedPreset())) {
-    if (!successor) {
-      const el = findQueueRowByIdentity(head);
-      if (el) el.remove();
-    }
-    return;
-  }
-  // A fired head always slides out + glides up, even with a same-key successor
-  // (monster attack→cooldown, hand phase change). runQueueRemoval removes the
-  // shared-key node from the DOM, so the same-key successor must be re-seated
-  // (no enter slide) before renderQueue runs — otherwise renderQueue's stable-key
-  // guard fails and the whole queue full-rebuilds, re-sliding the successor back
-  // in (the "slides out then back in" bug for hand cooldown→ready).
+function silentPopHead(head, newQueue) {
+  if (!head) return;
   const row = findQueueRowByIdentity(head);
   if (!row) return;
-  const id = row.dataset.rowId || head.id;
-  await runQueueRemoval([id]);
-  if (successor) reseatSameKeySuccessor(successor, newQueue, bs);
-}
-
-/** Put a same-key successor back in the DOM at its engine slot, without an
- * enter slide. The fired row already slid out; this is not a new key. */
-function reseatSameKeySuccessor(successor, engineQueue, bs) {
-  const queueEl = document.getElementById('queue');
-  if (!queueEl || !successor) return;
-  const key = queueRowKey(successor);
-  const existing = Array.from(queueEl.querySelectorAll('.queue-row')).find(el => el.dataset.stableKey === key);
-  if (existing) return;
-  const rowEl = buildQueueRow(successor, (bs && bs.monsters) || [], bs || {}, true);
-  const domRows = Array.from(queueEl.children).filter(c =>
-    c.classList.contains('queue-row') && !c.classList.contains('queue-row-exit')
-  );
-  const idx = insertIndexFor(successor, domRows, engineQueue);
-  const ref = domRows[idx] || null;
-  if (ref) queueEl.insertBefore(rowEl, ref);
-  else queueEl.appendChild(rowEl);
+  row.classList.remove('queue-row-current', 'queue-row-exit');
+  const key = queueRowKey(head);
+  const successorSameKey = (newQueue || []).some(r => queueRowKey(r) === key);
+  if (!successorSameKey) {
+    exitingQueueRows.delete(row.dataset.rowId);
+    if (head.id != null) exitingQueueRows.delete(head.id);
+    row.remove();
+  }
 }
 
 function measuredRowHeight(queueEl) {
@@ -2067,10 +2037,12 @@ async function tickLoop(runId) {
       const visualsP = awaitTickVisuals(deathBefore);
       await Promise.all([narrateP, visualsP]);
 
-      // removeHead LAST — fired head slides out only when its key is gone.
-      // Ready pauses are not a fired head. Monster winding→impact→cooldown
-      // and hand phase changes stay the same key, so they do not exit-slide.
-      await animateFiredHeadExit(processedHead, newQueue, bs);
+      // removeHead LAST — silent pop, no exit slide. The processed head stays
+      // pinned through narration + visuals, then is removed without animating
+      // the top item out. A same-key successor (hand phase change, monster
+      // winding→impact→cooldown) stays in the DOM so renderQueue relabels it
+      // in place — no re-slide.
+      silentPopHead(processedHead, newQueue);
 
       const oldKeys = new Set(oldQueue.map(queueRowKey));
       const newKeys = new Set(newQueue.map(queueRowKey));

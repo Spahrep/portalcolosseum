@@ -105,22 +105,20 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.match(settle, /waitForEvent\(rowEl, 'animationend'/);
   });
 
-  it('tickLoop pins the head through narration, then slides it out and glides the queue up', () => {
+it('tickLoop pins the head through narration, then silently pops it (no exit slide)', () => {
     const loop = fnBody(app, 'tickLoop');
     const post = loop.indexOf('/tick');
     const pin = loop.indexOf('pinProcessedHead(processedHead)');
     const narrate = loop.indexOf('awaitNarration(');
     const both = loop.indexOf('await Promise.all([narrateP, visualsP])');
-    const exit = loop.indexOf('animateFiredHeadExit(processedHead');
-    assert.ok(post >= 0 && pin > post && narrate > pin && both > narrate && exit > both,
-      'order is POST → pin → narrate → await both → slide-out');
-    assert.equal(loop.includes('silentPopHead'), false, 'fired head is not a silent pop');
-    const exitFn = fnBodyUntilNext(app, 'async function animateFiredHeadExit', ['function reseatSameKeySuccessor', 'function measuredRowHeight']);
-    assert.match(exitFn, /head\.event === 'ready'/, 'a ready pause is not a fired-head slide');
-    assert.match(exitFn, /runQueueRemoval/, 'fired head uses slide-out + group-lift');
-    assert.match(exitFn, /queueRowKey/, 'same-key successor is recognized, not dropped');
-    assert.equal(exitFn.includes('if (successor) return;'), false, 'a fired head slides out even with a same-key successor');
-    assert.match(exitFn, /reseatSameKeySuccessor\(successor, newQueue, bs\)/, 'exit path re-seats the same-key successor in place (no enter slide) so renderQueue does not full-rebuild and re-slide it');
+    const pop = loop.indexOf('silentPopHead(processedHead');
+    assert.ok(post >= 0 && pin > post && narrate > pin && both > narrate && pop > both,
+      'order is POST → pin → narrate → await both → silent pop');
+    assert.equal(loop.includes('animateFiredHeadExit'), false, 'fired head is not an exit slide');
+    const popFn = fnBodyUntilNext(app, 'function silentPopHead', ['function measuredRowHeight']);
+    assert.match(popFn, /queueRowKey/, 'same-key successor is recognized, not dropped');
+    assert.match(popFn, /row\.remove\(\)/, 'head is removed silently');
+    assert.equal(popFn.includes('runQueueRemoval'), false, 'silent pop does not slide out or group-lift');
     assert.match(loop, /newQueue\.filter\(r => !oldKeys\.has\(queueRowKey\(r\)\)\)/, 'added stays key-based');
     assert.match(loop, /runQueueRemoval/); // non-head path still slides
     const ceremonyAt = loop.indexOf('playInsertCeremony');

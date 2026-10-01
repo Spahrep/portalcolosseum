@@ -35,7 +35,7 @@ MasterClock.start():
     animateItem(event)               // effects, health bar, shake, sparkles
     await BOTH finish                // typewriter + visuals both must complete
     
-    removeHead()                     // fired head slides out, queue glides up — done
+    removeHead()                     // silent pop the processed item — done
     
     if (player hand is Ready):       // player's turn
       showActionMenu()
@@ -212,14 +212,14 @@ Option A (Spahrep 2026-09-28) still holds: `mon.speed` is added into both the pr
    - **Typewriter:** "<Monster> <attackName> hits player for N damage!" (or "misses" / "CRITICAL!")
    - **Visuals:** Damage numbers on player, health bar depletion, shake/hit feedback
 3. If still alive: insert a `cooldown` successor at the stored `cooldownTicks` (`engine.js:296-301`). Label on the rail: "<Monster name> recovering", with the player-style timing bar.
-4. **Remove** the `impact` item (slide-out + glide-up). The cooldown stays a same-key successor (`m:<label>`).
+4. **Remove** the `impact` item (silent pop — no exit slide). The cooldown stays a same-key successor (`m:<label>`), so the node stays in the DOM and `renderQueue` relabels it in place.
 5. **Master Clock ticks** → next item.
 
 **When the `cooldown` row fires** (`engine.js:310-311`):
 
 1. `queueNextMonsterAttack` selects the next attack and inserts a new `winding` row (same formula as Phase 1).
 2. Feed: "<Monster> prepares a <attackName>..."
-3. **Remove** the cooldown item (slide-out + glide-up). The next `winding` stays a same-key successor (`m:<label>`).
+3. **Remove** the cooldown item (silent pop — no exit slide). The next `winding` stays a same-key successor (`m:<label>`), so the node stays in the DOM and `renderQueue` relabels it in place.
 4. **Master Clock ticks** → next item.
 
 Last strike of a dead monster inserts no cooldown (`engine.js:296`). Death still cancels every queued row for that monster (PC-DEC-054).
@@ -349,7 +349,7 @@ MasterClock.tick():
   ├─ typewriter.print(narration) — char by char + animateItem(effects)
   │   → Await BOTH to complete
   │
-  ├─ removeHead() — fired head slides out + queue glides up — done
+  ├─ removeHead() — silent pop the processed item — done
   │
   ├─ Check triggers:
   │   ├─ If player hand is Ready → show command menu, PAUSE
