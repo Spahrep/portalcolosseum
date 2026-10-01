@@ -46,6 +46,15 @@ describe('Master clock tick order (PC-94)', () => {
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 1, hand_r_speed: 2 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 8, accuracy: 70, label: 'A' }]
     });
+    // startBattle advances to the first decision. Rewind to the seeded queue
+    // so this test still proves tick() processes the peeked approach head.
+    const intro = eng.state.intro;
+    eng.state.tic = 0;
+    eng.state.queue = intro.rows.map(r => ({ ...r }));
+    eng.state.player.hands.LH.state = 'Approach';
+    eng.state.player.hands.RH.state = 'Approach';
+    eng.state.player.hp = intro.hpStart;
+    eng.state.feed = [...(intro.seedFeed || [])];
     const head = peekHead(eng.state.queue);
     assert.ok(head, 'queue has a non-ready head');
     // LH approach key 1 is ahead of RH 2 and the monster attack (speed 8 + prepare 1).

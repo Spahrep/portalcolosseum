@@ -103,7 +103,6 @@ describe('Heal effects (PC-39)', () => {
   it('engine in-battle: overheal reports actual healed (10) in feed, hp capped at 1000', () => {
     const eng = createEngine(seededRNG(202));
     eng.startBattle(makeParticipants(healPotion(50)));
-    eng.advanceToNextDecision();
     eng.state.player.hp = 990;
     eng.commitPotion('A', { weaponSpeed: 0 }); // pre = ceil((0+2)/2) = 1
     // Drinking row is behind already-queued rows. Walk insertion order until it fires.

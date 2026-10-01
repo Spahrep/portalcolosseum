@@ -15,7 +15,7 @@ import { getSpeedPreset, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeC
 import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.debug in Supabase
 import {
   renderQueue, diffQueueForAnimation, markQueueRowExiting,
-  buildQueueRow, sortQueueRows,
+  buildQueueRow,
   setQueueBarInfo, clearQueueBarInfo, isQueueRowExiting,
   queueRowKey, isMonsterQueueRow, forgetQueueRowExiting,
   QUEUE_EXIT_MS, QUEUE_REMOVE_GAP_MS, QUEUE_GAP_MS,
@@ -304,7 +304,8 @@ let shouldAnimateDice = false;
 // track is full (the fill's onDone removes intro-pending).
 let battleIntroPending = false;
 let introTimer = null; // PC-64: countdown interval for the battle-intro replay
-let introCountdownPlayed = false; // tic-0 3-2-1 plays once per battle start
+let introCountdownPlayed = false; // advance-replay plays once per genuine battle entry
+let introSeenBattle = 0; // portal_run.current_battle, for the per-battle seen key
 
 // PC-81: action-menu input is bound once. renderActionMenu publishes the live
 // cascade here; both handlers read it. Binding inside renderActionMenu leaked a
@@ -648,6 +649,21 @@ function finishBattleIntro() {
   const queue = lastBs ? lastBs.queue || [] : [];
   const monsters = lastBs ? lastBs.monsters || [] : [];
 
+  const intro = lastBs && lastBs.intro;
+  const willReplay = !!(intro && Array.isArray(intro.rows) && Array.isArray(intro.fires) && intro.fires.length > 0 && !introAlreadySeen());
+  if (willReplay) {
+    // Dice landed. Replay the seeded advance, then open the menu.
+    // Do not slide in the already-advanced queue — that skips the windups.
+    document.body.classList.add('intro-pending');
+    document.body.classList.remove('queue-filling');
+    const openMenu = () => {
+      document.body.classList.remove('intro-pending', 'queue-filling');
+      renderActionMenu(lastBs);
+    };
+    beginAfterIntro(openMenu);
+    return;
+  }
+
   queue.forEach((row, i) => {
     setTimeout(() => {
       if (el) {
@@ -661,19 +677,34 @@ function finishBattleIntro() {
   const totalDelay = (queue.length * 200) + 350;
   setTimeout(() => {
     renderFeed([]);
-    // Battles open straight to the first decision point — no 3-2-1 countdown
-    // (removed 2026-10-01). beginAfterIntro resolves immediately.
+    // No intro payload (legacy battle): 3-2-1 stays gone. Legacy approaches
+    // still need the tick loop to reach a Ready hand.
     beginAfterIntro(() => {
-      // PC-91: Advance through approach phase until first decision point.
-      // tickLoop handles pacing, feed narration, queue updates, and only shows
-      // the action menu when a hand is Ready.
-      if (currentRunId) {
+      if (currentRunId && !handReadyIn(lastBs)) {
         tickLoop(currentRunId).catch(err => console.error('tickLoop ceremony:', err));
       } else {
         renderActionMenu(lastBs);
       }
     });
   }, totalDelay);
+}
+
+function handReadyIn(bs) {
+  const hands = bs && bs.player && bs.player.hands;
+  if (!hands) return false;
+  return Object.values(hands).some(h => h && h.state === 'Ready');
+}
+
+function introSeenKey() {
+  return `pc_intro_seen_${currentRunId || '0'}_b${introSeenBattle || 0}`;
+}
+
+function introAlreadySeen() {
+  try { return sessionStorage.getItem(introSeenKey()) === '1'; } catch (_) { return false; }
+}
+
+function markIntroSeen() {
+  try { sessionStorage.setItem(introSeenKey(), '1'); } catch (_) { /* private mode */ }
 }
 
 function renderPlayerHP(runOrState) {
@@ -709,17 +740,28 @@ function renderLoadout(bs) {
   if (rh) rh.textContent = (wl.hand_r && wl.hand_r.name) || '—';
 }
 
-// Battle-start entry point. The 3-2-1 countdown was removed (Spahrep 2026-10-01),
-// so shouldPlayIntroCountdown is always false and onDone runs immediately —
-// the battle opens straight to the first decision point.
+// Battle-start entry point. The 3-2-1 countdown stays gone (Spahrep 2026-10-01).
+// A populated intro replays the master-clock advance as live events, then onDone
+// opens the command window. shouldPlayIntroCountdown remains hard-false.
 function beginAfterIntro(onDone) {
   const tic = lastBs?.tic ?? 0;
-  if (!shouldPlayIntroCountdown(tic, introCountdownPlayed)) {
+  if (shouldPlayIntroCountdown(tic, introCountdownPlayed)) {
+    // Retired 3-2-1 path. The gate is hard-false; this branch does not run.
+    introCountdownPlayed = true;
+    playThreeTwoOne(onDone);
+    return;
+  }
+  const intro = lastBs?.intro || null;
+  const canReplay = !introCountdownPlayed
+    && !introAlreadySeen()
+    && intro && Array.isArray(intro.rows) && Array.isArray(intro.fires) && intro.fires.length > 0;
+  if (!canReplay) {
     if (onDone) onDone();
     return;
   }
   introCountdownPlayed = true;
-  playIntroCountdown(lastBs, lastBs?.intro || null, onDone);
+  markIntroSeen();
+  playIntroCountdown(lastBs, intro, onDone);
 }
 
 function playThreeTwoOne(onDone) {
@@ -746,68 +788,117 @@ function playThreeTwoOne(onDone) {
 }
 
 function playIntroCountdown(bs, intro, onDone) {
-  if (!intro || !Array.isArray(intro.rows)) {
-    playThreeTwoOne(onDone);
+  // 3-2-1 stays gone. Missing intro opens the menu; it does not fall back to the countdown.
+  if (!intro || !Array.isArray(intro.rows) || !Array.isArray(intro.fires)) {
+    if (onDone) onDone();
     return;
   }
-  document.body.classList.remove('queue-filling'); // timing track appears
+  document.body.classList.add('intro-pending');
+  document.body.classList.remove('queue-filling');
   const el = document.getElementById('queue');
   if (el) el.innerHTML = '';
   const monsters = bs.monsters || [];
-  const rail = intro.rows.map(r => ({ label: r.label, event: r.event, tics: r.tics }));
-  const ordered = sortQueueRows(rail);
-  for (const row of ordered) {
-    if (el) el.appendChild(buildQueueRow(row, monsters, bs, false));
-  }
-  renderPlayerHP({ player_hp: intro.hpStart });
-  const battleLabel = document.getElementById('battle-label');
-  if (battleLabel) battleLabel.textContent = battleLabel.textContent.replace(/— TIC \d+$/, '— TIC 0');
+  const rail = intro.rows.map(r => ({
+    id: r.id,
+    label: r.label,
+    event: r.event,
+    tics: r.tics,
+    monsterAttackName: r.monsterAttackName || null
+  }));
+  // Seeded engine order. Do not re-sort — that is not the master clock.
+  rail.forEach((row, i) => {
+    if (!el) return;
+    const node = buildQueueRow(row, monsters, bs, false, i);
+    node.classList.add(isMonsterQueueRow(row) ? 'queue-row-monster-enter' : 'queue-row-enter');
+    node.style.animationDelay = `${i * 80}ms`;
+    el.appendChild(node);
+  });
+  const maxHp = bs.player && bs.player.max_hp;
+  renderPlayerHP({ player_hp: intro.hpStart, max_hp: maxHp });
+  setIntroTicLabel(0);
 
-  const total = bs.tic || 0;
-  if (total > 60 || !Array.isArray(intro.fires)) {
-    // Defensive: unreasonably long countdown (or malformed intro) — snap to real state.
+  const seedLines = Array.isArray(intro.seedFeed) ? intro.seedFeed.slice() : [];
+  const preset = getSpeedPreset();
+  const instant = !preset || preset.charMs === 0;
+  if (instant || intro.fires.length > 80) {
+    seedLines.forEach(line => appendFeedLine(line));
+    for (const fire of intro.fires) {
+      applyIntroFire(rail, fire);
+      introFireLines(fire).forEach(line => appendFeedLine(line));
+    }
+    addRenderedFeedLines(seedLines.length + intro.fires.reduce((n, f) => n + introFireLines(f).length, 0));
+    clearIntroTimer();
     finishIntroSnap(bs, onDone);
     return;
   }
-  const dwell = Math.max(60, Math.min(600, Math.round(4500 / Math.max(total, 1))));
+
+  const gap = Math.max(90, preset.charMs * 4);
   let k = 0;
   clearIntroTimer();
-  introTimer = setInterval(() => {
-    k++;
-    // Decrement every visible row's tics (floor 0).
-    for (const row of ordered) {
-      if (row.tics > 0) row.tics--;
+  const typeThen = (lines, next) => {
+    if (!lines.length) {
+      introTimer = setTimeout(next, gap);
+      return;
     }
-    // Reveal fires for the tic that just elapsed (pre-increment tic k-1), in order.
-    const fires = (intro.fires || []).filter(f => f.tic === k - 1);
-    for (const f of fires) {
-      appendFeedLine(f.line);
-      renderPlayerHP({ player_hp: f.hp, max_hp: bs.player.max_hp });
-      if (f.after) {
-        const row = ordered.find(r => r.label === f.label);
-        if (row) {
-          row.tics = f.after.tics;
-          if (f.after.event) row.event = f.after.event;
-        }
-      } else {
-        const idx = ordered.findIndex(r => r.label === f.label);
-        if (idx !== -1) ordered.splice(idx, 1);
-      }
-    }
-    addRenderedFeedLines(fires.length); // intro fires are feed lines — keep the diff counter in sync
-    // Re-render the rail from the mirror so decrements + after-effects show.
-    if (el) {
-      el.innerHTML = '';
-      for (const row of sortQueueRows(ordered)) {
-        el.appendChild(buildQueueRow(row, monsters, bs, false));
-      }
-    }
-    if (battleLabel) battleLabel.textContent = battleLabel.textContent.replace(/— TIC \d+$/, `— TIC ${k}`);
-    if (k >= total) {
+    typeFeedLines(lines, () => {
+      addRenderedFeedLines(lines.length);
+      introTimer = setTimeout(next, gap);
+    }, setBusy, handleHitLine);
+  };
+  const step = () => {
+    if (k >= intro.fires.length) {
       clearIntroTimer();
       finishIntroSnap(bs, onDone);
+      return;
     }
-  }, dwell);
+    const fire = intro.fires[k++];
+    applyIntroFire(rail, fire);
+    paintIntroRail(el, rail, monsters, bs, fire.label);
+    setIntroTicLabel(fire.tic);
+    renderPlayerHP({ player_hp: fire.hp, max_hp: maxHp });
+    typeThen(introFireLines(fire), step);
+  };
+  typeThen(seedLines, step);
+}
+
+function introFireLines(fire) {
+  if (!fire || !fire.line) return [];
+  return String(fire.line).split('\n').filter(s => s.length > 0);
+}
+
+function applyIntroFire(rail, fire) {
+  const cost = Number(fire.ticCost) || 0;
+  let target = rail.findIndex(r => r.label === fire.label && r.event === fire.event);
+  if (target === -1) target = rail.findIndex(r => r.label === fire.label);
+  for (let i = 0; i < rail.length; i++) {
+    if (i === target) continue;
+    rail[i].tics = Math.max(0, (Number(rail[i].tics) || 0) - cost);
+  }
+  if (target === -1) return;
+  if (fire.after) {
+    rail[target].event = fire.after.event;
+    rail[target].tics = fire.after.tics;
+    if (fire.after.monsterAttackName) rail[target].monsterAttackName = fire.after.monsterAttackName;
+  } else {
+    rail.splice(target, 1);
+  }
+}
+
+function paintIntroRail(el, rail, monsters, bs, changedLabel) {
+  if (!el) return;
+  el.innerHTML = '';
+  rail.forEach((row, i) => {
+    const node = buildQueueRow(row, monsters, bs, false, i);
+    if (changedLabel && row.label === changedLabel) {
+      node.classList.add(isMonsterQueueRow(row) ? 'queue-row-monster-enter' : 'queue-row-enter');
+    }
+    el.appendChild(node);
+  });
+}
+
+function setIntroTicLabel(tic) {
+  const battleLabel = document.getElementById('battle-label');
+  if (battleLabel) battleLabel.textContent = battleLabel.textContent.replace(/— TIC \d+$/, `— TIC ${tic}`);
 }
 
 function clearIntroTimer() {
@@ -820,30 +911,29 @@ function clearIntroTimer() {
 
 function finishIntroSnap(bs, onDone) {
   renderQueue(bs); // real rows replace the mirrored DOM
+  setIntroTicLabel(bs.tic ?? 0);
+  const maxHp = bs.player && bs.player.max_hp;
+  const hp = bs.player && typeof bs.player.hp === 'number' ? bs.player.hp : null;
+  if (hp !== null) renderPlayerHP({ player_hp: hp, max_hp: maxHp });
   const feed = bs.feed || [];
-  // PC-70: the snap re-narrates the FULL battle history (fires already played
-  // with their shakes during the countdown) — suppress feedback so history
-  // does not re-shake; only NEW lines react after the snap.
-  setSuppressHitFeedback(true);
-  const done = () => { setSuppressHitFeedback(false); if (onDone) onDone(); };
-  const preset = getSpeedPreset();
-  if (preset.charMs === 0) {
-    renderFeed(feed);
-    done();
+  // The replay already typed seed + fire lines. Do not clear the box and
+  // re-type history — that is the double-presentation bug.
+  if (getRenderedFeedLines() >= feed.length) {
+    if (onDone) onDone();
     return;
   }
-  // PC-DEC-044: hold onDone until typing completes; reset path in renderFeed clears for from-the-top reveal
-  // always type the FULL feed (after placeholder) for intro snap
-  if (feed.length > 0) {
-    // clear any prior content (placeholder + any revealed) so we type the full post-reset feed
-    const box = document.getElementById('message-box');
-    if (box) box.innerHTML = '';
-    setRenderedFeedLines(0); // full-feed re-type starts from the top
-    typeFeedLines(feed, done, setBusy, handleHitLine);
-    setRenderedFeedLines(feed.length);
-  } else {
-    done();
+  const tail = feed.slice(getRenderedFeedLines());
+  const preset = getSpeedPreset();
+  if (!tail.length || !preset || preset.charMs === 0) {
+    tail.forEach(line => appendFeedLine(line));
+    addRenderedFeedLines(tail.length);
+    if (onDone) onDone();
+    return;
   }
+  typeFeedLines(tail, () => {
+    addRenderedFeedLines(tail.length);
+    if (onDone) onDone();
+  }, setBusy, handleHitLine);
 }
 
 function ensureAdvanceOverlayStyles() {
@@ -1749,14 +1839,15 @@ async function loadBattle(runId) {
     setMonstersPendingReveal(willRoll);
     battleIntroPending = willRoll;
     if (!willRoll) shouldAnimateDice = false; // no roll playing — consume the flag
-    // A new battle at tic 0 gets one countdown. Commits (prevBs set, not a
-    // fresh presentation) must not replay it.
-    if ((bs.tic ?? 0) === 0 && (battleIntroPending || !prevBs)) {
+    introSeenBattle = run.current_battle || 1;
+    // Server startBattle already advanced past tic 0. Replay when this battle's
+    // intro has not been seen yet (genuine first entry). A mid-battle reload
+    // has intro stripped by loadState, or the seen key set, so it does not replay.
+    const introReady = !!(bs.intro && Array.isArray(bs.intro.rows) && Array.isArray(bs.intro.fires) && bs.intro.fires.length > 0);
+    if ((battleIntroPending || !prevBs) && introReady && !introAlreadySeen()) {
       introCountdownPlayed = false;
     }
-    // PC-64: the tic-0 countdown only plays when the ceremony runs AND the engine
-    // captured fires (a battle that started pre-PC-64 has no intro to replay).
-    const introPlays = battleIntroPending && bs.intro?.fires?.length > 0;
+    const introPlays = introReady && !introAlreadySeen() && (battleIntroPending || !prevBs);
     if (battleLabel) {
       const cb = run.current_battle || 1;
       const tb = run.total_battles || 1;
@@ -1765,10 +1856,8 @@ async function loadBattle(runId) {
     }
 
     if (introPlays) {
-      // PC-64: show the pre-advance state — full HP; message log stays blank
-      // during the ceremony (dice → populate monsters → action queue). Feed
-      // renders only after the ceremony finishes (see finishBattleIntro).
-      renderPlayerHP({ player_hp: bs.intro.hpStart });
+      // Pre-advance HP. Feed stays blank until the replay (or the dice ceremony).
+      renderPlayerHP({ player_hp: bs.intro.hpStart, max_hp: bs.player && bs.player.max_hp });
     } else {
       renderPlayerHP(run);
     }
@@ -1788,9 +1877,13 @@ async function loadBattle(runId) {
       // Ceremony-intro: die still rolling — command window + timing track stay hidden.
       document.body.classList.add('intro-pending', 'queue-filling');
     } else {
-      // Tic-0 battle start with no dice ceremony opens straight to the command window.
-      const showMenu = () => renderActionMenu(bs);
-      const countdownFirst = (bs.tic ?? 0) === 0 && !prevBs;
+      // Genuine first entry replays the seeded advance, then opens the menu.
+      // tic is already past 0 (startBattle advanced); intro is the tic-0 snapshot.
+      const showMenu = () => {
+        document.body.classList.remove('intro-pending', 'queue-filling');
+        renderActionMenu(bs);
+      };
+      const countdownFirst = !prevBs && introReady && !introAlreadySeen();
       if (!countdownFirst) showMenu();
       // PC-DEC-045c: fresh page load in a mid-battle run shows history instantly;
       // incremental commit updates typewriter new lines.
@@ -1811,21 +1904,23 @@ async function loadBattle(runId) {
         });
       }
       const feedCb = (battleClock.state !== 'IDLE') ? () => battleClock.onNarrateDone() : null;
-      if (!prevBs && getRenderedFeedLines() === 0 && bs.feed && bs.feed.length > 0) {
+      if (!prevBs && !countdownFirst && getRenderedFeedLines() === 0 && bs.feed && bs.feed.length > 0) {
         populateFeedInstantly(bs.feed);
         if (feedCb) feedCb();
-      } else {
+      } else if (!countdownFirst) {
         renderFeed(bs.feed || [], feedCb);
       }
-      // Queue rendered through battleClock for commits; fresh page / intro renders immediately
-      if (!prevBs) renderQueue(bs);
-      // Bug 2: staggered entry animations on fresh page loads (cascade effect)
-      if (!prevBs) {
+      // Queue rendered through battleClock for commits; fresh page renders immediately.
+      // Intro replay owns the rail on genuine first entry — do not also stagger it.
+      if (!prevBs && !countdownFirst) renderQueue(bs);
+      if (!prevBs && !countdownFirst) {
         const nqEl = document.getElementById('queue');
+        const queueRows = bs.queue || [];
         if (nqEl) {
           Array.from(nqEl.children).forEach((row, i) => {
             setTimeout(() => {
-              const isMonRow = row.querySelector('.name')?.textContent?.includes("'s ");
+              const entry = queueRows.find(r => String(r.id) === row.dataset.rowId) || queueRows[i];
+              const isMonRow = entry ? isMonsterQueueRow(entry) : false;
               const cls = isMonRow ? 'queue-row-monster-enter' : 'queue-row-enter';
               row.classList.add(cls);
               const timeout = isMonRow ? 450 : QUEUE_ENTER_MS + 80;
@@ -1836,7 +1931,11 @@ async function loadBattle(runId) {
           });
         }
       }
-      if (countdownFirst) beginAfterIntro(showMenu);
+      if (countdownFirst) {
+        document.body.classList.add('intro-pending');
+        document.body.classList.remove('queue-filling');
+        beginAfterIntro(showMenu);
+      }
     }
 
 

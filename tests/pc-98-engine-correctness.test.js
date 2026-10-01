@@ -36,6 +36,14 @@ describe('PC-98 player death at hp 0', () => {
       loadout: { hand_l_speed: 3, hand_r_speed: 4 },
       monsters: [{ id: 1, max_hp: 50, damage: 20, speed: 1, accuracy: 100, label: 'A' }]
     });
+    // Death assertion needs the seeded clock, not the already-advanced battle.
+    const intro = eng.state.intro;
+    eng.state.tic = 0;
+    eng.state.queue = intro.rows.map(r => ({ ...r }));
+    eng.state.player.hands.LH.state = 'Approach';
+    eng.state.player.hands.RH.state = 'Approach';
+    eng.state.player.hp = intro.hpStart;
+    eng.state.feed = [...(intro.seedFeed || [])];
     eng.state.player.hp = 1;
     let sawDeath = false;
     for (let i = 0; i < 8; i++) {
@@ -60,6 +68,12 @@ describe('PC-98 live tick clock', () => {
       loadout: { hand_l_speed: 4, hand_r_speed: 9 },
       monsters: [{ id: 1, max_hp: 80, damage: 1, speed: 20, accuracy: 1, label: 'A' }]
     });
+    // Clock assertion needs the seeded head, not the post-decision queue.
+    const intro = eng.state.intro;
+    eng.state.tic = 0;
+    eng.state.queue = intro.rows.map(r => ({ ...r }));
+    eng.state.player.hands.LH.state = 'Approach';
+    eng.state.player.hands.RH.state = 'Approach';
     assert.equal(eng.state.tic, 0);
     const head = peekHead(eng.state.queue);
     assert.equal(head.label, 'LH');

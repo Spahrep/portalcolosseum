@@ -705,7 +705,10 @@ async function handle(request) {
         weapons: { hand_l: handL, hand_r: handR, belt: beltW, fist: cfg ? { name: 'Fist (unarmed)', damage: cfg.fist_damage, speed: cfg.fist_speed ?? 6, accuracy: cfg.fist_accuracy, crit_chance: cfg.fist_crit_chance ?? 0, base_damage: cfg.fist_damage, damage_range: 0, grade: null, attacks: [{ id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time: cfg.fist_prepare_time, cooldown_time: cfg.fist_cooldown_time, prepare_time_range: cfg.fist_prepare_time_range, cooldown_time_range: cfg.fist_cooldown_time_range, description: '', base_damage_multiplier: 1 }] } : null },
         potions: { potion_a: potionA, potion_b: potionB },
         monsters,
-        dice
+        dice,
+        // PC-DEC-039: tic-0 seed + fires so a genuine first entry can replay
+        // the advance. Absent after resumeEngine (loadState clears intro).
+        intro: state.intro || null
       };
       return json({ run: { ...run, stop_share_tiers: stopShareTiers, prize_weapons: prizeWeapons, potion_a: potionA, potion_b: potionB, battle_state: safeState } });
     }
@@ -806,7 +809,8 @@ async function handle(request) {
         participants: battleStateOut.participants,
         feed: battleStateOut.feed,
         tic: battleStateOut.tic,
-        battle_over: battleStateOut.battle_over
+        battle_over: battleStateOut.battle_over,
+        intro: battleStateOut.intro
       });
     }
 
@@ -1150,7 +1154,7 @@ async function handle(request) {
           await admin.from('portal_run')
             .update({ battle_state: newBattleState, current_battle: newBattle, player_hp: carryHp, prize_pool: prizePool })
             .eq('id', id).eq('user_id', user.id);
-          return json({ status: 'active', current_battle: newBattle, prize_pool: prizePool, battle_state: { participants: freshEngine.getState().participants } });
+          return json({ status: 'active', current_battle: newBattle, prize_pool: prizePool, battle_state: { participants: freshEngine.getState().participants, intro: freshEngine.state.intro || null, tic: freshEngine.state.tic, queue: freshEngine.state.queue, feed: freshEngine.state.feed } });
         } else {
           // only complete if monsters_dead on final battle
           if (s.monsters_dead) {

@@ -114,7 +114,6 @@ describe('Potion use (PC-39)', () => {
   it('effect pipeline called ONCE: exactly one heal line, hp delta correct', () => {
     const eng = createEngine(seededRNG(10));
     eng.startBattle(makeParticipants({ effect_type: 'heal', rolled_floor: 40, rolled_speed: 2, template_name: 'Heal' }));
-    eng.advanceToNextDecision();
     eng.state.player.hp = 900;
     eng.commitPotion('A', { weaponSpeed: 0 });
     const afterPre = stepUntil(eng, s => s.feed.some(l => l.includes('healed')));

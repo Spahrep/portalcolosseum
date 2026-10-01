@@ -578,19 +578,27 @@ export function createEngine(rng = Math.random) {
       const mon = state.monsters.find(m => m.label === row.label);
       let after = null;
       // Read the successor already inserted by handleFire — do not roll again.
-      if (mon && !isMonsterDead(mon)) {
-        const nextEvent = row.event === 'winding' ? 'impact'
+      const nextEvent = (mon && !isMonsterDead(mon))
+        ? (row.event === 'winding' ? 'impact'
           : row.event === 'impact' ? 'cooldown'
           : row.event === 'attack' ? 'cooldown'
           : row.event === 'cooldown' ? 'winding'
+          : null)
+        : (row.label === 'LH' || row.label === 'RH')
+          ? (row.event === 'approach' || row.event === 'cooldown' || row.event === 'recovery' ? 'ready'
+            : row.event === 'winding' ? 'impact'
+            : row.event === 'impact' ? 'cooldown'
+            : null)
           : null;
-        if (nextEvent) {
-          const successor = state.queue.find(r => r.label === row.label && r.event === nextEvent);
-          if (successor) after = { event: nextEvent, tics: successor.tics };
+      if (nextEvent) {
+        const successor = state.queue.find(r => r.label === row.label && r.event === nextEvent);
+        if (successor) {
+          after = { event: nextEvent, tics: successor.tics };
         }
       }
       captureFires.push({
         tic: state.tic,
+        ticCost: ticOffset,
         label: row.label,
         event: row.event,
         line: result.narrate,
@@ -668,6 +676,16 @@ export function createEngine(rng = Math.random) {
     state.player.hands.RH.state = 'Approach';
     commitNewRow(state.queue, 'LH', 'approach', handLSpeed);
     commitNewRow(state.queue, 'RH', 'approach', handRSpeed);
+    // PC-DEC-032/039: the battle is seeded at tic 0, then the master clock
+    // runs to the first decision point so a faster monster genuinely acts
+    // first. intro is the tic-0 snapshot the client replays; loadState drops
+    // it so a mid-battle resume does not replay.
+    const hpStart = state.player.hp;
+    const seededRows = state.queue.map(r => ({ ...r }));
+    const seedFeed = state.feed.slice();
+    const fires = [];
+    advanceToNextDecision(fires);
+    state.intro = { rows: seededRows, fires, hpStart, seedFeed };
     return getState();
   }
 

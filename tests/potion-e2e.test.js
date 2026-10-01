@@ -143,7 +143,6 @@ describe('Potion E2E parity (PC-39)', () => {
     // snapshot stays about buff timing, not monster cadence.
     p.monsters[0].speed = 12;
     eng.startBattle(p);
-    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 4 });
     const state = advanceUntilUsed(eng);
     assert.equal(state.buffs.length, 1);
@@ -198,7 +197,6 @@ describe('Potion E2E parity (PC-39)', () => {
     eng.startBattle(p);
     // Drinking row is placed by its ordering key, ahead of the still-queued monster.
     // endTic is land tic + duration.
-    eng.advanceToNextDecision();
     eng.commitPotion('A', { weaponSpeed: 0 });
     const landed = advanceUntilUsed(eng);
     assert.equal(landed.buffs.length, 1);
