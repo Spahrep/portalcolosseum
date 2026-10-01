@@ -333,7 +333,7 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Speaker: Spahrep
   Verbatim: "The battle still starts at Tic 0, and progresses until the first entity has an action."
   Status: DECIDED
-  Notes: Refines PC-DEC-032's presentation: the battle is PRESENTED from Tic 0 and progresses until the first entity acts — no jump straight to the first decision point. Shipped as the PC-64 battle intro (5dde661/212b014 on branch pc-64-battle-intro: `intro` timeline on the startBattle result + tic-0 countdown presentation). Engine placement unchanged (PC-DEC-032): startBattle still advances the clock so a faster monster genuinely acts first. Applied to battle-status-ui.md + current-design-status.md.
+  Notes: Refines PC-DEC-032's presentation: the battle is PRESENTED from Tic 0 and progresses until the first entity acts — no jump straight to the first decision point. Shipped as the PC-64 battle intro (5dde661/212b014 on branch pc-64-battle-intro: `intro` timeline on the startBattle result + tic-0 countdown presentation). Engine placement unchanged (PC-DEC-032): startBattle still advances the clock so a faster monster genuinely acts first. The initial countdown presentation was later removed by PC-DEC-059 (2026-10-01): the battle opens straight to the first decision, no "3,2,1" countdown. Applied to battle-status-ui.md + current-design-status.md.
 
 - ID: PC-DEC-040
   Date: 2026-09-17
@@ -486,6 +486,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Verbatim: (ruling on #3 — potion window) "the label promises a range the effect doesn't deliver. Should the effect roll within the range, or should the label just show the floor?"
   Status: DECIDED
   Notes: Potion effect must roll within `[floor, floor + window]` at use time — `effect = rolled_floor + uniform(0..rolled_window)`. The floor stays the guaranteed minimum (never violated); the window is the upside. This matches the label ("X+, up to Y") and the price (EV = floor + window/2). The current code is floor-locked (`js/combat/potion-effects.js` `buildPotionPayload` uses `rolled_floor` directly) — a genuine bug where the player pays for upside they can never receive. Crit multiplies the final effect (unchanged). Applied to consumables.md, current-design-status.md, ticket PC-106.
+
+- ID: PC-DEC-059
+  Date: 2026-10-01
+  Source: Discord thread "Action bar animation and tic zero issue" (session 20261001_115530_a11c2ba9; trigger msg 1555231685816229979; follow-up msg 1555233795475505173) — captured by the 2026-10-01 midday sweep
+  Speaker: Spahrep
+  Verbatim: "remove the 3-2-1. I thought htat was self explanitory"
+  Status: DECIDED
+  Notes: There is NO battle-start countdown. The battle opens straight to the first decision point — the "Battle starts in 3,2,1" countdown is not wanted and is removed. This CHANGES the presentation element that PC-DEC-032/039 had described as shipped (the PC-64 battle intro's "tic-0 countdown presentation"). Shipped in commit ca2aabf (2026-10-01, "Advance battle start to the first decision and replay it"): startBattle seeds the queue at tic 0, runs advanceToNextDecision(fires), captures the advanced state into state.intro, and the client replays the advance as live animated events on genuine first entry, then opens the command window — no 3-2-1 countdown, no intro-fires theater. The dice ceremony (sweep + roll) is preserved; the countdown is not. Planted-driving first action is unchanged (PC-DEC-032/039: a monster faster than both hands still acts first during the advance). Applied to battle-status-ui.md + current-design-status.md. Decided by Spahrep, 2026-10-01.
 
 ## Open
 

@@ -150,12 +150,14 @@ instance speed (PC-DEC-030).
 
 When an approach row hits 0 the hand becomes **Ready** and the player picks their
 action then. The battle is **presented from Tic 0 and progresses until the first
-entity has an action** (PC-DEC-039, Decided by Spahrep, 2026-09-17) — a tic-0
-countdown intro shows the approach rows advancing; there is no jump straight to
-the first decision point. `startBattle` still advances the engine clock to that
-point, so a monster faster than both hands genuinely acts first (its attack lands
-during the advance and it re-seeds at its instance speed as usual). Ties → player
-first (LH/RH before monsters on the same tic, PC-DEC-030).
+entity has an action** (PC-DEC-039, Decided by Spahrep, 2026-09-17), then opens
+straight to the first decision point. There is **no "3,2,1" countdown and no
+intro-theater** (PC-DEC-059, Decided by Spahrep, 2026-10-01 — Spahrep: "remove
+the 3-2-1"): the early advance is replayed as live animated events and the command
+window opens when the first decision is reached. `startBattle` still advances the
+engine clock to that point, so a monster faster than both hands genuinely acts
+first (its attack lands during the advance and it re-seeds at its instance speed
+as usual). Ties → player first (LH/RH before monsters on the same tic, PC-DEC-030).
 
 The approach row is **initial placement only**: the attack timing formula
 (weapon speed + rolled prepare/cooldown) is unchanged, and after an attack's
