@@ -84,78 +84,11 @@ function monsterQueueName(row, monsters) {
  * Rows are countdowns to a state change: an attack landing, a hand freeing
  * ("Ready"), a monster striking, a potion taking effect.
  */
-export function renderQueue(bs, fill = false, onDone = null) {
-  debugLog('renderQueue', `fill=${fill} n_queue=${bs.queue?.length || 0} n_monsters=${bs.monsters?.length || 0}`);
-  const el = document.getElementById('queue');
-  if (!el) return;
-  // Same rows in the same engine order: rewrite readouts in place. Never rebuild
-  // and never move nodes — a tick must not re-slide rows that did not change slot.
-  const queue = bs.queue || [];
-  const currentRows = Array.from(el.querySelectorAll('.queue-row'));
-  const currentIds = currentRows.map(r => r.dataset.rowId);
-  const newIds = queue.map(r => r.id);
-  if (currentIds.length === newIds.length && currentIds.every((id, i) => id === newIds[i])) {
-    const monsters = bs.monsters || [];
-    queue.forEach((row, index) => {
-      updateQueueRowInPlace(currentRows[index], row, monsters, bs, index);
-    });
-    const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
-    if (titleEl) titleEl.textContent = 'Action Queue';
-    if (fill && onDone) {
-      const rows = Math.max(queue.length, 1);
-      setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
-    }
-    return;
-  }
-  // Stable-key successor (hand phase, monster winding↔impact↔cooldown): relabel the
-  // existing node. Move a node only if its engine slot actually changed.
-  const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
-  const newKeys = queue.map(queueRowKey);
-  if (domKeys.size === newKeys.length && newKeys.every(k => domKeys.has(k))) {
-    const monsters = bs.monsters || [];
-    const nonRows = Array.from(el.children).filter(c => !c.classList.contains('queue-row'));
-    nonRows.forEach(c => c.remove());
-    queue.forEach((row, index) => {
-      const domEl = currentRows.find(r => r.dataset.stableKey === queueRowKey(row));
-      if (!domEl || !domEl.parentNode) return;
-      const rowsNow = Array.from(el.querySelectorAll('.queue-row'));
-      if (rowsNow[index] !== domEl) {
-        const ref = rowsNow[index] || null;
-        if (ref) el.insertBefore(domEl, ref);
-        else el.appendChild(domEl);
-      }
-      updateQueueRowInPlace(domEl, row, monsters, bs, index);
-    });
-    nonRows.forEach(c => el.appendChild(c));
-    const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
-    if (titleEl) titleEl.textContent = 'Action Queue';
-    if (fill && onDone) {
-      const rows = Math.max(queue.length, 1);
-      setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
-    }
-    return;
-  }
-  clearQueueDom();
-  const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
-  if (titleEl) {
-    titleEl.textContent = 'Action Queue';
-  }
-  // queue already declared in no-flicker check above
-  if (fill && onDone) {
-    // Ceremony-intro: signal completion after the last row's fade lands, so the
-    // command window never waits on an animation that cannot start (empty queue).
-    const rows = Math.max(queue.length, 1);
-    setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
-  }
-  if (queue.length === 0) return;
-  const monsters = bs.monsters || [];
-  queue.forEach((row, index) => {
-    if (!exitingQueueRows.has(row.id)) {
-      el.appendChild(buildQueueRow(row, monsters, bs, true, index));
-    }
-  });
-  // PC-56: Prediction bar — maps [minT, maxT] onto continuous tic → pixel interpolation
-  if (queueBarInfo && queueBarInfo.kind === 'bar' && queueBarInfo.firstId && queueBarInfo.lastId) {
+function paintPredictionBar(el) {
+  el.querySelectorAll('.prediction-bar').forEach(node => node.remove());
+  // Selecting an attack does not change queue row ids. The in-place paths
+  // must still draw this strip, and must remove it when the selection clears.
+  if (!(queueBarInfo && queueBarInfo.kind === 'bar' && queueBarInfo.firstId && queueBarInfo.lastId)) return;
     const bar = document.createElement('div');
     bar.className = 'prediction-bar';
     // Read-only tic→pixel ladder for the PC-56 prediction bar. The copy-sort
@@ -234,6 +167,80 @@ export function renderQueue(bs, fill = false, onDone = null) {
     bar.style.height = `${Math.max(4, barBottom - barTop + 3)}px`;
     el.appendChild(bar);
   }
+
+export function renderQueue(bs, fill = false, onDone = null) {
+  debugLog('renderQueue', `fill=${fill} n_queue=${bs.queue?.length || 0} n_monsters=${bs.monsters?.length || 0}`);
+  const el = document.getElementById('queue');
+  if (!el) return;
+  // Same rows in the same engine order: rewrite readouts in place. Never rebuild
+  // and never move nodes — a tick must not re-slide rows that did not change slot.
+  const queue = bs.queue || [];
+  const currentRows = Array.from(el.querySelectorAll('.queue-row'));
+  const currentIds = currentRows.map(r => r.dataset.rowId);
+  const newIds = queue.map(r => r.id);
+  if (currentIds.length === newIds.length && currentIds.every((id, i) => id === newIds[i])) {
+    const monsters = bs.monsters || [];
+    queue.forEach((row, index) => {
+      updateQueueRowInPlace(currentRows[index], row, monsters, bs, index);
+    });
+    const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
+    if (titleEl) titleEl.textContent = 'Action Queue';
+    if (fill && onDone) {
+      const rows = Math.max(queue.length, 1);
+      setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+    }
+    paintPredictionBar(el);
+    return;
+  }
+  // Stable-key successor (hand phase, monster winding↔impact↔cooldown): relabel the
+  // existing node. Move a node only if its engine slot actually changed.
+  const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
+  const newKeys = queue.map(queueRowKey);
+  if (domKeys.size === newKeys.length && newKeys.every(k => domKeys.has(k))) {
+    const monsters = bs.monsters || [];
+    const nonRows = Array.from(el.children).filter(c => !c.classList.contains('queue-row'));
+    nonRows.forEach(c => c.remove());
+    queue.forEach((row, index) => {
+      const domEl = currentRows.find(r => r.dataset.stableKey === queueRowKey(row));
+      if (!domEl || !domEl.parentNode) return;
+      const rowsNow = Array.from(el.querySelectorAll('.queue-row'));
+      if (rowsNow[index] !== domEl) {
+        const ref = rowsNow[index] || null;
+        if (ref) el.insertBefore(domEl, ref);
+        else el.appendChild(domEl);
+      }
+      updateQueueRowInPlace(domEl, row, monsters, bs, index);
+    });
+    nonRows.forEach(c => el.appendChild(c));
+    const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
+    if (titleEl) titleEl.textContent = 'Action Queue';
+    if (fill && onDone) {
+      const rows = Math.max(queue.length, 1);
+      setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+    }
+    paintPredictionBar(el);
+    return;
+  }
+  clearQueueDom();
+  const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
+  if (titleEl) {
+    titleEl.textContent = 'Action Queue';
+  }
+  // queue already declared in no-flicker check above
+  if (fill && onDone) {
+    // Ceremony-intro: signal completion after the last row's fade lands, so the
+    // command window never waits on an animation that cannot start (empty queue).
+    const rows = Math.max(queue.length, 1);
+    setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+  }
+  if (queue.length === 0) return;
+  const monsters = bs.monsters || [];
+  queue.forEach((row, index) => {
+    if (!exitingQueueRows.has(row.id)) {
+      el.appendChild(buildQueueRow(row, monsters, bs, true, index));
+    }
+  });
+  paintPredictionBar(el);
   if (fill) {
     // Ceremony-intro fill: reveal rows in engine array order, top to bottom.
     Array.from(el.children).forEach((row, i) => {
