@@ -1,5 +1,4 @@
 -- PC-72: Crit strikes — schema + generation RPCs (SQL ONLY)
--- NOTE: migration file only; do not apply here. Overseer will run it.
 
 -- 1. attack table: crit_factor (multiplies instance crit chance; neutral=1.0 later), crit_multiplier (damage x on crit)
 ALTER TABLE public.attack

@@ -54,4 +54,4 @@ CREATE INDEX IF NOT EXISTS idx_weapon_instance_grade ON public.weapon_instance(g
 
 COMMENT ON COLUMN public.weapon_instance.grade IS 'Grade label (F-S) computed at generation time from template-relative composite z-score of the three rolled stats (damage/speed/accuracy). Stored, not derived. Mirrors consumable_instance.grade banding.';
 
--- Commit on this branch only. DO NOT apply the migration to any database — PM applies after review with human approval.
+

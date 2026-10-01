@@ -2,7 +2,6 @@
 -- Enforces exactly one 'active' portal_run per user_id at the DB level.
 -- MUST run the collapse DELETE first on any prod data that has 2-3 active runs,
 -- or the unique index creation will fail. (Spahrep 2026-09-15)
--- Do NOT apply this migration until review + human signoff.
 
 -- 1. PURGE extra active runs (hard delete). Keep the richest per user:
 --    length(battle_state::text) DESC, id DESC tiebreak. Child rows (dice) cascade.
@@ -22,4 +21,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_portal_run_one_active_per_user
 COMMENT ON INDEX idx_portal_run_one_active_per_user IS
   'PC-50r: partial unique enforces one active run/account. Collapse step first for existing dups. Pairs with API guard change from 3→1 (Spahrep 2026-09-15).';
 
--- Commit on this branch only. DO NOT apply the migration to any database — PM applies after review with human approval.

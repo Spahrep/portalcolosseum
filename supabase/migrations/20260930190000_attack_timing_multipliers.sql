@@ -6,7 +6,6 @@
 -- 1.0 = exactly base speed, 1.5 = 50% slower, 0.7 = 30% faster.
 -- Existing prepare_time / cooldown_time columns are kept for backward-compat.
 -- The engine no longer reads them for timing. Do NOT drop or alter them.
--- Do not apply here — PM applies after review.
 
 ALTER TABLE public.attack
   ADD COLUMN prepare_time_multiplier float NOT NULL DEFAULT 1.0,

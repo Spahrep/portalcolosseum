@@ -7,7 +7,6 @@
 --   call shifts the window: uniform_int(base - delta, 2*delta).
 --   Slot N is gated by slot_N_chance (including slot 4). Slot 1 is not
 --   auto-granted. A failed slot stops the chain.
--- Do not apply here — PM applies after review.
 
 CREATE OR REPLACE FUNCTION generate_monster(p_template_id bigint)
 RETURNS jsonb AS $func$

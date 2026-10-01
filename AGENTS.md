@@ -33,6 +33,7 @@ Working rules for AI agents in this repo (Hermes, Grok workers, Claude Code, and
 ## Ground rules
 - Code lives in this repo. Run it. Post preview/live URLs when humans need to see.
 - Production stays on Vercel + Supabase; no secrets in git.
+- Migrations ship WITH the code they support and are applied as part of the work — no "do not apply / PM applies after review" gate (Spahrep 2026-10-01). Migrations are on-script: applied without approval once the supporting code is committed. Do not add gating headers to migration files. Keep generated functions/ddl idempotent (CREATE OR REPLACE / IF NOT EXISTS / IF EXISTS) so re-running is safe.
 - Follow the portal-colosseum-agent-team skill for the full workflow.
 
 ## Verification & scope (Spahrep 2026-09-16)

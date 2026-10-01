@@ -2,7 +2,6 @@
 -- Call sites pass (base, range), not (mean, stddev). stddev = range/3 so the
 -- ±3σ clamp is base ± range (combat-system.md: damage/speed/accuracy bell).
 -- Idempotent: CREATE OR REPLACE the (int, int) signature callers already use.
--- Do not apply here — PM applies after review.
 --
 -- Apply fix (2026-09-30): the live DB already has normal_int(integer,integer)
 -- whose second parameter is named `range` (reserved). CREATE OR REPLACE cannot

@@ -8,7 +8,6 @@
 --       Chain: a failed slot stops later slots (weapon-generation.md conditional probability).
 -- Service-role bypass (auth.uid() IS NULL) is preserved — the combat API admin client
 -- has no auth.uid() and must still be able to persist loot.
--- Do not apply here — PM applies after review.
 
 CREATE OR REPLACE FUNCTION public.generate_weapon(p_template_id bigint, p_user_id uuid DEFAULT NULL::uuid)
  RETURNS jsonb
