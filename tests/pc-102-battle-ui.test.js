@@ -5,9 +5,6 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { TEXT_SPEEDS, normalizeSpeedKey } from '../js/battle/text-speed.js';
 import {
-  rowShowsTimingBar, timingBarColor, initialTicsFor, timingFillRatio, timingFillPercent,
-} from '../js/battle/timing-bar.js';
-import {
   assignArenaLetters, letterForMonster, targetCardLabel, arenaLetterFromLabel,
 } from '../js/battle/arena-letters.js';
 import { nextTypingStateAfterClick } from '../js/battle/feed-skip.js';
@@ -16,40 +13,6 @@ import { shouldPlayIntroCountdown, INTRO_COUNTDOWN_STEPS } from '../js/battle/in
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(root, rel), 'utf8');
-
-describe('PC-102 timing-bar fill', () => {
-  it('fills as 1 - remaining/initial, blue while charging and cyan at reduction', () => {
-    const winding = { event: 'winding', tics: 2, initialTics: 8 };
-    assert.equal(rowShowsTimingBar(winding), true);
-    assert.equal(timingBarColor(winding), 'blue');
-    assert.equal(timingFillRatio(winding), 0.75);
-    assert.equal(timingFillPercent(winding), 75);
-
-    const cd = { event: 'cooldown', tics: 1, initialTics: 4 };
-    assert.equal(timingBarColor(cd), 'cyan');
-    assert.equal(timingFillRatio(cd), 0.75);
-
-    const monsterWind = { label: 'A', event: 'winding', tics: 5, initialTics: 5 };
-    assert.equal(rowShowsTimingBar(monsterWind), true);
-    assert.equal(timingBarColor(monsterWind), 'blue');
-    assert.equal(timingFillRatio(monsterWind), 0);
-  });
-
-  it('derives initial tics from action data when the row does not carry them', () => {
-    assert.equal(initialTicsFor({ event: 'winding', tics: 3, castTicks: 9 }), 9);
-    assert.equal(initialTicsFor({ event: 'cooldown', tics: 2, cooldownTicks: 6 }), 6);
-    assert.equal(initialTicsFor({ event: 'drinking', tics: 1, postTicks: 4 }), 4);
-    assert.equal(initialTicsFor({ event: 'winding', tics: 3 }, 8), 8);
-  });
-
-  it('does not bar ready, approach, impact, or legacy monster attack rows', () => {
-    assert.equal(rowShowsTimingBar({ event: 'ready', tics: 0 }), false);
-    assert.equal(rowShowsTimingBar({ event: 'approach', tics: 4 }), false);
-    assert.equal(rowShowsTimingBar({ event: 'impact', tics: 0 }), false);
-    assert.equal(rowShowsTimingBar({ event: 'attack', label: 'A', tics: 3 }), false);
-    assert.equal(rowShowsTimingBar({ event: 'cooldown', label: 'A', tics: 3 }), true);
-  });
-});
 
 describe('PC-102 stable target letters', () => {
   it('keeps B as B after A dies — letters are not living-array indexes', () => {
@@ -162,7 +125,5 @@ describe('PC-102 wiring (source contract)', () => {
     assert.match(html, /data-speed="normal">Standard/);
     assert.match(html, /data-speed="slow">Slow/);
     assert.match(html, /data-speed="instant">Instant/);
-    assert.match(html, /timing-fill-blue/);
-    assert.match(html, /timing-fill-cyan/);
   });
 });

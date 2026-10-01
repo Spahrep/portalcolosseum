@@ -4,9 +4,7 @@
  * exit-row cache, and the PC-56 prediction bar. No behavior change.
  */
 import { debugLog } from '../battle-debug.js';
-import {
-  rowShowsTimingBar, timingBarColor, initialTicsFor, timingFillPercent,
-} from './timing-bar.js';
+import { assignArenaLetters, letterForMonster } from './arena-letters.js';
 
 // Exit animation duration for queue rows — MUST match the `.queue-row-exit`
 // / `.queue-row-lift` CSS in run.html. The battle clock holds the rebuild long
@@ -71,7 +69,11 @@ function isMonsterCooldownRow(row) {
 
 function monsterQueueName(row, monsters) {
   const mon = (monsters || []).find(m => m.label === row.label);
-  if (mon && mon.name) return mon.name;
+  if (mon && mon.name) {
+    const letter = letterForMonster(mon, assignArenaLetters(monsters, new Map()));
+    if (!letter || letter === '?') return mon.name;
+    return `${mon.name} (${letter})`;
+  }
   if (mon && mon.label) return mon.label;
   return queueLabel(row);
 }
@@ -314,37 +316,6 @@ function queueRowDisplayLabel(row, monsters, bs) {
 // Shared rail-row builder: used by renderQueue and the PC-64 intro countdown so
 // countdown rows are pixel-identical to the real queue (same sort, same DOM).
 // withMarkers=false omits PC-56 '>' timing markers (no selection during the intro).
-function applyTimingFill(div, row) {
-  let track = div.querySelector('.timing-track');
-  if (!rowShowsTimingBar(row)) {
-    if (track) track.remove();
-    return;
-  }
-  if (!track) {
-    track = document.createElement('div');
-    track.className = 'timing-track';
-    const fill = document.createElement('div');
-    fill.className = 'timing-fill';
-    track.appendChild(fill);
-    div.appendChild(track);
-  }
-  const fill = track.querySelector('.timing-fill');
-  // Snapshot the denominator on first sight of this row id. A phase change
-  // is a new id, so cooldown does not inherit winding's initial tics.
-  // The stable-key DOM node is reused across phases — key the snapshot by id.
-  if (div.dataset.fillRowId !== String(row.id)) {
-    div.dataset.fillRowId = String(row.id);
-    div.dataset.initialTics = String(initialTicsFor(row));
-  }
-  const remembered = Number(div.dataset.initialTics);
-  const pct = timingFillPercent(row, remembered);
-  const color = timingBarColor(row);
-  fill.style.width = pct + '%';
-  fill.classList.toggle('timing-fill-blue', color === 'blue');
-  fill.classList.toggle('timing-fill-cyan', color === 'cyan');
-  div.dataset.fill = String(pct);
-}
-
 export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   const div = document.createElement('div');
   div.className = 'queue-row';
@@ -376,9 +347,7 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
     div.appendChild(ticSpan);
     return div;
   }
-  // Monster winding/impact (and legacy attack): "<Monster name>'s <Attack>".
-  // Winding gets the proportional timing fill (charging). Impact and legacy
-  // attack stay name + tic. Cooldown (below) gets the reduction fill.
+  // Monster winding/impact (and legacy attack): "<Monster name> (A)'s <Attack>".
   const isMonster = isMonsterQueueRow(row);
   if (isMonster) {
     nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
@@ -398,9 +367,6 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
     bar.className = 'queue-bar';
     div.appendChild(bar);
   }
-  // Proportional timing fill (not the 8px prediction marker). Browser DOM;
-  // the ratio/color live in timing-bar.js and are unit-tested there.
-  applyTimingFill(div, row);
   // PC-56: bar-only mode — no pin markers; the prediction bar is added by renderQueue
   return div;
 }
@@ -451,7 +417,6 @@ export function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
   } else if (!hasBar && bar) {
     bar.remove();
   }
-  applyTimingFill(div, row);
 }
 
 // Intro theater mirror only (playIntroCountdown). Live render follows engine
