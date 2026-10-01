@@ -445,7 +445,12 @@ function reseatSameKeySuccessor(head, newQueue, bs) {
 
 async function releaseProcessedHead(head, newQueue, bs, preset) {
   if (!head) return;
-  if (!isEnemyQueueHead(head) || animationsSkipped(preset)) {
+  const key = queueRowKey(head);
+  const successor = (newQueue || []).find(r => queueRowKey(r) === key);
+  const successorIsNewHead = !!(successor && newQueue[0] && queueRowKey(newQueue[0]) === key);
+  // Same monster row is still the top item. Sliding it out and seating the
+  // follow-up paints the attack twice. Leave it and relabel in place.
+  if (!isEnemyQueueHead(head) || animationsSkipped(preset) || successorIsNewHead) {
     silentPopHead(head, newQueue);
     return;
   }
