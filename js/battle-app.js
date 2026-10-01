@@ -11,7 +11,7 @@ import { supabaseClient } from '../js/utils.js';
 import { fillHudName } from './session.js';
 import { apiCall, checkAuth } from './combat/combat-api.js';
 import { computeTimingMarkers } from './combat/tic-queue.js';
-import { getSpeedPreset, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeChange, setSpeed } from './settings-controller.js';
+import { getSpeedPreset, getFontSizeKey, onFontSizeChange } from './settings-controller.js';
 import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.debug in Supabase
 import {
   renderQueue, diffQueueForAnimation, markQueueRowExiting,
@@ -1972,23 +1972,6 @@ async function init() {
   shouldAnimateDice = freshEntry; // run start transition (fresh entry only)
   await loadBattle(runId);
   setupEndRunButton(runId);
-
-  // PC-DEC-044 / PC-102: TEXT SPEED on the battle screen (Standard / Slow / Instant).
-  // Mid-battle changes feed the typewriter preset (getSpeedPreset is read per character).
-  function paintTextSpeed() {
-    const key = getSpeedKey();
-    document.querySelectorAll('.text-speed-opt').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.speed === key);
-    });
-  }
-  document.querySelectorAll('.text-speed-opt').forEach(btn => {
-    btn.onclick = (ev) => {
-      ev.stopPropagation();
-      setSpeed(btn.dataset.speed);
-    };
-  });
-  paintTextSpeed();
-  onSpeedChange(() => paintTextSpeed());
 
   // Font size subscriber + initial class on .queue-panel
   onFontSizeChange((key) => {

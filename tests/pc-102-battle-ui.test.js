@@ -121,9 +121,8 @@ describe('PC-102 wiring (source contract)', () => {
     assert.equal(slice.includes('clearTyping'), false);
   });
 
-  it('battle screen exposes Standard/Slow/Instant', () => {
-    assert.match(html, /data-speed="normal">Standard/);
-    assert.match(html, /data-speed="slow">Slow/);
-    assert.match(html, /data-speed="instant">Instant/);
+  it('battle screen does not expose text-speed buttons', () => {
+    assert.equal(html.includes('text-speed-opt'), false);
+    assert.equal(html.includes('id="text-speed"'), false);
   });
 });
