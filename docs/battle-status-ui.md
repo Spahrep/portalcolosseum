@@ -149,15 +149,16 @@ Monsters need no initiative of their own: they are already on the rail at their
 instance speed (PC-DEC-030).
 
 When an approach row hits 0 the hand becomes **Ready** and the player picks their
-action then. The battle is **presented from Tic 0 and progresses until the first
-entity has an action** (PC-DEC-039, Decided by Spahrep, 2026-09-17), then opens
-straight to the first decision point. There is **no "3,2,1" countdown and no
-intro-theater** (PC-DEC-059, Decided by Spahrep, 2026-10-01 — Spahrep: "remove
-the 3-2-1"): the early advance is replayed as live animated events and the command
-window opens when the first decision is reached. `startBattle` still advances the
-engine clock to that point, so a monster faster than both hands genuinely acts
-first (its attack lands during the advance and it re-seeds at its instance speed
-as usual). Ties → player first (LH/RH before monsters on the same tic, PC-DEC-030).
+action then. The battle **starts at Tic 0 and is not advanced to the player's
+turn** (PC-DEC-060, Decided by Spahrep, 2026-10-01). Each living monster is added
+with **one cooldown row** at that monster's instance speed — the same shape as a
+hand's opening approach row. There is no "prepares" line at tic 0, and no skip
+past monster actions. If a monster's row comes up before either hand is Ready,
+that event plays as a normal tick (typewriter + queue), not as a replay of a
+pre-run clock. The command window opens when the **first** hand becomes Ready.
+The other hand's approach stays on the track — it is not also marked Ready.
+There is **no "3,2,1" countdown** (PC-DEC-059). Ties → player first (LH/RH before
+monsters on the same tic, PC-DEC-030).
 
 The approach row is **initial placement only**: the attack timing formula
 (weapon speed + rolled prepare/cooldown) is unchanged, and after an attack's

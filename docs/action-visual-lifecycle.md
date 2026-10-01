@@ -57,11 +57,11 @@ MasterClock.start():
 |---|---|---|---|
 | `ready` | Player hand | Player's turn to act | Preview → Wait for commit → Narrate → Visuals → Insert winding → Remove |
 | `winding` | Player hand | Attack preparation | Narrate → Visuals → Insert `impact` → Remove |
-| `winding` | Monster | Preparation. Seeded at battle start and again when cooldown fires. Tics = `mon.speed + rollStat(prepare_time, prepare_time_range)`. Does not deal damage. | Log "prepares…" → Insert `impact` at 0, carrying the strike → Remove |
+| `winding` | Monster | Preparation. Inserted when a cooldown fires, not at battle start. Tics = `mon.speed * prepare multiplier`, floored, min 1. Does not deal damage. | Log "prepares…" → Insert `impact` at 0, carrying the strike → Remove |
 | `impact` | Player hand | Attack execution | Engine resolves → Narrate + Visuals (parallel) → Insert cooldown → Remove |
 | `impact` | Monster | Damage lands. Hit/damage/crit roll once, from the strike carried off `winding`. | Engine resolves → Narrate + Visuals (parallel) → If still alive, insert `cooldown` at stored `cooldownTicks` → Remove |
 | `cooldown` | Player hand | Recovery | Narrate → Visuals → Insert `ready` → Remove |
-| `cooldown` | Monster | Recovering after the impact that just fired | When it fires, pick the next attack and insert `winding` → Remove |
+| `cooldown` | Monster | Opening row at battle start (tics = `mon.speed`), and again after an impact. | When it fires, pick the next attack and insert `winding` → Remove |
 | `drinking` | Player hand | Potion consumption | Narrate → Visuals → Apply effect → Insert recovery → Remove |
 | `recovery` | Player hand | Post-potion cooldown | Narrate → Visuals → Insert ready → Remove |
 | Buff expiry | System | Buff wears off | Typewriter only → Remove |
@@ -151,7 +151,7 @@ Row shows: label "L. Hand Ready", tic count, timing bar filling.
 
 ### Phase 5: Approach (Battle Start)
 
-Trigger: `startBattle()` seeds initial `approach` rows for each hand + initial monster attacks.
+Trigger: `startBattle()` seeds one `approach` row per hand and one `cooldown` row per living monster (PC-DEC-060). It does not run the clock.
 
 **Master Clock processes each approach row:**
 
@@ -167,19 +167,25 @@ Trigger: `startBattle()` seeds initial `approach` rows for each hand + initial m
 
 6. **Remove** the `approach` item.
 
-7. **Master Clock ticks** → next approach row, then monster attacks, etc.
+7. **Master Clock ticks** → the next row, whatever it is. If that row is a monster cooldown, it plays as a normal tick. There is no skip to the player.
 
-When the first `ready` token surfaces → player's turn begins.
+When the **first** `ready` token surfaces → player's turn begins. The other hand's approach stays on the track.
 
 ---
 
 ## 2. Monster Attack Lifecycle
 
-Monsters do not use a `ready` token or an `attack` event. The cycle is `winding` → `impact` → `cooldown` → next `winding` (`js/combat/engine.js:305-318`).
+Monsters do not use a `ready` token or an `attack` event. Battle start seeds one `cooldown` at `mon.speed` (PC-DEC-060). After that cooldown fires, the cycle is `winding` → `impact` → `cooldown` → next `winding`.
 
-### Phase 1: Seed winding — battle start, and again when cooldown fires
+### Phase 1: Opening cooldown — battle start
 
-`startBattle` calls `queueNextMonsterAttack` for each living monster (`js/combat/engine.js:640-644`). The same function runs when a monster `cooldown` row fires (`engine.js:310-311`).
+`startBattle` inserts one `cooldown` row per living monster at `mon.speed` (PC-DEC-060). It does not call `queueNextMonsterAttack` and does not write a "prepares" line. The timing track fills with that row plus the two hand approach rows. The clock is not run forward.
+
+When that cooldown later fires on a normal tick, `queueNextMonsterAttack` picks the attack and inserts `winding`. That is the first "prepares" line, at the tic the cooldown fires — not at tic 0.
+
+### Phase 1b: Next winding — when a cooldown fires
+
+`queueNextMonsterAttack` runs when a monster `cooldown` row fires. Not at battle start.
 
 **Sub-actions (sequential):**
 
@@ -405,7 +411,7 @@ If both LH and RH have `ready` rows at tic=0, LH (player-first sort) surfaces fi
 Same-tic ties: status/buff/expiry first, then other events, then `ready`; within a category, LH before RH before monsters (`js/combat/tic-queue.js:14-29`, `:41-43`). There is no monster `ready` row.
 
 ### Monster attack is picked when winding is inserted
-`queueNextMonsterAttack` picks the attack and inserts `winding` at battle start and when cooldown fires (`js/combat/engine.js:162-169`, `:310-311`). Not on a `ready` token.
+`queueNextMonsterAttack` picks the attack and inserts `winding` when a cooldown fires. Not at battle start. Not on a `ready` token.
 
 ### Cancel-into-cooldown (PC-68)
 When a player hand's winding attack is cancelled because all targets died: the `winding` item processes as normal (narrate "RH attack cancelled — target already defeated"), but instead of inserting an `impact` row, engine inserts a `cooldown` row. That cooldown is the next item to surface.

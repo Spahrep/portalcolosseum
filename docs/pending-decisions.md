@@ -493,7 +493,15 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Speaker: Spahrep
   Verbatim: "remove the 3-2-1. I thought htat was self explanitory"
   Status: DECIDED
-  Notes: There is NO battle-start countdown. The battle opens straight to the first decision point — the "Battle starts in 3,2,1" countdown is not wanted and is removed. This CHANGES the presentation element that PC-DEC-032/039 had described as shipped (the PC-64 battle intro's "tic-0 countdown presentation"). Shipped in commit ca2aabf (2026-10-01, "Advance battle start to the first decision and replay it"): startBattle seeds the queue at tic 0, runs advanceToNextDecision(fires), captures the advanced state into state.intro, and the client replays the advance as live animated events on genuine first entry, then opens the command window — no 3-2-1 countdown, no intro-fires theater. The dice ceremony (sweep + roll) is preserved; the countdown is not. Planted-driving first action is unchanged (PC-DEC-032/039: a monster faster than both hands still acts first during the advance). Applied to battle-status-ui.md + current-design-status.md. Decided by Spahrep, 2026-10-01.
+  Notes: There is NO battle-start countdown. The "Battle starts in 3,2,1" countdown is not wanted and is removed. The "open straight to the first decision / replay a pre-advanced battle" reading of this note is superseded by PC-DEC-060 (2026-10-01): the clock is not run forward at battle start, and events that come before the player are played live, not skipped. No 3-2-1 remains. Applied to battle-status-ui.md + current-design-status.md. Decided by Spahrep, 2026-10-01.
+
+- ID: PC-DEC-060
+  Date: 2026-10-01
+  Source: CLI session (opening ceremony / tic-0 queue)
+  Speaker: Spahrep
+  Verbatim: "We dont want to advance right to the user action. if monsters have actions first, the game needs to act as normal. There is no skipping. When the monsters are added to the que they should have a cool down row added just like the player initial attacks"
+  Status: DECIDED
+  Notes: Also this session: "THERE SHOULD BE 1 INITIAL ENTRY PER MONSTER IN THE ACTION QUE, A COOL DOWN. JUST LIKE THE PLAYER GETS." And: the typewriter must not print both hands Ready up front — "the 2nd one cant be ready until after the first one." Supersedes the advance-then-replay presentation in PC-DEC-059. No 3-2-1 (PC-DEC-059) stays. Applied: one opening cooldown row per living monster, tics = that monster's instance speed, same shape as a hand's opening approach row at weapon instance speed. No "prepares" line at tic 0. Battle start does not run the clock. The timing track fills with those rows. Then the normal one-event tick plays whatever is next, including a monster action that comes before either hand. The command window opens at the first hand Ready; the other hand's approach stays on the track. Applied to battle-status-ui.md, current-design-status.md, action-visual-lifecycle.md. Decided by Spahrep, 2026-10-01.
 
 ## Open
 
