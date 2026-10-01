@@ -445,20 +445,21 @@ function reseatSameKeySuccessor(head, newQueue, bs) {
 
 async function releaseProcessedHead(head, newQueue, bs, preset) {
   if (!head) return;
-  const key = queueRowKey(head);
-  const successor = (newQueue || []).find(r => queueRowKey(r) === key);
-  const successorIsNewHead = !!(successor && newQueue[0] && queueRowKey(newQueue[0]) === key);
-  // Same monster row is still the top item. Sliding it out and seating the
-  // follow-up paints the attack twice. Leave it and relabel in place.
-  if (!isEnemyQueueHead(head) || animationsSkipped(preset) || successorIsNewHead) {
+  if (!isEnemyQueueHead(head)) {
     silentPopHead(head, newQueue);
     return;
   }
   const row = findQueueRowByIdentity(head);
   if (!row) return;
+  // New row lands first, while the current top row is still in the queue.
+  // Then the processed row leaves. Players already do this; monsters must too.
+  reseatSameKeySuccessor(head, newQueue, bs);
+  if (animationsSkipped(preset)) {
+    row.remove();
+    return;
+  }
   const id = row.dataset.rowId || head.id;
   await runQueueRemoval([id]);
-  reseatSameKeySuccessor(head, newQueue, bs);
 }
 
 function measuredRowHeight(queueEl) {
@@ -2094,8 +2095,8 @@ async function tickLoop(runId) {
       const visualsP = awaitTickVisuals(deathBefore);
       await Promise.all([narrateP, visualsP]);
 
-      // Enemy head slides off the top, then its next phase is seated with no
-      // enter slide. Player heads stay a silent pop.
+      // Enemy successor is seated first, then the current top row leaves.
+      // Player commits already add the new row before the ready row slides out.
       await releaseProcessedHead(processedHead, newQueue, bs, preset);
 
       const oldKeys = new Set(oldQueue.map(queueRowKey));
