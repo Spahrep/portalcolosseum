@@ -889,9 +889,13 @@ function paintIntroRail(el, rail, monsters, bs, changedLabel) {
   el.innerHTML = '';
   rail.forEach((row, i) => {
     const node = buildQueueRow(row, monsters, bs, false, i);
-    if (changedLabel && row.label === changedLabel) {
-      node.classList.add(isMonsterQueueRow(row) ? 'queue-row-monster-enter' : 'queue-row-enter');
-    }
+    // Every row this intro-theater repaint draws animates in — not just the one
+    // that just changed. paintIntroRail wipes the DOM, so any row left bare here
+    // (the tic-0 monster windups that have not fired yet) would lose the enter
+    // animation the first time a fire lands, reading as "the actions at tick zero
+    // are never animated." Same stagger as the initial intro build so entering
+    // rows sweep in one after another.
+    node.classList.add(isMonsterQueueRow(row) ? 'queue-row-monster-enter' : 'queue-row-enter');
     el.appendChild(node);
   });
 }
