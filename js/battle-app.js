@@ -703,7 +703,10 @@ function finishBattleIntro() {
   queue.forEach((row, i) => {
     setTimeout(() => {
       if (el) {
-        const rowEl = buildQueueRow(row, monsters, lastBs, false);
+        // Initial Action Queue creation: monster cooldown rows read
+        // "<Name> getting ready" (they have not attacked yet), not "recovering".
+        // Later renders (updateQueueRowInPlace / normal build) say "recovering".
+        const rowEl = buildQueueRow(row, monsters, lastBs, false, -1, true);
         rowEl.classList.add('queue-row-slide-in');
         el.appendChild(rowEl);
       }

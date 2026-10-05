@@ -307,7 +307,9 @@ export function markQueueRowExiting(rowId) {
 
 // Ready / approach / monster-attack / recovering label. Shared by buildQueueRow
 // and updateQueueRowInPlace so the two paths cannot drift.
-function queueRowDisplayLabel(row, monsters, bs) {
+// initial=true (ceremony-intro fill only): a monster's first cooldown row reads
+// "<Name> getting ready"; every later render says "<Name> recovering".
+function queueRowDisplayLabel(row, monsters, bs, initial = false) {
   if (row.event === 'ready' || row.event === 'approach') {
     return `${queueLabel(row)} Ready`;
   }
@@ -315,7 +317,7 @@ function queueRowDisplayLabel(row, monsters, bs) {
     return `${monsterQueueName(row, monsters)}'s ${queueEventName(row, monsters, bs)}`;
   }
   if (isMonsterCooldownRow(row)) {
-    return `${monsterQueueName(row, monsters)} recovering`;
+    return `${monsterQueueName(row, monsters)} ${initial ? 'getting ready' : 'recovering'}`;
   }
   return `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
 }
@@ -323,7 +325,7 @@ function queueRowDisplayLabel(row, monsters, bs) {
 // Shared rail-row builder: used by renderQueue and the PC-64 intro countdown so
 // countdown rows are pixel-identical to the real queue (same sort, same DOM).
 // withMarkers=false omits PC-56 '>' timing markers (no selection during the intro).
-export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
+export function buildQueueRow(row, monsters, bs, withMarkers, index = -1, initial = false) {
   const div = document.createElement('div');
   div.className = 'queue-row';
   if (index >= 0 && index < 3) {
@@ -336,7 +338,7 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   nameSpan.className = 'name';
   // Ready placeholder rows: show the hand label and "Ready" — no tic countdown
   if (row.event === 'ready') {
-    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs, initial);
     const ticSpan = document.createElement('span');
     ticSpan.className = 'tic';
     ticSpan.textContent = '—';
@@ -346,7 +348,7 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   }
   // Approach rows: show "L. Hand Ready" with tic count (approach still fires)
   if (row.event === 'approach') {
-    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs, initial);
     const ticSpan = document.createElement('span');
     ticSpan.className = 'tic';
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
@@ -357,12 +359,12 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1) {
   // Monster winding/impact (and legacy attack): "<Monster name> (A)'s <Attack>".
   const isMonster = isMonsterQueueRow(row);
   if (isMonster) {
-    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs, initial);
   } else if (isMonsterCooldownRow(row)) {
     // Clear row (player-style bar). Label "<Monster name> recovering".
-    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs, initial);
   } else {
-    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
+    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs, initial);
   }
   const ticSpan = document.createElement('span');
   ticSpan.className = 'tic';
