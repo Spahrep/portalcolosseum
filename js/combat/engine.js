@@ -545,14 +545,8 @@ export function createEngine(rng = Math.random) {
     const narrate = result ? result.narrate : '';
     const newFeed = result ? result.feed : [];
     const battleOver = cleanupResult.battleOver;
-    // PC-100: playerReady only when no monster winding/impact is next
-    const nextHead = peekHead(state.queue);
-    const isMonsterThreat = nextHead &&
-      nextHead.label !== 'LH' && nextHead.label !== 'RH' &&
-      (nextHead.event === 'winding' || nextHead.event === 'impact');
-    const playerReady = isMonsterThreat ? false : playerHasHandState(state.player, 'Ready');
     return { narrate, row: head, feed: newFeed, needsInput: false,
-      playerReady, battleOver };
+      playerReady: playerHasHandState(state.player, 'Ready'), battleOver };
   }
 
   function stepQueue(captureFires = null) {
