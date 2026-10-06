@@ -237,7 +237,9 @@ function handleHandFire(state, row) {
             }
           }
         } else {
-          logLine(state, `${row.label} ${row.attackName || 'attack'} misses`);
+          // PC-113: name the missed target(s) so a miss reads "LH Attack misses Glimmerling A"
+          const tgt = r.targets && r.targets.length ? r.targets.join(', ') : 'its target';
+          logLine(state, `${row.label} ${row.attackName || 'attack'} misses ${tgt}`);
         }
       });
     }
