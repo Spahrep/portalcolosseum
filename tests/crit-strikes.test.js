@@ -159,7 +159,7 @@ describe('PC-72: monster attack crit (feed marker + multiplier)', () => {
     }
     assert.ok(critLine, 'monster crit line present');
     // damage 10 (rng 0.5 → ±3 roll lands 0) × 2.5 = 25
-    assert.match(critLine, /A slam hits player for 25 CRITICAL!$/);
+    assert.match(critLine, /A slam hits you for 25 damage CRITICAL!$/);
   });
 
   it('monster crit_chance 0 → never crits, no CRITICAL! from monster', () => {

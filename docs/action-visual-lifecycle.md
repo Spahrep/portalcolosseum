@@ -215,7 +215,7 @@ Option A (Spahrep 2026-09-28) still holds: `mon.speed` is added into both the pr
    - If hit: applies to player HP
    - If crit: multiplies damage
 2. **(Parallel — both must finish):**
-   - **Typewriter:** "<Monster> <attackName> hits player for N damage!" (or "misses" / "CRITICAL!")
+   - **Typewriter:** "<Monster> <attackName> hits you for N damage!" (or "misses" / "CRITICAL!")
    - **Visuals:** Damage numbers on player, health bar depletion, shake/hit feedback
 3. If still alive: insert a `cooldown` successor at the stored `cooldownTicks` (`engine.js:296-301`). Label on the rail: "<Monster name> recovering", with the player-style timing bar.
 4. **Remove** the `impact` item (silent pop — no exit slide). The cooldown stays a same-key successor (`m:<label>`), so the node stays in the DOM and `renderQueue` relabels it in place.

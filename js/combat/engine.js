@@ -308,7 +308,7 @@ function resolveMonsterImpact(state, row, mon) {
     }
     applyDamage(state.player, dmg);
     const monLabel = monsterStrikeLabel(mon, row);
-    logLine(state, `${monLabel} ${atkName ? atkName + ' ' : ''}hits player for ${dmg}${crit ? ' CRITICAL!' : ''}`);
+    logLine(state, `${monLabel} ${atkName ? atkName + ' ' : ''}hits you for ${dmg} damage${crit ? ' CRITICAL!' : ''}`);
   } else {
     const monLabel = monsterStrikeLabel(mon, row);
     logLine(state, `${monLabel} ${atkName ? atkName + ' ' : ''}misses`);

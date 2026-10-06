@@ -3,7 +3,7 @@
  *
  * Pure module (no DOM) so the feed-line → event mapping is unit-testable.
  * Engine feed formats (js/combat/engine.js log() + api/combat/[...path].js):
- *   tic N — <monsterLabel> <attackName> hits player for <dmg>   (monster → player)
+ *   tic N — <monsterLabel> <attackName> hits you for <dmg> damage   (monster → player)
  *   tic N — LH|RH <attackName> hits <monsterLabel> for <dmg>    (player → monster)
  * Monster labels have the format <name> <letter>, e.g. "Wolf A", "Glimmerling B",
  * or bare "Monster A", "A", or the "Monster #<id>" fallback
@@ -14,7 +14,7 @@
  * (a whiff is a low-tension beat; feedback must not lie about impact).
  */
 const ARENA_LABEL = '(?:Monster #[0-9]+|[A-Z]|[A-Za-z]+(?: [A-Za-z]+)* [A-Z])';
-const MONSTER_HIT = new RegExp(`^tic \\d+ — (${ARENA_LABEL})(?: .*)? hits player for (\\d+)(?: CRITICAL!)?$`);
+const MONSTER_HIT = new RegExp(`^tic \\d+ — (${ARENA_LABEL})(?: .*)? hits you for (\\d+) damage(?: CRITICAL!)?$`);
 const PLAYER_HIT = new RegExp(`^tic \\d+ — (LH|RH) .*? hits (${ARENA_LABEL}) for (\\d+)(?: CRITICAL!)?$`);
 
 export function parseHitLine(line) {

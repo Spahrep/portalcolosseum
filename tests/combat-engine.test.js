@@ -994,7 +994,7 @@ describe('monster winding lifecycle (PC-97)', () => {
     const fires = [];
     eng.stepQueue(fires);
     assert.equal(eng.state.player.hp, hpBefore, 'winding deals no damage');
-    assert.equal(eng.state.feed.some(l => /hits player/.test(l)), false);
+    assert.equal(eng.state.feed.some(l => /hits you/.test(l)), false);
     const monRows = eng.state.queue.filter(r => r.label === 'A');
     assert.equal(monRows.length, 1);
     assert.equal(monRows[0].event, 'impact');
@@ -1016,7 +1016,7 @@ describe('monster winding lifecycle (PC-97)', () => {
     eng.stepQueue(fires);
     eng.stepQueue(fires);
     assert.ok(eng.state.player.hp < hpBefore, 'damage resolved on impact fire');
-    assert.ok(eng.state.feed.some(l => /hits player for \d+/.test(l)));
+    assert.ok(eng.state.feed.some(l => /hits you for \d+ damage/.test(l)));
     const monRows = eng.state.queue.filter(r => r.label === 'A');
     assert.equal(monRows.length, 1);
     assert.equal(monRows[0].event, 'cooldown');

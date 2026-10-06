@@ -309,24 +309,24 @@ function narrateFeed(feedLines, participants = null) {
   for (const raw of newLines) {
     let mapped = null;
 
-    // Rule: tic N — Monster quick attack hits player for NUM → "Monster's quick attack hits you for NUM."
+    // Rule: tic N — Monster quick attack hits you for NUM damage → "Monster's quick attack hits you for NUM damage."
     // DEFECT 1 FIX: use getMonsterLabel + exact strip + greedy fallback
     let label = getMonsterLabel(raw);
     let m;
     if (label) {
       const remainder = raw.replace(label, '').replace(/^tic \d+ — \s*/, '');
-      m = remainder.match(/^(.+?)?\s*hits player for (\d+)$/);
+      m = remainder.match(/^(.+?)?\s*hits you for (\d+) damage$/);
       if (m) {
-        mapped = m[1] && m[1].trim() ? `${label}'s ${m[1].trim()} hits you for ${m[2]}.` : `${label} hits you for ${m[2]}.`;
+        mapped = m[1] && m[1].trim() ? `${label}'s ${m[1].trim()} hits you for ${m[2]} damage.` : `${label} hits you for ${m[2]} damage.`;
         outputEntries.push({ text: mapped, matched: true });
         continue;
       }
     }
     // greedy fallback when no known labels
-    m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?)(?: (.+?))? hits player for (\d+)$/);
+    m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?)(?: (.+?))? hits you for (\d+) damage$/);
     if (m) {
       const mon = m[1];
-      mapped = m[2] && m[2].trim() ? `${mon}'s ${m[2].trim()} hits you for ${m[3]}.` : `${mon} hits you for ${m[3]}.`;
+      mapped = m[2] && m[2].trim() ? `${mon}'s ${m[2].trim()} hits you for ${m[3]} damage.` : `${mon} hits you for ${m[3]} damage.`;
       outputEntries.push({ text: mapped, matched: true });
       continue;
     }

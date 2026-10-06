@@ -4,28 +4,28 @@ import { parseHitLine, arenaKey } from '../js/combat/hit-feedback.js';
 
 describe('parseHitLine — PC-70 hit feedback', () => {
   it('monster hit with attack name (bare letter label)', () => {
-    assert.deepEqual(parseHitLine('tic 4 — A Glow Moth Bite hits player for 7'), { type: 'monster', letter: 'A', damage: 7 });
+    assert.deepEqual(parseHitLine('tic 4 — A Glow Moth Bite hits you for 7 damage'), { type: 'monster', letter: 'A', damage: 7 });
   });
   it('monster hit with API "Monster A" label', () => {
-    assert.deepEqual(parseHitLine('tic 4 — Monster A Glow Moth Bite hits player for 7'), { type: 'monster', letter: 'A', damage: 7 });
+    assert.deepEqual(parseHitLine('tic 4 — Monster A Glow Moth Bite hits you for 7 damage'), { type: 'monster', letter: 'A', damage: 7 });
   });
   it('monster hit without attack name', () => {
-    assert.deepEqual(parseHitLine('tic 4 — B hits player for 12'), { type: 'monster', letter: 'B', damage: 12 });
+    assert.deepEqual(parseHitLine('tic 4 — B hits you for 12 damage'), { type: 'monster', letter: 'B', damage: 12 });
   });
   it('monster hit with fallback "Monster #id" label', () => {
-    assert.deepEqual(parseHitLine('tic 4 — Monster #12 Venom Strike hits player for 9'), { type: 'monster', letter: '#12', damage: 9 });
+    assert.deepEqual(parseHitLine('tic 4 — Monster #12 Venom Strike hits you for 9 damage'), { type: 'monster', letter: '#12', damage: 9 });
   });
   it('monster hit with name+letter label (e.g. Wolf A)', () => {
-    assert.deepEqual(parseHitLine('tic 4 — Wolf A Glow Moth Bite hits player for 7'), { type: 'monster', letter: 'A', damage: 7 });
+    assert.deepEqual(parseHitLine('tic 4 — Wolf A Glow Moth Bite hits you for 7 damage'), { type: 'monster', letter: 'A', damage: 7 });
   });
   it('monster hit with multi-word name+letter label (e.g. Giant Rat B)', () => {
-    assert.deepEqual(parseHitLine('tic 4 — Giant Rat B Bite hits player for 12'), { type: 'monster', letter: 'B', damage: 12 });
+    assert.deepEqual(parseHitLine('tic 4 — Giant Rat B Bite hits you for 12 damage'), { type: 'monster', letter: 'B', damage: 12 });
   });
   it('monster hit with name+letter and no attack name', () => {
-    assert.deepEqual(parseHitLine('tic 4 — Wolf A hits player for 12'), { type: 'monster', letter: 'A', damage: 12 });
+    assert.deepEqual(parseHitLine('tic 4 — Wolf A hits you for 12 damage'), { type: 'monster', letter: 'A', damage: 12 });
   });
   it('multi-digit damage', () => {
-    assert.deepEqual(parseHitLine('tic 9 — C Venom Strike hits player for 104'), { type: 'monster', letter: 'C', damage: 104 });
+    assert.deepEqual(parseHitLine('tic 9 — C Venom Strike hits you for 104 damage'), { type: 'monster', letter: 'C', damage: 104 });
   });
   it('player hit on a monster (bare letter label)', () => {
     assert.deepEqual(parseHitLine('tic 5 — LH Heavy Chop hits A for 25'), { type: 'player', letter: 'A', damage: 25 });
