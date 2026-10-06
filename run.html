@@ -233,6 +233,12 @@
       padding: 14px;
       background: rgba(0,0,0,0.45);
       border-left: 2px solid #334466;
+      /* PC-77: keep the outer frame fixed — the queue scrolls inside the
+         panel instead of growing the row. Panel stretches to match the
+         monsters panel (tallest sibling); #queue scrolls within it. */
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
     }
     /* Ceremony-intro: while the battle-start dice ceremony plays, the command window
        stays hidden until the timing track has finished filling in (battle-app.js
@@ -323,7 +329,14 @@
     .queue-size-L .queue-row .tic { font-size: 14px!important; }
 
     /* ---- Prediction bar (continuous yellow strip) ---- */
-    #queue { position: relative; padding-right: 10px; }
+    #queue {
+      position: relative;
+      padding-right: 10px;
+      /* PC-77: scroll within the fixed panel instead of growing the frame */
+      flex: 1;
+      overflow-y: auto;
+      min-height: 0;
+    }
     .prediction-bar {
       position: absolute;
       right: 0;
