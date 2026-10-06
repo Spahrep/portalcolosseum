@@ -269,10 +269,12 @@
     }
     /* Ceremony-intro: while the battle-start dice ceremony plays, the command window
        stays hidden until the timing track has finished filling in (battle-app.js
-       removes the class via the queue fill's onDone). */
+       removes the class via the queue fill's onDone). visibility:hidden (not
+       display:none) keeps the menu's space reserved so the main-area above does
+       not grow and the message log does not shift when the menu hides. */
     body.intro-pending .action-menu,
     body.intro-pending .footer-info {
-      display: none;
+      visibility: hidden;
     }
     /* PC-DEC-045/PC-80: while the typewriter/action-queue animations are
        playing, keep the command input VISIBLE but disabled (setBusy disables
