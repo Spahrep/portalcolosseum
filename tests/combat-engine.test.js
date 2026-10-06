@@ -974,7 +974,7 @@ describe('monster winding lifecycle (PC-97)', () => {
     assert.equal(row.damage, 10);
     assert.equal(row.accuracy, 100);
     assert.equal(row.critChance, 0);
-    assert.ok(eng.state.feed.some(l => l.includes('prepares a Bite')));
+    assert.ok(eng.state.feed.some(l => l.includes('prepares Bite')));
     assert.equal(eng.state.feed.some(l => l.includes('Ready')), false);
     assert.equal(eng.state.player.hands.LH.state, 'Approach');
     assert.equal(eng.state.player.hands.RH.state, 'Approach');
@@ -1041,7 +1041,7 @@ describe('monster winding lifecycle (PC-97)', () => {
     assert.equal(next.monsterAttackName, 'Bite');
     assert.equal(next.damage, 10);
     assert.equal(eng.state.queue.filter(r => r.label === 'A' && r.event === 'cooldown').length, 0);
-    assert.ok(eng.state.feed.filter(l => l.includes('prepares a Bite')).length >= 2);
+    assert.ok(eng.state.feed.filter(l => l.includes('prepares Bite')).length >= 2);
     assert.deepEqual(cooldownFire.after, { event: 'winding', tics: 6 });
     assert.equal(cooldownFire.event, 'cooldown');
   });
