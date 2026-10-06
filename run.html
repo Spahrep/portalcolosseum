@@ -234,11 +234,10 @@
       background: rgba(0,0,0,0.45);
       border-left: 2px solid #334466;
       /* PC-77: keep the outer frame fixed — the queue scrolls inside the
-         panel instead of growing the row. Panel stretches to match the
-         monsters panel (tallest sibling); #queue scrolls within it. */
+         panel instead of growing the row. Fixed height; #queue scrolls. */
       display: flex;
       flex-direction: column;
-      min-height: 0;
+      height: 400px;
     }
     /* Ceremony-intro: while the battle-start dice ceremony plays, the command window
        stays hidden until the timing track has finished filling in (battle-app.js
