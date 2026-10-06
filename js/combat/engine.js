@@ -183,7 +183,7 @@ function queueNextMonsterAttack(state, mon, labelForLog) {
   const newRow = commitNewRow(state.queue, mon.label, 'winding', Math.max(1, Math.floor(mon.speed * prepare)));
   stampMonsterStrike(newRow, mon, atk);
   newRow.cooldownTicks = Math.max(1, Math.floor(mon.speed * rollMultiplier(atk?.cooldown_time_multiplier ?? 1, atk?.cooldown_time_multiplier_range ?? 0, state.rng)));
-  logLine(state, `${mon.name || mon.template_name || 'Monster'} ${labelForLog.replace('Monster ', '')} prepares ${atk?.name || 'an attack'}...`);
+  logLine(state, `${mon.name || mon.template_name || 'Monster'} ${labelForLog.replace('Monster ', '')} prepares to attack...`);
   return newRow;
 }
 
@@ -421,7 +421,7 @@ function commitAttackAction(state, hand, attackId, targetIds = [], params = {}) 
   row.critMultiplier = playerCritMultiplier;
   state.player.hands[hand].state = 'winding';
   state.player.hands[hand].attackId = attackId;
-  logLine(state, `${hand} prepares ${attackName || 'an attack'}...`);
+  logLine(state, `${hand} prepares to attack...`);
   return { committed: true };
 }
 

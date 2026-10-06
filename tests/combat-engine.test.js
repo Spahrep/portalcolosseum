@@ -352,6 +352,12 @@ describe('F16 end-to-end attack lifecycle + security', () => {
     eng.advanceToNextDecision();
     eng.commitAttack('LH', 42, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 12, isMultiTarget: false, attackName: 'Quick Jab' });
     eng.advanceToNextDecision();
+    // Player attack name surfaces on the impact line, which fires after the
+    // winding row resolves — step until it appears (mirrors the monster check).
+    for (let i = 0; i < 30; i++) {
+      if (eng.state.feed.some(l => l.includes('Quick Jab'))) break;
+      eng.advanceToNextDecision();
+    }
     assert.ok(eng.state.feed.some(l => l.includes('Quick Jab')), 'player attack name in feed');
     // advance until monster attacks to test real monster attack name
     for (let i = 0; i < 30; i++) {
@@ -974,7 +980,7 @@ describe('monster winding lifecycle (PC-97)', () => {
     assert.equal(row.damage, 10);
     assert.equal(row.accuracy, 100);
     assert.equal(row.critChance, 0);
-    assert.ok(eng.state.feed.some(l => l.includes('prepares Bite')));
+    assert.ok(eng.state.feed.some(l => l.includes('prepares to attack')));
     assert.equal(eng.state.feed.some(l => l.includes('Ready')), false);
     assert.equal(eng.state.player.hands.LH.state, 'Approach');
     assert.equal(eng.state.player.hands.RH.state, 'Approach');
@@ -1041,7 +1047,7 @@ describe('monster winding lifecycle (PC-97)', () => {
     assert.equal(next.monsterAttackName, 'Bite');
     assert.equal(next.damage, 10);
     assert.equal(eng.state.queue.filter(r => r.label === 'A' && r.event === 'cooldown').length, 0);
-    assert.ok(eng.state.feed.filter(l => l.includes('prepares Bite')).length >= 2);
+    assert.ok(eng.state.feed.filter(l => l.includes('prepares to attack')).length >= 2);
     assert.deepEqual(cooldownFire.after, { event: 'winding', tics: 6 });
     assert.equal(cooldownFire.event, 'cooldown');
   });
