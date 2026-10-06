@@ -309,6 +309,10 @@ export function markQueueRowExiting(rowId) {
 // and updateQueueRowInPlace so the two paths cannot drift.
 // initial=true (ceremony-intro fill only): a monster's first cooldown row reads
 // "<Name> getting ready"; every later render says "<Name> recovering".
+// Player hand rows that carry a committed target render the arena letter as a
+// "→ <letter>" tail, so the queue shows WHO the player chose to hit, not just
+// the limb+attack (PC-…: "L. Hand — Power Attack → A"). Monster rows never get
+// the tail — monsters only ever target the player, so it would be dead weight.
 function queueRowDisplayLabel(row, monsters, bs, initial = false) {
   if (row.event === 'ready' || row.event === 'approach') {
     return `${queueLabel(row)} Ready`;
@@ -319,7 +323,31 @@ function queueRowDisplayLabel(row, monsters, bs, initial = false) {
   if (isMonsterCooldownRow(row)) {
     return `${monsterQueueName(row, monsters)} ${initial ? 'getting ready' : 'recovering'}`;
   }
-  return `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
+  const action = queueEventName(row, monsters, bs);
+  const label = `${queueLabel(row)} ${action}`;
+  const targetLetter = playerRowTargetLetter(row, monsters);
+  // Agreed format for a targeted player attack: "L. Hand — Power Attack → A".
+  // The em-dash only appears on targeted attack rows; cooldown ("L. Hand Ready")
+  // and untargeted rows keep the plain space.
+  if (targetLetter) return `${queueLabel(row)} — ${action} → ${targetLetter}`;
+  return label;
+}
+
+// Resolve a player hand row's committed target to its stable arena letter.
+// row.targetIds is the array of monster ids chosen at commit time; the queue
+// shows the first living one as the "→ <letter>" tail. No target / none alive
+// / non-player row → null (no tail rendered).
+function playerRowTargetLetter(row, monsters) {
+  if (!row.targetIds || !row.targetIds.length) return null;
+  const assigned = assignArenaLetters(monsters, new Map());
+  for (const id of row.targetIds) {
+    const mon = (monsters || []).find(m => m.id === id);
+    if (mon) {
+      const letter = letterForMonster(mon, assigned);
+      if (letter && letter !== '?') return letter;
+    }
+  }
+  return null;
 }
 
 // Shared rail-row builder: used by renderQueue and the PC-64 intro countdown so
