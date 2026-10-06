@@ -503,6 +503,22 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Also this session: "THERE SHOULD BE 1 INITIAL ENTRY PER MONSTER IN THE ACTION QUE, A COOL DOWN. JUST LIKE THE PLAYER GETS." And: the typewriter must not print both hands Ready up front — "the 2nd one cant be ready until after the first one." Supersedes the advance-then-replay presentation in PC-DEC-059. No 3-2-1 (PC-DEC-059) stays. Applied: one opening cooldown row per living monster, tics = that monster's instance speed, same shape as a hand's opening approach row at weapon instance speed. No "prepares" line at tic 0. Battle start does not run the clock. The timing track fills with those rows. Then the normal one-event tick plays whatever is next, including a monster action that comes before either hand. The command window opens at the first hand Ready; the other hand's approach stays on the track. Applied to battle-status-ui.md, current-design-status.md, action-visual-lifecycle.md. Decided by Spahrep, 2026-10-01.
 
+- ID: PC-DEC-061
+  Date: 2026-10-06
+  Source: Discord thread 1556988087358197814 ("Speed up base typewriter speed by 50%", `#the-forge`), 08:14 — captured by the 2026-10-06 midday sweep from the persisted gateway log
+  Speaker: Spahrep
+  Verbatim: "Let's speed up the base typewriter speed by 50%."
+  Status: DECIDED
+  Notes: Changes PC-DEC-044's Standard text-speed preset. The Standard typewriter base rate was sped up 50% (15 → 22.5 characters/sec), shipped `af163bb` (`js/battle/text-speed.js`: normal `charsPerSec` 22.5, `charMs` ≈44, `lineDelayMs` 1000 unchanged). No new preset; the 3 knobs (Standard/Slow/Instant) and the per-browser localStorage mechanism are unchanged. Note: PC-DEC-044's own note had drifted from the code before this — it recorded "slow (25ms/1600ms)" but the Slow preset was already 10 chars/sec (100ms/char); the 50% rule applies to the Standard base rate only. Applied to current-design-status.md. Decided by Spahrep, 2026-10-06.
+
+- ID: PC-DEC-062
+  Date: 2026-10-06
+  Source: Discord thread 1556989922500415501 ("Debug tic display in attack messages", `#the-forge`), 08:22–08:26 — captured by the 2026-10-06 midday sweep from the persisted gateway log (persisted log excerpt truncated; directive confirmed by shipped commit)
+  Speaker: Spahrep
+  Verbatim: "currently the game displays \"tic 76 — Wolf A Attack misses\".  We only wan that \"" + "Ok, i want you to do what i said. FOR USER Display, wrap the tic number in a deb[ug flag]"
+  Status: DECIDED
+  Notes: The `tic N — ` prefix is DEBUG data and must not be shown in the player battle log. Honored as shipped `6311f98` (`js/battle/feed-render.js`): the engine still emits raw `tic N — <msg>` lines, but the display layer strips the prefix for the player unless the debug flag is set (`window.__PC_DEBUG` from `/api/config` game_config.debug). The hit router still receives the raw line so hit-feedback shake keeps working; system/ceremony lines (no `tic N — ` prefix) pass through unstripped. Note: `docs/combat-system-testing.md:115` still lists "Message log shows 'tic N — LH prepares a [Attack Name]...'" — that verification line is now stale (flag ③). Applied to current-design-status.md. Decided by Spahrep, 2026-10-06.
+
 ## Open
 
 - ID: PC-DEC-004
