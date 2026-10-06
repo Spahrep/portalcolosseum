@@ -1,13 +1,14 @@
 /**
  * PC-DEC-044 text-speed presets, as read by PC-102.
- * Standard = 15 characters/second, Slow = 10 characters/second, Instant = no
- * typewriter. charMs is the per-character delay the typewriter actually waits.
+ * Standard = 22.5 characters/second (50% faster than the original 15), Slow =
+ * 10 characters/second, Instant = no typewriter. charMs is the per-character
+ * delay the typewriter actually waits.
  * There is no 'fast' / 'Normal' preset — those values drifted from the ruling.
  */
 export const TEXT_SPEEDS = {
   normal: {
-    charsPerSec: 15,
-    charMs: Math.round(1000 / 15),
+    charsPerSec: 22.5,
+    charMs: Math.round(1000 / 22.5),
     lineDelayMs: 1000,
     label: 'Standard',
     windupEnabled: true,

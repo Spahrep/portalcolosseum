@@ -88,10 +88,10 @@ describe('PC-102 intro countdown and text speed', () => {
     assert.equal(shouldPlayIntroCountdown(4, false), false);
   });
 
-  it('presets are Standard 15/s, Slow 10/s, Instant — no fast/Normal', () => {
+  it('presets are Standard 22.5/s (50% faster than the original 15/s), Slow 10/s, Instant — no fast/Normal', () => {
     assert.equal(TEXT_SPEEDS.normal.label, 'Standard');
-    assert.equal(TEXT_SPEEDS.normal.charsPerSec, 15);
-    assert.equal(TEXT_SPEEDS.normal.charMs, Math.round(1000 / 15));
+    assert.equal(TEXT_SPEEDS.normal.charsPerSec, 22.5);
+    assert.equal(TEXT_SPEEDS.normal.charMs, Math.round(1000 / 22.5));
     assert.equal(TEXT_SPEEDS.slow.label, 'Slow');
     assert.equal(TEXT_SPEEDS.slow.charsPerSec, 10);
     assert.equal(TEXT_SPEEDS.slow.charMs, 100);
