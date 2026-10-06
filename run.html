@@ -266,7 +266,19 @@
       overflow: hidden;
     }
     .queue-row .name { color: #ccddff; }
-    .queue-row .tic { color: #6688aa; font-size: 12px; }
+        .queue-row .tic { color: #6688aa; font-size: 12px; }
+        /* Option 4: target sub-line under a player attack row ("└─ Wolf A").
+           flex-basis:100% wraps it onto its own line inside the flex row; the
+           indent + smaller/dimmer type marks it as subordinate to the action. */
+        .queue-row .queue-target {
+          flex-basis: 100%;
+          padding-left: 14px;
+          font-size: 11px;
+          color: #7a9cc0;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
     /* PC-56 Queue Font Size + top-row + prediction bar/pin + animations (added inside existing <style>) */
     .queue-size-S .queue-row { font-size: 13px!important; }
     .queue-size-S .queue-row .tic { font-size: 12px!important; }

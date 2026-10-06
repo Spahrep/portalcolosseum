@@ -309,10 +309,10 @@ export function markQueueRowExiting(rowId) {
 // and updateQueueRowInPlace so the two paths cannot drift.
 // initial=true (ceremony-intro fill only): a monster's first cooldown row reads
 // "<Name> getting ready"; every later render says "<Name> recovering".
-// Player hand rows that carry a committed target render the arena letter as a
-// "→ <letter>" tail, so the queue shows WHO the player chose to hit, not just
-// the limb+attack (PC-…: "L. Hand — Power Attack → A"). Monster rows never get
-// the tail — monsters only ever target the player, so it would be dead weight.
+// Player hand rows that carry a committed target render it as an indented
+// sub-line under the action (Option 4): "L. Hand Power Attack" / "  └─ Wolf A".
+// Monster rows never get a target sub-line — monsters only ever target the
+// player, so it would be dead weight.
 function queueRowDisplayLabel(row, monsters, bs, initial = false) {
   if (row.event === 'ready' || row.event === 'approach') {
     return `${queueLabel(row)} Ready`;
@@ -323,28 +323,23 @@ function queueRowDisplayLabel(row, monsters, bs, initial = false) {
   if (isMonsterCooldownRow(row)) {
     return `${monsterQueueName(row, monsters)} ${initial ? 'getting ready' : 'recovering'}`;
   }
-  const action = queueEventName(row, monsters, bs);
-  const label = `${queueLabel(row)} ${action}`;
-  const targetLetter = playerRowTargetLetter(row, monsters);
-  // Agreed format for a targeted player attack: "L. Hand — Power Attack → A".
-  // The em-dash only appears on targeted attack rows; cooldown ("L. Hand Ready")
-  // and untargeted rows keep the plain space.
-  if (targetLetter) return `${queueLabel(row)} — ${action} → ${targetLetter}`;
-  return label;
+  return `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
 }
 
-// Resolve a player hand row's committed target to its stable arena letter.
-// row.targetIds is the array of monster ids chosen at commit time; the queue
-// shows the first living one as the "→ <letter>" tail. No target / none alive
-// / non-player row → null (no tail rendered).
-function playerRowTargetLetter(row, monsters) {
+// Resolve a player hand row's committed target to its display name, matching
+// the monster-card convention ("Wolf A"). row.targetIds is the array of monster
+// ids chosen at commit time; the queue shows the first living one as an indented
+// sub-line under the action. No target / none alive / non-player row → null.
+function playerRowTargetName(row, monsters) {
   if (!row.targetIds || !row.targetIds.length) return null;
   const assigned = assignArenaLetters(monsters, new Map());
   for (const id of row.targetIds) {
     const mon = (monsters || []).find(m => m.id === id);
     if (mon) {
       const letter = letterForMonster(mon, assigned);
-      if (letter && letter !== '?') return letter;
+      const name = (mon && mon.name) || 'Monster';
+      if (letter && letter !== '?') return `${name} (${letter})`;
+      return name;
     }
   }
   return null;
@@ -399,6 +394,15 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1, initia
   ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   div.appendChild(nameSpan);
   div.appendChild(ticSpan);
+  // Option 4: player attack rows with a committed target get an indented
+  // sub-line naming the target ("└─ Wolf A"). Monster rows never do.
+  const targetName = playerRowTargetName(row, monsters);
+  if (targetName) {
+    const targetSpan = document.createElement('span');
+    targetSpan.className = 'queue-target';
+    targetSpan.textContent = `└─ ${targetName}`;
+    div.appendChild(targetSpan);
+  }
   if (!isMonster) {
     const bar = document.createElement('div');
     bar.className = 'queue-bar';
@@ -453,6 +457,21 @@ export function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
     div.appendChild(bar);
   } else if (!hasBar && bar) {
     bar.remove();
+  }
+  // Option 4: keep the target sub-line in sync on in-place updates. Create it
+  // when a player attack row has a committed target, update its text, and
+  // remove it when the target is gone (e.g. the monster died mid-windup).
+  let targetSpan = div.querySelector('.queue-target');
+  const targetName = playerRowTargetName(row, monsters);
+  if (targetName) {
+    if (!targetSpan) {
+      targetSpan = document.createElement('span');
+      targetSpan.className = 'queue-target';
+      div.appendChild(targetSpan);
+    }
+    targetSpan.textContent = `└─ ${targetName}`;
+  } else if (targetSpan) {
+    targetSpan.remove();
   }
 }
 
