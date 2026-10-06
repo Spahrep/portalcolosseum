@@ -588,6 +588,11 @@
       color: #a8c8ea;
       margin-top: 8px;
     }
+    .message-log-wrap {
+      /* PC-79: the message log frame is static — never shrinks/grows with
+         the container; the main-area absorbs all flex height changes. */
+      flex-shrink: 0;
+    }
     .message-box {
       background: #0a1a2e;
       border: 3px solid #4a90d9;
@@ -597,6 +602,9 @@
       height: 140px;
       overflow-y: auto;
       line-height: 1.45;
+      /* PC-79: fixed height, never compressed by the flex column */
+      flex-shrink: 0;
+      box-sizing: border-box;
     }
     .msg-line { margin-bottom: 3px; }
     .msg-error {
@@ -839,7 +847,7 @@
     </div>
 
     <!-- MESSAGE BOX -->
-    <div style="padding:0 14px 8px 14px;">
+    <div class="message-log-wrap" style="padding:0 14px 8px 14px;">
       <div class="panel-title message-log-title">
         <span>MESSAGE LOG</span>
       </div>
