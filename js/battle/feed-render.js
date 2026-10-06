@@ -111,8 +111,16 @@ function typeNextLine() {
   typingLineText = lineText;
   typingPhase = 'chars';
   // PC-70: the hit reaction fires as the line STARTS typing — impact lands
-  // with the message, not after it finishes narrating.
+  // with the message, not after it finishes narrating. It MUST see the raw
+  // engine line ("tic N — ...") — the hit parsers key off that canonical
+  // format — so it runs before any display stripping.
   handleHitLine(lineText);
+  // Debug-only tic stamp: hide "tic N — " from the player-facing typewriter
+  // unless the debug flag is on (window.__PC_DEBUG, set from game_config).
+  // Strip for display only; the div gets this, the hit router got the raw line.
+  const displayLine = window.__PC_DEBUG
+    ? lineText
+    : lineText.replace(/^tic \d+ — /, '');
   const div = document.createElement('div');
   div.className = 'msg-line';
   box.appendChild(div);
@@ -120,7 +128,7 @@ function typeNextLine() {
   if (feedPinned) box.scrollTop = box.scrollHeight;
   const preset = getSpeedPreset();
   if (preset.charMs === 0) {
-    div.textContent = lineText;
+    div.textContent = displayLine;
     typingLineIndex++;
     typeNextLine();
     return;
@@ -129,15 +137,15 @@ function typeNextLine() {
   function typeChar() {
     const speed = getSpeedPreset();
     if (speed.charMs === 0) {
-      div.textContent = lineText;
+      div.textContent = displayLine;
       // Instant mid-batch: dump the rest so the preset actually takes effect.
       for (let j = typingLineIndex + 1; j < typingLines.length; j++) appendFeedLine(typingLines[j]);
       typingLineIndex = typingLines.length;
       typeNextLine();
       return;
     }
-    if (charIndex < lineText.length) {
-      div.textContent = lineText.slice(0, charIndex + 1);
+    if (charIndex < displayLine.length) {
+      div.textContent = displayLine.slice(0, charIndex + 1);
       charIndex++;
       if (feedPinned) box.scrollTop = box.scrollHeight;
       const t = setTimeout(typeChar, speed.charMs);
@@ -167,7 +175,12 @@ export function completeCurrentTypingLine() {
   });
   cancelTypingTimers();
   if (next.finishCurrent && typingLineEl && typingLineText != null) {
-    typingLineEl.textContent = next.finishedText != null ? next.finishedText : typingLineText;
+    // Strip the debug-only tic stamp here too — click-to-complete writes the
+    // finished line directly into the div and must not leak "tic N — ".
+    const raw = next.finishedText != null ? next.finishedText : typingLineText;
+    typingLineEl.textContent = window.__PC_DEBUG
+      ? raw
+      : raw.replace(/^tic \d+ — /, '');
   }
   typingLineIndex = next.lineIndex;
   typingPhase = next.phase === 'done' ? 'idle' : 'chars';
@@ -234,7 +247,14 @@ export function renderFeed(feed, onComplete) {
     // reset and re-render the full feed.
     if (currentLines.length > 0 && currentLines.length === renderedFeedLines) {
       const lastShown = box.querySelector('.msg-line:last-child');
-      const lastFeed = currentLines[currentLines.length - 1];
+      const lastFeedRaw = currentLines[currentLines.length - 1];
+      // Match the DISPLAYED last line, which is the feed line with the
+      // debug-only tic stamp stripped (appendFeedLine/typeNextLine strip it
+      // unless __PC_DEBUG). Without this, every comparison mismatches in
+      // non-debug mode and forces a full re-render on every incremental tick.
+      const lastFeed = window.__PC_DEBUG
+        ? lastFeedRaw
+        : lastFeedRaw.replace(/^tic \d+ — /, '');
       if (!lastShown || lastShown.textContent !== lastFeed) {
         // content shifted — clear and re-display everything
         renderedFeedLines = 0;
@@ -285,8 +305,16 @@ export function populateFeedInstantly(feed) {
 
 export function appendFeedLine(line) {
   // PC-70: every feed line passes the hit router — covers the instant text
-  // preset, the intro-countdown fires, and one-shot lines.
+  // preset, the intro-countdown fires, and one-shot lines. The hit router
+  // MUST see the raw engine line ("tic N — ...") — its parsers key off the
+  // tic-prefixed canonical format — so it runs before any display stripping.
   handleHitLine(line);
+  // Debug-only tic stamp: the engine emits every feed line as "tic N — <msg>".
+  // That is QA/debug data, not player narration — hide it from the player-facing
+  // log unless the debug flag is on (window.__PC_DEBUG, set from game_config).
+  if (!window.__PC_DEBUG) {
+    line = line.replace(/^tic \d+ — /, '');
+  }
   const box = document.getElementById('message-box');
   if (!box) return;
   const div = document.createElement('div');
