@@ -274,11 +274,13 @@
     body.intro-pending .footer-info {
       display: none;
     }
-    /* PC-DEC-045: while the typewriter/action-queue animations are playing,
-       hide the LH/RH command input — `command-hidden` is toggled by the
-       typewriter in battle-app.js alongside setBusy. */
+    /* PC-DEC-045/PC-80: while the typewriter/action-queue animations are
+       playing, keep the command input VISIBLE but disabled (setBusy disables
+       the buttons). Hiding it entirely made the frame shift — the main-area
+       grew to fill the vacated space, so the message log appeared to
+       expand/contract and the input box flickered in and out. */
     body.command-hidden .action-menu {
-      display: none;
+      opacity: 0.6;
     }
     /* Timing track stays hidden until the monsters are in; released by
        finishBattleIntro() when the fill starts (rows then fade in one at a time). */
@@ -605,6 +607,9 @@
       /* PC-79: fixed height, never compressed by the flex column */
       flex-shrink: 0;
       box-sizing: border-box;
+      /* PC-80: reserve scrollbar space so the box width never jitters as
+         the feed fills/clears and the scrollbar appears/disappears. */
+      scrollbar-gutter: stable;
     }
     .msg-line { margin-bottom: 3px; }
     .msg-error {
