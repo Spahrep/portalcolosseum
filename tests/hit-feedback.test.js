@@ -50,6 +50,12 @@ describe('parseHitLine — PC-70 hit feedback', () => {
   });
   it('crit player hit reports damage without the marker', () => {
     assert.deepEqual(parseHitLine('tic 5 — LH Heavy Chop hits A for 25 CRITICAL!'), { type: 'player', letter: 'A', attack: 'Heavy Chop', damage: 25 });
+    // PC-117 regression: the engine emits "... for 25 damage" (engine.js:229).
+    // Without the optional trailing " damage" the landed-hit beat never fired
+    // for player attacks in live battles (only the synthetic bare forms matched).
+    assert.deepEqual(parseHitLine('tic 5 — LH Heavy Chop hits Wolf A for 25 damage'), { type: 'player', letter: 'A', attack: 'Heavy Chop', damage: 25 });
+    assert.deepEqual(parseHitLine('tic 7 — RH Frost Dagger hits Imp B for 15 damage CRITICAL!'), { type: 'player', letter: 'B', attack: 'Frost Dagger', damage: 15 });
+    assert.deepEqual(parseHitLine('tic 4 — LH Fracture hits Monarch A for 300 damage CRITICAL!'), { type: 'player', letter: 'A', attack: 'Fracture', damage: 300 });
   });
   it('miss lines get no feedback', () => {
     assert.equal(parseHitLine('tic 4 — A Glow Moth Bite misses'), null);
@@ -91,6 +97,10 @@ describe('splitHitLine — PC-117 landed-hit beat split', () => {
   });
   it('player hit: tell keeps hand+attack+target, payload the damage', () => {
     assert.deepEqual(splitHitLine('tic 5 — RH Fire Bow hits Wolf A for 8'), {
+      kind: 'player', tell: 'RH Fire Bow hits A…', payload: '…for 8 damage.', letter: 'A', isCrit: false,
+    });
+    // PC-117 regression: the live engine appends " damage" (engine.js:229).
+    assert.deepEqual(splitHitLine('tic 5 — RH Fire Bow hits Wolf A for 8 damage'), {
       kind: 'player', tell: 'RH Fire Bow hits A…', payload: '…for 8 damage.', letter: 'A', isCrit: false,
     });
   });

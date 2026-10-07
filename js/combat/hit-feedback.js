@@ -19,8 +19,13 @@ const ARENA_LABEL = '(?:Monster #[0-9]+|[A-Z]|[A-Za-z]+(?: [A-Za-z]+)* [A-Z])';
 // attack phrase (e.g. "Claw", "Fire Claw"), with a fallback for a bare label.
 const MONSTER_HIT = new RegExp(`^tic \\d+ — (${ARENA_LABEL}) (.*?) hits you for (\\d+) damage(?: CRITICAL!)?$`);
 const MONSTER_HIT_NOATK = new RegExp(`^tic \\d+ — (${ARENA_LABEL}) hits you for (\\d+) damage(?: CRITICAL!)?$`);
-// Player→monster: "<LH|RH> <attack> hits <label> for <dmg>[( CRITICAL!)]".
-const PLAYER_HIT = new RegExp(`^tic \\d+ — (LH|RH) (.*?) hits (${ARENA_LABEL}) for (\\d+)(?: CRITICAL!)?$`);
+// Player→monster: "<LH|RH> <attack> hits <label> for <dmg>[( damage)][( CRITICAL!)]".
+// NOTE: the engine emits a trailing " damage" on player→monster lines too
+// (engine.js:229 — `${r.target} for ${r.damage} damage`), and that suffix is
+// OPTIONAL because the legacy LH/RH comet path and bare-label tests omit it.
+// Matching it (when present) keeps the landed-hit beat firing for player
+// attacks; without it the regex only ever matched the synthetic bare lines.
+const PLAYER_HIT = new RegExp(`^tic \\d+ — (LH|RH) (.*?) hits (${ARENA_LABEL}) for (\\d+)(?: damage)?(?: CRITICAL!)?$`);
 
 export function parseHitLine(line) {
   if (typeof line !== 'string') return null;
@@ -68,7 +73,9 @@ export function splitHitLine(line) {
     };
   }
   // player → monster: keep the whole "LH/RH <attack> hits <label>" as the tell.
-  const m = clean.match(/^tic \d+ — (LH|RH) (.*?) hits (.+?) for (\d+)$/);
+  // Trailing " damage" is part of the real engine line (engine.js:229) and must
+  // be tolerated, or the landed-hit beat silently dies for player attacks.
+  const m = clean.match(/^tic \d+ — (LH|RH) (.*?) hits (.+?) for (\d+)(?: damage)?$/);
   if (!m) return null;
   const handAtk = m[2].trim();
   const tgt = arenaKey(m[3]);
