@@ -6,16 +6,24 @@
 import { debugLog } from '../battle-debug.js';
 import { getSpeedPreset } from '../settings-controller.js';
 import { nextTypingStateAfterClick } from './feed-skip.js';
+import { splitHitLine } from '../combat/hit-feedback.js';
 
 // setBusy + handleHitLine stay in battle-app.js. Bound here (and overridable
 // via typeFeedLines params) so this module does not import battle-app.js.
 let setBusy = () => {};
 let handleHitLine = () => {};
+let handleDeferredHit = () => {};
 let setSuppressHitFeedback = () => {};
+
+// PC-117: beat length between a landed hit's "tell" (attack name) and its
+// impact. The typewriter holds this long, fires the shake/flash, then types
+// the damage payload. Shorter than lineDelayMs so the beat reads as one breath.
+const HIT_PAUSE_MS = 320;
 
 export function bindFeedRender(deps) {
   setBusy = deps.setBusy;
   handleHitLine = deps.handleHitLine;
+  handleDeferredHit = deps.handleDeferredHit || (() => {});
   setSuppressHitFeedback = deps.setSuppressHitFeedback;
 }
 
@@ -110,6 +118,16 @@ function typeNextLine() {
   const lineText = typingLines[typingLineIndex];
   typingLineText = lineText;
   typingPhase = 'chars';
+  const preset = getSpeedPreset();
+  // PC-117: a landed hit line splits into a tell (attack identity) and a payload
+  // (damage consequence). The impact shake is WITHHELD until the tell has typed
+  // and a short pause has passed, then fires; only then does the payload type.
+  // Non-hit lines keep the old behavior (onset shake, single contiguous line).
+  const split = splitHitLine(lineText);
+  if (split) {
+    typeSplitHit(split);
+    return;
+  }
   // PC-70: the hit reaction fires as the line STARTS typing — impact lands
   // with the message, not after it finishes narrating. It MUST see the raw
   // engine line ("tic N — ...") — the hit parsers key off that canonical
@@ -126,35 +144,105 @@ function typeNextLine() {
   box.appendChild(div);
   typingLineEl = div;
   if (feedPinned) box.scrollTop = box.scrollHeight;
-  const preset = getSpeedPreset();
   if (preset.charMs === 0) {
     div.textContent = displayLine;
     typingLineIndex++;
     typeNextLine();
     return;
   }
+  typeOneText(div, displayLine, () => {
+    typingPhase = 'delay';
+    typingLineIndex++;
+    const t = setTimeout(typeNextLine, preset.lineDelayMs);
+    typingTimeouts.push(t);
+  });
+}
+
+// Doorstep OOB guard: a thrown error here (e.g. a malformed line that splitHitLine
+// flags but the payload path trips on) must not stall the whole typewriter loop.
+function typeSplitHit(split) {
+  const box = document.getElementById('message-box');
+  const preset = getSpeedPreset();
+  const mkDiv = () => {
+    const d = document.createElement('div');
+    d.className = 'msg-line';
+    box.appendChild(d);
+    if (feedPinned) box.scrollTop = box.scrollHeight;
+    return d;
+  };
+  // Tell div — the attack identity. Types first, up to the short pause.
+  const tellDiv = mkDiv();
+  typingLineEl = tellDiv;
+  const tellText = stripTic(split.tell);
+  const finish = () => {
+    typingPhase = 'delay';
+    typingLineIndex++;
+    const t = setTimeout(typeNextLine, preset.lineDelayMs);
+    typingTimeouts.push(t);
+  };
+  if (preset.charMs === 0) {
+    tellDiv.textContent = tellText;
+    // Instant preset: no beat choreography — put tell and payload on screen at
+    // once so the log stays in sync, but still fire the deferred shake once.
+    const payloadDiv = mkDiv();
+    payloadDiv.textContent = stripTic(split.payload);
+    handleDeferredHit(split);
+    finish();
+    return;
+  }
+  typeOneText(tellDiv, tellText, () => {
+    // Short beat, then the impact shakes/flashes, then the payload types.
+    const impactTimer = setTimeout(() => {
+      handleDeferredHit(split);
+      const payloadDiv = mkDiv();
+      typingLineEl = payloadDiv;
+      // The real on-screen "delay" then holds naturally during payload typing.
+      typeOneText(payloadDiv, stripTic(split.payload), finish);
+    }, HIT_PAUSE_MS);
+    typingTimeouts.push(impactTimer);
+  });
+}
+
+// Debug-only tic stamp: hide "tic N — " unless the debug flag is on.
+function stripTic(s) {
+  return window.__PC_DEBUG ? s : s.replace(/^tic \d+ — /, '');
+}
+
+// Type `text` into `div` char-by-char per the speed preset, resolving `done`
+// when the line finishes typing. Pure char-loop shared by split sub-lines.
+// On an instant-preset AND/OR a live speed change to Instant mid-batch, dumps
+// any still-queued lines after the current one (PC-102) so the preset takes
+// effect instead of returning to a half-typed line.
+function typeOneText(div, text, done) {
+  const preset = getSpeedPreset();
+  if (preset.charMs === 0) {
+    div.textContent = text;
+    if (done) done();
+    return;
+  }
   let charIndex = 0;
+  typingPhase = 'chars';
+  function restartWithDump() {
+    div.textContent = text; // finish the current line outright
+    // Instant mid-batch: dump the rest so the preset actually takes effect.
+    for (let j = typingLineIndex + 1; j < typingLines.length; j++) appendFeedLine(typingLines[j]);
+    typingLineIndex = typingLines.length;
+    if (done) done();
+  }
   function typeChar() {
     const speed = getSpeedPreset();
     if (speed.charMs === 0) {
-      div.textContent = displayLine;
-      // Instant mid-batch: dump the rest so the preset actually takes effect.
-      for (let j = typingLineIndex + 1; j < typingLines.length; j++) appendFeedLine(typingLines[j]);
-      typingLineIndex = typingLines.length;
-      typeNextLine();
+      restartWithDump();
       return;
     }
-    if (charIndex < displayLine.length) {
-      div.textContent = displayLine.slice(0, charIndex + 1);
+    if (charIndex < text.length) {
+      div.textContent = text.slice(0, charIndex + 1);
       charIndex++;
       if (feedPinned) box.scrollTop = box.scrollHeight;
       const t = setTimeout(typeChar, speed.charMs);
       typingTimeouts.push(t);
     } else {
-      typingPhase = 'delay';
-      typingLineIndex++;
-      const t = setTimeout(typeNextLine, speed.lineDelayMs);
-      typingTimeouts.push(t);
+      if (done) done();
     }
   }
   typeChar();

@@ -14,20 +14,73 @@
  * (a whiff is a low-tension beat; feedback must not lie about impact).
  */
 const ARENA_LABEL = '(?:Monster #[0-9]+|[A-Z]|[A-Za-z]+(?: [A-Za-z]+)* [A-Z])';
-const MONSTER_HIT = new RegExp(`^tic \\d+ — (${ARENA_LABEL})(?: .*)? hits you for (\\d+) damage(?: CRITICAL!)?$`);
-const PLAYER_HIT = new RegExp(`^tic \\d+ — (LH|RH) .*? hits (${ARENA_LABEL}) for (\\d+)(?: CRITICAL!)?$`);
+// Monster→player: "<label> <attackName> hits you for <dmg> damage[( CRITICAL!)]".
+// `<atk>` is greedy up to the literal " hits you for " so it captures the full
+// attack phrase (e.g. "Claw", "Fire Claw"), with a fallback for a bare label.
+const MONSTER_HIT = new RegExp(`^tic \\d+ — (${ARENA_LABEL}) (.*?) hits you for (\\d+) damage(?: CRITICAL!)?$`);
+const MONSTER_HIT_NOATK = new RegExp(`^tic \\d+ — (${ARENA_LABEL}) hits you for (\\d+) damage(?: CRITICAL!)?$`);
+// Player→monster: "<LH|RH> <attack> hits <label> for <dmg>[( CRITICAL!)]".
+const PLAYER_HIT = new RegExp(`^tic \\d+ — (LH|RH) (.*?) hits (${ARENA_LABEL}) for (\\d+)(?: CRITICAL!)?$`);
 
 export function parseHitLine(line) {
   if (typeof line !== 'string') return null;
-  const monsterHit = line.match(MONSTER_HIT);
+  const monsterHit = line.match(MONSTER_HIT) || line.match(MONSTER_HIT_NOATK);
   if (monsterHit) {
-    return { type: 'monster', letter: arenaKey(monsterHit[1]), damage: Number(monsterHit[2]) };
+    const atk = monsterHit.length > 3 ? monsterHit[2] : null;
+    const dmgIdx = monsterHit.length > 3 ? 3 : 2;
+    return { type: 'monster', letter: arenaKey(monsterHit[1]), attack: atk?.trim() || null, damage: Number(monsterHit[dmgIdx]) };
   }
   const playerHit = line.match(PLAYER_HIT);
   if (playerHit) {
-    return { type: 'player', letter: arenaKey(playerHit[2]), damage: Number(playerHit[3]) };
+    return { type: 'player', letter: arenaKey(playerHit[3]), attack: playerHit[2].trim(), damage: Number(playerHit[4]) };
   }
   return null;
+}
+
+/**
+ * PC-117: split a landed-hit feed line into a "tell" (attack identity / intent)
+ * and a "payload" (the damage consequence) so the battle log can play the beat
+ * name → pause → impact → damage. Non-hit lines (misses, "prepares", system)
+ * return null and are typed as a single line, unchanged.
+ *
+ * Monster→player: "Imp A Claw hits you for 5 damage" → "Imp A attacks…" / "You take 5 damage."
+ * Player→monster: "RH Fire Bow hits Wolf A for 8"     → "RH Fire Bow hits Wolf A…" / "…for 8 damage."
+ *
+ * The tell names the attacker and intent; the SHORT PAUSE + impact (shake/flash)
+ * happens between them; the payload delivers the number as its own hard beat.
+ */
+export function splitHitLine(line) {
+  if (typeof line !== 'string') return null;
+  const isCrit = line.includes(' CRITICAL!');
+  const clean = isCrit ? line.replace(/ CRITICAL!$/, '') : line;
+  const hit = parseHitLine(clean);
+  if (!hit) return null;
+  if (hit.type === 'monster') {
+    // Full attacker label = the leading <name> <letter> (e.g. "Imp A", "Giant Rat B").
+    const labelMatch = clean.match(new RegExp(`^tic \\d+ — (${ARENA_LABEL})\\b`));
+    const attacker = labelMatch ? labelMatch[1] : hit.letter;
+    return {
+      kind: 'monster',
+      tell: `${attacker} attacks…`,
+      payload: `You take ${hit.damage} damage.`,
+      letter: hit.letter,
+      isCrit,
+    };
+  }
+  // player → monster: keep the whole "LH/RH <attack> hits <label>" as the tell.
+  const m = clean.match(/^tic \d+ — (LH|RH) (.*?) hits (.+?) for (\d+)$/);
+  if (!m) return null;
+  const handAtk = m[2].trim();
+  const tgt = arenaKey(m[3]);
+  // "RH Fire Bow hits Wolf A…" then "…for 8 damage."
+  // (kept minimal — the hand is already shown on the queue rail label)
+  return {
+    kind: 'player',
+    tell: `${m[1]} ${handAtk} hits ${tgt}…`,
+    payload: `…for ${hit.damage} damage${isCrit ? ' CRITICAL!' : ''}.`,
+    letter: hit.letter,
+    isCrit,
+  };
 }
 
 // "Wolf A" → "A", "Monster A" → "A", "A" → "A", "Monster #12" → "#12". Mirrors queueLabel().

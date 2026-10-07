@@ -132,6 +132,24 @@ function handleHitLine(line) {
   }
 }
 
+/**
+ * PC-117: fire the impact shake/flash for an already-split hit. The typewriter
+ * withholds this until the "tell" has typed and the short pause has passed, so
+ * the impact lands AFTER the attack name is on screen — not (as before) at the
+ * very onset of the line. Suppression (resume/history re-type) still applies.
+ * @param {{kind:'monster'|'player', letter:string, isCrit:boolean}} hit
+ */
+export function handleDeferredHit(hit) {
+  if (!hit || suppressHitFeedback) return;
+  if (hit.kind === 'monster') {
+    if (hit.isCrit) triggerCritWindowShake();
+    else triggerWindowShake();
+  } else {
+    if (hit.isCrit) triggerCritMonsterHit(hit.letter);
+    else triggerMonsterHit(hit.letter);
+  }
+}
+
 function syncArenaLetters(monsters) {
   arenaLetters = assignArenaLetters(monsters || [], arenaLetters);
   return arenaLetters;
@@ -295,6 +313,7 @@ export {
   hideForReveal,
   revealMonsters,
   handleHitLine,
+  handleDeferredHit,
   bandClass,
   deathCards,
   MONSTER_DEATH_MS,
