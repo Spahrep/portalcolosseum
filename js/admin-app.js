@@ -1174,7 +1174,7 @@ async function renderConsumableTemplates(container) {
     <button class="btn" id="create-ct-btn">+ Create New Consumable Template</button>
     <div id="ct-form-container"></div>
     <table>
-      <thead><tr><th>Name</th><th>Type</th><th>Effect</th><th>EV</th><th>Drink Speed</th><th>Duration</th><th># Instances</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Name</th><th>Type</th><th>Effect</th><th>EV</th><th>Drink Speed</th><th>Duration</th><th>Actions</th></tr></thead>
       <tbody id="ct-tbody"></tbody>
     </table>
   `;
@@ -1192,7 +1192,6 @@ async function renderConsumableTemplates(container) {
       <td>${Math.round((t.floor_base + t.floor_delta / 2 + (t.window_base + t.window_delta / 2) / 2) * 10) / 10}</td>
       <td>${t.speed_base}+, up to ${t.speed_base + t.speed_delta}</td>
       <td>${t.duration_ticks ?? 'instant'}</td>
-      <td>${t.instance_count ?? 0}</td>
       <td>
         <button class="btn" data-edit="${t.id}">Edit</button>
         <button class="btn btn-danger" data-delete="${t.id}">Delete</button>

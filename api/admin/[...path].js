@@ -553,10 +553,7 @@ async function handle(request, method) {
     if (method === 'GET' && !id) {
       const { data, error } = await admin.from(table).select('*').order('name');
       if (error) return json({ error: error.message }, 500);
-      const { data: instances } = await admin.from('consumable_instance').select('template_id');
-      const counts = {};
-      for (const row of instances || []) counts[row.template_id] = (counts[row.template_id] || 0) + 1;
-      return json({ data: data.map(t => ({ ...t, instance_count: counts[t.id] || 0 })) });
+      return json({ data });
     }
     if (method === 'POST' && !id) {
       const body = await getBody(request);
