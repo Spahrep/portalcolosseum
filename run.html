@@ -157,7 +157,7 @@
       90%  { transform: translate(1px, 0); }
       100% { transform: translate(0, 0); }
     }
-    .container-shake { animation: window-shake 0.28s linear; }
+    .container-shake { animation: window-shake var(--ux-shake, 280ms) linear; }
     @keyframes monster-card-shake {
       0%   { transform: translate(0, 0); }
       20%  { transform: translate(-3px, 0); }
@@ -166,12 +166,12 @@
       80%  { transform: translate(2px, 0); }
       100% { transform: translate(0, 0); }
     }
-    .monster-hit { animation: monster-card-shake 0.22s linear; }
+    .monster-hit { animation: monster-card-shake var(--ux-card-shake, 220ms) linear; }
     @keyframes sprite-hit-flash {
       0%   { background: #ffffff; filter: brightness(3); }
       100% { background: #112233; filter: brightness(1); }
     }
-    .sprite-flash { animation: sprite-hit-flash 0.18s ease-out; }
+    .sprite-flash { animation: sprite-hit-flash var(--ux-flash, 180ms) ease-out; }
     /* PC-74: crit juice escalation (harder shake/flash). Separate classes keep non-crit behavior unchanged.
        Stronger amplitude + longer duration. Class restart pattern in battle-app.js still applies. */
     @keyframes window-crit-shake {
@@ -185,7 +185,7 @@
       84%  { transform: translate(-2px, 1px); }
       100% { transform: translate(0, 0); }
     }
-    .container-crit-shake { animation: window-crit-shake 0.42s linear; }
+    .container-crit-shake { animation: window-crit-shake var(--ux-crit-shake, 420ms) linear; }
     @keyframes monster-crit-shake {
       0%   { transform: translate(0, 0); }
       15%  { transform: translate(-6px, 0); }
@@ -196,19 +196,19 @@
       90%  { transform: translate(2px, 0); }
       100% { transform: translate(0, 0); }
     }
-    .monster-crit-hit { animation: monster-crit-shake 0.28s linear; }
+    .monster-crit-hit { animation: monster-crit-shake var(--ux-crit-card, 280ms) linear; }
     @keyframes sprite-crit-flash {
       0%   { background: #ffffff; filter: brightness(4); }
       100% { background: #112233; filter: brightness(1); }
     }
-    .sprite-crit-flash { animation: sprite-crit-flash 0.28s ease-out; }
+    .sprite-crit-flash { animation: sprite-crit-flash var(--ux-crit-flash, 280ms) ease-out; }
     /* monster-card.crit is the hook for future unique crit sprite swap (see setMonsterSprite stub) */
     .monster-card.crit .monster-sprite { outline: 2px solid #ffcc00; outline-offset: 2px; }
     /* PC-71: monster death — the card flashes red (three pulses) then fades
        out in place. Keyframes override the card's inline background/border
        while the animation runs; `forwards` keeps the faded end state until
        battle-app.js removes the element (animationend + timeout fallback).
-       Duration must match MONSTER_DEATH_MS in js/battle-app.js. */
+       Length is --ux-death (dur('monsterDeath'), 1200ms at 1×). */
     @keyframes monster-death {
       0%   { background-color: rgba(0, 0, 0, 0.4); border-color: #4a90d9; opacity: 1; }
       14%  { background-color: #dd2222; border-color: #ff6666; }
@@ -220,7 +220,7 @@
       100% { background-color: #550000; border-color: #881111; opacity: 0; }
     }
     .monster-dying {
-      animation: monster-death 1.2s ease-in forwards;
+      animation: monster-death var(--ux-death, 1200ms) ease-in forwards;
       pointer-events: none;
     }
     .dice-labels {
@@ -344,7 +344,7 @@
       0% { opacity: 0; transform: translateX(20px); }
       100% { opacity: 1; transform: translateX(0); }
     }
-    .queue-row-enter { animation: queue-row-enter 250ms ease-out; }
+    .queue-row-enter { animation: queue-row-enter var(--ux-queue-enter, 250ms) ease-out; }
 
     @keyframes queue-row-slide-in {
       0% { opacity: 0; transform: translateX(30px); }
@@ -357,16 +357,15 @@
       100% { opacity: 0; transform: translateX(96px); }
     }
     /* Top-item exit: row stays in flow during slide-out (transform only; space
-       not released until removal). After 280ms exit completes, row is removed
-       and rows below FLIP-slide up. Duration matches QUEUE_EXIT_MS. */
+       not released until removal). Length is --ux-queue-exit (dur('queueExit')). */
     .queue-row-exit {
-      animation: queue-row-exit 280ms ease-in forwards;
+      animation: queue-row-exit var(--ux-queue-exit, 280ms) ease-in forwards;
     }
     /* FLIP slide-up for rows below the removed one: battle-app.js sets an
        inverted translateY for one frame, then clears it and the transition
        glides them up into the vacated slot. */
     .queue-row-lift {
-      transition: transform 280ms ease-in;
+      transition: transform var(--ux-queue-exit, 280ms) ease-in;
     }
     .queue-size-L .queue-row .tic { font-size: 14px!important; }
 
@@ -465,7 +464,7 @@
       overflow: hidden;
       position: relative;
       pointer-events: none;
-      transition: height 300ms ease-out, margin-bottom 300ms ease-out;
+      transition: height var(--ux-queue-gap, 300ms) ease-out, margin-bottom var(--ux-queue-gap, 300ms) ease-out;
     }
     .queue-insert-gap.open {
       height: var(--insert-gap, 24px);
@@ -484,7 +483,7 @@
       pointer-events: none;
     }
     .queue-insert-bar.wipe {
-      animation: queue-insert-wipe 250ms ease-in-out forwards;
+      animation: queue-insert-wipe var(--ux-queue-wipe, 250ms) ease-in-out forwards;
     }
     @keyframes queue-insert-wipe {
       from { width: 0; }
@@ -492,7 +491,7 @@
     }
     .queue-insert-bar.flash {
       width: 100%;
-      animation: insert-flash 150ms ease-out;
+      animation: insert-flash var(--ux-queue-flash, 150ms) ease-out;
     }
     @keyframes insert-flash {
       0%   { opacity: 1; }

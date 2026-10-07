@@ -7,23 +7,19 @@ import { debugLog } from '../battle-debug.js';
 import { getSpeedPreset } from '../settings-controller.js';
 import { nextTypingStateAfterClick } from './feed-skip.js';
 import { splitHitLine } from '../combat/hit-feedback.js';
+import { playLandedHit, whenHitsSettled } from './ux-controller.js';
 
 // setBusy + handleHitLine stay in battle-app.js. Bound here (and overridable
 // via typeFeedLines params) so this module does not import battle-app.js.
+// The landed-hit beat (pause + shake) is ux-controller; handleDeferredHit is
+// bound there, not here, so this file never imports monster-render.js.
 let setBusy = () => {};
 let handleHitLine = () => {};
-let handleDeferredHit = () => {};
 let setSuppressHitFeedback = () => {};
-
-// PC-117: beat length between a landed hit's "tell" (attack name) and its
-// impact. The typewriter holds this long, fires the shake/flash, then types
-// the damage payload. Shorter than lineDelayMs so the beat reads as one breath.
-const HIT_PAUSE_MS = 320;
 
 export function bindFeedRender(deps) {
   setBusy = deps.setBusy;
   handleHitLine = deps.handleHitLine;
-  handleDeferredHit = deps.handleDeferredHit || (() => {});
   setSuppressHitFeedback = deps.setSuppressHitFeedback;
 }
 
@@ -40,6 +36,11 @@ let typingLineEl = null;
 let typingLineText = '';
 let typingPhase = 'idle'; // 'chars' | 'delay' | 'idle'
 let typingOnComplete = null;
+// Bumped by clearTyping so a sealed batch does not resolve a callback that
+// latest-feed-wins already dropped. batchSeal makes finish idempotent while
+// an in-flight hit shake is still holding the narration promise open.
+let typingEpoch = 0;
+let batchSeal = null;
 // Feed lines already displayed in #message-box. The box is NOT a pure feed
 // mirror — it also holds the battle-complete panel, "Advancing..." and
 // "Attack committed" system lines — so the incremental feed diff must track
@@ -70,6 +71,8 @@ export async function awaitNarration(feed) {
 }
 
 export function clearTyping() {
+  typingEpoch++;
+  batchSeal = null;
   typingTimeouts.forEach(t => clearTimeout(t));
   typingTimeouts = [];
   typingInProgress = false;
@@ -90,18 +93,31 @@ function cancelTypingTimers() {
 }
 
 function finishTypingBatch() {
-  typingInProgress = false;
-  typingPhase = 'idle';
-  typingLineEl = null;
-  typingLineText = '';
-  if (typingSetBusy) {
-    setBusy(false);
-    document.body.classList.remove('command-hidden');
-    typingSetBusy = false;
-  }
+  if (batchSeal) return;
+  const epoch = typingEpoch;
   const done = typingOnComplete;
   typingOnComplete = null;
-  if (done) done();
+  // Deferred hit shakes start mid-line, after awaitTickVisuals has already
+  // snapshotted the DOM. Hold the narration resolve until animationend so
+  // releaseProcessedHead cannot cut them. No in-flight shake resolves on the
+  // next microtask. typingInProgress stays true until then so a second batch
+  // cannot start on top of the shake.
+  let seal;
+  seal = whenHitsSettled().then(() => {
+    if (batchSeal === seal) batchSeal = null;
+    if (epoch !== typingEpoch) return;
+    typingInProgress = false;
+    typingPhase = 'idle';
+    typingLineEl = null;
+    typingLineText = '';
+    if (typingSetBusy) {
+      setBusy(false);
+      document.body.classList.remove('command-hidden');
+      typingSetBusy = false;
+    }
+    if (done) done();
+  });
+  batchSeal = seal;
 }
 
 function typeNextLine() {
@@ -160,47 +176,41 @@ function typeNextLine() {
 
 // Doorstep OOB guard: a thrown error here (e.g. a malformed line that splitHitLine
 // flags but the payload path trips on) must not stall the whole typewriter loop.
+// Sequencing (tell → pause → shake → payload) is playLandedHit. This function
+// only supplies the typewriter primitives.
 function typeSplitHit(split) {
-  const box = document.getElementById('message-box');
-  const preset = getSpeedPreset();
-  const mkDiv = () => {
-    const d = document.createElement('div');
-    d.className = 'msg-line';
-    box.appendChild(d);
-    if (feedPinned) box.scrollTop = box.scrollHeight;
-    return d;
-  };
-  // Tell div — the attack identity. Types first, up to the short pause.
-  const tellDiv = mkDiv();
-  typingLineEl = tellDiv;
-  const tellText = stripTic(split.tell);
-  const finish = () => {
-    typingPhase = 'delay';
+  try {
+    playLandedHit(split, {
+      isInstant: () => getSpeedPreset().charMs === 0,
+      openLine: () => {
+        const box = document.getElementById('message-box');
+        const d = document.createElement('div');
+        d.className = 'msg-line';
+        if (box) {
+          box.appendChild(d);
+          if (feedPinned) box.scrollTop = box.scrollHeight;
+        }
+        typingLineEl = d;
+        return d;
+      },
+      display: stripTic,
+      typeText: (el, text, done) => typeOneText(el, text, done),
+      schedule: (fn, ms) => {
+        const t = setTimeout(fn, ms);
+        typingTimeouts.push(t);
+      },
+      finish: () => {
+        typingPhase = 'delay';
+        typingLineIndex++;
+        const t = setTimeout(typeNextLine, getSpeedPreset().lineDelayMs);
+        typingTimeouts.push(t);
+      },
+    });
+  } catch (err) {
+    debugLog('typeSplitHit', String(err && err.message || err));
     typingLineIndex++;
-    const t = setTimeout(typeNextLine, preset.lineDelayMs);
-    typingTimeouts.push(t);
-  };
-  if (preset.charMs === 0) {
-    tellDiv.textContent = tellText;
-    // Instant preset: no beat choreography — put tell and payload on screen at
-    // once so the log stays in sync, but still fire the deferred shake once.
-    const payloadDiv = mkDiv();
-    payloadDiv.textContent = stripTic(split.payload);
-    handleDeferredHit(split);
-    finish();
-    return;
+    typeNextLine();
   }
-  typeOneText(tellDiv, tellText, () => {
-    // Short beat, then the impact shakes/flashes, then the payload types.
-    const impactTimer = setTimeout(() => {
-      handleDeferredHit(split);
-      const payloadDiv = mkDiv();
-      typingLineEl = payloadDiv;
-      // The real on-screen "delay" then holds naturally during payload typing.
-      typeOneText(payloadDiv, stripTic(split.payload), finish);
-    }, HIT_PAUSE_MS);
-    typingTimeouts.push(impactTimer);
-  });
 }
 
 // Debug-only tic stamp: hide "tic N — " unless the debug flag is on.
@@ -238,7 +248,10 @@ function typeOneText(div, text, done) {
     if (charIndex < text.length) {
       div.textContent = text.slice(0, charIndex + 1);
       charIndex++;
-      if (feedPinned) box.scrollTop = box.scrollHeight;
+      if (feedPinned) {
+        const box = document.getElementById('message-box');
+        if (box) box.scrollTop = box.scrollHeight;
+      }
       const t = setTimeout(typeChar, speed.charMs);
       typingTimeouts.push(t);
     } else {

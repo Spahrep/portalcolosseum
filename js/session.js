@@ -17,6 +17,7 @@
  */
 
 import { supabaseClient } from './utils.js';
+import { setScreenshakeOn, setUxSpeed } from './settings-controller.js';
 
 /**
  * POST /api/session — persist the refresh token in an HttpOnly cookie.
@@ -169,6 +170,15 @@ export async function loadServerSettings(tokenForHeader) {
     if (!settings) return;
     if (settings.battle_text_speed) {
       localStorage.setItem('pc_battle_text_speed', settings.battle_text_speed);
+    }
+    // Server wins. Setters write pc_ux_speed / pc_screenshake_on and update
+    // the in-memory cache (init already ran at import). Unknown speeds are
+    // ignored so a bad profile value cannot leave a non-step in localStorage.
+    if (settings.ux_speed != null && settings.ux_speed !== '') {
+      setUxSpeed(settings.ux_speed);
+    }
+    if (typeof settings.screenshake_on === 'boolean') {
+      setScreenshakeOn(settings.screenshake_on);
     }
   } catch (e) {
     console.error('Settings fetch failed (soft):', e);

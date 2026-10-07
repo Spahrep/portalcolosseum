@@ -5,23 +5,14 @@
  */
 import { debugLog } from '../battle-debug.js';
 import { assignArenaLetters, letterForMonster } from './arena-letters.js';
+import { dur } from './ux-controller.js';
 
-// Exit animation duration for queue rows — MUST match the `.queue-row-exit`
-// / `.queue-row-lift` CSS in run.html. The battle clock holds the rebuild long
-// enough for the row to slide out AND the rows below to slide up before re-rendering.
-export const QUEUE_EXIT_MS = 280;
-// Genuine-removal sequence: slide fully out (QUEUE_EXIT_MS) → this gap →
-// remaining rows glide up TOGETHER (QUEUE_EXIT_MS again). See runQueueRemoval.
-export const QUEUE_REMOVE_GAP_MS = 100;
-// Insert ceremony durations — must match run.html (.queue-insert-gap / .queue-insert-bar / .queue-row-enter).
-export const QUEUE_GAP_MS = 300;
-export const QUEUE_WIPE_MS = 250;
-export const QUEUE_FLASH_MS = 150;
-export const QUEUE_ENTER_MS = 250;
+// Queue beat lengths live in ux-controller TIMING. dur() applies ux_speed.
+// The matching CSS (queue-row-exit, insert gap/wipe/flash, row enter) reads
+// the custom properties applyTimingScale() sets, so the animation and the
+// waitForEvent fallback stay the same length.
 
 let queueBarInfo = null; // {kind:'bar',firstId,lastId} | null — PC-56 prediction bar
-export const QUEUE_FILL_STAGGER = 600; // ms between timing rows appearing (First → last, one at a time)
-export const QUEUE_FILL_MS = 700;      // per-row fade
 
 // Bug 4 fix: persistent cache for exit-animating queue rows (like deathCards for monsters)
 const exitingQueueRows = new Map(); // rowId -> { element, finished }
@@ -187,7 +178,7 @@ export function renderQueue(bs, fill = false, onDone = null) {
     if (titleEl) titleEl.textContent = 'Action Queue';
     if (fill && onDone) {
       const rows = Math.max(queue.length, 1);
-      setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+      setTimeout(onDone, (rows - 1) * dur('queueFillStagger') + dur('queueFill'));
     }
     paintPredictionBar(el);
     return;
@@ -216,7 +207,7 @@ export function renderQueue(bs, fill = false, onDone = null) {
     if (titleEl) titleEl.textContent = 'Action Queue';
     if (fill && onDone) {
       const rows = Math.max(queue.length, 1);
-      setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+      setTimeout(onDone, (rows - 1) * dur('queueFillStagger') + dur('queueFill'));
     }
     paintPredictionBar(el);
     return;
@@ -231,7 +222,7 @@ export function renderQueue(bs, fill = false, onDone = null) {
     // Ceremony-intro: signal completion after the last row's fade lands, so the
     // command window never waits on an animation that cannot start (empty queue).
     const rows = Math.max(queue.length, 1);
-    setTimeout(onDone, (rows - 1) * QUEUE_FILL_STAGGER + QUEUE_FILL_MS);
+    setTimeout(onDone, (rows - 1) * dur('queueFillStagger') + dur('queueFill'));
   }
   if (queue.length === 0) return;
   const monsters = bs.monsters || [];
@@ -244,9 +235,9 @@ export function renderQueue(bs, fill = false, onDone = null) {
   if (fill) {
     // Ceremony-intro fill: reveal rows in engine array order, top to bottom.
     Array.from(el.children).forEach((row, i) => {
-      row.style.transition = `opacity ${QUEUE_FILL_MS}ms ease`;
+      row.style.transition = `opacity ${dur('queueFill')}ms ease`;
       row.style.opacity = '0';
-      setTimeout(() => { row.style.opacity = '1'; }, i * QUEUE_FILL_STAGGER);
+      setTimeout(() => { row.style.opacity = '1'; }, i * dur('queueFillStagger'));
     });
   }
 }

@@ -23,7 +23,10 @@ import {
   loadServerSettings,
   logout as sessionLogout,
 } from './session.js';
-import { showNotReadyModal, highlightSpeedButtons, highlightFontButtons, initMenuSettings } from './settings-menu.js';
+import {
+  showNotReadyModal, highlightSpeedButtons, highlightFontButtons,
+  highlightUxButtons, highlightShakeButtons, initMenuSettings,
+} from './settings-menu.js';
 
 // === SUPABASE CONFIGURATION ===
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
@@ -150,9 +153,16 @@ function hideNotReadyModal() {
 
 // === MENU / SETTINGS MODAL ===
 // Replaces the drunk-jester placeholder for the Menu (campfire) location.
-// Player-adjustable settings: battle text speed, log out.
-/** Focusable items in the settings modal: 0-2 = speed buttons, 3-5 = font size buttons, 6 = Log Out */
+// Player-adjustable settings: battle text speed, effect speed, screen shake, log out.
+/** Index into menuFocusItems() (every .speed-opt, then Log Out). */
 let menuFocusIndex = 0;
+
+function menuFocusItems() {
+  const items = Array.from(document.querySelectorAll('#menu-settings-modal .speed-opt'));
+  const logoutBtn = document.getElementById('menu-logout-btn');
+  if (logoutBtn) items.push(logoutBtn);
+  return items;
+}
 
 function isMenuSettingsOpen() {
   const modal = document.getElementById('menu-settings-modal');
@@ -169,6 +179,8 @@ function showMenuSettings() {
     // Highlight the currently active speed & font buttons
     highlightSpeedButtons();
     highlightFontButtons();
+    highlightUxButtons();
+    highlightShakeButtons();
     // Reset keyboard focus index to the first speed button
     menuFocusIndex = 0;
     updateMenuFocus();
@@ -184,21 +196,16 @@ function hideMenuSettings() {
 
 /** Apply visual focus to the currently focused menu item index */
 function updateMenuFocus() {
-  const items = document.querySelectorAll('.speed-opt');
-  const logoutBtn = document.getElementById('menu-logout-btn');
-  items.forEach((btn, i) => btn.classList.toggle('menu-focused', i === menuFocusIndex && menuFocusIndex < 6));
-  if (logoutBtn) logoutBtn.classList.toggle('menu-focused', menuFocusIndex === 6);
+  const items = menuFocusItems();
+  if (menuFocusIndex > items.length - 1) menuFocusIndex = Math.max(0, items.length - 1);
+  items.forEach((el, i) => el.classList.toggle('menu-focused', i === menuFocusIndex));
 }
 
 /** Activate (click) whatever item is currently focused */
 function activateMenuFocus() {
-  const items = document.querySelectorAll('.speed-opt');
-  if (menuFocusIndex < 6 && items[menuFocusIndex]) {
-    items[menuFocusIndex].click();
-  } else if (menuFocusIndex === 6) {
-    const logoutBtn = document.getElementById('menu-logout-btn');
-    if (logoutBtn) logoutBtn.click();
-  }
+  const items = menuFocusItems();
+  const el = items[menuFocusIndex];
+  if (el) el.click();
 }
 
 /** Handle arrow key navigation within the settings modal. Returns true if handled. */
@@ -229,10 +236,11 @@ function handleMenuKeydown(e) {
     case 'ArrowRight':
     case 'ArrowDown':
       e.preventDefault();
-      if (menuFocusIndex === 6) menuFocusIndex = 0;
-      else menuFocusIndex++;
-      // Clamp — speed+font buttons (0-5) don't wrap individually, but Down from Log Out wraps
-      if (menuFocusIndex > 6) menuFocusIndex = 6;
+      {
+        const last = Math.max(0, menuFocusItems().length - 1);
+        if (menuFocusIndex >= last) menuFocusIndex = 0;
+        else menuFocusIndex++;
+      }
       updateMenuFocus();
       return true;
     case 'Enter':

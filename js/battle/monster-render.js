@@ -6,13 +6,12 @@
 import { debugLog } from '../battle-debug.js';
 import { parseHitLine } from '../combat/hit-feedback.js';
 import { assignArenaLetters, letterForMonster } from './arena-letters.js';
+import { dur, screenshakeEnabled } from './ux-controller.js';
 
 // PC-51: monsters stay hidden while the dice roll ceremony plays, then
 // fade in one at a time. Set in the battle render when a roll will run;
 // revealMonsters() clears it when the roll completes.
 let monstersPendingReveal = false;
-const MONSTER_FADE_STAGGER = 1000; // ms pause between monster reveals (one at a time, with a beat)
-const MONSTER_FADE_MS = 1400;      // per-monster fade duration
 
 export function setMonstersPendingReveal(flag) {
   monstersPendingReveal = flag;
@@ -28,17 +27,10 @@ function bandClass(m) {
 }
 
 // PC-70: hit feedback — window shake when a monster hits the player, monster
-// card shake + sprite white-flash when the player lands a hit. Durations must
-// match the keyframes in run.html; the class-restart pattern (remove → reflow →
-// re-add) replays the animation on rapid successive hits.
-const HIT_FEEDBACK = {
-  WINDOW_SHAKE_MS: 280,
-  CARD_SHAKE_MS: 220,
-  FLASH_MS: 180,
-  // PC-74: harder/longer for crit juice (class restart still applies)
-  CRIT_WINDOW_SHAKE_MS: 420,
-  CRIT_FLASH_MS: 280
-};
+// card shake + sprite white-flash when the player lands a hit. Lengths come
+// from dur() and the matching --ux-* custom properties on the keyframes.
+// The class-restart pattern (remove → reflow → re-add) replays the animation
+// on rapid successive hits.
 let windowShakeTimer = null;
 let suppressHitFeedback = false; // intro-snap re-type narrates HISTORY — only NEW hits react
 export function setSuppressHitFeedback(flag) {
@@ -46,11 +38,16 @@ export function setSuppressHitFeedback(flag) {
 }
 const cardHitTimers = new WeakMap(); // per-card cleanup timer for multi-target hits
 
+function hitFeedbackBlocked() {
+  // Resume/history re-type AND the user's screenshake_on:false toggle.
+  // Both kill window shake, card shake, and the sprite flash.
+  return suppressHitFeedback || !screenshakeEnabled();
+}
+
 // PC-71: monster death — a dead monster's card flashes red and fades out in
-// place (run.html @keyframes monster-death), then is removed. Duration must
-// match the keyframes; the +200ms timeout is the fallback for environments
-// where animationend never fires (reduced-motion etc.).
-const MONSTER_DEATH_MS = 1200;
+// place (run.html @keyframes monster-death). dur('monsterDeath') matches
+// --ux-death. The +200ms timeout is the fallback when animationend never
+// fires (reduced-motion etc.).
 // Death cards survive renderMonsters' innerHTML wipe: they're re-appended
 // from this map (keyed by monster id) in their original arena position while
 // the animation plays, so a fast follow-up action can't cut the beat short.
@@ -60,17 +57,18 @@ let arenaLetters = new Map();
 
 function triggerWindowShake() {
   const el = document.querySelector('.container');
-  if (!el) return;
+  if (!el) return null;
   clearTimeout(windowShakeTimer);
   el.classList.remove('container-shake');
   void el.offsetWidth;
   el.classList.add('container-shake');
-  windowShakeTimer = setTimeout(() => el.classList.remove('container-shake'), HIT_FEEDBACK.WINDOW_SHAKE_MS);
+  windowShakeTimer = setTimeout(() => el.classList.remove('container-shake'), dur('shake'));
+  return el;
 }
 
 function triggerMonsterHit(letter) {
   const card = document.querySelector(`.monster-card[data-letter="${letter}"]`);
-  if (!card || card.classList.contains('monster-dying')) return;
+  if (!card || card.classList.contains('monster-dying')) return null;
   const sprite = card.querySelector('.monster-sprite');
   const prior = cardHitTimers.get(card);
   if (prior) clearTimeout(prior);
@@ -82,7 +80,8 @@ function triggerMonsterHit(letter) {
   cardHitTimers.set(card, setTimeout(() => {
     card.classList.remove('monster-hit');
     if (sprite) sprite.classList.remove('sprite-flash');
-  }, Math.max(HIT_FEEDBACK.CARD_SHAKE_MS, HIT_FEEDBACK.FLASH_MS)));
+  }, Math.max(dur('cardShake'), dur('flash'))));
+  return card;
 }
 
 // PC-74 crit juice: harder shake on player being crit-hit, harder flash on player critting monster.
@@ -90,17 +89,18 @@ function triggerMonsterHit(letter) {
 let critWindowShakeTimer = null;
 function triggerCritWindowShake() {
   const el = document.querySelector('.container');
-  if (!el) return;
+  if (!el) return null;
   clearTimeout(critWindowShakeTimer);
   el.classList.remove('container-crit-shake');
   void el.offsetWidth;
   el.classList.add('container-crit-shake');
-  critWindowShakeTimer = setTimeout(() => el.classList.remove('container-crit-shake'), HIT_FEEDBACK.CRIT_WINDOW_SHAKE_MS);
+  critWindowShakeTimer = setTimeout(() => el.classList.remove('container-crit-shake'), dur('critShake'));
+  return el;
 }
 
 function triggerCritMonsterHit(letter) {
   const card = document.querySelector(`.monster-card[data-letter="${letter}"]`);
-  if (!card || card.classList.contains('monster-dying')) return;
+  if (!card || card.classList.contains('monster-dying')) return null;
   const sprite = card.querySelector('.monster-sprite');
   const prior = cardHitTimers.get(card);
   if (prior) clearTimeout(prior);
@@ -112,13 +112,49 @@ function triggerCritMonsterHit(letter) {
   cardHitTimers.set(card, setTimeout(() => {
     card.classList.remove('monster-crit-hit');
     if (sprite) sprite.classList.remove('sprite-crit-flash');
-  }, HIT_FEEDBACK.CRIT_FLASH_MS));
+  }, Math.max(dur('critCardShake'), dur('critFlash'))));
+  return card;
+}
+
+// Resolve when the hit animation ends. Reduced-motion and a missing element
+// resolve immediately so narration is not held open for a shake that will
+// never fire animationend. The timeout is the same fallback awaitTickVisuals uses.
+function waitForHitAnimation(el, timeoutMs) {
+  return new Promise(resolve => {
+    if (!el || typeof el.addEventListener !== 'function') {
+      resolve();
+      return;
+    }
+    let reduce = false;
+    try {
+      reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    } catch {
+      reduce = false;
+    }
+    if (reduce) {
+      resolve();
+      return;
+    }
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      el.removeEventListener('animationend', onEnd);
+      resolve();
+    };
+    const onEnd = (e) => {
+      if (e.target !== el) return;
+      finish();
+    };
+    el.addEventListener('animationend', onEnd);
+    setTimeout(finish, timeoutMs);
+  });
 }
 
 // Route engine feed lines to the right reaction. parseHitLine is the single
 // source of truth for what counts as a hit (misses/Ready/defeat → no feedback).
 function handleHitLine(line) {
-  if (suppressHitFeedback) return;
+  if (hitFeedbackBlocked()) return;
   const isCrit = typeof line === 'string' && line.includes(' CRITICAL!');
   const cleanLine = isCrit ? line.replace(/ CRITICAL!$/, '') : line;
   const hit = parseHitLine(cleanLine);
@@ -139,15 +175,16 @@ function handleHitLine(line) {
  * very onset of the line. Suppression (resume/history re-type) still applies.
  * @param {{kind:'monster'|'player', letter:string, isCrit:boolean}} hit
  */
-export function handleDeferredHit(hit) {
-  if (!hit || suppressHitFeedback) return;
+function handleDeferredHit(hit) {
+  if (!hit || hitFeedbackBlocked()) return Promise.resolve();
   if (hit.kind === 'monster') {
-    if (hit.isCrit) triggerCritWindowShake();
-    else triggerWindowShake();
-  } else {
-    if (hit.isCrit) triggerCritMonsterHit(hit.letter);
-    else triggerMonsterHit(hit.letter);
+    if (hit.isCrit) return waitForHitAnimation(triggerCritWindowShake(), dur('critShake') + 80);
+    return waitForHitAnimation(triggerWindowShake(), dur('shake') + 80);
   }
+  if (hit.isCrit) {
+    return waitForHitAnimation(triggerCritMonsterHit(hit.letter), Math.max(dur('critCardShake'), dur('critFlash')) + 80);
+  }
+  return waitForHitAnimation(triggerMonsterHit(hit.letter), Math.max(dur('cardShake'), dur('flash')) + 80);
 }
 
 function syncArenaLetters(monsters) {
@@ -207,7 +244,7 @@ function renderMonsters(monsters) {
         // same tick (the killing blow) must not remove it early
         if (e.animationName === 'monster-death') finishDeath(key);
       });
-      entry.timer = setTimeout(() => finishDeath(key), MONSTER_DEATH_MS + 200);
+      entry.timer = setTimeout(() => finishDeath(key), dur('monsterDeath') + 200);
     } else {
       container.appendChild(buildMonsterCard(m, false));
     }
@@ -278,7 +315,7 @@ function finishDeath(key) {
 // While the roll plays, monster cards render invisible (laid out, opacity 0)
 // and materialize one at a time once the roll completes.
 function hideForReveal(el) {
-  el.style.transition = `opacity ${MONSTER_FADE_MS}ms ease`;
+  el.style.transition = `opacity ${dur('monsterFade')}ms ease`;
   el.style.opacity = '0';
 }
 
@@ -296,15 +333,15 @@ function revealMonsters(onDone) {
     return;
   }
   cards.forEach((card, i) => {
-    setTimeout(() => { card.style.opacity = '1'; }, i * MONSTER_FADE_STAGGER);
+    setTimeout(() => { card.style.opacity = '1'; }, i * dur('monsterFadeStagger'));
   });
   // onDone fires after the LAST card is fully in (stagger of the last card
   // plus its own fade) — the timing track and command window follow.
-  if (onDone) setTimeout(onDone, (cards.length - 1) * MONSTER_FADE_STAGGER + MONSTER_FADE_MS);
+  if (onDone) setTimeout(onDone, (cards.length - 1) * dur('monsterFadeStagger') + dur('monsterFade'));
 }
 
-// tickLoop / awaitTickVisuals in battle-app.js still read the death-card map
-// and the death duration. Exported so those call sites stay verbatim.
+// tickLoop / awaitTickVisuals in battle-app.js still read the death-card map.
+// Death length is dur('monsterDeath') — no exported constant.
 export {
   renderMonsters,
   buildMonsterCard,
@@ -316,7 +353,6 @@ export {
   handleDeferredHit,
   bandClass,
   deathCards,
-  MONSTER_DEATH_MS,
   syncArenaLetters,
   arenaLetterOf,
 };

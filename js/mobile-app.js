@@ -6,7 +6,10 @@ import {
   loadServerSettings,
   logout as sessionLogout,
 } from './session.js';
-import { showNotReadyModal, highlightSpeedButtons, highlightFontButtons, initMenuSettings } from './settings-menu.js';
+import {
+  showNotReadyModal, highlightSpeedButtons, highlightFontButtons,
+  highlightUxButtons, highlightShakeButtons, initMenuSettings,
+} from './settings-menu.js';
 
 // === SUPABASE CONFIGURATION ===
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
@@ -71,6 +74,8 @@ function showMenuSettings() {
     modal.hidden = false;
     highlightSpeedButtons();
     highlightFontButtons();
+    highlightUxButtons();
+    highlightShakeButtons();
   }
 }
 

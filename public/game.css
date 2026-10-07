@@ -282,6 +282,13 @@ body.game-page {
   gap: 16px;
   margin-bottom: 12px;
 }
+.settings-row-stack {
+  flex-wrap: wrap;
+}
+.settings-row-stack .setting-options {
+  flex: 1 1 100%;
+  justify-content: flex-end;
+}
 .settings-label {
   font-family: 'Pixeloid Mono', 'Courier New', monospace;
   font-size: 14px;
@@ -292,6 +299,8 @@ body.game-page {
 .setting-options {
   display: flex;
   gap: 6px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
 .speed-opt {
   background: #0a1a2e;

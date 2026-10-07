@@ -8,7 +8,11 @@
  * backdrop, and #logout-confirm-yes/no in initGame AND here, so confirm-yes
  * started logout twice.
  */
-import { setSpeed, setFontSize, getSpeedKey, getFontSizeKey, onSpeedChange, onFontSizeChange } from './settings-controller.js';
+import {
+  setSpeed, setFontSize, setUxSpeed, setScreenshakeOn,
+  getSpeedKey, getFontSizeKey, getUxSpeed, getScreenshakeOn,
+  onSpeedChange, onFontSizeChange, onUxSpeedChange, onScreenshakeChange,
+} from './settings-controller.js';
 
 const settingsHooks = {
   getSupabase: () => null,
@@ -25,8 +29,11 @@ export function showNotReadyModal() {
 
 export function highlightSpeedButtons() {
   const current = getSpeedKey();
-  document.querySelectorAll('.speed-opt').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.speed.toLowerCase() === current ||
+  // Font / effect-speed / shake buttons share .speed-opt for styling but have
+  // no data-speed. Only the text-speed row is highlighted here.
+  document.querySelectorAll('.speed-opt[data-speed]').forEach(btn => {
+    const key = btn.dataset.speed.toLowerCase();
+    btn.classList.toggle('active', key === current ||
       (btn.dataset.speed === 'STANDARD' && current === 'normal'));
   });
 }
@@ -35,6 +42,20 @@ export function highlightFontButtons() {
   const current = getFontSizeKey();
   document.querySelectorAll('.font-opt').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.font === current);
+  });
+}
+
+export function highlightUxButtons() {
+  const current = getUxSpeed();
+  document.querySelectorAll('.ux-opt').forEach(btn => {
+    btn.classList.toggle('active', Number(btn.dataset.ux) === current);
+  });
+}
+
+export function highlightShakeButtons() {
+  const on = getScreenshakeOn();
+  document.querySelectorAll('.shake-opt').forEach(btn => {
+    btn.classList.toggle('active', (btn.dataset.shake === 'on') === on);
   });
 }
 
@@ -47,6 +68,18 @@ export function setBattleTextSpeed(key) {
 export function setQueueFontSize(key) {
   setFontSize(key);
   highlightFontButtons();
+}
+
+export function setUxSpeedSetting(value) {
+  setUxSpeed(value);
+  highlightUxButtons();
+  syncSettings({ ux_speed: getUxSpeed() });
+}
+
+export function setScreenshakeSetting(on) {
+  setScreenshakeOn(on);
+  highlightShakeButtons();
+  syncSettings({ screenshake_on: getScreenshakeOn() });
 }
 
 /**
@@ -105,8 +138,9 @@ export function initMenuSettings(hooks = {}) {
     });
   }
 
-  // Speed option buttons
-  document.querySelectorAll('.speed-opt').forEach(btn => {
+  // Text-speed buttons only. Other .speed-opt rows (font, effect speed, shake)
+  // have their own data attributes and must not call setBattleTextSpeed.
+  document.querySelectorAll('.speed-opt[data-speed]').forEach(btn => {
     btn.addEventListener('click', () => {
       setBattleTextSpeed(btn.dataset.speed);
     });
@@ -119,9 +153,23 @@ export function initMenuSettings(hooks = {}) {
     });
   });
 
+  document.querySelectorAll('.ux-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setUxSpeedSetting(btn.dataset.ux);
+    });
+  });
+
+  document.querySelectorAll('.shake-opt').forEach(btn => {
+    btn.addEventListener('click', () => {
+      setScreenshakeSetting(btn.dataset.shake === 'on');
+    });
+  });
+
   // Subscribe to external changes (e.g. from battle tab or other tab) to keep highlights in sync
   onSpeedChange(() => highlightSpeedButtons());
   onFontSizeChange(() => highlightFontButtons());
+  onUxSpeedChange(() => highlightUxButtons());
+  onScreenshakeChange(() => highlightShakeButtons());
 
   // Logout button — shows the confirmation dialog
   const logoutBtn = document.getElementById('menu-logout-btn');

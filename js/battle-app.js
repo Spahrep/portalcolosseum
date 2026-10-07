@@ -13,13 +13,12 @@ import { apiCall, checkAuth } from './combat/combat-api.js';
 import { computeTimingMarkers } from './combat/tic-queue.js';
 import { getSpeedPreset, getFontSizeKey, onFontSizeChange } from './settings-controller.js';
 import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.debug in Supabase
+import { bindUxController, dur } from './battle/ux-controller.js';
 import {
   renderQueue, diffQueueForAnimation, markQueueRowExiting,
   buildQueueRow,
   setQueueBarInfo, clearQueueBarInfo, isQueueRowExiting,
   queueRowKey, isMonsterQueueRow, forgetQueueRowExiting,
-  QUEUE_EXIT_MS, QUEUE_REMOVE_GAP_MS, QUEUE_GAP_MS,
-  QUEUE_WIPE_MS, QUEUE_FLASH_MS, QUEUE_ENTER_MS
 } from './battle/queue-render.js';
 
 import {
@@ -31,9 +30,9 @@ import {
 import {
   renderDice, bindDiceRender, performSweepAnimation
 } from './battle/dice-render.js';
-import { renderMonsters, revealMonsters, handleHitLine,
+import { renderMonsters, revealMonsters, handleHitLine, handleDeferredHit,
          bandClass, setMonstersPendingReveal, syncArenaLetters, arenaLetterOf,
-         setSuppressHitFeedback, deathCards, MONSTER_DEATH_MS } from './battle/monster-render.js';
+         setSuppressHitFeedback, deathCards } from './battle/monster-render.js';
 import { escapeHtml } from './pure-utils.js';
 import { potionCommitPayload } from './battle/potion-target.js';
 import { shouldPlayIntroCountdown, INTRO_COUNTDOWN_STEPS } from './battle/intro-countdown.js';
@@ -43,6 +42,10 @@ import {
 
 // PC-78: feed and dice own their state. Hooks stay here (busy gate, hit
 // feedback, ceremony) so the new modules do not import battle-app.js.
+// The landed-hit shake is bound into the UX controller. handleDeferredHit
+// already refuses when suppressHitFeedback is set OR screenshake_on is false,
+// so window shake, card shake, and sprite flash share that one gate.
+bindUxController({ handleDeferredHit });
 bindFeedRender({
   setBusy,
   handleHitLine,
@@ -200,7 +203,7 @@ function sleep(ms) {
  * Timeout fallback preserves behavior when events never fire (reduced-motion
  * environments, etc.). Matches the monster-death pattern.
  */
-function waitForEvent(el, eventName, timeoutMs = QUEUE_EXIT_MS + 50) {
+function waitForEvent(el, eventName, timeoutMs = dur('queueExit') + 50) {
   return new Promise(resolve => {
     if (!el) {
       resolve();
@@ -226,9 +229,9 @@ function waitForEvent(el, eventName, timeoutMs = QUEUE_EXIT_MS + 50) {
 
 /**
  * Genuine-removal choreography (shared by BattleClock._runResolve and tickLoop):
- *   1) the resolved row(s) slide fully out over QUEUE_EXIT_MS (stays in flow),
- *   2) QUEUE_REMOVE_GAP_MS pause,
- *   3) the remaining rows FLIP up together as one unit over QUEUE_EXIT_MS.
+ *   1) the resolved row(s) slide fully out over dur('queueExit') (stays in flow),
+ *   2) dur('queueRemoveGap') pause,
+ *   3) the remaining rows FLIP up together as one unit over dur('queueExit').
  * Callers must pass exactly one id (slice(0,1)) per removal per the shipped spec.
  * The container is left with the remaining rows at their final positions; the
  * subsequent renderQueue() reconciles in place (stable-key pass) so this lift is
@@ -245,7 +248,7 @@ async function runQueueRemoval(resolvedIds) {
     if (row) exitRows.push(row);
   });
   await Promise.all(exitRows.map(r => waitForEvent(r, 'animationend')));
-  await sleep(QUEUE_REMOVE_GAP_MS); // 2) pause (gap is non-visual timing)
+  await sleep(dur('queueRemoveGap')); // 2) pause (gap is non-visual timing)
   await groupLiftRemaining();       // 3) glide the rest up together
 }
 
@@ -278,7 +281,7 @@ async function groupLiftRemaining() {
   });
   void queueEl.offsetHeight; // reflow to commit the locked transform
   siblings.forEach(r => {
-    r.style.transition = `transform ${QUEUE_EXIT_MS}ms ease-in`;
+    r.style.transition = `transform ${dur('queueExit')}ms ease-in`;
     r.style.transform = '';
   });
   // strict barrier inside step: await all transitionend events in parallel
@@ -520,7 +523,7 @@ async function openInsertGap(entry, queueEl, engineQueue) {
   else queueEl.appendChild(gap);
   void gap.offsetHeight;
   gap.classList.add('open');
-  await waitForEvent(gap, 'transitionend', QUEUE_GAP_MS + 80);
+  await waitForEvent(gap, 'transitionend', dur('queueGap') + 80);
   return gap;
 }
 
@@ -531,11 +534,11 @@ async function playInsertMarker(gap) {
   gap.appendChild(marker);
   void marker.offsetWidth;
   marker.classList.add('wipe');
-  await waitForEvent(marker, 'animationend', QUEUE_WIPE_MS + 80);
+  await waitForEvent(marker, 'animationend', dur('queueWipe') + 80);
   marker.classList.remove('wipe');
   void marker.offsetWidth;
   marker.classList.add('flash');
-  await waitForEvent(marker, 'animationend', QUEUE_FLASH_MS + 80);
+  await waitForEvent(marker, 'animationend', dur('queueFlash') + 80);
   return marker;
 }
 
@@ -560,7 +563,7 @@ async function playInsertCeremony(entries, preset, bs, opts) {
       const cls = isMonsterQueueRow(entry) ? 'queue-row-monster-enter' : 'queue-row-enter';
       rowEl.classList.add(cls);
       gap.replaceWith(rowEl);
-      const timeout = isMonsterQueueRow(entry) ? 450 : QUEUE_ENTER_MS + 80;
+      const timeout = isMonsterQueueRow(entry) ? 450 : dur('queueEnter') + 80;
       await waitForEvent(rowEl, 'animationend', timeout);
       rowEl.classList.remove('queue-row-enter', 'queue-row-monster-enter');
     } else {
@@ -584,7 +587,7 @@ async function awaitTickVisuals(deathBefore) {
     }
   }
   if (els.length === 0) return;
-  await Promise.all(els.map(el => waitForEvent(el, 'animationend', MONSTER_DEATH_MS + 80)));
+  await Promise.all(els.map(el => waitForEvent(el, 'animationend', dur('monsterDeath') + 80)));
 }
 
 /**
@@ -1904,7 +1907,7 @@ async function loadBattle(runId) {
               const isMonRow = entry ? isMonsterQueueRow(entry) : false;
               const cls = isMonRow ? 'queue-row-monster-enter' : 'queue-row-enter';
               row.classList.add(cls);
-              const timeout = isMonRow ? 450 : QUEUE_ENTER_MS + 80;
+              const timeout = isMonRow ? 450 : dur('queueEnter') + 80;
               waitForEvent(row, 'animationend', timeout).then(() => {
                 row.classList.remove('queue-row-enter', 'queue-row-monster-enter');
               });

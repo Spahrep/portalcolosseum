@@ -284,6 +284,13 @@
       gap: 12px;
       margin-bottom: 12px;
     }
+    .settings-row-stack {
+      flex-wrap: wrap;
+    }
+    .settings-row-stack .setting-options {
+      flex: 1 1 100%;
+      justify-content: flex-end;
+    }
     .settings-label {
       font-family: 'Pixeloid Mono', 'Courier New', monospace;
       font-size: 13px;
@@ -475,6 +482,27 @@
             <button class="speed-opt font-opt" data-font="S">S</button>
             <button class="speed-opt font-opt" data-font="M">M</button>
             <button class="speed-opt font-opt" data-font="L">L</button>
+          </div>
+        </div>
+
+        <!-- Effect speed: one multiplier for every battle effect duration -->
+        <div class="settings-row settings-row-stack">
+          <div class="settings-label">Effect Speed</div>
+          <div class="setting-options">
+            <button class="speed-opt ux-opt" data-ux="0.5">0.5×</button>
+            <button class="speed-opt ux-opt" data-ux="0.75">0.75×</button>
+            <button class="speed-opt ux-opt" data-ux="1">1×</button>
+            <button class="speed-opt ux-opt" data-ux="1.25">1.25×</button>
+            <button class="speed-opt ux-opt" data-ux="1.5">1.5×</button>
+          </div>
+        </div>
+
+        <!-- Screen shake + monster flash -->
+        <div class="settings-row">
+          <div class="settings-label">Screen Shake</div>
+          <div class="setting-options">
+            <button class="speed-opt shake-opt" data-shake="on">On</button>
+            <button class="speed-opt shake-opt" data-shake="off">Off</button>
           </div>
         </div>
 
