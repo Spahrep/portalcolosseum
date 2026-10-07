@@ -629,10 +629,10 @@
       padding: 12px;
       background: rgba(10,26,46,0.78);
       border-top: 2px solid #334466;
-      /* PC-80: fixed height so the menu never resizes when its buttons
-         render/clear — the main-area above stays put. The readout is
-         absolute and overlays within this fixed frame. */
-      height: 66px;
+      /* PC-80: fixed height so the menu never resizes when its cascade
+         windows render/clear — the main-area above stays put. The cascade
+         (.dw-root) needs ~236px, so the menu is sized to fit it. */
+      height: 260px;
       flex-shrink: 0;
       flex-grow: 0;
       box-sizing: border-box;
