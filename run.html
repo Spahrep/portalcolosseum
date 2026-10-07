@@ -246,6 +246,13 @@
       padding: 14px;
       background: rgba(0,0,0,0.45);
       border-right: 2px solid #334466;
+      /* PC-81: column so the loadout well can stretch to the panel bottom.
+         Panel bounds stay the stretched main-area height — content no longer
+         ends after the HP line and leaves a void. */
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      box-sizing: border-box;
     }
     .monsters-panel {
       flex: 1;
@@ -254,6 +261,10 @@
       min-height: 0;
       /* PC-78: scroll internally so the frame never grows past the screen */
       overflow-y: auto;
+      /* PC-81: column so #monsters (flex:1) fills below the title */
+      display: flex;
+      flex-direction: column;
+      box-sizing: border-box;
     }
     .queue-panel {
       width: 220px;
@@ -363,10 +374,17 @@
     #queue {
       position: relative;
       padding-right: 10px;
-      /* PC-77: scroll within the fixed panel instead of growing the frame */
+      /* PC-77: scroll within the fixed panel instead of growing the frame.
+         PC-81: flex:1 fills the column below the title. Rows stay packed at
+         the top (insert/exit + prediction bar keep their positions); the
+         inset well is the stretched content, so the area under the rows
+         reads as the queue track, not an empty void. */
       flex: 1;
       overflow-y: auto;
       min-height: 0;
+      box-sizing: border-box;
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid #2a3a55;
     }
     .prediction-bar {
       position: absolute;
@@ -557,6 +575,8 @@
       margin-bottom: 10px;
       padding-bottom: 4px;
       border-bottom: 1px solid #334466;
+      /* PC-81: titles stay put; the content well below them takes the rest */
+      flex-shrink: 0;
     }
     .message-log-title {
       display: flex;
@@ -591,6 +611,26 @@
       font-size: 13px;
       color: #a8c8ea;
       margin-top: 8px;
+      /* PC-81: stretch to the player-panel bottom. Weapon lines stay at the
+         top of the well; the well itself fills the void. Size is frame-driven,
+         so queue/monster updates do not resize it. */
+      flex: 1 1 auto;
+      min-height: 0;
+      box-sizing: border-box;
+      padding: 8px;
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid #2a3a55;
+    }
+    /* PC-81: monster list fills the panel below the title. Cards keep their
+       intrinsic size (no grow — a death must not resize the survivors) and
+       the panel still scrolls. The inset well is the stretched content. */
+    #monsters {
+      flex: 1 1 auto;
+      min-height: 0;
+      box-sizing: border-box;
+      padding: 4px;
+      background: rgba(0, 0, 0, 0.28);
+      border: 1px solid #2a3a55;
     }
     .message-log-wrap {
       /* PC-79: the message log frame is static — never shrinks/grows with
