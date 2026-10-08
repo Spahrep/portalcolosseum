@@ -2,9 +2,10 @@
 // Pure ESM. Ordered list of {id, label, event, tics}.
 // `tics` is an ordering key only: each new row is spliced into tics-ascending
 // position once, at insert, and the array is never globally re-sorted.
-// Ties at the same tic (§7): status/buff/expiry first, then other, then ready.
-// Within a category: LH before RH before monsters. Equal rank stays stable.
-// Head = first non-ready row in that frozen array order.
+// Ties at the same tic: status/buff/expiry first, then every other event
+// (including ready). Within a category: LH before RH before monsters.
+// A ready row sharing a tic with a monster impact therefore sorts first
+// (player-first). Head = queue[0]. Ready rows are not skipped.
 // F5: collision-free IDs via crypto.randomUUID().
 
 export function createQueue() {
@@ -12,8 +13,9 @@ export function createQueue() {
 }
 
 // §7 categories. buff_expiry is inserted with label null and must still sort first.
+// ready is a normal event (category 1), not a trailer. Player-first comes from
+// label rank: LH, then RH, then monsters.
 function tieCategory(entry) {
-  if (entry.event === 'ready') return 2;
   const event = entry.event || '';
   if (event === 'buff_expiry' || event === 'status' || event === 'buff' || event === 'dot' || event === 'expiry') {
     return 0;
@@ -51,14 +53,10 @@ export function addEvent(queue, label, event, tics, id = null) {
   return entry;
 }
 
-// Head = first non-ready row in array order. Leading ready rows are skipped.
+// Head is the first row. A ready row at index 0 is that actor's turn.
 // Does not sort and does not reorder.
 function firstActionableIndex(queue) {
-  let headIdx = 0;
-  while (headIdx < queue.length && queue[headIdx].event === 'ready') {
-    headIdx++;
-  }
-  return headIdx < queue.length ? headIdx : -1;
+  return queue.length > 0 ? 0 : -1;
 }
 
 export function popNext(queue) {
@@ -86,6 +84,26 @@ export function removeHead(queue) {
 
 export function commitNewRow(queue, label, event, tics) {
   return addEvent(queue, label, event, tics);
+}
+
+// Client ceremony and engine commit share this mutation: drop the consumed
+// ready row, splice the successor at its ordering key. Idempotent if the
+// successor id is already present (reconcile against a server-confirmed row).
+export function replaceReadyWithSuccessor(queue, readyRow, successor) {
+  const next = (queue || []).filter(r => !readyRow || r.id !== readyRow.id);
+  if (!successor) return next;
+  if (next.some(r => r.id === successor.id)) return next;
+  const entry = { ...successor };
+  next.splice(orderedInsertIndex(next, entry), 0, entry);
+  return next;
+}
+
+export function queuesMatch(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].id !== b[i].id || a[i].event !== b[i].event || a[i].label !== b[i].label) return false;
+  }
+  return true;
 }
 
 // PC-56: computeTimingMarkers returns bar info for prediction bar UX.

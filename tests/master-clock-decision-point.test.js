@@ -1,7 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import createEngine from '../js/combat/engine.js';
-import { peekHead } from '../js/combat/tic-queue.js';
 
 function seededRNG(seed = 42) {
   let s = seed;
@@ -11,30 +10,33 @@ function seededRNG(seed = 42) {
   };
 }
 
-describe('Master clock decision point (PC-100)', () => {
-  it('playerReady is false when monster winding/impact is next head, even if hand Ready', () => {
+describe('Master clock decision point (PC-106)', () => {
+  it('a monster row strictly ahead of a ready row fires before the menu pause', () => {
     const eng = createEngine(seededRNG(7));
     eng.startBattle({
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 1, hand_r_speed: 2 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 8, accuracy: 70, label: 'B' }]
+      monsters: [{ id: 1, max_hp: 80, damage: 1, speed: 8, accuracy: 1, label: 'B' }]
     });
-
-    // Force a state: hand Ready, monster winding ahead in queue
-    // Manually set one hand to Ready and insert a monster winding row at head
     eng.state.player.hands.RH.state = 'Ready';
-    // Clear queue and insert: monster winding (tics=5), then player row
     eng.state.queue.length = 0;
-    // mutate queue directly for repro (tests already access eng.state.queue)
-    eng.state.queue.push({ id: 'm1', label: 'B', event: 'winding', tics: 5 });
-    eng.state.queue.push({ id: 'p1', label: 'RH', event: 'winding', tics: 8 });
+    eng.state.queue.push({
+      id: 'm1', label: 'B', event: 'impact', tics: 2,
+      monsterAttackName: 'Bite', damage: 1, accuracy: 1, cooldownTicks: 4
+    });
+    eng.state.queue.push({ id: 'p1', label: 'RH', event: 'ready', tics: 8 });
 
     const result = eng.tick();
-    assert.equal(result.playerReady, false, 'monster winding ahead blocks prompt');
+    assert.equal(result.playerReady, false, 'ready is still behind the monster successor');
     assert.equal(result.needsInput, false);
+    assert.equal(result.row.id, 'm1');
+    assert.equal(eng.state.queue.some(r => r.id === 'p1'), true, 'ready row was not skipped or removed');
 
-    // Now simulate monster threat resolved (remove the winding row)
-    eng.state.queue.shift(); // remove monster winding
-    const result2 = eng.tick();
-    assert.equal(result2.playerReady, true, 'now prompt when no monster threat ahead');
+    // Monster cooldown landed at 4; ready is at 6. One more tick reaches the ready head.
+    const mid = eng.tick();
+    assert.equal(mid.row.event, 'cooldown');
+    const paused = eng.tick();
+    assert.equal(paused.playerReady, true, 'menu opens when the ready row is the head');
+    assert.equal(paused.needsInput, true);
+    assert.equal(eng.state.queue[0].id, 'p1', 'pause does not remove the ready row');
   });
 });

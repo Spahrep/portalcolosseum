@@ -348,6 +348,7 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1, initia
   div.dataset.rowId = row.id;
   div.dataset.tics = row.tics;
   div.dataset.stableKey = queueRowKey(row);
+  if (index === 0 && row.event === 'ready') div.classList.add('queue-row-ready-head');
   const nameSpan = document.createElement('span');
   nameSpan.className = 'name';
   // Ready placeholder rows: show the hand label and "Ready" — no tic countdown
@@ -410,6 +411,7 @@ export function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
   div.dataset.rowId = row.id;
   div.dataset.tics = row.tics;
   div.classList.toggle('top-row', index >= 0 && index < 3);
+  div.classList.toggle('queue-row-ready-head', index === 0 && row.event === 'ready');
   const isMonster = isMonsterQueueRow(row);
   const isRecovering = isMonsterCooldownRow(row);
   const hasBar = !isMonster && row.event !== 'ready' && row.event !== 'approach';

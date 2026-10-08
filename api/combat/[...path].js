@@ -198,6 +198,31 @@ function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: CORS });
 }
 
+// Commit/swap snapshot the client ceremony reconciles against. playerReady is
+// the queue head, matching engine.tick(). Nested state stays so existing
+// readers of data.state / data.result keep working.
+function commitSnapshot(engine, committed = {}) {
+  const snap = engine.getState();
+  const head = snap.queue && snap.queue[0];
+  return {
+    committed: true,
+    queue: snap.queue,
+    removed: committed.removed || null,
+    inserted: committed.inserted || null,
+    playerReady: !!(head && head.event === 'ready'),
+    battleOver: !!snap.battle_over,
+    state: {
+      queue: snap.queue,
+      participants: snap.participants,
+      player: snap.participants?.player || null,
+      feed: snap.feed,
+      tic: snap.tic,
+      battle_over: snap.battle_over,
+      player_dead: snap.player_dead
+    }
+  };
+}
+
 // PC-64r2: player max HP is config-driven (game_config.starting_hp).
 // Returns null when unset/unreadable → engine falls back to PLAYER_MAX_HP (1000).
 async function startingHp(admin) {
@@ -907,14 +932,14 @@ async function handle(request) {
         engine = createEngine();
       }
 
-      engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName, playerAccuracy, playerCritChance, playerCritMultiplier });
-      // NO advanceToNextDecision — commit inserts the winding row and returns immediately
-      // The client drives progression via /tick
+      const committed = engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName, playerAccuracy, playerCritChance, playerCritMultiplier });
+      // NO advanceToNextDecision — commit removes the ready head, inserts the
+      // winding row, and returns immediately. The client drives /tick.
 
       await admin.from('portal_run')
         .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp, ...potionUsedFlags(engine.state) })
         .eq('id', id).eq('user_id', user.id);
-      return json({ committed: true });
+      return json(commitSnapshot(engine, committed));
     }
 
     // POST /api/combat/runs/:id/tick — process ONE queue item
@@ -946,6 +971,10 @@ async function handle(request) {
 
       return json({
         result,
+        narration: result.narrate || '',
+        queue: newState.queue,
+        playerReady: !!result.playerReady,
+        battleOver: !!result.battleOver,
         state: {
           queue: newState.queue,
           participants: newState.participants,
@@ -1289,8 +1318,9 @@ async function handle(request) {
         params.weaponSpeed = weaponSpeed;
       }
 
+      let committed = { committed: true };
       try {
-        engine.commitPotion(slot, params);
+        committed = engine.commitPotion(slot, params) || committed;
       } catch (e) {
         return json({ error: e.message || 'Potion use failed' }, 400);
       }
@@ -1303,7 +1333,7 @@ async function handle(request) {
         })
         .eq('id', id).eq('user_id', user.id);
 
-      return json({ committed: true });
+      return json(commitSnapshot(engine, committed));
     }
 
     // POST /api/combat/runs/:id/swap {hand: 'LH'|'RH'}  (PC-54: mid-battle belt swap)
@@ -1378,19 +1408,20 @@ async function handle(request) {
         .eq('id', id).eq('user_id', user.id);
 
       const out = engine.getState();
+      const snap = commitSnapshot(engine, result);
       return json({
         hand,
         delay: result.delay,
         new_weapon_id: result.newWeaponId,
         old_weapon_id: result.oldWeaponId,
         player_hp: out.participants?.player?.hp ?? run.player_hp,
+        queue: snap.queue,
+        removed: result.removed || null,
+        inserted: result.inserted || null,
+        playerReady: snap.playerReady,
+        battleOver: snap.battleOver,
         state: {
-          queue: out.queue,
-          participants: out.participants,
-          feed: out.feed,
-          tic: out.tic,
-          battle_over: out.battle_over,
-          player_dead: out.player_dead,
+          ...snap.state,
           monsters_dead: out.monsters_dead,
           potions: out.potions,
           buffs: out.buffs

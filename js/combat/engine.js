@@ -66,10 +66,6 @@ function normalizePotion(p) {
   return { ...p, used: !!p.used };
 }
 
-function playerHasHandState(player, handState) {
-  return Object.values(player?.hands || {}).some(h => h.state === handState);
-}
-
 function battleIsOver(state) {
   const allMonstersDead = state.monsters.length > 0 && state.monsters.every(isMonsterDead);
   return allMonstersDead || (state.player ? isPlayerDead(state.player) : true);
@@ -126,21 +122,27 @@ function applyPotionWithCrit(state, potion, tic) {
   return { result, crit };
 }
 
-function removeReadyPlaceholder(queue, hand) {
-  const readyRow = queue.find(r => r.label === hand && r.event === 'ready');
-  if (readyRow) {
-    const idx = queue.indexOf(readyRow);
-    if (idx !== -1) queue.splice(idx, 1);
-  }
-}
-
-// tick() only. Skips ready rows and no-ops at cost 0. stepQueue is a different clock.
 function applyTickCost(queue, ticCost) {
   if (ticCost > 0) {
     for (const r of queue) {
-      if (r.event !== 'ready') r.tics = Math.max(0, r.tics - ticCost);
+      r.tics = Math.max(0, r.tics - ticCost);
     }
   }
+}
+
+// Consume the committing hand's ready row. Prefer the head (the live turn).
+// A ready row for this hand that is not the head is still consumed so a
+// second ready hand can be committed after the first; the live menu only
+// offers the head. Returns the removed row, or null if this hand has no token.
+function consumeReadyForHand(state, hand) {
+  const head = peekHead(state.queue);
+  if (head && head.event === 'ready' && head.label === hand) {
+    return removeHead(state.queue);
+  }
+  const ready = state.queue.find(r => r.label === hand && r.event === 'ready');
+  if (!ready) return null;
+  state.queue.splice(state.queue.indexOf(ready), 1);
+  return ready;
 }
 
 // Strike inputs live on the winding row so impact resolves them once.
@@ -399,8 +401,7 @@ function commitAttackAction(state, hand, attackId, targetIds = [], params = {}) 
   if (!state.player.hands[hand] || state.player.hands[hand].state !== 'Ready') {
     throw new Error('Hand not ready');
   }
-  // If there's a 'ready' placeholder row, remove it before creating the winding row
-  removeReadyPlaceholder(state.queue, hand);
+  const removed = consumeReadyForHand(state, hand);
   const dmgBuff = applyBuffs(state.buffs, state.tic, 'damage');
   const spdBuff = applyBuffs(state.buffs, state.tic, 'speed');
   const accBuff = applyBuffs(state.buffs, state.tic, 'accuracy');
@@ -424,7 +425,7 @@ function commitAttackAction(state, hand, attackId, targetIds = [], params = {}) 
   state.player.hands[hand].state = 'winding';
   state.player.hands[hand].attackId = attackId;
   logLine(state, `${hand} prepares to ${attackName || 'attack'}...`);
-  return { committed: true };
+  return { committed: true, removed, inserted: row };
 }
 
 function commitPotionAction(state, slot, params = {}) {
@@ -472,8 +473,7 @@ function commitPotionAction(state, slot, params = {}) {
   const weaponSpeed = Number(params.weaponSpeed) || 0;
   const pre = potionPrePostTicks(weaponSpeed, potion.rolled_speed);
   const post = pre;
-  // lock hand — remove any ready placeholder row first to prevent duplicates
-  removeReadyPlaceholder(state.queue, hand);
+  const removed = consumeReadyForHand(state, hand);
   state.player.hands[hand].state = 'drinking';
   state.player.hands[hand].attackId = null;
   const row = commitNewRow(state.queue, hand, 'drinking', pre);
@@ -481,7 +481,7 @@ function commitPotionAction(state, slot, params = {}) {
   row.postTicks = post;
   logLine(state, `${hand} drinks ${potion.template_name || potion.effect_type}...`);
   // Action cost: hand locked for pre + post = weapon.speed + potion.rolled_speed total (contract §7)
-  return { committed: true };
+  return { committed: true, removed, inserted: row };
 }
 
 export function createEngine(rng = Math.random) {
@@ -524,56 +524,80 @@ export function createEngine(rng = Math.random) {
     return removePhase(state);
   }
 
-  // Explicit Peek→Process→Cleanup→Remove phases (PC-94)
-  // Master loop (tick) calls them serially, one item at a time.
-  // remove() fires ONLY after process() — the head stays until narration
-  // data is produced. Never detach the head before process.
+  // Live clock: one peek. A ready head pauses (needsInput, no removal).
+  // Any other head is removed BEFORE process so handleFire inserts onto a
+  // clean queue and cannot double-fire. playerReady is the new head's event,
+  // never hand state.
   function tick() {
-    const row = peek();
-    if (!row) {
-      // No non-ready rows. Player needs to act or battle is over.
-      if (playerHasHandState(state.player, 'Ready')) return { needsInput: true, row: null };
-      return { done: true };
+    const head = peek();
+    if (!head || battleIsOver(state)) {
+      return {
+        narrate: '',
+        row: head || null,
+        feed: [],
+        needsInput: false,
+        playerReady: false,
+        battleOver: battleIsOver(state),
+        done: true
+      };
     }
-    const head = row;  // do not remove yet — remove LAST
-    // Live clock: the head's tic cost advances the absolute battle tic
-    // before process. stepQueue is a separate clock and already does this.
+    if (head.event === 'ready') {
+      return {
+        narrate: '',
+        row: head,
+        feed: [],
+        needsInput: true,
+        playerReady: true,
+        battleOver: false,
+        done: false
+      };
+    }
     const ticCost = head.tics;
     state.tic += ticCost;
+    const removed = remove();
     applyTickCost(state.queue, ticCost);
-    const result = process(head);
+    const result = process(removed);
     const cleanupResult = cleanup();
-    remove();  // pop head LAST, after process/cleanup
-    const narrate = result ? result.narrate : '';
-    const newFeed = result ? result.feed : [];
-    const battleOver = cleanupResult.battleOver;
-    // PC-100: playerReady only when no monster winding/impact is next
-    const nextHead = peekHead(state.queue);
-    const isMonsterThreat = nextHead &&
-      nextHead.label !== 'LH' && nextHead.label !== 'RH' &&
-      (nextHead.event === 'winding' || nextHead.event === 'impact');
-    const playerReady = isMonsterThreat ? false : playerHasHandState(state.player, 'Ready');
-    return { narrate, row: head, feed: newFeed, needsInput: false,
-      playerReady, battleOver };
+    const next = peek();
+    const playerReady = !!(next && next.event === 'ready');
+    return {
+      narrate: result ? result.narrate : '',
+      row: removed,
+      feed: result ? result.feed : [],
+      needsInput: playerReady,
+      playerReady,
+      battleOver: cleanupResult.battleOver,
+      done: false
+    };
+  }
+
+  // Legacy test clock. NOT the live /tick path. Walks the first non-ready row
+  // so advanceToNextDecision can finish an approach that sits behind a ready
+  // token. tick() never skips a ready head.
+  function legacyNonReadyIndex() {
+    let i = 0;
+    while (i < state.queue.length && state.queue[i].event === 'ready') i++;
+    return i < state.queue.length ? i : -1;
   }
 
   function stepQueue(captureFires = null) {
     if (isBattleOver()) {
       return getState();
     }
-    const rowHead = peekHead(state.queue);
-    if (!rowHead) {
+    const idx = legacyNonReadyIndex();
+    if (idx === -1) {
       return getState();
     }
+    const rowHead = state.queue[idx];
     const ticOffset = rowHead.tics;
     state.tic += ticOffset;
     // Not applyTickCost: this clock also moves state.tic and ready rows.
     for (const r of state.queue) {
       r.tics = Math.max(0, r.tics - ticOffset);
     }
-    // Remove the head row BEFORE firing so handleFire's addEvent/commitNewRow
-    // don't leave the original row duplicating in the queue
-    const removedRow = removeProcessedHead();
+    // Remove the row BEFORE firing so handleFire's addEvent/commitNewRow
+    // don't leave the original row duplicating in the queue.
+    const removedRow = state.queue.splice(idx, 1)[0];
     if (!removedRow) {
       return getState();
     }
@@ -617,30 +641,27 @@ export function createEngine(rng = Math.random) {
     return getState();
   }
 
-  // Compat wrapper for existing tests and old call sites — loops stepQueue until decision point.
-  // Preserves exact same feed output and RNG consumption order for determinism.
-  function hasApproachingHand() {
-    return playerHasHandState(state.player, 'Approach');
-  }
-
+  // Test/legacy helper. Live /tick does not call this. Stops when a ready row
+  // is queued and no approach row remains — both opening approaches can finish
+  // even after the first ready token exists, because stepQueue walks past it.
   function advanceToNextDecision(captureFires = null) {
     const fires = captureFires || [];
     let iterations = 0;
     while (true) {
       if (isBattleOver()) break;
+      const beforeIds = state.queue.map(r => r.id).join(',');
+      const beforeTic = state.tic;
       stepQueue(fires);
-      // Keep stepping past approach rows so ALL hands complete their initial approach
-      // (checkPlayerReady using .some() returns on the first Ready hand, but during
-      // startBattle both approach rows must fire before the player can choose a hand)
-      if (!hasApproachingHand() && checkPlayerReady()) break;
+      const approachLeft = state.queue.some(r => r.event === 'approach');
+      const hasReady = state.queue.some(r => r.event === 'ready');
+      if (!approachLeft && hasReady) break;
+      // A 0-tic morph keeps length and tic but changes row ids. Only a true
+      // no-op (nothing to fire) stops the legacy walker.
+      if (state.queue.map(r => r.id).join(',') === beforeIds && state.tic === beforeTic) break;
       iterations++;
       if (iterations > 500) break;
     }
     return getState();
-  }
-
-  function checkPlayerReady() {
-    return playerHasHandState(state.player, 'Ready');
   }
 
   function isBattleOver() {
@@ -726,16 +747,22 @@ export function createEngine(rng = Math.random) {
     if (!result.success) {
       return { error: result.error };
     }
-    // PC-54: the swap costs max(speeds) tics as a cooldown. Remove any existing
-    // ready/placeholder row for the hand, add a fresh cooldown.
-    // Any row for this hand, not only event==='ready' — do not use removeReadyPlaceholder.
-    const existing = state.queue.find(r => r.label === hand);
-    if (existing) {
-      const idx = state.queue.indexOf(existing);
-      if (idx !== -1) state.queue.splice(idx, 1);
+    // PC-54: swap cost is a cooldown row. Consume the ready head when it is
+    // this hand; otherwise drop this hand's row and insert the cost row.
+    let removed = null;
+    const head = peekHead(state.queue);
+    if (head && head.event === 'ready' && head.label === hand) {
+      removed = removeHead(state.queue);
+    } else {
+      const existing = state.queue.find(r => r.label === hand);
+      if (existing) {
+        removed = existing;
+        const idx = state.queue.indexOf(existing);
+        if (idx !== -1) state.queue.splice(idx, 1);
+      }
     }
-    addEvent(state.queue, hand, 'cooldown', result.delay);
-    return { success: true, delay: result.delay, newWeaponId: result.newWeaponId, oldWeaponId: result.oldWeaponId };
+    const inserted = addEvent(state.queue, hand, 'cooldown', result.delay);
+    return { success: true, delay: result.delay, newWeaponId: result.newWeaponId, oldWeaponId: result.oldWeaponId, removed, inserted };
   }
 
   return { startBattle, commitAttack, commitPotion, swapHandWithBelt, advanceToNextDecision, stepQueue, getState, state, loadState, stepOnce, removeProcessedHead, tick };

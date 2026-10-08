@@ -117,7 +117,7 @@ describe('PC-98 dead monster queue rows', () => {
 });
 
 describe('PC-98 same-tic tie order', () => {
-  it('status/expiry first, ready last, LH before RH before monsters inside a category', () => {
+  it('status/expiry first, then player rows including ready, before monsters', () => {
     const q = createQueue();
     addEvent(q, 'M', 'attack', 4);
     addEvent(q, 'RH', 'ready', 4);
@@ -125,13 +125,15 @@ describe('PC-98 same-tic tie order', () => {
     addEvent(q, null, 'buff_expiry', 4);
     addEvent(q, 'RH', 'cooldown', 4);
     addEvent(q, 'LH', 'ready', 4);
+    // PC-106: ready is not a trailer category. Same tic is player-first, so a
+    // ready row sorts ahead of a monster impact. LH before RH stays.
     assert.deepEqual(q.map(r => ({ label: r.label, event: r.event })), [
       { label: null, event: 'buff_expiry' },
       { label: 'LH', event: 'winding' },
-      { label: 'RH', event: 'cooldown' },
-      { label: 'M', event: 'attack' },
       { label: 'LH', event: 'ready' },
-      { label: 'RH', event: 'ready' }
+      { label: 'RH', event: 'ready' },
+      { label: 'RH', event: 'cooldown' },
+      { label: 'M', event: 'attack' }
     ]);
   });
 });

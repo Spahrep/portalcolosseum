@@ -68,17 +68,19 @@ describe('Master clock tick order (PC-94)', () => {
     assert.equal(eng.state.queue.includes(head), false, 'processed head is gone after tick');
     assert.ok(eng.state.feed.length > feedBefore, 'process ran and wrote narration before return');
     assert.equal(eng.state.player.hands.LH.state, 'Ready');
-    assert.equal(result.needsInput, false);
+    assert.equal(result.needsInput, true, 'approach insert leaves a ready head, so the clock pauses');
+    assert.equal(peekHead(eng.state.queue).event, 'ready');
   });
 
-  it('tick() source removes only after process', () => {
+  it('tick() source removes the head before process', () => {
     const src = read('js/combat/engine.js');
-    const tick = src.slice(src.indexOf('function tick()'), src.indexOf('function cancelQueuedAttacksOnDeadTargets'));
-    const processAt = tick.indexOf('process(head)');
-    const removeAt = tick.indexOf('remove()');
-    assert.ok(processAt > 0, 'process(head) is in tick()');
-    assert.ok(removeAt > processAt, 'remove() fires after process(head)');
-    assert.match(tick, /row: head/);
+    const tick = src.slice(src.indexOf('function tick()'), src.indexOf('function legacyNonReadyIndex'));
+    const processAt = tick.indexOf('process(removed)');
+    const removeAt = tick.indexOf('const removed = remove()');
+    assert.ok(removeAt > 0, 'remove() is in tick()');
+    assert.ok(processAt > removeAt, 'remove() fires before process — a ready head is not this path');
+    assert.match(tick, /row: removed/);
+    assert.match(tick, /head\.event === 'ready'/);
   });
 });
 
@@ -163,6 +165,8 @@ describe('Master clock visual fidelity (client contract)', () => {
     const removeAt = commit.indexOf('runQueueRemoval');
     const ceremonyAt = commit.indexOf('playInsertCeremony');
     assert.ok(ceremonyAt >= 0 && removeAt > ceremonyAt, 'attack lands, then ready row slides out');
+    assert.ok(commit.indexOf('replaceReadyWithSuccessor') >= 0 && commit.indexOf('replaceReadyWithSuccessor') < ceremonyAt,
+      'ceremony applies the queue mutation before painting the successor');
     assert.match(commit, /await Promise\.all\(\[narrateP, visualP\]\)/);
     const insert = fnBodyUntilNext(app, 'async _runInsert()', ['class BattleClock', 'async _runResolve()', 'async _renderNew()']);
     assert.equal(insert.includes('resolved.length === 0'), false);

@@ -10,7 +10,7 @@
 import { supabaseClient } from '../js/utils.js';
 import { fillHudName } from './session.js';
 import { apiCall, checkAuth } from './combat/combat-api.js';
-import { computeTimingMarkers } from './combat/tic-queue.js';
+import { computeTimingMarkers, replaceReadyWithSuccessor, queuesMatch } from './combat/tic-queue.js';
 import { getSpeedPreset, getFontSizeKey, onFontSizeChange } from './settings-controller.js';
 import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.debug in Supabase
 import { bindUxController, dur } from './battle/ux-controller.js';
@@ -595,25 +595,45 @@ async function awaitTickVisuals(deathBefore) {
  * THEN the ready placeholder slides out. Runs before the next /tick so the
  * clock does not swallow the insert.
  */
-async function playCommitArrival(runId) {
+async function playCommitArrival(runId, commitData) {
   const fullRun = await apiCall(`/runs/${runId}`, 'GET');
   const run = fullRun.run || fullRun;
   const rich = run.battle_state || {};
+  const serverQueue = (commitData && (commitData.queue || (commitData.state && commitData.state.queue))) || rich.queue || [];
   const bs = {
     ...rich,
+    queue: serverQueue,
     player_hp: run.player_hp ?? rich.player?.hp ?? 0,
     max_hp: run.max_hp ?? rich.player?.max_hp ?? 100
   };
-  const prev = lastBs;
+  const prevQueue = (lastBs && lastBs.queue) || [];
   const preset = getSpeedPreset();
-  const commits = findReadyCommits(prev?.queue || [], bs.queue || []);
-  const narrateP = awaitNarration(bs.feed || []);
+  let removed = commitData && commitData.removed;
+  let inserted = commitData && commitData.inserted;
+  if (!removed || !inserted) {
+    const inferred = findReadyCommits(prevQueue, serverQueue);
+    if (inferred[0]) {
+      removed = removed || inferred[0].ready;
+      inserted = inserted || inferred[0].attack;
+    }
+  }
+  // Ceremony applies the mutation. Server queue wins if the two disagree.
+  // A second call with the same inserted id is a no-op (idempotent).
+  let local = replaceReadyWithSuccessor(prevQueue, removed, inserted);
+  if (!queuesMatch(local, serverQueue)) local = serverQueue.map(r => ({ ...r }));
+  bs.queue = local;
+  const commits = findReadyCommits(prevQueue, local);
+  const narrateP = awaitNarration(bs.feed || rich.feed || []);
   const visualP = (async () => {
-    if (commits.length === 0) return;
-    // Attack slides into its slot first. Reconcile is deferred so the ready
-    // placeholder is still in the DOM to slide out after the ceremony lands.
-    await playInsertCeremony(commits.map(c => c.attack), preset, bs, { reconcile: false });
-    for (const c of commits) {
+    const entries = commits.length ? commits.map(c => c.attack) : (inserted ? [inserted] : []);
+    if (entries.length === 0) {
+      renderQueue(bs);
+      return;
+    }
+    await playInsertCeremony(entries, preset, bs, { reconcile: false });
+    const readyRows = commits.length ? commits : (removed ? [{ ready: removed }] : []);
+    for (const c of readyRows) {
+      if (!c.ready) continue;
       if (animationsSkipped(preset)) {
         const el = findQueueRowByIdentity(c.ready);
         if (el) el.remove();
@@ -627,7 +647,6 @@ async function playCommitArrival(runId) {
   lastBs = bs;
   renderPlayerHP(bs);
   renderLoadout(bs);
-  if (commits.length === 0) renderQueue(bs);
 }
 
 // Settings now live in ./settings-controller.js (single source of truth for speed + font size)
@@ -721,7 +740,7 @@ function finishBattleIntro() {
     // Dice ceremony text stays. Do not renderFeed([]) — that wipes the box.
     // Do not type a pre-advanced feed or both Ready lines.
     beginAfterIntro(() => {
-      if (currentRunId && !handReadyIn(lastBs)) {
+      if (currentRunId && !readyHeadOf(lastBs)) {
         tickLoop(currentRunId).catch(err => console.error('tickLoop ceremony:', err));
       } else {
         renderActionMenu(lastBs);
@@ -730,10 +749,11 @@ function finishBattleIntro() {
   }, totalDelay);
 }
 
-function handReadyIn(bs) {
-  const hands = bs && bs.player && bs.player.hands;
-  if (!hands) return false;
-  return Object.values(hands).some(h => h && h.state === 'Ready');
+function readyHeadOf(bs) {
+  const head = bs && bs.queue && bs.queue[0];
+  if (!head || head.event !== 'ready') return null;
+  if (head.label !== 'LH' && head.label !== 'RH') return null;
+  return head;
 }
 
 function introSeenKey() {
@@ -1414,7 +1434,7 @@ async function commitThenTick(runId, postFn, { message, hideMenu } = {}) {
     }
     enterMasterClock();
     try {
-      await playCommitArrival(runId);
+      await playCommitArrival(runId, data);
     } catch (err) {
       console.error('commit ceremony:', err);
     }
@@ -1489,7 +1509,6 @@ function renderActionMenu(bs) {
   pendingAttack = null;
   wrap.style.display = 'block';
 
-  const hands = (bs.player && bs.player.hands) || {};
   const weapons = bs.weapons || {};
   const queue = bs.queue || [];
   const monsters = (bs.monsters || []).filter(m => !m.dead);
@@ -1499,34 +1518,21 @@ function renderActionMenu(bs) {
   // roster (including the dead) so a kill cannot relabel the survivors.
   syncArenaLetters(bs.monsters || []);
 
-  // PC-52r: an empty hand is a Ready hand — it always has legal actions
-  // (potion, Fist unarmed attack), so the queue never waits on an impossible action.
-  const readyHands = ['LH', 'RH'].filter(h => {
-    const w = weapons[h === 'LH' ? 'hand_l' : 'hand_r'];
-    return hands[h] && hands[h].state === 'Ready' && (!w || w.id);
-  }).sort((a, b) => {
-    // PC-DEC-028: both ready → faster base attack (lower weapon speed) opens first; tie → LH.
-    // Missing speed (empty hand / anomalous data) sorts last — never a surprise first-mover.
-    const sa = weapons[a === 'LH' ? 'hand_l' : 'hand_r']?.speed ?? Number.MAX_SAFE_INTEGER;
-    const sb = weapons[b === 'LH' ? 'hand_l' : 'hand_r']?.speed ?? Number.MAX_SAFE_INTEGER;
-    return sa !== sb ? sa - sb : (a === 'LH' ? -1 : 1);
-  });
-  if (!readyHands.length) {
-    // no ready hand — show winding status
+  // The menu opens only when the queue head is a ready row. Hand state alone
+  // is not a turn — a monster row ahead of a ready token keeps the menu shut.
+  const head = readyHeadOf(bs);
+  if (!head) {
     const status = document.createElement('div');
     status.className = 'action-status';
-    status.textContent = ['LH', 'RH'].map(h => {
-      const w = weapons[h === 'LH' ? 'hand_l' : 'hand_r'];
-      if (!w || !w.id) return null;
-      const approachOrWindingRow = queue.find(q => (q.event === 'winding' || q.event === 'approach') && q.label === h);
-      const row = approachOrWindingRow;
-      return `${h} — ${row ? row.event : 'winding'}${row && row.tics != null ? ' ' + row.tics + ' tics' : ''}`;
-    }).filter(Boolean).join('  ·  ') || 'No hand ready';
+    const top = queue[0];
+    status.textContent = top
+      ? `${top.label || 'Next'} — ${top.event}${top.tics != null ? ' ' + top.tics + ' tics' : ''}`
+      : 'No hand ready';
     wrap.appendChild(status);
     return;
   }
 
-  const hand = readyHands[0];
+  const hand = head.label;
   const w = weapons[hand === 'LH' ? 'hand_l' : 'hand_r'];
   const handLineText = hand === 'LH' ? 'L.HAND' : 'R.HAND';
 
@@ -1865,7 +1871,10 @@ async function loadBattle(runId) {
       // tic is already past 0 (startBattle advanced); intro is the tic-0 snapshot.
       const showMenu = () => {
         document.body.classList.remove('intro-pending', 'queue-filling');
-        renderActionMenu(bs);
+        if (readyHeadOf(bs)) renderActionMenu(bs);
+        else if (currentRunId && !((bs.monsters || []).length > 0 && (bs.monsters || []).every(m => m.dead))) {
+          tickLoop(currentRunId).catch(err => console.error('tickLoop resume:', err));
+        }
       };
       const countdownFirst = !prevBs && introReady && !introAlreadySeen();
       if (!countdownFirst) showMenu();
@@ -2086,10 +2095,10 @@ async function tickLoop(runId) {
       };
       const processedHead = data.result?.row || null;
       const newQueue = bs.queue || [];
+      // A ready-head pause returns the row still in the queue. Do not pop it.
+      const headStillQueued = !!(processedHead && newQueue.some(r => r.id === processedHead.id));
 
-      // Processed head stays pinned through narration + visuals. Do not
-      // renderQueue (which would drop it) until both have finished.
-      pinProcessedHead(processedHead);
+      if (!headStillQueued) pinProcessedHead(processedHead);
 
       const deathBefore = new Set(deathCards.keys());
       renderPlayerHP(bs);
@@ -2103,7 +2112,9 @@ async function tickLoop(runId) {
 
       // Enemy successor is seated first, then the current top row leaves.
       // Player commits already add the new row before the ready row slides out.
-      await releaseProcessedHead(processedHead, newQueue, bs, preset);
+      if (!headStillQueued) {
+        await releaseProcessedHead(processedHead, newQueue, bs, preset);
+      }
 
       const oldKeys = new Set(oldQueue.map(queueRowKey));
       const newKeys = new Set(newQueue.map(queueRowKey));
