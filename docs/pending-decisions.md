@@ -519,6 +519,38 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: The `tic N — ` prefix is DEBUG data and must not be shown in the player battle log. Honored as shipped `6311f98` (`js/battle/feed-render.js`): the engine still emits raw `tic N — <msg>` lines, but the display layer strips the prefix for the player unless the debug flag is set (`window.__PC_DEBUG` from `/api/config` game_config.debug). The hit router still receives the raw line so hit-feedback shake keeps working; system/ceremony lines (no `tic N — ` prefix) pass through unstripped. Note: `docs/combat-system-testing.md:115` still lists "Message log shows 'tic N — LH prepares a [Attack Name]...'" — that verification line is now stale (flag ③). Applied to current-design-status.md. Decided by Spahrep, 2026-10-06.
 
+- ID: PC-DEC-063
+  Date: 2026-10-07
+  Source: Discord thread 1557449091900903555 (PC-117 UX session, "UX changes readiness check"), 14:51 — captured by the 2026-10-08 nightly sweep from the session DB
+  Speaker: Spahrep
+  Verbatim: "When a monster hits the player with an attack. The timing sequence on a landed attack should be: 1) Typewriter prints out \"Imp A Attacks ...\" 2) Short pause 3) Screen Shake 4) You take <<X>> damage. Like wise when your attacks land it should be 1/2/3/4 but instaed of screen shake it would be them shaking/flashing and the text of course would be apropriate."
+  Status: DECIDED
+  Notes: Refines PC-DEC-048's hit feedback with a precise LANDED-HIT BEAT SEQUENCE, both directions. Monster→player: typewriter attack line → short pause → window screen shake → damage line ("You take <<X>> damage"). Player→monster: same 1/2/3/4 but monster card shake/flash instead of window shake. The beat is the PC-117 landed-hit work; the split-line typewriter choreography + HIT_PAUSE_MS = `typeSplitHit` in js/battle/feed-render.js; deferred shake/flash via ux-controller handleDeferredHit. Shipped as commits 7fe86ac (feat: landed-hit beat sequence), 7210cbb (central UX controller), 024f171 (fix: player→monster landed-hit beat parser so it actually fires). Applied to current-design-status.md + ux-controller-workorder.md. Decided by Spahrep, 2026-10-07.
+
+- ID: PC-DEC-064
+  Date: 2026-10-07
+  Source: Discord thread 1557449091900903555 (PC-117 UX session), 15:10 — captured by the 2026-10-08 nightly sweep
+  Speaker: Spahrep
+  Verbatim: "also dont forget the shake from normal will be different from critical. So will shakes from magic impacts (PMVP), blocked hits (PMVP), and misses wont have a shake at all (MVP)"
+  Status: DECIDED
+  Notes: Shake tiers. Hit-impact shake/fx is NOT uniform: a NORMAL hit's shake differs from a CRITICAL hit's shake. Magic-impact shakes = PMVP (no magic attacks MVP). Blocked-hit shakes = PMVP. MISSES get NO shake at all (MVP — feedback must not lie about impact, reinforcing PC-DEC-048's "misses get none"). Applied to current-design-status.md. Decided by Spahrep, 2026-10-07.
+
+- ID: PC-DEC-065
+  Date: 2026-10-07
+  Source: Discord thread 1557449091900903555 (PC-117 UX session), 14:59–15:07 — captured by the 2026-10-08 nightly sweep
+  Speaker: Spahrep
+  Verbatim: "is it possible that you need one central controller for UX like i had asked for, and it calls all the effects?" + "I think things will probalby need to be in a config table of some sort, as users may want things sped up or down via their personal config menu" + "I think we will ahve screenshake on/off toggle + overall speed." + "Let's go with 1 for now, we can change later easily enough yes?"
+  Status: DECIDED
+  Notes: Per-user UX timing config behind ONE central controller. (1) Architecture: a single central UX controller (js/battle/ux-controller.js) is THE choke point — it owns a TIMING map of every currently-hardcoded duration and all beat sequences (typeprepare → pause → shake → payload). (2) Per-user config, persisted like battle_text_speed (localStorage mirrors + user-profile JSONB via /api/user/profile PATCH, no new table): `ux_speed` global multiplier (float, 1.0 default; >1 faster, <1 slower — all effect durations scale by base/ux_speed) and `screenshake_on` boolean toggle (false ⇒ window shake AND monster card shake/flash fully suppress; text beat unchanged). Shipped 686a13a (docs: ux-controller workorder), 7210cbb (feat: central UX controller one timing choke point + per-user speed/screenshake config), 024f171. "Let's go with 1" = option 1 for the inter-line pause value (tunable later). Applied to current-design-status.md + ux-controller-workorder.md. Decided by Spahrep, 2026-10-07.
+
+- ID: PC-DEC-066
+  Date: 2026-10-07
+  Source: Discord thread 1557479665159901236 (DarkJester, "Find consumables design docs"), 16:51 — captured by the 2026-10-08 nightly sweep from the session DB
+  Speaker: DarkJester
+  Verbatim: "Does a damage tonic increase your damage for a certain amount of ticks or instantly hurt the enemy for that much? And speed potions should not add speed but subtract it, since the smaller the number the faster the hits."
+  Status: DECIDED
+  Notes: Rules the Speed Tonic direction gap (flagged 10-07 in-thread by Hermes). (1) Damage tonic = a BUFF (flat damage bonus for duration_ticks, seeds say 8 tics, per potion-contract.md §1-2) — it does NOT instantly hurt the enemy; instant damage is the PMVP bomb/throwable. (2) Speed Tonic SUBTRACTS speed — lower speed value = faster (consistent with weapon-generation.md L99-103: speed is "ticks per attack"; 25 ≈ 4/sec, 55 ≈ 1.8/sec). The `+`-only floor/window rule applies to the BENEFIT (a bigger speed cut is better), NOT to the raw stat direction. This locks the loose "adds speed" phrasing in consumables.md so no implementing agent wires the potion backwards (a positive static addition to Speed would make hits slower). Applied to consumables.md. Decided by DarkJester, 2026-10-07.
+
 ## Open
 
 - ID: PC-DEC-004

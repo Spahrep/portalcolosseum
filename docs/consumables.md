@@ -49,6 +49,7 @@
 
 - Apply to the **player**, not the hand — both hands are affected (a speed potion speeds up both hands; e.g., RH 50 + LH 90 → both scaled).
 - **Flat values, additive stacking**: two speed potions both active = bonuses added. Each potion has its own **separate end tic** (no refresh mechanic).
+- **Speed Tonic subtracts speed** (lower = faster) — ruled PC-DEC-066. The `+`-only floor/window rule applies to the *benefit* (a bigger speed cut is better), NOT to the raw stat direction: the tonic applies a negative delta to the speed stat, since a smaller speed value = faster attacks (speed is "ticks per attack"). A positive static addition to Speed would make hits *slower* — never implemented that way. Decided by DarkJester, 2026-10-07.
 - **Duration** applies to non-heal consumables (speed/accuracy/damage). Heals are instant once the effect lands — no duration.
 
 ## Interruption & Disruption
