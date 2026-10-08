@@ -16,7 +16,7 @@ import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.de
 import { bindUxController, dur } from './battle/ux-controller.js';
 import {
   renderQueue, diffQueueForAnimation, markQueueRowExiting,
-  buildQueueRow, armQueueRowEnter,
+  buildQueueRow, armQueueRowEnter, updateQueueRowInPlace,
   setQueueBarInfo, clearQueueBarInfo, isQueueRowExiting,
   queueRowKey, isMonsterQueueRow, forgetQueueRowExiting,
 } from './battle/queue-render.js';
@@ -441,6 +441,17 @@ function reseatSameKeySuccessor(head, newQueue, bs, preset) {
   if (!successor) return;
   const queueEl = document.getElementById('queue');
   if (!queueEl) return;
+  // PC-118: a same-key successor is the SAME logical row (hand ready→winding→
+  // impact→cooldown→ready, monster winding→impact→cooldown). If a live node
+  // already carries this stable key, relabel it in place — never build a second
+  // DOM node. The caller's later renderQueue/updateQueueRowInPlace repaints it;
+  // we just arm the enter class so the phase change still animates.
+  const live = Array.from(queueEl.querySelectorAll('.queue-row'))
+    .find(r => r.dataset.stableKey === key && !r.classList.contains('queue-row-exit'));
+  if (live) {
+    if (!animationsSkipped(preset)) armQueueRowEnter(live, successor);
+    return;
+  }
   if (successor.id != null && queueEl.querySelector(`[data-row-id="${successor.id}"]`)) return;
   const monsters = (bs && bs.monsters) || [];
   // 4th arg is withMarkers, not an enter flag. Add the enter class explicitly.
@@ -457,11 +468,19 @@ async function releaseProcessedHead(head, newQueue, bs, preset) {
   if (!head) return;
   const row = findQueueRowByIdentity(head);
   if (!row) return;
-  // Successor lands first, while the processed row is still in the queue.
-  // Then that row slides out. Player hands and enemy heads share this order
-  // so a same-key phase change is a slide-in plus a slide-out, not a relabel.
+  const key = queueRowKey(head);
+  const successorSameKey = (newQueue || []).some(r => queueRowKey(r) === key);
   const id = row.dataset.rowId || head.id;
+  // Successor relabels the existing node in place (same-key rows are one logical
+  // row). Then a truly-removed head slides out; a same-key relabel does not.
   reseatSameKeySuccessor(head, newQueue, bs, preset);
+  if (successorSameKey) {
+    // The relabeled node stands in for the old row; do not exit or remove it.
+    row.classList.remove('queue-row-current', 'queue-row-exit');
+    if (id != null) forgetQueueRowExiting(id);
+    if (head.id != null) forgetQueueRowExiting(head.id);
+    return;
+  }
   if (animationsSkipped(preset)) {
     silentPopHead(head, newQueue, preset);
     return;
@@ -629,14 +648,26 @@ async function playCommitArrival(runId, commitData) {
   bs.queue = local;
   const commits = findReadyCommits(prevQueue, local);
   const narrateP = awaitNarration(bs.feed || rich.feed || []);
+  const keysEqual = (c) => !!(c.ready && c.attack) && queueRowKey(c.ready) === queueRowKey(c.attack);
+  const relabeled = commits.filter(keysEqual);
+  const ceremonyCommits = commits.filter(c => !keysEqual(c));
   const visualP = (async () => {
-    const entries = commits.length ? commits.map(c => c.attack) : (inserted ? [inserted] : []);
+    const monsters = (bs && bs.monsters) || [];
+    // PC-118: a hand commit's attack shares the ready row's stable key — relabel
+    // the ready node in place, never insert a second node nor remove the ready row.
+    for (const c of relabeled) {
+      const el = findQueueRowByIdentity(c.ready);
+      if (!el) continue;
+      updateQueueRowInPlace(el, c.attack, monsters, bs);
+      if (!animationsSkipped(preset)) armQueueRowEnter(el, c.attack);
+    }
+    const entries = ceremonyCommits.length ? ceremonyCommits.map(c => c.attack) : (commits.length ? [] : (inserted ? [inserted] : []));
     if (entries.length === 0) {
       renderQueue(bs);
       return;
     }
     await playInsertCeremony(entries, preset, bs, { reconcile: false });
-    const readyRows = commits.length ? commits : (removed ? [{ ready: removed }] : []);
+    const readyRows = ceremonyCommits.length ? ceremonyCommits : (commits.length ? [] : (removed ? [{ ready: removed }] : []));
     for (const c of readyRows) {
       if (!c.ready) continue;
       if (animationsSkipped(preset)) {

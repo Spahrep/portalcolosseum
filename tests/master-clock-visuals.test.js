@@ -210,11 +210,49 @@ describe('Master clock visual fidelity (client contract)', () => {
   });
 
   it('monster winding, impact, and cooldown stay one stable key', () => {
-    const queueRender = read('js/battle/queue-render.js');
-    const keyFn = fnBodyUntilNext(queueRender, 'function queueRowKey', ['function isMonsterLabel']);
-    assert.match(keyFn, /row\.event === 'winding'/);
-    assert.match(keyFn, /row\.event === 'impact'/);
-    assert.match(keyFn, /row\.event === 'cooldown'/);
-    assert.match(keyFn, /`m:\$\{row\.label\}`/);
+      const queueRender = read('js/battle/queue-render.js');
+      const keyFn = fnBodyUntilNext(queueRender, 'function queueRowKey', ['function isMonsterLabel']);
+      assert.match(keyFn, /row\.event === 'winding'/);
+      assert.match(keyFn, /row\.event === 'impact'/);
+      assert.match(keyFn, /row\.event === 'cooldown'/);
+      assert.match(keyFn, /`m:\$\{row\.label\}`/);
+    });
+
+    it('PC-118: a same-key successor relabels the existing node, never a second DOM node', () => {
+      const app = read('js/battle-app.js');
+      // reseatSameKeySuccessor must short-circuit on a live same-stable-key node
+      // BEFORE it can build/insert a second row.
+      const reseatFn = fnBodyUntilNext(app, 'function reseatSameKeySuccessor', ['async function releaseProcessedHead']);
+      const liveCheck = reseatFn.indexOf('dataset.stableKey === key');
+      const buildAt = reseatFn.indexOf('buildQueueRow');
+      assert.ok(liveCheck >= 0 && buildAt > liveCheck,
+        'reseat checks for a live same-key node before it can build a second row');
+      assert.match(reseatFn, /classList\.contains\('queue-row-exit'\)/,
+        'the live-node check ignores an exiting row so a genuine removal still reseats');
+      // releaseProcessedHead must NOT runQueueRemoval when the head has a same-key
+      // successor (the node was relabeled in place, not removed).
+      const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
+      const sameKeyAt = releaseFn.indexOf('successorSameKey');
+      const removeAt = releaseFn.indexOf('runQueueRemoval');
+      assert.ok(sameKeyAt >= 0 && removeAt > sameKeyAt,
+        'same-key successor returns before any runQueueRemoval');
+      assert.match(releaseFn, /forgetQueueRowExiting/,
+        'relabeled head clears its exit mark instead of sliding out');
+      // playCommitArrival relabels the ready row in place for a same-key commit.
+      const commit = fnBody(app, 'playCommitArrival');
+      assert.ok(commit.indexOf('updateQueueRowInPlace') >= 0 && commit.indexOf('updateQueueRowInPlace') < commit.indexOf('playInsertCeremony'),
+        'commit relabels the ready node in place before any ceremony insert');
+      assert.match(commit, /keysEqual/);
+    });
+
+    it('PC-118: renderQueue defensively drops a duplicate stable-key node', () => {
+      const queueRender = read('js/battle/queue-render.js');
+      const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
+      const stable = render.indexOf('domKeys.size === newKeys.length');
+      const dedup = render.indexOf('seenLive');
+      assert.ok(stable >= 0 && dedup > stable,
+        'stable-key branch dedups duplicate stable keys before relabeling');
+      assert.match(render.slice(stable, render.indexOf('clearQueueDom()')), /r\.remove\(\)/,
+        'the extra same-key node is removed, never left asas a ghost');
+    });
   });
-});

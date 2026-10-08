@@ -232,10 +232,24 @@ export function renderQueue(bs, fill = false, onDone = null) {
     const monsters = bs.monsters || [];
     const nonRows = Array.from(el.children).filter(c => !c.classList.contains('queue-row'));
     nonRows.forEach(c => c.remove());
+    // PC-118 defensive: a same stable key must never leave two live nodes in the
+    // DOM. If a duplicate slipped through, keep the non-exiting row and drop the
+    // extra so a relabel-in-place render never leaves a ghost copy behind.
+    const seenLive = new Set();
+    for (const r of Array.from(currentRows)) {
+      const k = r.dataset.stableKey;
+      if (!k) continue;
+      if (seenLive.has(k)) {
+        r.remove();
+        continue;
+      }
+      if (!r.classList.contains('queue-row-exit')) seenLive.add(k);
+    }
+    const liveRows = Array.from(el.querySelectorAll('.queue-row'));
     queue.forEach((row, index) => {
       const key = queueRowKey(row);
-      const domEl = currentRows.find(r => r.dataset.stableKey === key && !r.classList.contains('queue-row-exit'))
-        || currentRows.find(r => r.dataset.stableKey === key);
+      const domEl = liveRows.find(r => r.dataset.stableKey === key && !r.classList.contains('queue-row-exit'))
+        || liveRows.find(r => r.dataset.stableKey === key);
       if (!domEl || !domEl.parentNode) return;
       const rowsNow = Array.from(el.querySelectorAll('.queue-row'));
       if (rowsNow[index] !== domEl) {
