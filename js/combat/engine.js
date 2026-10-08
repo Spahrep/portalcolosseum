@@ -66,22 +66,8 @@ function normalizePotion(p) {
   return { ...p, used: !!p.used };
 }
 
-function isPlayerHand(label) {
-  return label === 'LH' || label === 'RH';
-}
-
-function isPlayerReadyRow(row) {
-  return !!row && isPlayerHand(row.label) && row.event === 'ready';
-}
-
-// peekHead skips leading ready rows (tic-queue.js firstActionableIndex), so a
-// non-null peek means a non-ready row is still the thing the clock will
-// process. A player decision is at the head only when that peek is empty and
-// the frozen front is a player ready row. Hand state is not an authority.
-function playerDecisionHead(queue) {
-  if (!queue || queue.length === 0) return null;
-  if (peekHead(queue)) return null;
-  return isPlayerReadyRow(queue[0]) ? queue[0] : null;
+function playerHasHandState(player, handState) {
+  return Object.values(player?.hands || {}).some(h => h.state === handState);
 }
 
 function battleIsOver(state) {
@@ -545,11 +531,8 @@ export function createEngine(rng = Math.random) {
   function tick() {
     const row = peek();
     if (!row) {
-      // No non-ready row left. Prompt only if the frozen front is a player
-      // ready row. An empty queue, or a Ready hand with no ready row, is done.
-      if (playerDecisionHead(state.queue)) {
-        return { needsInput: true, playerReady: true, row: null };
-      }
+      // No non-ready rows. Player needs to act or battle is over.
+      if (playerHasHandState(state.player, 'Ready')) return { needsInput: true, row: null };
       return { done: true };
     }
     const head = row;  // do not remove yet — remove LAST
@@ -564,10 +547,12 @@ export function createEngine(rng = Math.random) {
     const narrate = result ? result.narrate : '';
     const newFeed = result ? result.feed : [];
     const battleOver = cleanupResult.battleOver;
-    // Prompt from the queue head alone. A ready row behind a monster
-    // cooldown/winding/impact, or behind the other hand's winding, is not
-    // the head — peekHead still has a non-ready row to process.
-    const playerReady = !!playerDecisionHead(state.queue);
+    // PC-100: playerReady only when no monster winding/impact is next
+    const nextHead = peekHead(state.queue);
+    const isMonsterThreat = nextHead &&
+      nextHead.label !== 'LH' && nextHead.label !== 'RH' &&
+      (nextHead.event === 'winding' || nextHead.event === 'impact');
+    const playerReady = isMonsterThreat ? false : playerHasHandState(state.player, 'Ready');
     return { narrate, row: head, feed: newFeed, needsInput: false,
       playerReady, battleOver };
   }
@@ -632,13 +617,10 @@ export function createEngine(rng = Math.random) {
     return getState();
   }
 
-  // Compat wrapper for existing tests and old call sites — loops stepQueue until
-  // a player ready row exists and no approach row remains. That stop is queue
-  // rows, not hand state. It is not the live clock: monster rows may still sit
-  // behind a ready placeholder, and tick() will not prompt while they do.
-  // Preserves feed output and RNG consumption order for determinism.
+  // Compat wrapper for existing tests and old call sites — loops stepQueue until decision point.
+  // Preserves exact same feed output and RNG consumption order for determinism.
   function hasApproachingHand() {
-    return state.queue.some(r => isPlayerHand(r.label) && r.event === 'approach');
+    return playerHasHandState(state.player, 'Approach');
   }
 
   function advanceToNextDecision(captureFires = null) {
@@ -646,11 +628,10 @@ export function createEngine(rng = Math.random) {
     let iterations = 0;
     while (true) {
       if (isBattleOver()) break;
-      if (!peekHead(state.queue)) break;
       stepQueue(fires);
       // Keep stepping past approach rows so ALL hands complete their initial approach
-      // (a ready row for one hand must not stop the wrapper while the other
-      // approach row is still in the queue).
+      // (checkPlayerReady using .some() returns on the first Ready hand, but during
+      // startBattle both approach rows must fire before the player can choose a hand)
       if (!hasApproachingHand() && checkPlayerReady()) break;
       iterations++;
       if (iterations > 500) break;
@@ -659,7 +640,7 @@ export function createEngine(rng = Math.random) {
   }
 
   function checkPlayerReady() {
-    return state.queue.some(isPlayerReadyRow);
+    return playerHasHandState(state.player, 'Ready');
   }
 
   function isBattleOver() {
