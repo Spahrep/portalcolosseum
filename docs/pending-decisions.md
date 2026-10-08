@@ -551,6 +551,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Rules the Speed Tonic direction gap (flagged 10-07 in-thread by Hermes). (1) Damage tonic = a BUFF (flat damage bonus for duration_ticks, seeds say 8 tics, per potion-contract.md §1-2) — it does NOT instantly hurt the enemy; instant damage is the PMVP bomb/throwable. (2) Speed Tonic SUBTRACTS speed — lower speed value = faster (consistent with weapon-generation.md L99-103: speed is "ticks per attack"; 25 ≈ 4/sec, 55 ≈ 1.8/sec). The `+`-only floor/window rule applies to the BENEFIT (a bigger speed cut is better), NOT to the raw stat direction. This locks the loose "adds speed" phrasing in consumables.md so no implementing agent wires the potion backwards (a positive static addition to Speed would make hits slower). Applied to consumables.md. Decided by DarkJester, 2026-10-07.
 
+- ID: PC-DEC-067
+  Date: 2026-10-08
+  Source: Discord thread 1557555686395744266 (Wolf-battle queue setup / queue-authority debugging), 10:45–10:47 — captured by the 2026-10-08 midday sweep from the session DB
+  Speaker: Spahrep
+  Verbatim: "That sounds like another example of it not being a single puppetmaster driver that works one step at a time and uses the que..." [truncated at source] + "I want you to get grok to fix the code so it follows this desing decision in all aspects. Every time we find a bug it seems to be because things arent' working as expectged"
+  Status: DECIDED
+  Notes: Confirms the Master Clock / single-driver architecture (docs/action-visual-lifecycle.md §17): the queue is the single source of truth, the clock advances ONE step at a time off the queue head ("the first non-ready row" — tic-queue.js:54-61), and the player is prompted only when the head is a player-decision row. Adds an "all aspects" conformance mandate — the engine must NOT derive turn authority from a separate hand-state check (`playerHasHandState`); that is a second puppetmaster. Any bug caused by drift from the single-driver contract is to be fixed by conforming the code to the design (queue-as-sole-authority), not patched at the symptom. Raised after the run-226 wolf desync: `tick()` answered "prompt" from hand readiness while the queue head was the wolf's non-ready row. The clean alignment (PC-100 guard re-applied earlier is a reconciliation patch) = make `playerReady` derive solely from the head being a player-decision row, dispatched to Grok as a single-file engine refactor + test. Applied to current-design-status.md. Decided by Spahrep, 2026-10-08.
+
 ## Open
 
 - ID: PC-DEC-004
