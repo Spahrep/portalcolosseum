@@ -116,7 +116,7 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.match(settle, /waitForEvent\(rowEl, 'animationend'/);
   });
 
-  it('tickLoop pins the head through narration, then enemy heads slide out', () => {
+  it('tickLoop pins the head through narration, then the successor lands before the head slides out', () => {
     const loop = fnBody(app, 'tickLoop');
     const post = loop.indexOf('/tick');
     const pin = loop.indexOf('pinProcessedHead(processedHead)');
@@ -126,11 +126,27 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.ok(post >= 0 && pin > post && narrate > pin && both > narrate && release > both,
       'order is POST → pin → narrate → await both → release head');
     const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
-    assert.match(releaseFn, /isEnemyQueueHead/);
+    // PC-107: player hands use the same reseat-then-exit order as enemies.
+    // The old isEnemyQueueHead early-return pinned the silent pop.
+    assert.equal(releaseFn.includes('isEnemyQueueHead'), false);
     assert.match(releaseFn, /runQueueRemoval/);
     assert.match(releaseFn, /reseatSameKeySuccessor/);
-    const popFn = fnBodyUntilNext(app, 'function silentPopHead', ['function isEnemyQueueHead']);
-    assert.equal(popFn.includes('runQueueRemoval'), false, 'player silent pop does not slide');
+    assert.match(releaseFn, /animationsSkipped/);
+    assert.ok(releaseFn.indexOf('reseatSameKeySuccessor') < releaseFn.indexOf('runQueueRemoval'),
+      'successor lands before the processed row leaves');
+    const popFn = fnBodyUntilNext(app, 'function silentPopHead', ['function reseatSameKeySuccessor']);
+    assert.equal(popFn.includes('runQueueRemoval'), false, 'pop marks exiting; the lift stays in releaseProcessedHead');
+    assert.match(popFn, /markQueueRowExiting/, 'animated path slides out with queue-row-exit');
+    assert.match(popFn, /animationsSkipped/);
+    assert.ok(popFn.indexOf('animationsSkipped') < popFn.indexOf('row.remove()'),
+      'instant remove stays on the skipped path only');
+    assert.ok(popFn.indexOf('row.remove()') < popFn.indexOf('markQueueRowExiting'),
+      'row.remove() is not the animated branch');
+    const reseatFn = fnBodyUntilNext(app, 'function reseatSameKeySuccessor', ['async function releaseProcessedHead']);
+    assert.match(reseatFn, /armQueueRowEnter/);
+    assert.match(reseatFn, /animationsSkipped/);
+    assert.equal(/buildQueueRow\(successor,\s*monsters,\s*bs,\s*true\)/.test(reseatFn), false,
+      '4th arg is withMarkers, not the enter flag');
     assert.match(loop, /runQueueRemoval/); // non-head path still slides
     const ceremonyAt = loop.indexOf('playInsertCeremony');
     const readyRemove = loop.indexOf('runQueueRemoval([c.ready.id])');
@@ -174,6 +190,23 @@ describe('Master clock visual fidelity (client contract)', () => {
     const clockCeremony = renderNew.indexOf('playInsertCeremony');
     const clockRemove = renderNew.indexOf('runQueueRemoval');
     assert.ok(clockCeremony >= 0 && clockRemove > clockCeremony, 'battle clock: attack ceremony before ready slide-out');
+  });
+
+  it('same-key phase change arms the enter class without rebuilding the queue', () => {
+    const queueRender = read('js/battle/queue-render.js');
+    const upd = fnBodyUntilNext(queueRender, 'function updateQueueRowInPlace', ['function sortQueueRows']);
+    assert.match(upd, /dataset\.queueEvent/);
+    assert.match(upd, /armQueueRowEnter/);
+    const arm = fnBodyUntilNext(queueRender, 'function armQueueRowEnter', ['function monsterQueueName']);
+    assert.match(arm, /queue-row-enter/);
+    assert.match(arm, /queue-row-monster-enter/);
+    assert.match(arm, /queueAnimationsSkipped/);
+    const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
+    const stable = render.indexOf('domKeys.size === newKeys.length');
+    const clear = render.indexOf('clearQueueDom()');
+    assert.ok(stable >= 0 && clear > stable, 'stable-key path returns before any full rebuild');
+    assert.ok(render.slice(stable, clear).includes('return;'), 'stable-key path does not fall through to clearQueueDom');
+    assert.equal(render.slice(stable, clear).includes('clearQueueDom'), false);
   });
 
   it('monster winding, impact, and cooldown stay one stable key', () => {

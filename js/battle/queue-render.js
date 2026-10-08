@@ -6,6 +6,7 @@
 import { debugLog } from '../battle-debug.js';
 import { assignArenaLetters, letterForMonster } from './arena-letters.js';
 import { dur } from './ux-controller.js';
+import { getSpeedPreset } from '../settings-controller.js';
 
 // Queue beat lengths live in ux-controller TIMING. dur() applies ux_speed.
 // The matching CSS (queue-row-exit, insert gap/wipe/flash, row enter) reads
@@ -56,6 +57,43 @@ export function isMonsterQueueRow(row) {
 
 function isMonsterCooldownRow(row) {
   return isMonsterLabel(row) && row.event === 'cooldown';
+}
+
+/** Instant preset and reduced-motion skip queue motion. Mirrors battle-app
+ * animationsSkipped without importing it (that module imports this one). */
+function queueAnimationsSkipped() {
+  try {
+    if (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      return true;
+    }
+  } catch (_) { /* no window in some test hosts */ }
+  const p = getSpeedPreset();
+  return !p || p.charMs === 0;
+}
+
+/** Enter class for a phase change. Monsters pulse; player rows slide. */
+export function queueRowEnterClass(row) {
+  if (row && row.label && row.label !== 'LH' && row.label !== 'RH' &&
+      (row.event === 'winding' || row.event === 'impact' || row.event === 'attack' || row.event === 'cooldown')) {
+    return 'queue-row-monster-enter';
+  }
+  return 'queue-row-enter';
+}
+
+/** Play the enter animation on an existing or just-built node. No-op when
+ * animations are skipped. The class comes off on animationend so a later
+ * phase change can replay it. Does not rebuild the node. */
+export function armQueueRowEnter(node, row) {
+  if (!node || queueAnimationsSkipped()) return;
+  const cls = queueRowEnterClass(row);
+  node.classList.remove('queue-row-enter', 'queue-row-monster-enter');
+  // Re-adding a class that was just removed needs a reflow or the browser
+  // will not restart the animation.
+  void node.offsetWidth;
+  node.classList.add(cls);
+  node.addEventListener('animationend', () => {
+    node.classList.remove('queue-row-enter', 'queue-row-monster-enter');
+  }, { once: true });
 }
 
 function monsterQueueName(row, monsters) {
@@ -184,7 +222,10 @@ export function renderQueue(bs, fill = false, onDone = null) {
     return;
   }
   // Stable-key successor (hand phase, monster winding↔impact↔cooldown): relabel the
-  // existing node. Move a node only if its engine slot actually changed.
+  // existing node. A phase change gets queue-row-enter / queue-row-monster-enter
+  // inside updateQueueRowInPlace — never rebuild the queue to animate it.
+  // Move a node only if its engine slot actually changed. Prefer the non-exiting
+  // node when a departing same-key row is still in the DOM.
   const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
   const newKeys = queue.map(queueRowKey);
   if (domKeys.size === newKeys.length && newKeys.every(k => domKeys.has(k))) {
@@ -192,7 +233,9 @@ export function renderQueue(bs, fill = false, onDone = null) {
     const nonRows = Array.from(el.children).filter(c => !c.classList.contains('queue-row'));
     nonRows.forEach(c => c.remove());
     queue.forEach((row, index) => {
-      const domEl = currentRows.find(r => r.dataset.stableKey === queueRowKey(row));
+      const key = queueRowKey(row);
+      const domEl = currentRows.find(r => r.dataset.stableKey === key && !r.classList.contains('queue-row-exit'))
+        || currentRows.find(r => r.dataset.stableKey === key);
       if (!domEl || !domEl.parentNode) return;
       const rowsNow = Array.from(el.querySelectorAll('.queue-row'));
       if (rowsNow[index] !== domEl) {
@@ -348,6 +391,7 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1, initia
   div.dataset.rowId = row.id;
   div.dataset.tics = row.tics;
   div.dataset.stableKey = queueRowKey(row);
+  div.dataset.queueEvent = row.event || '';
   if (index === 0 && row.event === 'ready') div.classList.add('queue-row-ready-head');
   const nameSpan = document.createElement('span');
   nameSpan.className = 'name';
@@ -465,6 +509,16 @@ export function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
     targetSpan.textContent = `└─ ${targetName}`;
   } else if (targetSpan) {
     targetSpan.remove();
+  }
+  // Phase change (cooldown→ready, winding→impact→cooldown) slides in on this
+  // node. Tic-only updates keep the same event and must not re-enter. A node
+  // just built by reseat already has queueEvent set, so a follow-up render
+  // does not replay the enter class that path added.
+  const prevEvent = div.dataset.queueEvent || '';
+  const nextEvent = row.event || '';
+  div.dataset.queueEvent = nextEvent;
+  if (prevEvent && prevEvent !== nextEvent) {
+    armQueueRowEnter(div, row);
   }
 }
 

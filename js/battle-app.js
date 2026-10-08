@@ -16,7 +16,7 @@ import './battle-debug.js'; // debugLog(tag, msg) — toggled via game_config.de
 import { bindUxController, dur } from './battle/ux-controller.js';
 import {
   renderQueue, diffQueueForAnimation, markQueueRowExiting,
-  buildQueueRow,
+  buildQueueRow, armQueueRowEnter,
   setQueueBarInfo, clearQueueBarInfo, isQueueRowExiting,
   queueRowKey, isMonsterQueueRow, forgetQueueRowExiting,
 } from './battle/queue-render.js';
@@ -405,31 +405,36 @@ function pinProcessedHead(head) {
 }
 
 /**
- * Head removal for a player hand is a silent pop — no exit slide. A same-key
- * successor stays in the DOM so renderQueue can relabel it in place.
- * An enemy row at the top slides out, then its same-key successor is seated
- * again with no enter animation so the queue does not rebuild and re-slide.
+ * Drop a processed head without a slide. Only the skipped-animation path
+ * (instant preset / reduced motion) may delete the node. The animated path
+ * marks queue-row-exit and leaves the node in flow so the rows below can
+ * lift together — runQueueRemoval owns the wait and the group-lift.
+ * A same-key successor must already have been reseated; this must not
+ * row.remove() that departing node while the successor is taking its place.
  */
-function silentPopHead(head, newQueue) {
+function silentPopHead(head, newQueue, preset) {
   if (!head) return;
   const row = findQueueRowByIdentity(head);
   if (!row) return;
-  row.classList.remove('queue-row-current', 'queue-row-exit');
   const key = queueRowKey(head);
   const successorSameKey = (newQueue || []).some(r => queueRowKey(r) === key);
-  if (!successorSameKey) {
-    exitingQueueRows.delete(row.dataset.rowId);
-    if (head.id != null) exitingQueueRows.delete(head.id);
+  if (animationsSkipped(preset)) {
+    row.classList.remove('queue-row-current', 'queue-row-exit');
+    forgetQueueRowExiting(row.dataset.rowId);
+    if (head.id != null) forgetQueueRowExiting(head.id);
     row.remove();
+    return;
   }
+  // Animated: never delete outright. Same-key successor and true head
+  // removal both slide out. Do not strip queue-row-exit — that class IS
+  // the slide.
+  row.classList.remove('queue-row-current');
+  const id = row.dataset.rowId || head.id;
+  if (id != null) markQueueRowExiting(id);
+  if (successorSameKey) return;
 }
 
-function isEnemyQueueHead(row) {
-  if (!row || row.label === 'LH' || row.label === 'RH') return false;
-  return queueRowKey(row).startsWith('m:');
-}
-
-function reseatSameKeySuccessor(head, newQueue, bs) {
+function reseatSameKeySuccessor(head, newQueue, bs, preset) {
   if (!head) return;
   const key = queueRowKey(head);
   const successor = (newQueue || []).find(r => queueRowKey(r) === key);
@@ -438,7 +443,9 @@ function reseatSameKeySuccessor(head, newQueue, bs) {
   if (!queueEl) return;
   if (successor.id != null && queueEl.querySelector(`[data-row-id="${successor.id}"]`)) return;
   const monsters = (bs && bs.monsters) || [];
+  // 4th arg is withMarkers, not an enter flag. Add the enter class explicitly.
   const node = buildQueueRow(successor, monsters, bs, false);
+  if (!animationsSkipped(preset)) armQueueRowEnter(node, successor);
   const rows = Array.from(queueEl.querySelectorAll('.queue-row'));
   const idx = insertIndexFor(successor, rows, newQueue);
   const ref = rows[idx] || null;
@@ -448,20 +455,18 @@ function reseatSameKeySuccessor(head, newQueue, bs) {
 
 async function releaseProcessedHead(head, newQueue, bs, preset) {
   if (!head) return;
-  if (!isEnemyQueueHead(head)) {
-    silentPopHead(head, newQueue);
-    return;
-  }
   const row = findQueueRowByIdentity(head);
   if (!row) return;
-  // New row lands first, while the current top row is still in the queue.
-  // Then the processed row leaves. Players already do this; monsters must too.
-  reseatSameKeySuccessor(head, newQueue, bs);
+  // Successor lands first, while the processed row is still in the queue.
+  // Then that row slides out. Player hands and enemy heads share this order
+  // so a same-key phase change is a slide-in plus a slide-out, not a relabel.
+  const id = row.dataset.rowId || head.id;
+  reseatSameKeySuccessor(head, newQueue, bs, preset);
   if (animationsSkipped(preset)) {
-    row.remove();
+    silentPopHead(head, newQueue, preset);
     return;
   }
-  const id = row.dataset.rowId || head.id;
+  silentPopHead(head, newQueue, preset);
   await runQueueRemoval([id]);
 }
 
@@ -2110,8 +2115,9 @@ async function tickLoop(runId) {
       const visualsP = awaitTickVisuals(deathBefore);
       await Promise.all([narrateP, visualsP]);
 
-      // Enemy successor is seated first, then the current top row leaves.
-      // Player commits already add the new row before the ready row slides out.
+      // Successor lands first (enter), then the processed row slides out.
+      // Player hands and enemy heads share that order. Commits already
+      // seat the attack row before the ready row slides out.
       if (!headStillQueued) {
         await releaseProcessedHead(processedHead, newQueue, bs, preset);
       }
