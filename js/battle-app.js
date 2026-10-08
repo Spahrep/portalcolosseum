@@ -441,11 +441,11 @@ function reseatSameKeySuccessor(head, newQueue, bs, preset) {
   if (!successor) return;
   const queueEl = document.getElementById('queue');
   if (!queueEl) return;
-  // PC-118: a same-key successor is the SAME logical row (hand ready→winding→
-  // impact→cooldown→ready, monster winding→impact→cooldown). If a live node
-  // already carries this stable key, relabel it in place — never build a second
-  // DOM node. The caller's later renderQueue/updateQueueRowInPlace repaints it;
-  // we just arm the enter class so the phase change still animates.
+  // A same-key successor is the SAME logical row (hand ready→winding→impact→
+  // cooldown→ready, monster winding→impact→cooldown). Never build a second DOM
+  // node. If a live node already carries this stable key, relabel it in place —
+  // the caller's later renderQueue/updateQueueRowInPlace repaints it; we just
+  // arm the enter class so the phase change still animates.
   const live = Array.from(queueEl.querySelectorAll('.queue-row'))
     .find(r => r.dataset.stableKey === key && !r.classList.contains('queue-row-exit'));
   if (live) {
@@ -471,16 +471,42 @@ async function releaseProcessedHead(head, newQueue, bs, preset) {
   const key = queueRowKey(head);
   const successorSameKey = (newQueue || []).some(r => queueRowKey(r) === key);
   const id = row.dataset.rowId || head.id;
-  // Successor relabels the existing node in place (same-key rows are one logical
-  // row). Then a truly-removed head slides out; a same-key relabel does not.
-  reseatSameKeySuccessor(head, newQueue, bs, preset);
   if (successorSameKey) {
-    // The relabeled node stands in for the old row; do not exit or remove it.
-    row.classList.remove('queue-row-current', 'queue-row-exit');
+    // Same-key phase change (hand ready→winding→impact→cooldown→ready, monster
+    // winding→impact→cooldown): the row is BOTH removed and re-added. Slide the
+    // existing node out, then relabel it in place and slide it in — one node,
+    // both animations, never two live nodes with the same stable key.
+    if (animationsSkipped(preset)) {
+      // Instant / reduced-motion: relabel directly, no slide.
+      const successor = (newQueue || []).find(r => queueRowKey(r) === key);
+      if (successor) {
+        const monsters = (bs && bs.monsters) || [];
+        updateQueueRowInPlace(row, successor, monsters, bs);
+      }
+      row.classList.remove('queue-row-current', 'queue-row-exit');
+      if (id != null) forgetQueueRowExiting(id);
+      if (head.id != null) forgetQueueRowExiting(head.id);
+      return;
+    }
+    // Animated: slide out, then relabel + slide in on the same node.
+    row.classList.remove('queue-row-current');
+    if (id != null) markQueueRowExiting(id);
+    await waitForEvent(row, 'animationend', dur('queueExit') + 80);
+    // The exit animation is `forwards` — strip it before the enter so the node
+    // is not left translated off-screen.
+    row.classList.remove('queue-row-exit');
+    const successor = (newQueue || []).find(r => queueRowKey(r) === key);
+    if (successor) {
+      const monsters = (bs && bs.monsters) || [];
+      updateQueueRowInPlace(row, successor, monsters, bs);
+      armQueueRowEnter(row, successor);
+    }
     if (id != null) forgetQueueRowExiting(id);
     if (head.id != null) forgetQueueRowExiting(head.id);
     return;
   }
+  // Genuine removal: successor (if any) lands first, then the head slides out.
+  reseatSameKeySuccessor(head, newQueue, bs, preset);
   if (animationsSkipped(preset)) {
     silentPopHead(head, newQueue, preset);
     return;
@@ -653,14 +679,26 @@ async function playCommitArrival(runId, commitData) {
   const ceremonyCommits = commits.filter(c => !keysEqual(c));
   const visualP = (async () => {
     const monsters = (bs && bs.monsters) || [];
-    // PC-118: a hand commit's attack shares the ready row's stable key — relabel
-    // the ready node in place, never insert a second node nor remove the ready row.
+    // A hand commit's attack shares the ready row's stable key — the row is
+    // BOTH removed and re-added. Slide the ready node out, then relabel it in
+    // place and slide it in: one node, both animations, never a second DOM node.
     for (const c of relabeled) {
-      const el = findQueueRowByIdentity(c.ready);
-      if (!el) continue;
-      updateQueueRowInPlace(el, c.attack, monsters, bs);
-      if (!animationsSkipped(preset)) armQueueRowEnter(el, c.attack);
-    }
+        const el = findQueueRowByIdentity(c.ready);
+        if (!el) continue;
+        if (animationsSkipped(preset)) {
+          updateQueueRowInPlace(el, c.attack, monsters, bs);
+          continue;
+        }
+        const id = el.dataset.rowId || c.ready.id;
+        el.classList.remove('queue-row-current');
+        if (id != null) markQueueRowExiting(id);
+        await waitForEvent(el, 'animationend', dur('queueExit') + 80);
+        el.classList.remove('queue-row-exit');
+        updateQueueRowInPlace(el, c.attack, monsters, bs);
+        armQueueRowEnter(el, c.attack);
+        if (id != null) forgetQueueRowExiting(id);
+        if (c.ready.id != null) forgetQueueRowExiting(c.ready.id);
+      }
     const entries = ceremonyCommits.length ? ceremonyCommits.map(c => c.attack) : (commits.length ? [] : (inserted ? [inserted] : []));
     if (entries.length === 0) {
       renderQueue(bs);
