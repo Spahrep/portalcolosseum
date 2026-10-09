@@ -4,22 +4,41 @@
  * Auth: /api/env.js + Supabase PKCE localStorage pattern from game.html
  * Commands: help/state/run new/run/battle start/attack/menu/swap/battle end/inventory/grant/clear
  * Always prints compact current state after state-changing commands
+ * Seams: text-builders, queue-labels, feed-narration, command-history,
+ * panel-nav, commands-inventory, commands-dev, side-panels.
+ * This file keeps the dispatcher, the input loop, and the session.
  */
 
-import { computeTimingMarkers } from '../../js/combat/tic-queue.js';
 import { potionPrePostTicks } from '../../js/combat/potion-contract.js';
+import {
+  buildPreambleText,
+  buildRecapText,
+  buildAfterBattleOffer,
+  buildPreambleDenied,
+  buildConfirmDenied,
+} from './text-builders.js';
+import { QUEUE_ACTION_LABELS, monsterQueueLabel, letterOf } from './queue-labels.js';
+import { createFeedNarrator } from './feed-narration.js';
+import { createCommandHistory } from './command-history.js';
+import { setupPanelNavigation } from './panel-nav.js';
+import { createInventoryCommands } from './commands-inventory.js';
+import { createDevCommands } from './commands-dev.js';
+import {
+  initSidePanels,
+  updateSidePanelsFromRun,
+  blankActionQueue,
+  setMenuAttack,
+  isSelectMode,
+  enterSelectMode,
+  exitSelectMode,
+  nudgeSelect,
+  showItemDetailForCurrent,
+} from './side-panels.js';
 
 const outputEl = document.getElementById('output');
 const inputEl = document.getElementById('input');
 const authStatusEl = document.getElementById('auth-status');
 
-// Side panel elements (retro 3-col layout)
-const playerStatsContent = document.getElementById('player-stats-content');
-const monsterRosterContent = document.getElementById('monster-roster-content');
-const runLootContent = document.getElementById('run-loot-content');
-const actionQueueContent = document.getElementById('action-queue-content');
-const diceLeftContent = document.getElementById('dice-left-content');
-const diceRolledContent = document.getElementById('dice-rolled-content');
 
 let supabase = null;
 let currentUser = null;
@@ -29,110 +48,39 @@ let devMode = localStorage.getItem('cli_dev_mode') === '1';
 let pendingInputResolver = null;
 let flowState = null; // 'preamble' | 'confirm' | null — run-start gate
 let pendingPicks = null; // {lh, rh, belt, ca, cb} captured at the ready step
-let selectMode = false; // UX select mode for player stats slots
-let selectIndex = 0; // 0=LH,1=RH,2=BL,3=C1,4=C2
 let offeredBattleNum = null; // last battle the after-battle offer was shown for
-// PC-56: DW menu selection state — active attack shows '>' markers on the queue panel
-let menuAttack = null; // {attack, queue} while a menu attack pick is pending
 
-// --- PC-36 pure text builders (tested in isolation) ---
-
-function buildPreambleText() {
-  // PC-36 short placeholder per spec (replaces atmospheric text; leading \n preserved for output parity)
-  return '\nPrepare to start your run.\n\nCommands: inventory | inspect # | equip LH|RH <id> | ready | cancel\nType "ready" when ready.\n';
+function clearRunId() {
+  currentRunId = null;
+  localStorage.removeItem('cli_current_run_id');
 }
 
-function buildRecapText(weapons, consumables, picks) {
-  const lines = [];
-  lines.push('You check your straps one last time.');
-  lines.push('');
-  lines.push('Your loadout for this run:');
-  const fmtAtk = (w) => {
-    if (!w || !w.attacks || !w.attacks.length) return '';
-    return w.attacks.map(a => {
-      const pVar = a.prepare_time_range || 0;
-      const cVar = a.cooldown_time_range || 0;
-      const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
-      const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
-      return `#${a.id} ${a.name} (${pPart}/${cPart})`;
-    }).join(', ');
-  };
-  const findW = (id) => (weapons || []).find(w => w.id === id) || null;
-  const findC = (id) => (consumables || []).find(c => c.id === id) || null;
-  const lh = picks && picks.lh != null ? findW(picks.lh) : null;
-  const rh = picks && picks.rh != null ? findW(picks.rh) : null;
-  const belt = picks && picks.belt != null ? findW(picks.belt) : null;
-  const ca = picks && picks.ca != null ? findC(picks.ca) : null;
-  const cb = picks && picks.cb != null ? findC(picks.cb) : null;
-  const fmtSlot = (id, item, isWeapon) => {
-    if (id == null) return 'empty';
-    if (item) return isWeapon
-      ? `#${item.id} ${item.name} (${item.damage} dmg) — ${fmtAtk(item)}`
-      : `#${item.id} ${item.name} ×${item.quantity ?? 1}`;
-    return `#${id} (unavailable)`;
-  };
-  lines.push(`  Left Hand: ${fmtSlot(picks.lh, lh, true)}`);
-  lines.push(`  Right Hand: ${fmtSlot(picks.rh, rh, true)}`);
-  lines.push(`  Belt: ${fmtSlot(picks.belt, belt, true)}`);
-  lines.push(`  Consume A: ${fmtSlot(picks.ca, ca, false)}`);
-  lines.push(`  Consume B: ${fmtSlot(picks.cb, cb, false)}`);
-  lines.push('');
-  lines.push('This loadout locks the moment you step through the portal. You cannot change it between fights.');
-  lines.push('');
-  lines.push('Type "confirm" to enter, or "inventory" to adjust.');
-  return lines.join('\n');
+function unlockDevMode() {
+  devMode = true;
+  localStorage.setItem('cli_dev_mode', '1');
 }
 
-function buildAfterBattleOffer(currentBattle, totalBattles, hpCur, hpMax, isFirstWin, potionHint = null) {
-  const lines = [];
-  if (isFirstWin) {
-    lines.push('The first monster falls. The pool stirs.');
-    lines.push('');
-  }
-  const hpPart = hpMax ? `Your HP: ${hpCur}/${hpMax}.` : `Your HP: ${hpCur}.`;
-  const battleLine = totalBattles ? `Battle ${currentBattle} of ${totalBattles} complete.` : `Battle ${currentBattle} complete.`;
-  lines.push(`${battleLine} ${hpPart}`);
-  lines.push('The prize pool has grown.');
-  lines.push('');
-  if (potionHint) {
-    lines.push(`Type "use ${potionHint}" to drink your remaining potion first, "continue" to risk the next fight, or "stop" to claim your current share and end the run.`);
-  } else {
-    lines.push('Type "continue" to risk the next fight, or "stop" to claim your current share and end the run. (e.g. 20% of gold, 0 items)');
-  }
-  return lines.join('\n');
-}
+const narrateFeed = createFeedNarrator({ appendLine, printDim });
+const commandHistory = createCommandHistory();
+initSidePanels({
+  apiCall,
+  blurInput: () => { if (inputEl) inputEl.blur(); },
+  focusInput: () => { if (inputEl) inputEl.focus(); },
+});
+const { cmdInventory } = createInventoryCommands({ apiCall, appendLine, printError });
+const { commands: DEV_COMMANDS, cmdInspect, cmdGrant } = createDevCommands({
+  apiCall,
+  appendLine,
+  printError,
+  printGreen,
+  printAmber,
+  refreshRunPanels,
+  getRunId: () => currentRunId,
+  clearRunId,
+  getFlowState: () => flowState,
+  unlockDevMode,
+});
 
-function buildItemInspectText(weapons, consumables, id) {
-  const w = (weapons || []).find(x => x.id === id);
-  if (w) {
-    const atks = (w.attacks || []).map(a => {
-      const pVar = a.prepare_time_range || 0;
-      const cVar = a.cooldown_time_range || 0;
-      const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
-      const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
-      return `#${a.id} ${a.name} (${pPart}/${cPart})`;
-    }).join(', ');
-    return `#${w.id} ${w.name} (${w.damage} dmg)\n  Attacks: ${atks || 'none'}`;
-  }
-  const c = (consumables || []).find(x => x.id === id);
-  if (c) {
-    // consumable rows carry template_name + effect_label (API /consumables shape)
-    const parts = [`#${c.id}`, c.template_name || 'Unknown'];
-    if (c.effect_label) parts.push(c.effect_label);
-    if (c.grade) parts.push(`grade ${c.grade}`);
-    if (c.used) parts.push('(used)');
-    return parts.join(' ');
-  }
-  return `No item #${id} found in your inventory.`;
-}
-
-function buildPreambleDenied() {
-  return 'Type "inventory", "inspect #", "ready", or "help".';
-}
-
-function buildConfirmDenied() {
-  return 'Type "confirm" to enter, or "inventory" to adjust.';
-}
 
 // After-battle offer: once per completed battle, keyed on the run's current_battle
 // (the engine state exposes no battle counter, so we fetch the run row).
@@ -156,25 +104,7 @@ async function showAfterBattleOffer(s) {
   }
 }
 
-// Command history for ArrowUp/ArrowDown (terminal-style recall), capped at 5.
-const HISTORY_KEY = 'cli_command_history';
-const HISTORY_MAX = 5;
-let history = [];
-try { history = JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch (_) { history = []; }
-let historyIdx = -1;      // -1 = not browsing history (fresh line)
-let historyDraft = '';    // preserves the in-progress line while browsing
 
-// Panel navigation (PC-20)
-const PANEL_IDS = [
-  'player-stats-panel',
-  'monster-roster-panel',
-  'run-loot-panel',
-  'action-queue-panel',
-  'dice-left-panel',
-  'dice-rolled-panel'
-];
-let focusedPanelIdx = -1;
-let infoPopEl = null;
 
 function appendLine(text, cls = '') {
   const div = document.createElement('div');
@@ -204,11 +134,6 @@ function printDim(msg) {
   appendLine(msg, 'dim');
 }
 
-// Record a completed command into history (most recent first), capped at HISTORY_MAX.
-function pushHistory(cmd) {
-  history = [cmd, ...history.filter(h => h !== cmd)].slice(0, HISTORY_MAX);
-  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch (_) {}
-}
 
 async function initAuth() {
   authStatusEl.textContent = 'checking auth…';
@@ -281,176 +206,7 @@ async function apiCall(method, path, body = null) {
   return json;
 }
 
-const seenFeed = new Set();
-function narrateFeed(feedLines, participants = null) {
-  if (!feedLines || !Array.isArray(feedLines) || feedLines.length === 0) return;
 
-  // extract monster labels for possessive matching (exact labels like "Glimmerling A")
-  const monsterLabels = [];
-  const p = participants || {};
-  if (p.monsters && Array.isArray(p.monsters)) {
-    p.monsters.forEach(m => { if (m && m.label) monsterLabels.push(m.label); });
-  }
-  const getMonsterLabel = (text) => {
-    for (const lbl of monsterLabels) {
-      if (text.includes(lbl)) return lbl;
-    }
-    // first-two-words fallback for monster names
-    const m = text.match(/tic \d+ — ([A-Za-z]+(?:\s+[A-Z])?)/);
-    return m ? m[1] : null;
-  };
-
-  // filter only NEW lines (rolling feed dedupe)
-  const newLines = feedLines.filter(l => !seenFeed.has(l));
-  newLines.forEach(l => seenFeed.add(l));
-
-  const outputEntries = []; // {text, matched}
-
-  for (const raw of newLines) {
-    let mapped = null;
-
-    // Rule: tic N — Monster quick attack hits you for NUM damage → "Monster's quick attack hits you for NUM damage."
-    // DEFECT 1 FIX: use getMonsterLabel + exact strip + greedy fallback
-    let label = getMonsterLabel(raw);
-    let m;
-    if (label) {
-      const remainder = raw.replace(label, '').replace(/^tic \d+ — \s*/, '');
-      m = remainder.match(/^(.+?)?\s*hits you for (\d+) damage$/);
-      if (m) {
-        mapped = m[1] && m[1].trim() ? `${label}'s ${m[1].trim()} hits you for ${m[2]} damage.` : `${label} hits you for ${m[2]} damage.`;
-        outputEntries.push({ text: mapped, matched: true });
-        continue;
-      }
-    }
-    // greedy fallback when no known labels
-    m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?)(?: (.+?))? hits you for (\d+) damage$/);
-    if (m) {
-      const mon = m[1];
-      mapped = m[2] && m[2].trim() ? `${mon}'s ${m[2].trim()} hits you for ${m[3]} damage.` : `${mon} hits you for ${m[3]} damage.`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-
-    // Rule: misses — same fix
-    label = getMonsterLabel(raw);
-    if (label) {
-      const remainder = raw.replace(label, '').replace(/^tic \d+ — \s*/, '');
-      m = remainder.match(/^(.+?)?\s*misses$/);
-      if (m) {
-        mapped = m[1] && m[1].trim() ? `${label}'s ${m[1].trim()} misses you.` : `${label} misses you.`;
-        outputEntries.push({ text: mapped, matched: true });
-        continue;
-      }
-    }
-    m = raw.match(/^tic \d+ — ([A-Za-z]+(?: [A-Z])?)(?: (.+?))? misses$/);
-    if (m) {
-      const mon = m[1];
-      mapped = m[2] && m[2].trim() ? `${mon}'s ${m[2].trim()} misses you.` : `${mon} misses you.`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-
-    // Rule: tic N — Monster is defeated → "Monster is defeated!"
-    m = raw.match(/^tic \d+ — (.+?) is defeated$/);
-    if (m) {
-      mapped = `${m[1]} is defeated!`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-
-    // Rule: tic N — LH commits AttackName (cast N) → "Your left hand begins casting AttackName…"
-    m = raw.match(/^tic \d+ — LH commits (.+?) \(cast \d+\)$/);
-    if (m) {
-      mapped = `Your left hand begins casting ${m[1]}…`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-
-    // Rule: tic N — RH commits ...
-    m = raw.match(/^tic \d+ — RH commits (.+?) \(cast \d+\)$/);
-    if (m) {
-      mapped = `Your right hand begins casting ${m[1]}…`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-
-    // Rule: tic N — LH AttackName hits Monster for NUM → "Your left hand's AttackName hits Monster for NUM."
-    m = raw.match(/^tic \d+ — LH (.+?) hits (.+?) for (\d+)$/);
-    if (m) {
-      mapped = `Your left hand's ${m[1]} hits ${m[2]} for ${m[3]}.`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-
-    // Rule: tic N — RH AttackName hits ...
-    m = raw.match(/^tic \d+ — RH (.+?) hits (.+?) for (\d+)$/);
-    if (m) {
-      mapped = `Your right hand's ${m[1]} hits ${m[2]} for ${m[3]}.`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-
-    // PC-39 potion rules (mirror js/combat/potion-format.mjs mapPotionFeedLine)
-    m = raw.match(/^tic \d+ — (LH|RH) drinks (.+?) \((\d+) tics\)$/);
-    if (m) {
-      mapped = `Your ${m[1] === 'LH' ? 'left' : 'right'} hand drinks ${m[2]} (${m[3]} tics)…`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-    m = raw.match(/^tic \d+ — (LH|RH) healed (\d+)$/);
-    if (m) {
-      mapped = `Your ${m[1] === 'LH' ? 'left' : 'right'} hand's potion restores ${m[2]} HP.`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-    m = raw.match(/^tic \d+ — (LH|RH) (damage|speed|accuracy) \+(\d+) until tic (\d+)$/);
-    if (m) {
-      mapped = `Your ${m[1] === 'LH' ? 'left' : 'right'} hand's potion grants ${m[2]} +${m[3]} until tic ${m[4]}.`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-    m = raw.match(/^tic \d+ — Potion ([AB]) used — (.+)$/);
-    if (m) {
-      mapped = `You drink potion ${m[1].toLowerCase()} — ${m[2]}.`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-    m = raw.match(/^tic \d+ — (.+?) buff expired$/);
-    if (m) {
-      mapped = `The ${m[1]} buff fades.`;
-      outputEntries.push({ text: mapped, matched: true });
-      continue;
-    }
-
-    // unmatched
-    outputEntries.push({ text: raw, matched: false });
-  }
-
-  // emit with colors: matched = green, unmatched = dim
-  outputEntries.forEach(entry => {
-    if (!entry.matched) {
-      printDim(entry.text);
-    } else {
-      appendLine(entry.text, 'green');
-    }
-  });
-}
-
-// Queue events shown in the state dump, humanized (engine sends raw event names).
-const QUEUE_ACTION_LABELS = { cooldown: 'Ready', winding: 'Casting', impact: 'Attack', attack: 'Attack', approach: 'Approach' };
-
-// Monster winding/impact are canonical attack rows (name + tic). Cooldown is
-// "<Monster> recovering". Hand rows stay on QUEUE_ACTION_LABELS.
-function monsterQueueLabel(q, monsters) {
-  if (!q || !q.label || q.label === 'LH' || q.label === 'RH') return null;
-  const mon = (monsters || []).find(m => m.label === q.label);
-  const monName = mon ? (mon.name || mon.label) : q.label;
-  if (q.event === 'winding' || q.event === 'impact' || q.event === 'attack') {
-    return `${monName}'s ${q.monsterAttackName || 'Attack'}`;
-  }
-  if (q.event === 'cooldown') return `${monName} recovering`;
-  return null;
-}
 
 function turnPromptFromState(stateObj) {
   const s = stateObj && stateObj.state ? stateObj.state : stateObj;
@@ -491,8 +247,6 @@ function turnPromptFromState(stateObj) {
   }
 }
 
-// monster labels end in a letter ('Giant Rat A'); letterOf extracts it for roster prints
-const letterOf = (label) => (label && /[A-Z]$/.test(label)) ? label.slice(-1) : '';
 
 function printStateFromRun(run) {
   if (!run) {
@@ -623,7 +377,7 @@ async function cmdRunNew() {
   // 'ready' works no matter when 'run new' is typed.
   flowState = 'preamble';
   pendingPicks = { lh: null, rh: null, belt: null, ca: null, cb: null };
-  if (actionQueueContent) actionQueueContent.innerHTML = '<div class="dim">—</div>';
+  blankActionQueue();
   appendLine(buildPreambleText());
 }
 
@@ -848,7 +602,7 @@ async function cmdMenu(args = []) {
 
     if (row.kind === 'attack') {
       // '>' timing markers on the queue panel for this attack (approved mockup semantics)
-      menuAttack = { attack: row.attack, queue: bs.queue || [], weaponSpeed: (weapons[hand === 'LH' ? 'hand_l' : 'hand_r']?.speed) || 0 };
+      setMenuAttack({ attack: row.attack, queue: bs.queue || [], weaponSpeed: (weapons[hand === 'LH' ? 'hand_l' : 'hand_r']?.speed) || 0 });
       try { await refreshRunPanels(); } catch (_) {}
       let targets = [];
       if (row.attack && row.attack.is_multi_target) {
@@ -866,7 +620,7 @@ async function cmdMenu(args = []) {
       }
       const ok = (await promptUser(`commit ${hand} ${row.attack.name}${targets.length ? '' : ' (auto)'}? y/n> `)).toLowerCase();
       if (ok !== 'y') { appendLine('cancelled', 'amber'); continue; }
-      menuAttack = null;
+      setMenuAttack(null);
       try { await refreshRunPanels(); } catch (_) {}
       return runCommit(run, hand, row.attack, targets);
     }
@@ -882,7 +636,7 @@ async function cmdMenu(args = []) {
     if (!potion) { appendLine('no potion in slot ' + slot, 'amber'); continue; }
     // PC-56: prediction bar markers for potion timing
     const ws = (weapons[hand === 'LH' ? 'hand_l' : 'hand_r']?.speed) || 0;
-    menuAttack = { attack: { prepare_time: potionPrePostTicks(ws, potion.rolled_speed || 0), prepare_time_range: 0 }, queue: bs.queue || [], weaponSpeed: 0 };
+    setMenuAttack({ attack: { prepare_time: potionPrePostTicks(ws, potion.rolled_speed || 0), prepare_time_range: 0 }, queue: bs.queue || [], weaponSpeed: 0 });
     try { await refreshRunPanels(); } catch (_) {}
     const ok = (await promptUser(`use potion ${slot}? y/n> `)).toLowerCase();
     if (ok !== 'y') { appendLine('cancelled', 'amber'); continue; }
@@ -990,62 +744,7 @@ async function cmdBattleEnd(args) {
   }
 }
 
-async function cmdInventory() {
-  try {
-    const [wData, cData] = await Promise.allSettled([
-      apiCall('GET', '/weapons'),
-      apiCall('GET', '/consumables')
-    ]);
-    const weapons = (wData.status === 'fulfilled' ? wData.value.weapons : []) || [];
-    const consumables = (cData.status === 'fulfilled' ? cData.value.consumables : []) || [];
 
-    appendLine('inventory — weapons:', 'dim');
-    if (weapons.length === 0) {
-      appendLine('  (none)', 'dim');
-    } else {
-      weapons.forEach(w => {
-        const atkList = w.attacks.map(a => {
-          const pVar = a.prepare_time_range || 0;
-          const cVar = a.cooldown_time_range || 0;
-          const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
-          const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
-          return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
-        }).join(' ');
-        appendLine(`#${w.id} ${w.name} dmg=${w.damage} crit=${w.crit_chance ?? 5}  attacks: ${atkList || 'none'}`, 'green');
-      });
-    }
-
-    appendLine('inventory — consumables:', 'dim');
-    if (consumables.length === 0) {
-      appendLine('  (none)', 'dim');
-    } else {
-      consumables.forEach(c => {
-        appendLine(`#${c.id} ${c.name} qty=${c.quantity ?? 1}`, 'green');
-      });
-    }
-  } catch (e) {
-    printError('gear: ' + e.message);
-  }
-}
-
-async function cmdGrant() {
-  try {
-    const data = await apiCall('POST', '/dev/grant', {});
-    if (data.dev_mode === true) {
-      devMode = true;
-      localStorage.setItem('cli_dev_mode', '1');
-      printGreen('Dev tools unlocked. Type help for the full command list.');
-    } else {
-      appendLine(JSON.stringify(data), 'dim');
-    }
-  } catch (e) {
-    if (e.message.includes('Admin access required') || e.message.includes('403')) {
-      printAmber('403 Admin access required (non-admin caller)');
-    } else {
-      printError('grant: ' + e.message);
-    }
-  }
-}
 
 function cmdClear() {
   outputEl.innerHTML = '';
@@ -1129,19 +828,18 @@ async function main() {
     // TASK2: Escape toggles UX select mode on player stats slots (only when not in pending resolver)
     if (e.key === 'Escape' && !pendingInputResolver) {
       e.preventDefault();
-      if (!selectMode) {
+      if (!isSelectMode()) {
         enterSelectMode();
       } else {
         exitSelectMode();
       }
       return;
     }
-    if (selectMode) {
+    if (isSelectMode()) {
       if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         const dir = e.key === 'ArrowDown' ? 1 : -1;
-        selectIndex = (selectIndex + dir + 5) % 5;
-        updateSelectHighlight();
+        nudgeSelect(dir);
         return;
       }
       if (e.key === 'Enter') {
@@ -1158,16 +856,10 @@ async function main() {
     }
     if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (history.length === 0) return;
-      if (historyIdx === -1) historyDraft = inputEl.value;   // save the line being edited
-      historyIdx = Math.min(historyIdx + 1, history.length - 1);
-      inputEl.value = history[historyIdx];
+      commandHistory.onArrowUp(inputEl);
     } else if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (historyIdx === -1) return;
-      historyIdx -= 1;
-      inputEl.value = historyIdx >= 0 ? history[historyIdx] : historyDraft;
-      if (historyIdx === -1) historyDraft = '';
+      commandHistory.onArrowDown(inputEl);
     } else if (e.key === 'Enter') {
       const val = inputEl.value.trim();
       if (pendingInputResolver) {
@@ -1176,9 +868,8 @@ async function main() {
         if (val) {
           appendLine('> ' + val, 'dim');
           inputEl.value = '';
-          historyIdx = -1;
-          historyDraft = '';
-          pushHistory(val);
+          commandHistory.resetBrowse();
+          commandHistory.push(val);
         } else {
           inputEl.value = '';
         }
@@ -1188,14 +879,13 @@ async function main() {
       if (!val) return;
       appendLine('> ' + val, 'dim');
       inputEl.value = '';
-      historyIdx = -1;
-      historyDraft = '';
-      pushHistory(val);
+      commandHistory.resetBrowse();
+      commandHistory.push(val);
       handleCommand(val);
     }
   });
 
-  setupPanelNavigation();
+  setupPanelNavigation(inputEl);
   // focus input
   setTimeout(() => inputEl.focus(), 100);
 }
@@ -1205,420 +895,6 @@ main().catch(e => {
   printError('Fatal: ' + e.message);
 });
 
-async function cmdDevEquip(args) {
-  if (!currentRunId) { printError('no run — use run new first'); return; }
-  let slot = args[0] ? args[0].toUpperCase() : null;
-  if (slot && !['LH','RH','belt'].includes(slot)) slot = null;
-  const instArg = args[1];
-  if (instArg) {
-    let n = instArg.startsWith('#') ? instArg.slice(1) : instArg;
-    const instance_id = parseInt(n, 10);
-    if (isNaN(instance_id) || instance_id <= 0) { printError('usage: /equip [LH|RH|belt] [#N]'); return; }
-    const body = { instance_id, slot: slot || undefined };
-    try {
-      const data = await apiCall('POST', '/dev/equip-instance', body);
-      const w = data.weapon;
-      let msg = `${data.slot} → ${w.template_name} (dmg ${w.damage}, #${w.instance_id})`;
-      if (data.displaced) msg += ` (displaced ${data.displaced.template_name} → inventory)`;
-      printGreen(msg);
-      await refreshRunPanels();
-    } catch (e) { printError('equip: ' + e.message); }
-    return;
-  }
-  try {
-    const data = await apiCall('POST', '/dev/equip', { slot: slot || undefined });
-    const w = data.weapon;
-    let msg = `${data.slot} → ${w.template_name} (dmg ${w.damage}, #${w.instance_id})`;
-    if (data.displaced) msg += ` (displaced ${data.displaced.template_name} → inventory)`;
-    printGreen(msg);
-    await refreshRunPanels();
-  } catch (e) { printError('equip: ' + e.message); }
-}
-
-async function cmdDevRoll(args) {
-  if (!currentRunId) { printError('no run — use run new first'); return; }
-  const sub = args[0];
-  if (sub === 'weapon') {
-    const template_id = parseInt(args[1], 10);
-    if (!Number.isFinite(template_id)) { printError('usage: /roll weapon <id> [LH|RH|belt] | /roll monster <id>'); return; }
-    let slot = args[2] ? args[2].toLowerCase() : 'lh';
-    if (!['lh','rh','belt'].includes(slot)) slot = 'lh';
-    slot = slot === 'belt' ? 'belt' : slot.toUpperCase();
-    try {
-      const data = await apiCall('POST', '/dev/roll-weapon', { template_id, slot });
-      const w = data.weapon;
-      printGreen(`${data.slot} → ${w.template_name} (dmg ${w.damage}, #${w.instance_id})`);
-      await refreshRunPanels();
-    } catch (e) {
-      printError('roll: ' + e.message);
-    }
-  } else if (sub === 'monster') {
-    const template_id = parseInt(args[1], 10);
-    if (!Number.isFinite(template_id)) { printError('usage: /roll weapon <id> [LH|RH|belt] | /roll monster <id>'); return; }
-    try {
-      const data = await apiCall('POST', '/dev/roll-monster', { template_id });
-      const m = data.monster;
-      printGreen(`monster ${m.label} hp ${m.current_hp ?? m.max_hp}/${m.max_hp} dmg ${m.damage} spd ${m.speed} acc ${m.accuracy}`);
-      await refreshRunPanels();
-    } catch (e) {
-      printError('roll: ' + e.message);
-    }
-  } else {
-    printError('usage: /roll weapon <id> [LH|RH|belt] | /roll monster <id>');
-  }
-}
-
-async function cmdDevDel(args) {
-  if (!currentRunId) { printError('no run — use run new first'); return; }
-  if (args[0] !== 'monster') { printError('usage: /del monster <label|id>'); return; }
-  const target = args[1];
-  if (!target) { printError('usage: /del monster <label|id>'); return; }
-  try {
-    const data = await apiCall('POST', '/dev/del-monster', { target });
-    printGreen(`removed ${data.removed.label} (#${data.removed.id})`);
-    await refreshRunPanels();
-  } catch (e) {
-    printError('del: ' + e.message);
-  }
-}
-
-async function cmdDevSet(args) {
-  const sub = args[0];
-  if (sub === 'weapon') {
-    const instance_id = parseInt(args[1], 10);
-    const flags = args.slice(2);
-    let damage, speed, accuracy, crit;
-    for (let i = 0; i < flags.length; i += 2) {
-      const k = flags[i];
-      const v = parseInt(flags[i + 1], 10);
-      if (k === 'dmg' || k === 'damage') damage = v;
-      else if (k === 'spd' || k === 'speed') speed = v;
-      else if (k === 'acc' || k === 'accuracy') accuracy = v;
-      else if (k === 'crit') crit = v;
-    }
-    if (isNaN(instance_id) || instance_id <= 0 || (!damage && !speed && !accuracy && crit === undefined) || [damage, speed, accuracy].some(v => v !== undefined && (isNaN(v) || v < 1)) || (crit !== undefined && (isNaN(crit) || crit < 0))) {
-      printError('usage: /set weapon <instance_id> [dmg N] [spd N] [acc N] [crit N]');
-      return;
-    }
-    try {
-      const data = await apiCall('POST', '/dev/set-weapon-stats', { instance_id, damage, speed, accuracy, crit });
-      printGreen(`#${data.instance_id} ${data.template_name}: dmg ${data.damage} spd ${data.speed} acc ${data.accuracy} crit ${data.crit_chance ?? 0} ${data.grade}`);
-    } catch (e) {
-      printError('set: ' + e.message);
-    }
-    return;
-  }
-  if (sub === 'potion') {
-    const instance_id = parseInt(args[1], 10);
-    const flags = args.slice(2);
-    let floor, window, speed, crit;
-    for (let i = 0; i < flags.length; i += 2) {
-      const k = flags[i];
-      const v = parseInt(flags[i + 1], 10);
-      if (k === 'floor') floor = v;
-      else if (k === 'window') window = v;
-      else if (k === 'spd' || k === 'speed') speed = v;
-      else if (k === 'crit') crit = v;
-    }
-    if (isNaN(instance_id) || instance_id <= 0 || (!floor && !window && !speed && crit === undefined) || [floor, window, speed].some(v => v !== undefined && (isNaN(v) || v < 1)) || (crit !== undefined && (isNaN(crit) || crit < 0))) {
-      printError('usage: /set potion <instance_id> [floor N] [window N] [spd N] [crit N]');
-      return;
-    }
-    try {
-      const data = await apiCall('POST', '/dev/set-consumable-stats', { instance_id, floor, window, speed, crit });
-      printGreen(`#${data.instance_id} ${data.template_name}: floor ${data.floor} window ${data.window} spd ${data.speed} crit ${data.crit_chance ?? 0} ${data.grade}`);
-    } catch (e) {
-      printError('set: ' + e.message);
-    }
-    return;
-  }
-  // hp branch keeps original run guard
-  if (!currentRunId) { printError('no run — use run new first'); return; }
-  if (sub !== 'hp') { printError('usage: /set hp <player|monster> <n>'); return; }
-  const target = args[1];
-  const hp = parseInt(args[2], 10);
-  if (!Number.isFinite(hp) || hp < 0) { printError('usage: /set hp <player|monster> <n>'); return; }
-  try {
-    const data = await apiCall('POST', '/dev/set-hp', { target, hp });
-    printGreen(`set ${data.target} hp → ${data.hp}`);
-    await refreshRunPanels();
-  } catch (e) {
-    printError('set: ' + e.message);
-  }
-}
-
-async function cmdDevWin(args) {
-  if (!currentRunId) { printError('no run — use run new first'); return; }
-  if (args[0] !== 'battle') { printError('usage: /win battle'); return; }
-  try {
-    const data = await apiCall('POST', '/dev/win-battle', {});
-    printGreen('battle won');
-    appendLine(JSON.stringify(data, null, 0), 'dim');
-    await refreshRunPanels();
-  } catch (e) {
-    printError('win: ' + e.message);
-  }
-}
-
-async function cmdDevKill(args) {
-  if (!currentRunId) { printError('no run — use run new first'); return; }
-  if (args[0] !== 'player') { printError('usage: /kill player'); return; }
-  try {
-    const data = await apiCall('POST', '/dev/kill-player', {});
-    printGreen('player killed');
-    appendLine(JSON.stringify(data, null, 0), 'dim');
-    await refreshRunPanels();
-  } catch (e) {
-    printError('kill: ' + e.message);
-  }
-}
-
-async function cmdDevList(args) {
-  const sub = args[0] || 'weapons';
-  if (sub === 'weapons') {
-    const username = args[1];
-    if (username) {
-      try {
-        const data = await apiCall('GET', `/dev/weapons?username=${encodeURIComponent(username)}`);
-        if (!data.weapons || data.weapons.length === 0) {
-          appendLine('No weapons.', 'amber');
-          return;
-        }
-        data.weapons.forEach(w => {
-          appendLine(`#${w.instance_id} ${w.template_name} dmg ${w.damage} spd ${w.speed} acc ${w.accuracy} crit ${w.crit_chance ?? 5} ${w.grade}`, 'green');
-        });
-      } catch (e) {
-        printError('list: ' + e.message);
-      }
-    } else {
-      // existing caller-own behavior untouched
-      try {
-        const data = await apiCall('GET', '/weapons');
-        if (!data.weapons || data.weapons.length === 0) {
-          appendLine('No weapons owned.', 'amber');
-          return;
-        }
-        data.weapons.forEach(w => {
-          const atkList = w.attacks.map(a => {
-            const pVar = a.prepare_time_range || 0;
-            const cVar = a.cooldown_time_range || 0;
-            const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
-            const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
-            return `#${a.id} ${a.name}${a.is_multi_target ? ' (multi)' : ''} ${pPart}/${cPart}`;
-          }).join(' ');
-          appendLine(`#${w.id} ${w.name} dmg=${w.damage} crit=${w.crit_chance ?? 5}  attacks: ${atkList || 'none'}`, 'green');
-        });
-      } catch (e) {
-        printError('list: ' + e.message);
-      }
-    }
-  } else if (sub === 'potions') {
-    const username = args[1];
-    try {
-      const url = username ? `/dev/potions?username=${encodeURIComponent(username)}` : '/dev/potions';
-      const data = await apiCall('GET', url);
-      if (!data.potions || data.potions.length === 0) {
-        appendLine('No potions.', 'amber');
-        return;
-      }
-data.potions.forEach(p => {
-        appendLine(`#${p.instance_id} ${p.template_name} floor ${p.floor} window ${p.window} spd ${p.speed} ${p.grade}`, 'green');
-      });
-    } catch (e) {
-      printError('list: ' + e.message);
-    }
-  } else if (sub === 'monsters') {
-    if (!currentRunId) { appendLine('no active run', 'amber'); return; }
-    try {
-      const data = await apiCall('GET', `/runs/${currentRunId}`);
-      const mons = (data.run && data.run.battle_state && data.run.battle_state.monsters) || [];
-      if (mons.length === 0) {
-        appendLine('no monsters', 'dim');
-        return;
-      }
-      mons.forEach(m => {
-        appendLine(`Monster ${m.label} hp ${m.current_hp}/${m.max_hp}`, 'green');
-      });
-    } catch (e) {
-      printError('list: ' + e.message);
-    }
-  } else if (sub === 'users') {
-    try {
-      const data = await apiCall('GET', '/dev/users');
-      if (!data.users || data.users.length === 0) {
-        appendLine('No users.', 'amber');
-        return;
-      }
-      data.users.forEach(u => {
-        const role = u.is_admin ? 'admin' : 'player';
-        appendLine(`${u.username} (${role})`, 'green');
-      });
-    } catch (e) {
-      printError('list: ' + e.message);
-    }
-  } else {
-    printError('usage: /list weapons|monsters|users|potions [username]');
-  }
-}
-
-async function cmdDevGive(args) {
-  const sub = args[0];
-  if (sub === 'weapon') {
-    const username = args[1];
-    const templateId = parseInt(args[2], 10);
-    let count = parseInt(args[3], 10);
-    if (!username || isNaN(templateId) || templateId <= 0) {
-      printError('usage: /give weapon <user> <template_id> [count]');
-      return;
-    }
-    if (isNaN(count) || count < 1) count = 1;
-    try {
-      const res = await apiCall('POST', '/dev/give-weapon', { username, template_id: templateId, count });
-      appendLine(`granted ${res.granted.length} × ${res.template_name} to ${res.username}`, 'green');
-      res.granted.forEach(g => {
-        appendLine(`#${g.instance_id} dmg ${g.damage} spd ${g.speed} acc ${g.accuracy} ${g.grade}`, 'dim');
-      });
-    } catch (e) {
-      printError('give: ' + e.message);
-    }
-  } else if (sub === 'sss') {
-    const username = args[1];
-    if (!username) {
-      printError('usage: /give sss <user>');
-      return;
-    }
-    try {
-      const res = await apiCall('POST', '/dev/give-starter', { username });
-      if (res.granted) {
-        appendLine(`SSS granted to ${username}`, 'green');
-        const inst = res.instance;
-        appendLine(`#${inst.instance_id} dmg ${inst.damage} spd ${inst.speed} acc ${inst.accuracy} ${inst.grade}`, 'dim');
-      } else {
-        appendLine(res.reason || 'already has starter', 'dim');
-      }
-    } catch (e) {
-      printError('give: ' + e.message);
-    }
-  } else {
-    printError('usage: /give weapon <user> <template_id> [count] | /give sss <user>');
-  }
-}
-
-async function cmdDevNuke(args) {
-  const res = await apiCall('POST', '/dev/nuke-monsters', {});
-  if (res.error) {
-    printError(res.error);
-    return;
-  }
-  const n = res.removed || 0;
-  if (n > 0) {
-    printGreen(`removed ${n} monster(s)`);
-    await refreshRunPanels();
-  } else {
-    appendLine('no monsters to remove', 'dim');
-  }
-}
-
-async function cmdListTemplates(args) {
-  const res = await apiCall('GET', '/dev/templates');
-  if (res.error) {
-    printError(res.error);
-    return;
-  }
-  appendLine('Weapons:', 'dim');
-  for (const w of (res.weapons || [])) {
-    appendLine(`  #${w.id} ${w.name}`, 'dim');
-  }
-  appendLine('Monsters:', 'dim');
-  for (const m of (res.monsters || [])) {
-    appendLine(`  #${m.id} ${m.name}`, 'dim');
-  }
-}
-
-async function cmdInspect(args) {
-  // During the run-start gate, inspect means ITEM inspect (from inventory payloads)
-  if (flowState === 'preamble' || flowState === 'confirm') {
-    const idStr = (args[0] || '').trim();
-    if (!idStr) {
-      printAmber('Usage: inspect #');
-      return;
-    }
-    const id = parseInt(idStr, 10);
-    if (isNaN(id) || id < 1) {
-      printAmber('Invalid id');
-      return;
-    }
-    try {
-      const [wData, cData] = await Promise.allSettled([
-        apiCall('GET', '/weapons'),
-        apiCall('GET', '/consumables')
-      ]);
-      const weapons = (wData.status === 'fulfilled' ? wData.value.weapons : []) || [];
-      const consumables = (cData.status === 'fulfilled' ? cData.value.consumables : []) || [];
-      appendLine(buildItemInspectText(weapons, consumables, id), 'green');
-    } catch (e) {
-      printError('inspect: ' + e.message);
-    }
-    return;
-  }
-  const idStr = (args[0] || '').trim();
-  if (!idStr) {
-    const res = await apiCall('GET', '/dev/templates');
-    if (res.error) {
-      printError(res.error);
-      return;
-    }
-    for (const m of (res.monsters || [])) {
-      appendLine(`#${m.id} ${m.name}`, 'dim');
-    }
-    return;
-  }
-  const id = parseInt(idStr, 10);
-  if (isNaN(id) || id < 1) {
-    printError('Invalid template id');
-    return;
-  }
-  const res = await apiCall('GET', `/templates/monster/${id}`);
-  if (res.error) {
-    printError(res.error);
-    return;
-  }
-  appendLine(`${res.name} (#${res.id})`, 'dim');
-  appendLine(`base_hp: ${res.base_hp}  dmg: ${res.damage}  spd: ${res.speed}  acc: ${res.accuracy}`);
-  if (res.attacks && res.attacks.length) {
-    appendLine('attacks:');
-    for (const a of res.attacks) {
-      const multi = a.is_multi_target ? ', multi' : '';
-      appendLine(`  #${a.id} ${a.name} (prep ${a.prepare_time}, cd ${a.cooldown_time}${multi})`);
-    }
-  }
-}
-
-async function cmdDevAbandonRun(args) {
-  const res = await apiCall('POST', '/dev/abandon-run', {});
-  if (res.error) {
-    printError(res.error);
-    return;
-  }
-  currentRunId = null;
-  localStorage.removeItem('cli_current_run_id');
-  printGreen(`run #${res.run_id} abandoned — use run new to start fresh`);
-  await refreshRunPanels();
-}
-
-const DEV_COMMANDS = {
-  '/equip': cmdDevEquip,
-  '/roll': cmdDevRoll,
-  '/del': cmdDevDel,
-  '/list': cmdDevList,
-  '/set': cmdDevSet,
-  '/win': cmdDevWin,
-  '/kill': cmdDevKill,
-  '/nuke': cmdDevNuke,
-  '/inspect': cmdInspect,
-  '/abandon': cmdDevAbandonRun,
-  '/give': cmdDevGive
-};
 
 /**
  * Re-fetch the current run and refresh all 6 side panels from authoritative API state.
@@ -1634,240 +910,7 @@ async function refreshRunPanels() {
   }
 }
 
-function updateSidePanelsFromRun(run) {
-  if (!run) return;
-  const bs = run.battle_state || {};
-  const weapons = bs.weapons || {};
-  const mons = bs.monsters || [];
-  const d = bs.dice || {};
-  const queue = bs.queue || [];
 
-  // LEFT: Player stats (HP + hands + placeholders for BL/C1/C2)
-  if (playerStatsContent) {
-    let html = `<div class="stat-line" data-slot="hp">HP: ${run.player_hp ?? '—'}</div>`;
-    const lh = weapons.hand_l;
-    html += `<div class="stat-line selectable" data-slot="lh">LH: ${lh ? `#${lh.id} ${lh.name}` : '—'}</div>`;
-    const rh = weapons.hand_r;
-    html += `<div class="stat-line selectable" data-slot="rh">RH: ${rh ? `#${rh.id} ${rh.name}` : '—'}</div>`;
-    const bl = weapons.belt;
-    html += `<div class="stat-line selectable" data-slot="bl">BL: ${bl ? `#${bl.id} ${bl.name}` : '—'}</div>`;
-    const pots = bs.potions || {};
-    const potA = pots.potion_a || pots.A || null;
-    const potB = pots.potion_b || pots.B || null;
-    const fmtPot = (p) => p
-      ? `${p.template_name || 'Potion'}${p.used ? ' (used)' : ''}`
-      : '—';
-    html += `<div class="stat-line selectable" data-slot="c1">C1: ${fmtPot(potA)}</div>`;
-    html += `<div class="stat-line selectable" data-slot="c2">C2: ${fmtPot(potB)}</div>`;
-    html += `<div id="player-detail" class="player-detail" style="display:none;"></div>`;
-    playerStatsContent.innerHTML = html;
-    // attach click handlers for selectable rows (TASK2)
-    const detailEl = playerStatsContent.querySelector('#player-detail');
-    playerStatsContent.querySelectorAll('.stat-line.selectable').forEach((el, idx) => {
-      el.addEventListener('click', () => {
-        if (selectMode) {
-          selectIndex = idx;
-          updateSelectHighlight();
-        }
-        showItemDetailForSlot(el.dataset.slot, detailEl, weapons);
-      });
-    });
-  }
-
-  // LEFT: Monster roster
-  if (monsterRosterContent) {
-    if (mons.length === 0) {
-      monsterRosterContent.innerHTML = '<div class="dim">No monsters</div>';
-    } else {
-      let html = '';
-      mons.forEach(m => {
-        const letter = (m.label && /[A-Z]$/.test(m.label)) ? m.label.slice(-1) : '';
-        const deadMark = m.dead ? ' (dead)' : '';
-        html += `<div class="monster">${m.name}${letter ? ' ' + letter : ''} - ${m.hp_word || 'Healthy'}${deadMark}</div>`;
-      });
-      monsterRosterContent.innerHTML = html;
-    }
-  }
-
-  // LEFT: Run Loot (prize_pool from run state)
-  if (runLootContent) {
-    const pp = run.prize_pool;
-    if (pp && (pp.lp_earned > 0 || pp.gold > 0 || (pp.weapon_ids && pp.weapon_ids.length > 0))) {
-      let html = '<div>LP earned: ' + (pp.lp_earned || 0) + '</div>';
-      html += '<div>Gold: ' + (pp.gold || 0) + '</div>';
-      html += '<div>Weapons: ' + (pp.weapon_ids?.length || 0) + '</div>';
-      runLootContent.innerHTML = html;
-    } else {
-      runLootContent.innerHTML = '<div class="dim">— (no loot data)</div>';
-    }
-  }
-
-  // RIGHT: Action/tic queue
-  if (actionQueueContent) {
-    const inFight = bs.tic > 0 || (bs.feed && bs.feed.length > 0);
-    if (!inFight || queue.length === 0) {
-      // Blank until the first fight starts (Spahrep 2026-09-13)
-      actionQueueContent.innerHTML = '<div class="dim">—</div>';
-    } else {
-      let html = '';
-      queue.slice(0, 8).forEach(q => {
-        const tics = q.tics ?? 0;
-        const monLabel = monsterQueueLabel(q, bs.monsters);
-        let label, ev;
-        if (monLabel) {
-          label = monLabel;
-          ev = '';
-        } else {
-          label = q.label || '?';
-          ev = QUEUE_ACTION_LABELS[q.event] || (q.event ? q.event[0].toUpperCase() + q.event.slice(1) : '?');
-        }
-        // PC-56: prediction bar — show | at the start and end of the bar range (no pin mode per design ref)
-        let marker = '';
-        if (menuAttack && menuAttack.queue === queue) {
-          const info = computeTimingMarkers(menuAttack.queue, menuAttack.attack, menuAttack.weaponSpeed);
-          if (info && info.kind === 'bar') {
-            if (info.firstId === q.id) marker = ' |<';
-            else if (info.lastId === q.id) marker = ' |>';
-            else marker = ' |';
-          }
-        }
-        html += `<div>${tics} - ${label}${ev ? ': ' + ev : ''}${marker}</div>`;
-      });
-      actionQueueContent.innerHTML = html;
-    }
-  }
-
-  // RIGHT: Dice Left (from battle_state.dice.remaining)
-  if (diceLeftContent) {
-    const fmt = (o) => `G${o?.green ?? 0} Y${o?.yellow ?? 0} R${o?.red ?? 0}`;
-    const rem = d.remaining ? fmt(d.remaining) : 'G0 Y0 R0';
-    diceLeftContent.innerHTML = `<div class="stat-line">${rem}</div>`;
-    if (d.used) {
-      diceLeftContent.innerHTML += `<div class="dim">used: ${fmt(d.used)}</div>`;
-    }
-  }
-
-  // RIGHT: Dice rolled results (current + any feed info)
-  if (diceRolledContent) {
-    let html = '';
-    if (d.current) {
-      html += `<div>current: ${d.current.color} face=${d.current.face} val=${d.current.rolled_value}</div>`;
-    } else {
-      html += `<div class="dim">no die drawn yet</div>`;
-    }
-    if (bs.feed && bs.feed.length) {
-      html += `<div class="amber">feed: ${bs.feed.slice(-2).join(' | ')}</div>`;
-    }
-    diceRolledContent.innerHTML = html || '<div class="dim">—</div>';
-  }
-}
-
-// PC-20 panel navigation helpers
-function getPanelElements() {
-  return PANEL_IDS.map(id => document.getElementById(id)).filter(Boolean);
-}
-
-function clearPanelFocus() {
-  getPanelElements().forEach(p => p.classList.remove('focused'));
-  dismissInfoPop();
-  focusedPanelIdx = -1;
-}
-
-function dismissInfoPop() {
-  if (infoPopEl && infoPopEl.parentNode) {
-    infoPopEl.parentNode.removeChild(infoPopEl);
-  }
-  infoPopEl = null;
-}
-
-function showInfoPop(panel) {
-  dismissInfoPop();
-  const titleEl = panel.querySelector('.panel-title, h3, .title') || panel.firstElementChild;
-  const contentContainer = panel.querySelector('[id$="-content"]') || panel;
-  const titleText = titleEl ? titleEl.textContent.trim() : panel.id.replace(/-/g, ' ').toUpperCase();
-  const contentHTML = contentContainer ? contentContainer.innerHTML : '';
-
-  infoPopEl = document.createElement('div');
-  infoPopEl.id = 'info-pop';
-  infoPopEl.innerHTML = `
-    <div class="pop-title">${titleText}</div>
-    <div class="pop-content">${contentHTML}</div>
-  `;
-  document.body.appendChild(infoPopEl);
-
-  const rect = panel.getBoundingClientRect();
-  let left = rect.right + 10;
-  let top = rect.top - 4;
-
-  const vw = window.innerWidth;
-  const vh = window.innerHeight;
-  const popW = 320;
-  if (left + popW > vw) left = Math.max(8, rect.left - popW - 10);
-  if (top + 220 > vh) top = Math.max(8, vh - 230);
-  if (top < 8) top = 8;
-  if (left < 8) left = 8;
-
-  infoPopEl.style.left = `${left}px`;
-  infoPopEl.style.top = `${top}px`;
-}
-
-function setFocusedPanel(idx) {
-  const panels = getPanelElements();
-  if (idx < 0 || idx >= panels.length) return;
-  clearPanelFocus();
-  const panel = panels[idx];
-  panel.classList.add('focused');
-  focusedPanelIdx = idx;
-  showInfoPop(panel);
-}
-
-function setupPanelNavigation() {
-  const input = inputEl;
-
-  document.addEventListener('keydown', (e) => {
-    if (document.activeElement === input) return; // history recall handled in input listener
-
-    const panels = getPanelElements();
-    if (panels.length === 0) return;
-
-    if (['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) {
-      e.preventDefault();
-    }
-
-    let idx = focusedPanelIdx;
-
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      if (idx === -1) idx = 0;
-      const col = Math.floor(idx / 3);
-      const row = idx % 3;
-      const newCol = (e.key === 'ArrowRight') ? 1 : 0;
-      idx = newCol * 3 + row;
-      if (idx >= panels.length) idx = panels.length - 1;
-      setFocusedPanel(idx);
-    } else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-      if (idx === -1) idx = 0;
-      const col = Math.floor(idx / 3);
-      const row = idx % 3;
-      let newRow = row + (e.key === 'ArrowDown' ? 1 : -1);
-      if (newRow < 0) newRow = 2;
-      if (newRow > 2) newRow = 0;
-      idx = col * 3 + newRow;
-      setFocusedPanel(idx);
-    } else if (e.key === 'Enter' && focusedPanelIdx !== -1) {
-      e.preventDefault();
-      input.focus();
-      clearPanelFocus();
-    } else if (e.key === 'Escape' && focusedPanelIdx !== -1) {
-      e.preventDefault();
-      input.focus();
-      clearPanelFocus();
-    }
-  });
-
-  input.addEventListener('focus', () => {
-    if (focusedPanelIdx !== -1) clearPanelFocus();
-  });
-}
 
 
 async function cmdEquip(args) {
@@ -1922,89 +965,3 @@ function cmdCancel() {
   if (currentRunId) refreshRunPanels();
 }
 
-
-// TASK2 UX select mode helpers (small functions, plain JS, yellow border aesthetic)
-function enterSelectMode() {
-  selectMode = true;
-  selectIndex = 0;
-  if (inputEl) inputEl.blur();
-  updateSelectHighlight();
-}
-
-function exitSelectMode() {
-  selectMode = false;
-  if (playerStatsContent) {
-    playerStatsContent.querySelectorAll('.stat-line.selectable').forEach(el => el.classList.remove('highlight'));
-    const d = playerStatsContent.querySelector('#player-detail');
-    if (d) d.style.display = 'none';
-  }
-  if (inputEl) inputEl.focus();
-}
-
-function updateSelectHighlight() {
-  if (!playerStatsContent || !selectMode) return;
-  const rows = playerStatsContent.querySelectorAll('.stat-line.selectable');
-  rows.forEach((el, i) => {
-    if (i === selectIndex) el.classList.add('highlight');
-    else el.classList.remove('highlight');
-  });
-}
-
-async function showItemDetailForCurrent() {
-  if (!playerStatsContent) return;
-  const rows = playerStatsContent.querySelectorAll('.stat-line.selectable');
-  const row = rows[selectIndex];
-  if (!row) return;
-  const detailEl = playerStatsContent.querySelector('#player-detail');
-  if (detailEl) {
-    await showItemDetailForSlot(row.dataset.slot, detailEl, null);
-  }
-}
-
-async function showItemDetailForSlot(slot, detailEl, preloadedWeapons) {
-  if (!detailEl) return;
-  detailEl.style.display = 'block';
-  if (slot === 'hp' || !['lh','rh','bl','c1','c2'].includes(slot)) {
-    detailEl.innerHTML = 'No item';
-    return;
-  }
-  if (slot === 'c1' || slot === 'c2') {
-    detailEl.innerHTML = 'No item';
-    return;
-  }
-  // parse id from the row text e.g. "LH: #12 Sword"
-  const rowText = document.querySelector(`.stat-line.selectable[data-slot="${slot}"]`)?.textContent || '';
-  const m = rowText.match(/#(\d+)/);
-  if (!m) {
-    detailEl.innerHTML = 'No item';
-    return;
-  }
-  const id = parseInt(m[1], 10);
-  try {
-    let wData = preloadedWeapons ? {weapons: Object.values(preloadedWeapons || {})} : null; // rough, but use fetch
-    if (!wData || !wData.weapons) {
-      wData = await apiCall('GET', '/weapons');
-    }
-    const weapons = wData.weapons || [];
-    const w = weapons.find(ww => ww.id === id);
-    if (!w) {
-      detailEl.innerHTML = `#${id} not found`;
-      return;
-    }
-    let html = `<div><strong>${w.name}</strong></div>`;
-    const delta = w.damage_delta != null ? ` (+${w.damage_delta})` : '';
-    html += `<div>Damage: ${w.damage}${delta}</div>`;
-    if (w.attacks && w.attacks.length) {
-      w.attacks.forEach(a => {
-        const pVar = a.prepare_time_range || 0;
-        const cVar = a.cooldown_time_range || 0;
-        const pPart = pVar > 0 ? `p${a.prepare_time}-${a.prepare_time + pVar}` : `p${a.prepare_time}`;
-        const cPart = cVar > 0 ? `c${a.cooldown_time}-${a.cooldown_time + cVar}` : `c${a.cooldown_time}`;
-        html += `<div>#${a.id} ${a.name} (${pPart}/${cPart})</div>`;
-      });
-    }
-    detailEl.innerHTML = html;
-  } catch (e) {
-    detailEl.innerHTML = 'Error loading detail';
-  }
-}
