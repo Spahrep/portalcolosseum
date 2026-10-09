@@ -85,6 +85,66 @@ async function getBody(request) {
   try { return await request.json(); } catch { return null; }
 }
 
+// Attack mappings, loot rows, and portal monster rows share the same
+// list/create/patch/delete chrome. Column names and required-field checks
+// differ, so those stay in the per-call config.
+async function crudSubresource(admin, request, route, config) {
+  const { method, id, subResource, mappingId } = route;
+  if (!id || subResource !== config.sub) return null;
+
+  if (method === 'GET') {
+    let query = admin.from(config.table).select(config.select).eq(config.parentKey, id);
+    for (const spec of config.order) {
+      query = spec.ascending === undefined
+        ? query.order(spec.column)
+        : query.order(spec.column, { ascending: spec.ascending });
+    }
+    const { data, error } = await query;
+    if (error) return json({ error: error.message }, 500);
+    return json({ data });
+  }
+
+  if (method === 'POST') {
+    const body = await getBody(request);
+    if (!body) return json({ error: 'Invalid JSON' }, 400);
+    for (const rule of config.required) {
+      const missing = rule.present === 'defined' ? body[rule.field] === undefined : !body[rule.field];
+      if (missing) return json({ error: config.requiredError }, 400);
+    }
+    if (config.slotMax != null) {
+      const validSlots = Array.from({ length: config.slotMax }, (_, i) => i + 1);
+      if (!validSlots.includes(body.slot)) return json({ error: `slot must be 1-${config.slotMax}` }, 400);
+    }
+    const row = { [config.parentKey]: id };
+    for (const field of config.insertFields) row[field] = body[field];
+    row.weight = body.weight || 1.0;
+    const { data, error } = await admin.from(config.table).insert(row).select().single();
+    if (error) return json({ error: error.message }, 400);
+    return json({ data }, 201);
+  }
+
+  if (method === 'PATCH' && mappingId) {
+    const body = await getBody(request);
+    if (!body) return json({ error: 'Invalid JSON' }, 400);
+    const update = {};
+    for (const field of config.patchFields) {
+      if (body[field] !== undefined) update[field] = body[field];
+    }
+    if (Object.keys(update).length === 0) return json({ error: 'Nothing to update' }, 400);
+    const { data, error } = await admin.from(config.table).update(update).eq('id', mappingId).select().single();
+    if (error) return json({ error: error.message }, 400);
+    return json({ data });
+  }
+
+  if (method === 'DELETE' && mappingId) {
+    const { error } = await admin.from(config.table).delete().eq('id', mappingId);
+    if (error) return json({ error: error.message }, 400);
+    return json({ success: true });
+  }
+
+  return null;
+}
+
 // ============================================================
 // FK DELETE BLOCKERS
 // ============================================================
@@ -268,41 +328,22 @@ async function handle(request, method) {
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
     }
-    if (method === 'GET' && id && subResource === 'mappings') {
-      const { data, error } = await admin.from(mappingTable)
-        .select(`id, ${templateIdCol}, attack_id, slot, weight, created_at, attack:attack!weapon_template_attack_attack_id_fkey(name)`)
-        .eq(templateIdCol, id).order('slot').order('weight', { ascending: false });
-      if (error) return json({ error: error.message }, 500);
-      return json({ data });
-    }
-    if (method === 'POST' && id && subResource === 'mappings') {
-      const body = await getBody(request);
-      if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const { attack_id, slot, weight } = body;
-      if (!attack_id || slot === undefined) return json({ error: 'attack_id and slot required' }, 400);
-      const validSlots = Array.from({ length: maxSlot }, (_, i) => i + 1);
-      if (!validSlots.includes(slot)) return json({ error: `slot must be 1-${maxSlot}` }, 400);
-      const { data, error } = await admin.from(mappingTable).insert({
-        [templateIdCol]: id, attack_id, slot, weight: weight || 1.0,
-      }).select().single();
-      if (error) return json({ error: error.message }, 400);
-      return json({ data }, 201);
-    }
-    if (method === 'PATCH' && id && subResource === 'mappings' && mappingId) {
-      const body = await getBody(request);
-      if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const update = {};
-      if (body.weight !== undefined) update.weight = body.weight;
-      if (Object.keys(update).length === 0) return json({ error: 'Nothing to update' }, 400);
-      const { data, error } = await admin.from(mappingTable).update(update).eq('id', mappingId).select().single();
-      if (error) return json({ error: error.message }, 400);
-      return json({ data });
-    }
-    if (method === 'DELETE' && id && subResource === 'mappings' && mappingId) {
-      const { error } = await admin.from(mappingTable).delete().eq('id', mappingId);
-      if (error) return json({ error: error.message }, 400);
-      return json({ success: true });
-    }
+    const mappingRes = await crudSubresource(admin, request, { method, id, subResource, mappingId }, {
+      table: mappingTable,
+      parentKey: templateIdCol,
+      sub: 'mappings',
+      select: `id, ${templateIdCol}, attack_id, slot, weight, created_at, attack:attack!weapon_template_attack_attack_id_fkey(name)`,
+      order: [{ column: 'slot' }, { column: 'weight', ascending: false }],
+      required: [
+        { field: 'attack_id', present: 'truthy' },
+        { field: 'slot', present: 'defined' },
+      ],
+      requiredError: 'attack_id and slot required',
+      slotMax: maxSlot,
+      insertFields: ['attack_id', 'slot'],
+      patchFields: ['weight'],
+    });
+    if (mappingRes) return mappingRes;
   }
 
   // ---- MONSTER TEMPLATES ----
@@ -345,77 +386,39 @@ async function handle(request, method) {
       if (error) return json({ error: error.message }, 400);
       return json({ success: true });
     }
-    if (method === 'GET' && id && subResource === 'mappings') {
-      const { data, error } = await admin.from(mappingTable)
-        .select(`id, ${templateIdCol}, attack_id, slot, weight, created_at, attack:attack!monster_template_attack_mapping_attack_id_fkey(name)`)
-        .eq(templateIdCol, id).order('slot').order('weight', { ascending: false });
-      if (error) return json({ error: error.message }, 500);
-      return json({ data });
-    }
-    if (method === 'POST' && id && subResource === 'mappings') {
-      const body = await getBody(request);
-      if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const { attack_id, slot, weight } = body;
-      if (!attack_id || slot === undefined) return json({ error: 'attack_id and slot required' }, 400);
-      const validSlots = Array.from({ length: maxSlot }, (_, i) => i + 1);
-      if (!validSlots.includes(slot)) return json({ error: `slot must be 1-${maxSlot}` }, 400);
-      const { data, error } = await admin.from(mappingTable).insert({
-        [templateIdCol]: id, attack_id, slot, weight: weight || 1.0,
-      }).select().single();
-      if (error) return json({ error: error.message }, 400);
-      return json({ data }, 201);
-    }
-    if (method === 'PATCH' && id && subResource === 'mappings' && mappingId) {
-      const body = await getBody(request);
-      if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const update = {};
-      if (body.weight !== undefined) update.weight = body.weight;
-      if (Object.keys(update).length === 0) return json({ error: 'Nothing to update' }, 400);
-      const { data, error } = await admin.from(mappingTable).update(update).eq('id', mappingId).select().single();
-      if (error) return json({ error: error.message }, 400);
-      return json({ data });
-    }
-    if (method === 'DELETE' && id && subResource === 'mappings' && mappingId) {
-      const { error } = await admin.from(mappingTable).delete().eq('id', mappingId);
-      if (error) return json({ error: error.message }, 400);
-      return json({ success: true });
-    }
+    const mappingRes = await crudSubresource(admin, request, { method, id, subResource, mappingId }, {
+      table: mappingTable,
+      parentKey: templateIdCol,
+      sub: 'mappings',
+      select: `id, ${templateIdCol}, attack_id, slot, weight, created_at, attack:attack!monster_template_attack_mapping_attack_id_fkey(name)`,
+      order: [{ column: 'slot' }, { column: 'weight', ascending: false }],
+      required: [
+        { field: 'attack_id', present: 'truthy' },
+        { field: 'slot', present: 'defined' },
+      ],
+      requiredError: 'attack_id and slot required',
+      slotMax: maxSlot,
+      insertFields: ['attack_id', 'slot'],
+      patchFields: ['weight'],
+    });
+    if (mappingRes) return mappingRes;
 
     // ---- Monster Loot Mappings (FK to weapon_template) ----
-    if (method === 'GET' && id && subResource === 'loot') {
-      const { data, error } = await admin.from('monster_loot_mapping')
-        .select('id, monster_template_id, weapon_template_id, lp_cost, weight, created_at, weapon_template:weapon_template!monster_loot_mapping_weapon_template_id_fkey(name)')
-        .eq('monster_template_id', id).order('weight', { ascending: false });
-      if (error) return json({ error: error.message }, 500);
-      return json({ data });
-    }
-    if (method === 'POST' && id && subResource === 'loot') {
-      const body = await getBody(request);
-      if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const { weapon_template_id, lp_cost, weight } = body;
-      if (!weapon_template_id || lp_cost === undefined) return json({ error: 'weapon_template_id and lp_cost required' }, 400);
-      const { data, error } = await admin.from('monster_loot_mapping').insert({
-        monster_template_id: id, weapon_template_id, lp_cost, weight: weight || 1.0,
-      }).select().single();
-      if (error) return json({ error: error.message }, 400);
-      return json({ data }, 201);
-    }
-    if (method === 'PATCH' && id && subResource === 'loot' && mappingId) {
-      const body = await getBody(request);
-      if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const update = {};
-      if (body.lp_cost !== undefined) update.lp_cost = body.lp_cost;
-      if (body.weight !== undefined) update.weight = body.weight;
-      if (Object.keys(update).length === 0) return json({ error: 'Nothing to update' }, 400);
-      const { data, error } = await admin.from('monster_loot_mapping').update(update).eq('id', mappingId).select().single();
-      if (error) return json({ error: error.message }, 400);
-      return json({ data });
-    }
-    if (method === 'DELETE' && id && subResource === 'loot' && mappingId) {
-      const { error } = await admin.from('monster_loot_mapping').delete().eq('id', mappingId);
-      if (error) return json({ error: error.message }, 400);
-      return json({ success: true });
-    }
+    const lootRes = await crudSubresource(admin, request, { method, id, subResource, mappingId }, {
+      table: 'monster_loot_mapping',
+      parentKey: 'monster_template_id',
+      sub: 'loot',
+      select: 'id, monster_template_id, weapon_template_id, lp_cost, weight, created_at, weapon_template:weapon_template!monster_loot_mapping_weapon_template_id_fkey(name)',
+      order: [{ column: 'weight', ascending: false }],
+      required: [
+        { field: 'weapon_template_id', present: 'truthy' },
+        { field: 'lp_cost', present: 'defined' },
+      ],
+      requiredError: 'weapon_template_id and lp_cost required',
+      insertFields: ['weapon_template_id', 'lp_cost'],
+      patchFields: ['lp_cost', 'weight'],
+    });
+    if (lootRes) return lootRes;
   }
 
   // ---- PORTAL TEMPLATES ----
@@ -468,76 +471,38 @@ async function handle(request, method) {
     }
 
     // ---- Portal Monster Mappings ----
-    if (method === 'GET' && id && subResource === 'monsters') {
-      const { data, error } = await admin.from('portal_monster_mapping')
-        .select('id, portal_template_id, monster_template_id, point_cost, weight, created_at, monster_template:monster_template!portal_monster_mapping_monster_template_id_fkey(name)')
-        .eq('portal_template_id', id).order('weight', { ascending: false });
-      if (error) return json({ error: error.message }, 500);
-      return json({ data });
-    }
-    if (method === 'POST' && id && subResource === 'monsters') {
-      const body = await getBody(request);
-      if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const { monster_template_id, point_cost, weight } = body;
-      if (!monster_template_id || point_cost === undefined) return json({ error: 'monster_template_id and point_cost required' }, 400);
-      const { data, error } = await admin.from('portal_monster_mapping').insert({
-        portal_template_id: id, monster_template_id, point_cost, weight: weight || 1.0,
-      }).select().single();
-      if (error) return json({ error: error.message }, 400);
-      return json({ data }, 201);
-    }
-    if (method === 'PATCH' && id && subResource === 'monsters' && mappingId) {
-      const body = await getBody(request);
-      if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const update = {};
-      if (body.point_cost !== undefined) update.point_cost = body.point_cost;
-      if (body.weight !== undefined) update.weight = body.weight;
-      if (Object.keys(update).length === 0) return json({ error: 'Nothing to update' }, 400);
-      const { data, error } = await admin.from('portal_monster_mapping').update(update).eq('id', mappingId).select().single();
-      if (error) return json({ error: error.message }, 400);
-      return json({ data });
-    }
-    if (method === 'DELETE' && id && subResource === 'monsters' && mappingId) {
-      const { error } = await admin.from('portal_monster_mapping').delete().eq('id', mappingId);
-      if (error) return json({ error: error.message }, 400);
-      return json({ success: true });
-    }
+    const monsterRes = await crudSubresource(admin, request, { method, id, subResource, mappingId }, {
+      table: 'portal_monster_mapping',
+      parentKey: 'portal_template_id',
+      sub: 'monsters',
+      select: 'id, portal_template_id, monster_template_id, point_cost, weight, created_at, monster_template:monster_template!portal_monster_mapping_monster_template_id_fkey(name)',
+      order: [{ column: 'weight', ascending: false }],
+      required: [
+        { field: 'monster_template_id', present: 'truthy' },
+        { field: 'point_cost', present: 'defined' },
+      ],
+      requiredError: 'monster_template_id and point_cost required',
+      insertFields: ['monster_template_id', 'point_cost'],
+      patchFields: ['point_cost', 'weight'],
+    });
+    if (monsterRes) return monsterRes;
 
     // ---- Portal Loot Mappings (FK to weapon_template) ----
-    if (method === 'GET' && id && subResource === 'loot') {
-      const { data, error } = await admin.from('portal_loot_mapping')
-        .select('id, portal_template_id, weapon_template_id, lp_cost, weight, created_at, weapon_template:weapon_template!portal_loot_mapping_weapon_template_id_fkey(name)')
-        .eq('portal_template_id', id).order('weight', { ascending: false });
-      if (error) return json({ error: error.message }, 500);
-      return json({ data });
-    }
-    if (method === 'POST' && id && subResource === 'loot') {
-      const body = await getBody(request);
-      if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const { weapon_template_id, lp_cost, weight } = body;
-      if (!weapon_template_id || lp_cost === undefined) return json({ error: 'weapon_template_id and lp_cost required' }, 400);
-      const { data, error } = await admin.from('portal_loot_mapping').insert({
-        portal_template_id: id, weapon_template_id, lp_cost, weight: weight || 1.0,
-      }).select().single();
-      if (error) return json({ error: error.message }, 400);
-      return json({ data }, 201);
-    }
-    if (method === 'PATCH' && id && subResource === 'loot' && mappingId) {
-      const body = await getBody(request);
-      if (!body) return json({ error: 'Invalid JSON' }, 400);
-      const update = {};
-      if (body.lp_cost !== undefined) update.lp_cost = body.lp_cost;
-      if (body.weight !== undefined) update.weight = body.weight;
-      if (Object.keys(update).length === 0) return json({ error: 'Nothing to update' }, 400);
-      const { data, error } = await admin.from('portal_loot_mapping').update(update).eq('id', mappingId).select().single();
-      if (error) return json({ error: error.message }, 400);
-      return json({ data });
-    }
-    if (method === 'DELETE' && id && subResource === 'loot' && mappingId) {
-      const { error } = await admin.from('portal_loot_mapping').delete().eq('id', mappingId);
-      if (error) return json({ error: error.message }, 400);
-      return json({ success: true });
-    }
+    const lootRes = await crudSubresource(admin, request, { method, id, subResource, mappingId }, {
+      table: 'portal_loot_mapping',
+      parentKey: 'portal_template_id',
+      sub: 'loot',
+      select: 'id, portal_template_id, weapon_template_id, lp_cost, weight, created_at, weapon_template:weapon_template!portal_loot_mapping_weapon_template_id_fkey(name)',
+      order: [{ column: 'weight', ascending: false }],
+      required: [
+        { field: 'weapon_template_id', present: 'truthy' },
+        { field: 'lp_cost', present: 'defined' },
+      ],
+      requiredError: 'weapon_template_id and lp_cost required',
+      insertFields: ['weapon_template_id', 'lp_cost'],
+      patchFields: ['lp_cost', 'weight'],
+    });
+    if (lootRes) return lootRes;
   }
 
   // ---- CONSUMABLE TEMPLATES ----
