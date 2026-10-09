@@ -104,7 +104,7 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.equal(/setTimeout\(\(\) => rowEl\.classList\.remove\('queue-row-enter'\), 1200\)/.test(app), false);
     const gap = fnBody(app, 'openInsertGap');
     assert.match(gap, /waitForEvent\(gap, 'transitionend'/);
-    const settle = fnBody(app, 'playInsertCeremony');
+    const settle = fnBody(app, 'playRowArrival');
     assert.match(settle, /waitForEvent\(rowEl, 'animationend'/);
   });
 
@@ -136,20 +136,20 @@ describe('Master clock visual fidelity (client contract)', () => {
       'instant remove stays on the skipped path only');
     assert.ok(popFn.indexOf('row.remove()') < popFn.indexOf('markQueueRowExiting'),
       'row.remove() is not the animated branch');
-    assert.match(loop, /playQueueTransition\(/, 'advance delegates the queue-transition ceremony');
-    assert.equal(loop.includes('playInsertCeremony'), false, 'advance does not inline the ceremony');
+    assert.match(loop, /playQueueTransition\(/, 'advance delegates the queue-transition arrival sequence');
+    assert.equal(loop.includes('playRowArrival'), false, 'advance does not inline the arrival sequence');
     const transition = fnBodyUntilNext(app, 'async function playQueueTransition', ['async function awaitTickVisuals']);
-    const ceremonyAt = transition.indexOf('playInsertCeremony');
+    const arrivalAt = transition.indexOf('playRowArrival');
     const readyRemove = transition.indexOf('runQueueRemoval([c.ready.id])');
-    assert.ok(ceremonyAt >= 0 && readyRemove > ceremonyAt, 'playQueueTransition: attack ceremony before ready slide-out');
+    assert.ok(arrivalAt >= 0 && readyRemove > arrivalAt, 'playQueueTransition: attack arrival before ready slide-out');
   });
 
   it('live render follows engine array order and does not re-sort or rebuild a same-id tick', () => {
     const queueRender = read('js/battle/queue-render.js');
     const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
-    const ceremony = fnBodyUntilNext(app, 'async function playInsertCeremony', ['async function awaitTickVisuals']);
+    const arrival = fnBodyUntilNext(app, 'async function playRowArrival', ['async function awaitTickVisuals']);
     assert.equal(render.includes('sortQueueRows'), false, 'renderQueue must not sort');
-    assert.equal(ceremony.includes('sortQueueRows'), false, 'playInsertCeremony must not sort');
+    assert.equal(arrival.includes('sortQueueRows'), false, 'playRowArrival must not sort');
     assert.ok(render.indexOf('updateQueueRowInPlace') >= 0 && render.indexOf('updateQueueRowInPlace') < render.indexOf('buildQueueRow'),
       'same-id path updates in place before any rebuild');
     assert.equal(render.includes('clearQueueDom'), true, 'rebuild remains the fallback for a real shape change');
@@ -167,24 +167,24 @@ describe('Master clock visual fidelity (client contract)', () => {
     }
   });
 
-  it('hand-ready commit plays the ceremony before the ready row slides out', () => {
+  it('hand-ready commit plays the arrival sequence before the ready row slides out', () => {
     const commit = fnBody(app, 'playCommitArrival');
     const removeAt = commit.indexOf('runQueueRemoval');
-    const ceremonyAt = commit.indexOf('playInsertCeremony');
-    assert.ok(ceremonyAt >= 0 && removeAt > ceremonyAt, 'attack lands, then ready row slides out');
-    assert.ok(commit.indexOf('replaceReadyWithSuccessor') >= 0 && commit.indexOf('replaceReadyWithSuccessor') < ceremonyAt,
-      'ceremony applies the queue mutation before painting the successor');
+    const arrivalAt = commit.indexOf('playRowArrival');
+    assert.ok(arrivalAt >= 0 && removeAt > arrivalAt, 'attack lands, then ready row slides out');
+    assert.ok(commit.indexOf('replaceReadyWithSuccessor') >= 0 && commit.indexOf('replaceReadyWithSuccessor') < arrivalAt,
+      'commit arrival applies the queue mutation before painting the successor');
     assert.match(commit, /await Promise\.all\(\[narrateP, visualP\]\)/);
     const insert = fnBodyUntilNext(app, 'async _runInsert()', ['class BattleClock', 'async _runResolve()', 'async _renderNew()']);
     assert.equal(insert.includes('resolved.length === 0'), false);
     const renderNew = fnBodyUntilNext(app, 'async _renderNew()', ['/** All done']);
-    assert.match(renderNew, /playQueueTransition\(/, 'battle clock delegates the queue-transition ceremony');
-    assert.equal(renderNew.includes('playInsertCeremony'), false, 'battle clock does not inline the ceremony');
+    assert.match(renderNew, /playQueueTransition\(/, 'battle clock delegates the queue-transition arrival sequence');
+    assert.equal(renderNew.includes('playRowArrival'), false, 'battle clock does not inline the arrival sequence');
     assert.equal(renderNew.includes('runQueueRemoval'), false, 'battle clock does not inline the ready slide-out');
     const transition = fnBodyUntilNext(app, 'async function playQueueTransition', ['async function awaitTickVisuals']);
-    const clockCeremony = transition.indexOf('playInsertCeremony');
+    const clockArrival = transition.indexOf('playRowArrival');
     const clockRemove = transition.indexOf('runQueueRemoval');
-    assert.ok(clockCeremony >= 0 && clockRemove > clockCeremony, 'battle clock: attack ceremony before ready slide-out');
+    assert.ok(clockArrival >= 0 && clockRemove > clockArrival, 'battle clock: attack arrival before ready slide-out');
   });
 
   it('tic-only change relabels in place — no slide', () => {
@@ -210,12 +210,12 @@ describe('Master clock visual fidelity (client contract)', () => {
     const insertAt = loop.indexOf('playQueueTransition(');
     const releaseAt = loop.indexOf('releaseProcessedHead(processedHead');
     assert.ok(insertAt >= 0 && releaseAt > insertAt, 'new box slides in before the processed box slides out');
-    assert.equal(loop.includes('playInsertCeremony'), false, 'advance delegates the insert ceremony');
+    assert.equal(loop.includes('playRowArrival'), false, 'advance delegates the row-arrival');
     const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
     assert.match(releaseFn, /runQueueRemoval/, 'departing boxes slide out');
     assert.equal(releaseFn.includes('updateQueueRowInPlace'), false, 'exit does not relabel the departing box');
     const commit = fnBodyUntilNext(app, 'async function playCommitArrival', ['function showMessage']);
-    assert.ok(commit.indexOf('playInsertCeremony') < commit.indexOf('runQueueRemoval'),
+    assert.ok(commit.indexOf('playRowArrival') < commit.indexOf('runQueueRemoval'),
       'a commit inserts the new entry before the ready box exits');
     assert.equal(commit.includes('updateQueueRowInPlace'), false, 'a commit is a new entry, not an in-place relabel');
     const diff = fnBodyUntilNext(read('js/battle/queue-render.js'), 'function diffQueueForAnimation', ['function isReconciledQueueRow']);

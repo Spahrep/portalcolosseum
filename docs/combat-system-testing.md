@@ -99,7 +99,7 @@ Before entering the portal, the test account must have a **heal potion** and a *
 - [ ] ALL existential checks pass (§1)
 - [ ] Queue entries match: hands (approach rows) + monsters (attack rows)
 - [ ] Dice display reflects drawn die for the battle
-- [ ] Typewriter (if ceremony plays) shows countdown 5... 3... 1...
+- [ ] Typewriter (if battle initialization plays) shows countdown 5... 3... 1...
 
 ### 2.4 First Attack Commit
 

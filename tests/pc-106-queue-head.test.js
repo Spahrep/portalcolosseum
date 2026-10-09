@@ -126,7 +126,7 @@ describe('PC-106 ready head is the turn', () => {
     assert.equal(persisted(eng).queue.some(r => r.id === committed.removed.id), false);
     assert.ok(persisted(eng).queue.some(r => r.id === committed.inserted.id));
     const local = replaceReadyWithSuccessor(before, committed.removed, committed.inserted);
-    assert.equal(queuesMatch(local, persisted(eng).queue), true, 'ceremony mutation matches the engine commit');
+    assert.equal(queuesMatch(local, persisted(eng).queue), true, 'arrival mutation matches the engine commit');
   });
 
   it('commit potion removes the ready head and inserts drinking', () => {

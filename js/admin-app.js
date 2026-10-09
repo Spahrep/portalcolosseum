@@ -164,7 +164,7 @@ async function loadTab(tab) {
 
 // ============================================================
 // SHARED SAVE / DELETE / ROW ACTIONS
-// Ceremony only. Field HTML stays per tab.
+// Handlers only. Field HTML stays per tab.
 // ============================================================
 
 const RESOURCE_FORM = {

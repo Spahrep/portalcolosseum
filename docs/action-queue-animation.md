@@ -29,9 +29,9 @@ After the action is confirmed, the slot where the new row will land grows open a
 **Mechanism (`openInsertGap` in `battle-app.js`):**
 1. Insert a `.queue-insert-gap` (`height: 0`, transparent, `border: none`) at the sorted index.
 2. Add `.open`. CSS transitions `height` to one row (`--insert-gap`) and `margin-bottom` to `2px` over `300ms` ease-out.
-3. Barrier is `waitForEvent(gap, 'transitionend', QUEUE_GAP_MS + 80)` — not `setTimeout(300)`. Reduced-motion and the Instant preset (`charMs === 0`) skip the ceremony and land the row directly.
+3. Barrier is `waitForEvent(gap, 'transitionend', QUEUE_GAP_MS + 80)` — not `setTimeout(300)`. Reduced-motion and the Instant preset (`charMs === 0`) skip the arrival sequence and land the row directly.
 
-**Hand-ready commit is two beats, not one suppressed tick (locked).** The new attack row plays the full ceremony first (gap grows → insert marker wipes → flashes → row settles) in `playCommitArrival` / `playInsertCeremony`. THEN the ready placeholder slides out (genuine slide-out + group-lift via `runQueueRemoval`). A same-tick removal must not suppress this ceremony.
+**Hand-ready commit is two beats, not one suppressed tick (locked).** The new attack row plays the full arrival sequence first (gap grows → insert marker wipes → flashes → row settles) in `playCommitArrival` / `playRowArrival`. THEN the ready placeholder slides out (genuine slide-out + group-lift via `runQueueRemoval`). A same-tick removal must not suppress this arrival sequence.
 
 ---
 
@@ -197,14 +197,14 @@ When charMs=0 and lineDelayMs=0 (Instant preset), skip all 5 insert stages. Inse
 | Stage 5: Row appears | ✅ Done | gap replaced by `.queue-row-enter` / `.queue-row-monster-enter`, `waitForEvent` |
 | Exit animation | ✅ Done | Every box slides. Fired head: successor (new entry) lands first, then the head slides out and siblings group-lift. Non-head: `runQueueRemoval()` + `.queue-row-exit` + group-lift. |
 | Staggered entry (resume) | ⚠️ Partial | Only on fresh battle load, skip on resume |
-| Hand-ready commit split | ✅ Done | `playCommitArrival()` — attack ceremony first, then ready row slides out, then `/tick` |
-| Master-clock order | ✅ Done | `tickLoop`: pin head → typewriter ∥ visuals → await both → slide-out/slide-in → ceremony → next `/tick` |
+| Hand-ready commit split | ✅ Done | `playCommitArrival()` — row-arrival first, then ready row slides out, then `/tick` |
+| Master-clock order | ✅ Done | `tickLoop`: pin head → typewriter ∥ visuals → await both → slide-out/slide-in → arrival sequence → next `/tick` |
 
 ---
 
 ## 6. Locked decisions (2026-09-28)
 
 1. **No dotted box.** `.queue-insert-preview` (dashed yellow border/fill) is gone from JS and CSS. Space creation is a clean empty `.queue-insert-gap`.
-2. **Commit ceremony is not suppressed.** A hand-ready commit is two beats: the attack row lands through gap → wipe → flash → settle, then the ready placeholder slides out.
+2. **Commit arrival is not suppressed.** A hand-ready commit is two beats: the attack row lands through gap → wipe → flash → settle, then the ready placeholder slides out.
 3. **Event-gated timing.** Preview and entry barriers use `waitForEvent` (`transitionend` / `animationend`), with the existing reduced-motion short-circuit. Do not reintroduce `setTimeout(300)` / `setTimeout(1200)` as the barrier.
 4. **Engine order unchanged.** `tick()` is Peek → Process → Cleanup → Remove. It returns the processed head (`result.row`). `remove()` fires only after `process()`.

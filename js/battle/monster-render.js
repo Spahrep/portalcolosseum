@@ -8,7 +8,7 @@ import { parseHitLine } from '../combat/hit-feedback.js';
 import { assignArenaLetters, letterForMonster } from './arena-letters.js';
 import { dur, screenshakeEnabled } from './ux-controller.js';
 
-// PC-51: monsters stay hidden while the dice roll ceremony plays, then
+// PC-51: monsters stay hidden while battle initialization plays, then
 // fade in one at a time. Set in the battle render when a roll will run;
 // revealMonsters() clears it when the roll completes.
 let monstersPendingReveal = false;
@@ -199,7 +199,7 @@ function arenaLetterOf(monster) {
 function renderMonsters(monsters) {
   const container = document.getElementById('monsters');
   if (!container) return;
-  // Fresh battle ceremony = a new arena — drop any in-flight death animations
+  // Fresh battle initialization = a new arena — drop any in-flight death animations
   // from the previous battle rather than letting corpses linger into battle 2.
   if (monstersPendingReveal && deathCards.size > 0) {
     for (const entry of deathCards.values()) {
@@ -322,7 +322,7 @@ function hideForReveal(el) {
 function revealMonsters(onDone) {
   debugLog('revealMonsters', `monstersPendingReveal=${monstersPendingReveal} n_cards=${document.getElementById('monsters')?.children?.length || 0}`);
   if (!monstersPendingReveal) {
-    if (onDone) onDone(); // no ceremony pending — nothing to wait for
+    if (onDone) onDone(); // no initialization pending — nothing to wait for
     return;
   }
   monstersPendingReveal = false;

@@ -190,7 +190,7 @@ async function loadGrantedAttacks(admin, instances, style) {
   };
 }
 
-// Commit/swap snapshot the client ceremony reconciles against. playerReady is
+// Commit/swap snapshot the client arrival reconciles against. playerReady is
 // the queue head, matching engine.tick(). Nested state stays so existing
 // readers of data.state / data.result keep working.
 function commitSnapshot(engine, committed = {}) {

@@ -52,8 +52,8 @@ reached by several callers (see below) — correct for the head, NOT for mid-que
 | `releaseProcessedHead` — same-key successor (:476-508) | slide out (mark exit, wait) → relabel → slide in | ✅ | ✅ | ✅ | ✅ | PASS |
 | `releaseProcessedHead` — genuine removal (:510-518) | successor lands First, then slide out + lift | ✅ | ✅ | ✅ | ✅ | PASS |
 | `releaseProcessedHead` — **`landsOnReady`** (:463-473) | relabel + arm ENTER, **no exit slide** | ✅ | ✅ | ❌ | ✅ | **VIOLATION — V1** |
-| `playInsertCeremony` (:601) | gap → wipe → flash → enter | ✅ | ✅ | ✅ | ✅ | PASS |
-| `playQueueTransition` (:639) | ceremony first, then ready-commit removal, then reconcile | ✅ | ✅ | ✅ | ✅ | PASS |
+| `playRowArrival` (:601) | gap → wipe → flash → enter | ✅ | ✅ | ✅ | ✅ | PASS |
+| `playQueueTransition` (:639) | row-arrival first, then ready-commit removal, then reconcile | ✅ | ✅ | ✅ | ✅ | PASS |
 | `playCommitArrival` (:698) | relabeled commit: slide out → relabel → slide in | ✅ | ✅ | ✅ | ✅ | PASS |
 | `advance` nonHead removal (:2276-2291) | `runQueueRemoval` on `nonHead.slice(0,1)` only | ✅ | ✅ | ⚠️ | ✅ | **RISK — see F1** |
 | `finishBattleIntro` (:824-874) | wipe + rebuild, rows staged with slide-in | ✅ | ✅ | ✅ | ✅ | PASS (first build only) |

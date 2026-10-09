@@ -27,7 +27,7 @@ export const TIMING = Object.freeze({
   queueFlash: 150,
   queueEnter: 250,
   queueFill: 700,
-  // Paired with queueFill / monsterFade so the ceremony's total wait scales
+  // Paired with queueFill / monsterFade so battle initialization's total wait scales
   // with the fade it is waiting on.
   queueFillStagger: 600,
   monsterFade: 1400,

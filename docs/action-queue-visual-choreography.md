@@ -90,7 +90,7 @@ old one.
 
 ---
 
-## Scenario 2 — Player Attack Commit (the full ceremony)
+## Scenario 2 — Player Attack Commit (the full arrival sequence)
 
 **Trigger:** A `ready` row is at the head (player's turn). The player picks an attack +
 target and commits.
@@ -141,7 +141,7 @@ On commit, in this exact order:
 ```
 
 **This order is locked.** The new row lands FIRST, then the processed head leaves. Never
-the reverse. A same-tick removal must never suppress the insert ceremony.
+the reverse. A same-tick removal must never suppress the row-arrival.
 
 ---
 
@@ -175,7 +175,7 @@ Monsters have no `ready` row. Their cycle is `cooldown → winding → impact �
 ### What the player sees
 1. A monster `cooldown` row ("<Name> recovering") fires → the next `winding` row
    ("<Name>'s <Attack>") is inserted at its sorted position. It slides in via the same
-   insert ceremony (Scenario 2 D).
+   row-arrival (Scenario 2 D).
 2. `winding` fires → `impact` row lands at tic 0 (new entry, slides in).
 3. `impact` fires → damage narration + visuals, then `cooldown` row inserted.
 
@@ -194,7 +194,7 @@ moves for this relabel. (This is relabel case #2 above.)
 
 ## Scenario 5 — Potion / Weapon swap
 
-Both follow the commit ceremony (Scenario 2):
+Both follow the commit arrival (Scenario 2):
 1. Ready head at top.
 2. Player picks potion (or Equip).
 3. Windup computed → space grows → marker wipes/flashes → new row (`drinking` or
@@ -244,6 +244,6 @@ This is locked. The silent path is correct and must remain.
 - ❌ A box never gets a new identity without being removed. A new entry is a new box.
 - ❌ The processed head never slides out BEFORE its successor slides in.
 - ❌ A plain countdown tick never animates (only the tic number updates in place).
-- ❌ The insert ceremony is never suppressed by a same-tick removal.
+- ❌ The row-arrival is never suppressed by a same-tick removal.
 - ❌ No timing bar / fill bar / %-complete bar on any row. The countdown is the tic number.
 - ❌ No shared DOM node pretending to be the same hand across two different entries.

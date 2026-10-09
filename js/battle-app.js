@@ -49,7 +49,7 @@ import {
 } from './battle/loot-exit.js';
 
 // PC-78: feed and dice own their state. Hooks stay here (busy gate, hit
-// feedback, ceremony) so the new modules do not import battle-app.js.
+// feedback, initialization) so the new modules do not import battle-app.js.
 // The landed-hit shake is bound into the UX controller. handleDeferredHit
 // already refuses when suppressHitFeedback is set OR screenshake_on is false,
 // so window shake, card shake, and sprite flash share that one gate.
@@ -146,7 +146,7 @@ class BattleClock {
     this._finish();
   }
 
-  /** Phase 2: attack row plays the ceremony first; the ready placeholder
+  /** Phase 2: attack row plays the arrival sequence first; the ready placeholder
    * then slides out. Never suppressed just because a removal happened
    * in the same tick. */
   async _runInsert() {
@@ -154,7 +154,7 @@ class BattleClock {
     this._finish();
   }
 
-  /** Phase 3: ceremony (event-gated), then ready slide-out, then entry settle.
+  /** Phase 3: arrival sequence (event-gated), then ready slide-out, then entry settle.
    * When a departing row still has to slide out, the insert does not reconcile
    * it away — the caller exits it after this returns. */
   async _renderNew() {
@@ -165,17 +165,17 @@ class BattleClock {
 
     const addedRows = diff.addedRows
       || (newBs.queue || []).filter(r => (diff.added || []).some(a => a.id === r.id));
-    const ceremonyEntries = [];
+    const arrivalEntries = [];
     const seenIds = new Set();
     for (const row of [...addedRows, ...commits.map(c => c.attack)]) {
       if (!row || row.id == null || seenIds.has(row.id)) continue;
       seenIds.add(row.id);
-      ceremonyEntries.push(row);
+      arrivalEntries.push(row);
     }
 
     // Id-matched adds. Pulse is post-commit only; the tick loop does not flash.
     await playQueueTransition({
-      ceremonyEntries,
+      arrivalEntries,
       readyCommits: holdDeparting ? [] : commits,
       bs: newBs,
       preset,
@@ -304,12 +304,12 @@ let supabase;
 let currentRunId = null;
 let lastBs = null; // last loaded battle_state (safeState) — source for attack/potion lookups
 let busy = false;
-let masterClockDepth = 0; // >0 while advance / commit ceremony owns the clock; blocks setBusy(false)
+let masterClockDepth = 0; // >0 while advance / commit arrival owns the clock; blocks setBusy(false)
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
 let playerName = 'Player';
 let shouldAnimateDice = false;
 
-// Ceremony-intro: the battle-start dice ceremony also gates the command window and the
+// Battle-initialization: battle initialization also gates the command window and the
 // timing track — both stay hidden while the die rolls. Once the last monster has faded
 // in, the timing track fills (First → last); the command window appears only after the
 // track is full (the fill's onDone removes intro-pending).
@@ -587,10 +587,10 @@ async function playInsertMarker(gap) {
 }
 
 /**
- * Full insert ceremony: empty gap grows → marker wipes → flashes → real row settles.
+ * Full row-arrival: empty gap grows → marker wipes → flashes → real row settles.
  * Event-gated via waitForEvent. Instant / reduced-motion skips straight to render.
  */
-async function playInsertCeremony(entries, preset, bs, opts) {
+async function playRowArrival(entries, preset, bs, opts) {
   const reconcile = !opts || opts.reconcile !== false;
   const list = entries || [];
   const queueEl = document.getElementById('queue');
@@ -618,20 +618,20 @@ async function playInsertCeremony(entries, preset, bs, opts) {
 }
 
 /**
- * Queue-transition ceremony shared by BattleClock._renderNew and advance.
+ * Queue-transition arrival sequence shared by BattleClock._renderNew and advance.
  * New rows slide in, then departing rows slide out. Callers pass entries
  * matched by (label, event), not by a shared hand node.
  *
  * reconcile stays false while a departing row still has to slide out —
- * playInsertCeremony's closing renderQueue would wipe it. holdDeparting
+ * playRowArrival's closing renderQueue would wipe it. holdDeparting
  * skips the exit and the closing render so the caller can exit last.
  * pulse is the post-commit panel flash only; the tick loop must not pulse.
  */
-async function playQueueTransition({ ceremonyEntries, readyCommits, bs, preset, reconcile, pulse, holdDeparting }) {
+async function playQueueTransition({ arrivalEntries, readyCommits, bs, preset, reconcile, pulse, holdDeparting }) {
   const closeReconcile = holdDeparting ? false : (reconcile !== undefined ? reconcile : readyCommits.length === 0);
 
-  if (ceremonyEntries.length > 0) {
-    await playInsertCeremony(ceremonyEntries, preset, bs, { reconcile: closeReconcile });
+  if (arrivalEntries.length > 0) {
+    await playRowArrival(arrivalEntries, preset, bs, { reconcile: closeReconcile });
   }
 
   if (!holdDeparting) {
@@ -645,13 +645,13 @@ async function playQueueTransition({ ceremonyEntries, readyCommits, bs, preset, 
     }
   }
 
-  if (!holdDeparting && (readyCommits.length > 0 || ceremonyEntries.length === 0)) {
+  if (!holdDeparting && (readyCommits.length > 0 || arrivalEntries.length === 0)) {
     renderQueue(bs);
   }
 
   if (pulse) {
     const qp = document.querySelector('.queue-panel');
-    if (qp && ceremonyEntries.length > 0 && !animationsSkipped(preset)) {
+    if (qp && arrivalEntries.length > 0 && !animationsSkipped(preset)) {
       qp.classList.add('queue-arrived');
       await waitForEvent(qp, 'animationend', 400);
       qp.classList.remove('queue-arrived');
@@ -677,7 +677,7 @@ async function awaitTickVisuals(deathBefore) {
 }
 
 /**
- * Commit-arrival beat of advance — not a ceremony owner. advance is the
+ * Commit-arrival beat of advance — not a presentation owner. advance is the
  * only caller. It owns every later queue transition and is the only thing
  * that decides when to stop for player input.
  *
@@ -708,7 +708,7 @@ async function playCommitArrival(runId, commitData) {
       inserted = inserted || inferred[0].attack;
     }
   }
-  // Ceremony applies the mutation. Server queue wins if the two disagree.
+  // Commit arrival applies the mutation. Server queue wins if the two disagree.
   // A second call with the same inserted id is a no-op (idempotent).
   let local = replaceReadyWithSuccessor(prevQueue, removed, inserted);
   if (!queuesMatch(local, serverQueue)) local = serverQueue.map(r => ({ ...r }));
@@ -723,7 +723,7 @@ async function playCommitArrival(runId, commitData) {
       renderQueue(bs);
       return;
     }
-    await playInsertCeremony(entries, preset, bs, { reconcile: false });
+    await playRowArrival(entries, preset, bs, { reconcile: false });
     const readyRows = commits.length ? commits : (removed ? [{ ready: removed }] : []);
     for (const c of readyRows) {
       if (!c.ready) continue;
@@ -807,7 +807,7 @@ function setBusy(state) {
   });
 }
 
-// Ceremony-intro: once every monster is in, the tic-0 timing track fills in
+// Battle-initialization: once every monster is in, the tic-0 timing track fills in
 // one row at a time. Battle start does not run the clock (PC-DEC-060), so no
 // hand is Ready yet. Do not replay intro.fires — that skip types both hands
 // Ready before the player can act. After the track is full, advance plays
@@ -852,11 +852,11 @@ function finishBattleIntro() {
 
   const totalDelay = (queue.length * 200) + 350;
   setTimeout(() => {
-    // Dice ceremony text stays. Do not renderFeed([]) — that wipes the box.
+    // Battle-initialization text stays. Do not renderFeed([]) — that wipes the box.
     // Do not type a pre-advanced feed or both Ready lines.
     beginAfterIntro(() => {
       if (currentRunId && !readyHeadOf(lastBs)) {
-        advance(currentRunId).catch(err => console.error('tickLoop ceremony:', err));
+        advance(currentRunId).catch(err => console.error('tickLoop initialization:', err));
       } else {
         renderActionMenu(lastBs);
       }
@@ -1059,7 +1059,7 @@ async function fightOn(runId, overlay, fightBtn) {
 
 
 /**
- * PC-91: one commit-then-tick ceremony for attack, swap, and potion.
+ * PC-91: one commit-then-tick arrival for attack, swap, and potion.
  * postFn performs the action POST and returns its JSON. message is a string
  * or (data) => string, shown only after a successful POST and before the clock
  * (doSwap builds its cooldown line from data.delay). hideMenu hides
@@ -1070,7 +1070,7 @@ async function fightOn(runId, overlay, fightBtn) {
  *
  * Single-owner contract: POST, then advance. advance presents the commit
  * arrival (same-key relabel) and every later queue transition, and it alone
- * decides when to stop for input. This function does not play a ceremony.
+ * decides when to stop for input. This function does not play an arrival sequence.
  * enterMasterClock stays so advance is not the outer clock owner and a
  * thrown POST still releases the busy gate in this finally.
  */
@@ -1471,8 +1471,8 @@ async function loadBattle(runId) {
     lastBs = bs;
     clearQueueBarInfo(); // PC-56: fresh battle state — no selection, no markers
     // Capture BEFORE renderDice — the animation path clears the flag.
-    // Ceremony-intro: the command window and timing track are part of the same
-    // ceremony — they stay hidden until the dice and monster typewriter finishes.
+    // Battle-initialization: the command window and timing track are part of the same
+    // initialization — they stay hidden until the dice and monster typewriter finishes.
     const willRoll = shouldAnimateDice
       && !!(bs.dice && bs.dice.current && bs.dice.current.color && bs.dice.current.face != null);
     debugLog('loadBattle', `willRoll=${willRoll} shouldAnimateDice=${shouldAnimateDice} dice_current=${!!(bs.dice?.current)}`);
@@ -1496,13 +1496,13 @@ async function loadBattle(runId) {
     }
 
     if (introPlays) {
-      // Pre-advance HP. Feed stays blank until the replay (or the dice ceremony).
+      // Pre-advance HP. Feed stays blank until the replay (or battle initialization).
       renderPlayerHP({ player_hp: bs.intro.hpStart, max_hp: bs.player && bs.player.max_hp });
     } else {
       renderPlayerHP(run);
     }
-    // If a ceremony intro is pending, force the message box completely empty
-    // so no old text bleeds through the ceremony phase. Feed is
+    // If battle initialization is pending, force the message box completely empty
+    // so no old text bleeds through the initialization phase. Feed is
     // populated later in finishBattleIntro (intro fires → playIntroCountdown;
     // no fires → renderFeed([])).
     if (battleIntroPending) {
@@ -1514,7 +1514,7 @@ async function loadBattle(runId) {
     renderMonsters(bs.monsters || []);
     renderLoadout(bs);
     if (battleIntroPending) {
-      // Ceremony-intro: die still rolling — command window + timing track stay hidden.
+      // Battle-initialization: die still rolling — command window + timing track stay hidden.
       document.body.classList.add('intro-pending', 'queue-filling');
     } else {
       // Genuine first entry replays the seeded advance, then opens the menu.
@@ -1543,10 +1543,10 @@ async function loadBattle(runId) {
         const pinned = (prevBs.queue || []).find(r => r.id === diff.resolved[0]);
         if (pinned) pinProcessedHead(pinned);
         // Not the player-commit path. commitThenTick POSTs and then advance
-        // is the single ceremony owner. This branch is a page-load / next-battle
+        // is the single presentation owner. This branch is a page-load / next-battle
         // diff (fightOn still has lastBs) coordinated with feed narration via
         // onNarrateDone. Routing it through advance would POST /tick during
-        // intro or next-battle setup and race the dice ceremony.
+        // intro or next-battle setup and race battle initialization.
         battleClock.start(diff, bs, () => {
           renderQueue(bs);
         });
@@ -1675,7 +1675,7 @@ async function init() {
   // A 401 from any battle API call surfaces a session-expired escape screen.
   window.addEventListener('pc:session-expired', showSessionExpired);
 
-  // PC-72: the die ceremony plays only on a genuine first entry — the marker is
+  // PC-72: battle initialization plays only on a genuine first entry — the marker is
   // set by run-equip right before navigating to a NEW run. Any other load
   // (returning to a battle after exiting part way, a reload, a reopened tab, a
   // direct URL) is a resume: no roll animation, no re-typed history — the page
@@ -1719,7 +1719,7 @@ async function init() {
 }
 
 /**
- * Single-advance driver and the only ceremony owner after a player commit.
+ * Single-advance driver and the only presentation owner after a player commit.
  * One server response → one readable cycle → stop only when the server's
  * returned player_ready says the player decides. Each iteration is one
  * /tick and one complete presentation; the loop yields on that server gate
@@ -1741,7 +1741,7 @@ async function advance(runId, { fromCommit = false, commitData = null } = {}) {
       try {
         await playCommitArrival(runId, commitData);
       } catch (err) {
-        console.error('commit ceremony:', err);
+        console.error('commit arrival:', err);
       }
     }
     let oldQueue = lastBs?.queue ? [...lastBs.queue] : [];
@@ -1802,11 +1802,11 @@ async function advance(runId, { fromCommit = false, commitData = null } = {}) {
         updateQueueRowInPlace(el, row, monstersNow, bs, newQueue.indexOf(row));
       });
 
-      // New entries slide in first (insert ceremony). Event changes are a
+      // New entries slide in first (row-arrival). Event changes are a
       // new box, not a relabel of the box being processed.
       if (changes.added.length > 0) {
         await playQueueTransition({
-          ceremonyEntries: changes.added,
+          arrivalEntries: changes.added,
           readyCommits: [],
           bs,
           preset,

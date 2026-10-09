@@ -1,7 +1,7 @@
 /**
  * Dice rendering / animation subsystem (PC-78).
  * Moved verbatim from battle-app.js: tray render, sweep, and roll.
- * No behavior change. Imports debugLog only — ceremony hooks are bound
+ * No behavior change. Imports debugLog only — initialization hooks are bound
  * from battle-app.js to avoid a circular import.
  */
 import { debugLog } from '../battle-debug.js';
@@ -36,7 +36,7 @@ const DICE_ANIM = {
 };
 
 export function renderDice(dice) {
-  // shouldAnimateDice stays in battle-app.js. Local copy so the ceremony
+  // shouldAnimateDice stays in battle-app.js. Local copy so battle initialization
   // reads the flag; the write-back below stops the 350ms re-render from re-rolling.
   let shouldAnimateDice = getShouldAnimateDice();
   debugLog('renderDice', `remaining=${dice.remaining?.green || 0}g/${dice.remaining?.yellow || 0}y/${dice.remaining?.red || 0}r willRoll=${shouldAnimateDice}`);
@@ -122,12 +122,12 @@ export function renderDice(dice) {
           appendFeedLine(`${colorLabel} die selected`);
           appendFeedLine('Rolling Portal Die...');
           rollDiceAnimation(landedBox, current, dice.faces, () => {
-            debugLog('ceremony', 'roll settled, starting reveal');
+            debugLog('initialization', 'roll settled, starting reveal');
             appendFeedLine(`${current.face} rolled`);
             updateCurrentDie(curEl, current); // persistent slot lights up
             appendFeedLine('Selecting Monsters...');
             revealMonsters(() => {
-              debugLog('ceremony', 'reveal complete, calling finishBattleIntro');
+              debugLog('initialization', 'reveal complete, calling finishBattleIntro');
               appendFeedLine('Creating Action Queue...');
               finishBattleIntro();
             });

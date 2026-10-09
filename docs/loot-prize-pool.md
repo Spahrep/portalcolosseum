@@ -122,7 +122,7 @@ The stop-share is a **progress-keyed curve**, configured on `portal_template.sto
 - **Random items fill the gap (0/1/1/2/2).** "Random" = the game picks for you (loss). Early stops are mostly random scraps; only deep stops let you protect your best drops.
 - **Full clear = 100% always.** The final tier is the full pool — the ultimate carrot, non-negotiable.
 
-**UX (roulette-style reveal):** the player first selects their `sel_items` weapons (existing flow), then the `rand_items` random picks are revealed with a **roulette-style sweep animation** — the same theater as the dice ceremony. The random selection is a *reveal*, not a silent server pick: the player watches the indicator sweep across the loot and land on what they keep. This makes the loss tangible and the win exciting.
+**UX (roulette-style reveal):** the player first selects their `sel_items` weapons (existing flow), then the `rand_items` random picks are revealed with a **roulette-style sweep animation** — the same theater as battle initialization. The random selection is a *reveal*, not a silent server pick: the player watches the indicator sweep across the loot and land on what they keep. This makes the loss tangible and the win exciting.
 
 This creates strong "push your luck" tension.
 

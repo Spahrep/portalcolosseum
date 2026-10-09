@@ -239,7 +239,7 @@ Omitted: scalar constants (strings, numbers, booleans), re-exports (`export { â€
 | `js/battle-app.js` | 527 | local | function | `insertIndexFor` |
 | `js/battle-app.js` | 558 | local | async function | `openInsertGap` |
 | `js/battle-app.js` | 575 | local | async function | `playInsertMarker` |
-| `js/battle-app.js` | 593 | local | async function | `playInsertCeremony` |
+| `js/battle-app.js` | 593 | local | async function | `playRowArrival` |
 | `js/battle-app.js` | 630 | local | async function | `playQueueTransition` |
 | `js/battle-app.js` | 663 | local | async function | `awaitTickVisuals` |
 | `js/battle-app.js` | 689 | local | async function | `playCommitArrival` |

@@ -24,7 +24,7 @@ This file is a condensed reference for agents; the canon doc wins on conflict.
   model exactly — there is no divergence between engine and UI on the order.
 - **UI (client) visual order — exit is the LAST action:** the processed head's box stays VISIBLE
   (pinned via `pinProcessedHead`) while the server processes and the clock runs; the new
-  replacement box slides in FIRST (insert ceremony), THEN the old top box slides out
+  replacement box slides in FIRST (row-arrival), THEN the old top box slides out
   (`releaseProcessedHead` → `runQueueRemoval`), THEN the remaining rows lift as one FLIP
   (battle-app.js:126-147, 630-660, 719-738). "Remove" in the UI means the box leaves the DOM —
   never when processing starts, only after the successor has landed.
@@ -70,7 +70,7 @@ cooldown → winding → impact → cooldown (no ready, no live `attack`; legacy
   together as one group using FLIP (First-Last-Invert-Play). FLIP is the technique for a smooth
   upward GLIDE — the rows literally slide up as one unit; it is not a flip/turnover motion.
   Exit is the LAST action — the successor slides in FIRST.
-- Insert ceremony (5 stages): prediction bar → clean gap grows → marker wipes → flashes → row settles.
+- Row-arrival (5 stages): prediction bar → clean gap grows → marker wipes → flashes → row settles.
   Event-gated via waitForEvent (animationend/transitionend), NOT setTimeout. No dotted box.
 - Order: successor lands FIRST (enter), then processed row slides out, then siblings slide up.
 - Group-lift: the rows slide upward together in ONE continuous motion — no jump, no teleport,
@@ -87,7 +87,7 @@ cooldown → winding → impact → cooldown (no ready, no live `attack`; legacy
 - Player attack rows with committed target: indented sub-line "└─ <Name> (A)".
 
 ## Client flow (battle-app.js)
-- `advance()` = single ceremony owner after commit. One /tick → one presentation → stop on
+- `advance()` = single presentation owner after commit. One /tick → one presentation → stop on
   playerReady/needsInput/done/battleOver.
 - Menu opens ONLY when head is a ready row (`readyHeadOf`).
 - `renderQueue` fast path compares (label, event) — not raw ids — so a tic-only update never moves or re-slides the row. An event change is remove + insert.

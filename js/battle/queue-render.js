@@ -234,8 +234,8 @@ export function renderQueue(bs, fill = false, onDone = null) {
     return;
   }
   // Structural change: an event changed, a label arrived, or a label left.
-  // The ceremony owns slide-in then slide-out. This fallback paints the
-  // settled queue (initial load, skip path, post-ceremony reconcile).
+  // The arrival sequence owns slide-in then slide-out. This fallback paints the
+  // settled queue (initial load, skip path, post-arrival reconcile).
   // An orphan is marked queue-row-exit and left in flow — never popped.
   rebuildReconciled = {
     idents: new Set(queue.map(queueEventIdentity)),
@@ -247,7 +247,7 @@ export function renderQueue(bs, fill = false, onDone = null) {
     titleEl.textContent = 'Action Queue';
   }
   if (fill && onDone) {
-    // Ceremony-intro: signal completion after the last row's fade lands, so the
+    // Battle-initialization: signal completion after the last row's fade lands, so the
     // command window never waits on an animation that cannot start (empty queue).
     const rows = Math.max(queue.length, 1);
     setTimeout(onDone, (rows - 1) * dur('queueFillStagger') + dur('queueFill'));
@@ -267,7 +267,7 @@ export function renderQueue(bs, fill = false, onDone = null) {
   });
   paintPredictionBar(el);
   if (fill) {
-    // Ceremony-intro fill: reveal rows in engine array order, top to bottom.
+    // Battle-initialization fill: reveal rows in engine array order, top to bottom.
     // Skip a row already sliding out — the fill must not clobber that exit.
     let stagger = 0;
     Array.from(el.children).forEach((row) => {
@@ -356,7 +356,7 @@ export function markQueueRowExiting(rowId) {
 
 // Ready / approach / monster-attack / recovering label. Shared by buildQueueRow
 // and updateQueueRowInPlace so the two paths cannot drift.
-// initial=true (ceremony-intro fill only): a monster's first cooldown row reads
+// initial=true (battle-initialization fill only): a monster's first cooldown row reads
 // "<Name> getting ready"; every later render says "<Name> recovering".
 // Player hand rows that carry a committed target render it as an indented
 // sub-line under the action (Option 4): "L. Hand Power Attack" / "  └─ Wolf A".

@@ -329,7 +329,7 @@ export function renderFeed(feed, onComplete) {
   const box = document.getElementById('message-box');
   if (!box) return;
   const currentLines = feed || [];
-  // EMPTY feed = new-battle reset signal (tic-0 ceremony): clear box, show placeholder instantly, reset state
+  // EMPTY feed = new-battle reset signal (battle initialization): clear box, show placeholder instantly, reset state
   if (currentLines.length === 0) {
     box.innerHTML = '';
     renderedFeedLines = 0; // placeholder is a system line, not feed

@@ -168,7 +168,7 @@ windup = weapon base speed + rolled prepare, cooldown = weapon base speed +
 rolled cooldown — the weapon's base speed is added into every attack timing
 computation. Both-hands-ready hand order is PC-DEC-028 (above).
 
-### Battle Intro Sequence — dice ceremony (PC-DEC-038, Decided by Spahrep, 2026-09-17)
+### Battle Intro Sequence — battle initialization (PC-DEC-038, Decided by Spahrep, 2026-09-17)
 
 Before the die is finished rolling: **no command window, no monsters, no timing
 track** — none of the battle is shown. After the die lands:
@@ -180,7 +180,7 @@ track** — none of the battle is shown. After the die lands:
 3. Only after the track is filled does the **command window** appear — the
    action menu must never come in before the time track is filled.
 
-Shipped: f76ea21 (command window + timing track hidden until the dice ceremony
+Shipped: f76ea21 (command window + timing track hidden until battle initialization
 completes), e7d32f5 (pronounced one-at-a-time reveals), cec8a60 (command window
 waits for the timing track).
 

@@ -86,7 +86,7 @@ export function commitNewRow(queue, label, event, tics) {
   return addEvent(queue, label, event, tics);
 }
 
-// Client ceremony and engine commit share this mutation: drop the consumed
+// Client arrival and engine commit share this mutation: drop the consumed
 // ready row, splice the successor at its ordering key. Idempotent if the
 // successor id is already present (reconcile against a server-confirmed row).
 export function replaceReadyWithSuccessor(queue, readyRow, successor) {
