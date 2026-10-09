@@ -9,7 +9,22 @@ import { supabaseClient } from '../utils.js';
 
 export function getAuthToken() {
   const supabase = supabaseClient();
-  return supabase?.auth?.getSession?.().then(({ data }) => data?.session?.access_token);
+  if (!supabase) return Promise.resolve(null);
+  return supabase.auth.getSession().then(async ({ data }) => {
+    const session = data?.session;
+    if (!session) return null;
+    // Supabase getSession() does NOT auto-refresh an expired access token.
+    // An idle player's token expires ~1h; without this, every battle API
+    // call sends a stale token and the server 401s — the battle appears
+    // "totally broken" (can't load, can't commit, can't end run). Refresh
+    // when the token is expired or within 30s of expiry.
+    const exp = session.expires_at ? session.expires_at * 1000 : null;
+    if (exp != null && exp - Date.now() < 30_000) {
+      const { data: { session: fresh } } = await supabase.auth.refreshSession();
+      return fresh?.access_token || session.access_token;
+    }
+    return session.access_token;
+  });
 }
 
 export async function apiCall(path, method = 'GET', body = null) {
