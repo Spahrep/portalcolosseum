@@ -244,21 +244,40 @@ describe('Master clock visual fidelity (client contract)', () => {
       assert.match(commit, /keysEqual/);
     });
 
-    it('a hand landing on READY at the head holds still — no slide-out/slide-back', () => {
-      // When the same-key successor is a hand READY row becoming the head, the
-      // transition is "wait for the player", not a removal. releaseProcessedHead
-      // must relabel in place and return BEFORE markQueueRowExiting can slide the
-      // ready row out and back in (Spahrep live bug 2026-10-09).
+    it('a hand landing on READY at the head slides out then in — no hold-still', () => {
+      // Cooldown→ready at the head is a same-key phase change. The old box
+      // must slide out (markQueueRowExiting applies queue-row-exit) before the
+      // ready box slides in. Instant / reduced-motion still relabels with no
+      // slide. Replaces the old "holds still" assertion, which contradicted
+      // the no-box-holds-still rule.
       const app = read('js/battle-app.js');
       const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
       assert.match(releaseFn, /landsOnReady/,
         'releaseProcessedHead branches on a ready-head landing');
-      const readyAt = releaseFn.indexOf('landsOnReady');
-      const exitingAt = releaseFn.indexOf('markQueueRowExiting');
-      assert.ok(readyAt >= 0 && (exitingAt === -1 || exitingAt > readyAt),
-        'the ready-head landing returns before any exit-slide animation');
       assert.match(releaseFn, /successor\.event === 'ready'/,
         'the landing guard specifically targets a ready successor');
+      const readyAt = releaseFn.indexOf('if (landsOnReady)');
+      const sameKeyAt = releaseFn.indexOf('const successorSameKey');
+      assert.ok(readyAt >= 0 && sameKeyAt > readyAt, 'landsOnReady branch precedes the other same-key path');
+      const readyBranch = releaseFn.slice(readyAt, sameKeyAt);
+      const skipIf = readyBranch.indexOf('if (animationsSkipped(preset))');
+      const skipReturn = readyBranch.indexOf('return;', skipIf);
+      const exitAt = readyBranch.indexOf('markQueueRowExiting');
+      const waitAt = readyBranch.indexOf("waitForEvent(row, 'animationend'");
+      assert.ok(skipIf >= 0 && skipReturn > skipIf && exitAt > skipReturn,
+        'exit slide is on the animated path, after the skipped-motion return');
+      assert.equal(readyBranch.slice(0, exitAt).includes('markQueueRowExiting'), false);
+      assert.match(readyBranch.slice(0, skipReturn), /updateQueueRowInPlace/,
+        'instant/reduced-motion path relabels directly');
+      assert.ok(waitAt > exitAt, 'animated path waits for the exit animationend');
+      assert.match(readyBranch, /waitForEvent\(row,\s*'animationend',\s*dur\('queueExit'\)\s*\+\s*80\)/);
+      const stripAt = readyBranch.indexOf("row.classList.remove('queue-row-exit')");
+      const relabelAt = readyBranch.indexOf('updateQueueRowInPlace', waitAt);
+      const enterAt = readyBranch.indexOf('armQueueRowEnter', waitAt);
+      assert.ok(stripAt > waitAt && relabelAt > stripAt && enterAt > relabelAt,
+        'strip exit class, relabel, then slide in — queue-row-exit was applied by markQueueRowExiting');
+      assert.ok(readyBranch.indexOf('forgetQueueRowExiting', enterAt) > enterAt,
+        'exit mark is cleared after the slide-in');
     });
 
     it('renderQueue fast path compares STABLE KEYS, not raw ids (no node move on tic)', () => {

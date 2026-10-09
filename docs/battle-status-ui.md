@@ -238,7 +238,7 @@ events (`js/combat/engine.js:305-318`):
 - `impact` is inserted at 0 and resolves hit/damage/crit once (`engine.js:266-302`).
 - `cooldown` tics = stored `cooldownTicks` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)` (`engine.js:167`, inserted at `engine.js:301`).
 
-When cooldown fires, the next attack is picked and a new `winding` row is inserted (`engine.js:310-311`). One row per monster at a time, rendered in place via the stable key `m:<label>`. Monster `winding` / `impact` rows stay name + tic, no bar (`js/battle/queue-render.js:60-62`). The cooldown row is a clear row: label `<Monster name> recovering`, player-style timing bar. There is no live monster `attack` event; a persisted pre-PC-97 `attack` row resolves as `impact` (`engine.js:315-318`). Death still cancels every queued row for that monster (PC-DEC-054).
+When cooldown fires, the next attack is picked and a new `winding` row is inserted (`engine.js:310-311`). One row per monster at a time, rendered in place via the stable key `m:<label>`. Monster `winding` / `impact` rows stay name + tic (`js/battle/queue-render.js:60-62`). The cooldown row is a clear row: label `<Monster name> recovering`. There is no live monster `attack` event; a persisted pre-PC-97 `attack` row resolves as `impact` (`engine.js:315-318`). Death still cancels every queued row for that monster (PC-DEC-054).
 
 ## Tie Resolution
 

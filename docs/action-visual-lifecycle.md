@@ -94,15 +94,15 @@ Item sits at top of UI Action Queue. Master Clock pauses — waiting for player 
 
 ### Phase 2: Winding — "LH: Winding (Fire Bow)" at top
 
-Item pinned at top. Row shows: label "L. Hand Fire Bow", tic count (counting down), timing bar filling left→right.
+Item pinned at top. Row shows: label "L. Hand Fire Bow", tic count (counting down).
 
 **Sub-actions:**
 
-1. **(If tic > 0)** Visual wind-up animation plays — timing bar fills as progress approaches 0. The item stays at top during this. If tic=0, this step is instant.
+1. **(If tic > 0)** Visual wind-up animation plays. The item stays at top during this. If tic=0, this step is instant.
 
 2. **(Parallel — both must finish):**
    - **Typewriter:** "LH winds their bow..."
-   - **Visuals:** Wind-up animation completes, timing bar reaches full
+   - **Visuals:** Wind-up animation completes
 
 3. **Engine inserts** `impact` row into queue with carried-over attack data.
 
@@ -133,11 +133,11 @@ Item pinned at top. Row shows: label "L. Hand Fire Bow", tic count (counting dow
 
 ### Phase 4: Cooldown — "LH: Cooldown" at top
 
-Row shows: label "L. Hand Ready", tic count, timing bar filling.
+Row shows: label "L. Hand Ready", tic count.
 
 **Sub-actions:**
 
-1. **(If tic > 0)** Visual recovery animation plays, timing bar fills.
+1. **(If tic > 0)** Visual recovery animation plays.
 
 2. **(Parallel — both must finish):**
    - **Typewriter:** "LH recovers"
@@ -217,7 +217,7 @@ Option A (Spahrep 2026-09-28) still holds: `mon.speed` is added into both the pr
 2. **(Parallel — both must finish):**
    - **Typewriter:** "<Monster> <attackName> hits you for N damage!" (or "misses" / "CRITICAL!")
    - **Visuals:** Damage numbers on player, health bar depletion, shake/hit feedback
-3. If still alive: insert a `cooldown` successor at the stored `cooldownTicks` (`engine.js:296-301`). Label on the rail: "<Monster name> recovering", with the player-style timing bar.
+3. If still alive: insert a `cooldown` successor at the stored `cooldownTicks` (`engine.js:296-301`). Label on the rail: "<Monster name> recovering".
 4. **Remove** the `impact` item (silent pop — no exit slide). The cooldown stays a same-key successor (`m:<label>`), so the node stays in the DOM and `renderQueue` relabels it in place.
 5. **Master Clock ticks** → next item.
 
@@ -294,38 +294,18 @@ Trigger: A buff's `endTic` reaches current tic.
 
 ---
 
-## 6. Timing Bar Visual Specification
-
-Every non-ready player row has a timing bar that visualizes countdown progress, except approach rows. Monster `winding` / `impact` rows (and a legacy persisted `attack` row) are name + tic only — no bar (`js/battle/queue-render.js:60-62`, `:345-346`). Monster `cooldown` ("recovering") uses the same player-style bar (`queue-render.js:350-351`).
-
-| Event | Bar behavior |
-|---|---|
-| `winding` (player) | Starts empty, fills left→right. At fire: full. |
-| `cooldown` (player) | Same — fills from empty to full. |
-| `drinking` | Same — fills from empty to full. |
-| `recovery` | Same — fills from empty to full. |
-| `ready` | No bar — shows `—` instead of tic count. |
-| `winding` / `impact` (monster) | No bar — tic count label only. Legacy `attack` rows are the same. |
-| `cooldown` (monster) | Same player-style fill — "<Monster name> recovering". |
-
-**Bar formula:** `width% = (1 - tics / initialTics) × 100`
-
-**Bar visual:** Player rows: blue/cyan bar. Bar only updates on Master Clock ticks (when item is processed or when a new item surfaces and tics are recalculated).
-
----
-
 ## 7. Queue Row Display Rules
 
-| Event | Label format | Tic display | Bar |
-|---|---|---|---|
-| `winding` | "L. Hand Fire Bow" | tic count | Timing bar |
-| `impact` | "L. Hand Fire Bow" | — | None (brief display) |
-| `cooldown` | "L. Hand Ready" | tic count | Timing bar |
-| `drinking` | "L. Hand Health Potion" | tic count | Timing bar |
-| `recovery` | "L. Hand Ready" | tic count | Timing bar |
-| `ready` | "L. Hand Ready" | — | None |
-| `winding` / `impact` (monster) | "<Monster name>'s <Attack>" | tic count | None |
-| `cooldown` (monster) | "Giant Rat recovering" | tic count | Timing bar |
+| Event | Label format | Tic display |
+|---|---|---|
+| `winding` | "L. Hand Fire Bow" | tic count |
+| `impact` | "L. Hand Fire Bow" | — |
+| `cooldown` | "L. Hand Ready" | tic count |
+| `drinking` | "L. Hand Health Potion" | tic count |
+| `recovery` | "L. Hand Ready" | tic count |
+| `ready` | "L. Hand Ready" | — |
+| `winding` / `impact` (monster) | "<Monster name>'s <Attack>" | tic count |
+| `cooldown` (monster) | "Giant Rat recovering" | tic count |
 
 **Ordering:** Each new row is spliced into tics-ascending position once at insert (`orderedInsertIndex`, `js/combat/tic-queue.js:32-50`). The array is never globally re-sorted after that. **Superseded:** "ordered at INSERTION time" / FIFO append — see Core Rule 4 and `docs/workorder-2026-09-28-queue-sorted-insert.md`. For items at the same tic:
 1. Status effects / buffs / DOTs / expiries go first (inserted before anything else at that tic)
@@ -396,7 +376,7 @@ Tics are set when the item is inserted:
 - Monster `winding` = `mon.speed + rollStat(prepare_time, prepare_time_range)` (`engine.js:165`)
 - Monster `cooldown` = stored `cooldownTicks` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)` (`engine.js:167`, inserted at `engine.js:301`)
 
-**Superseded:** "Tics are display values only. They do NOT drive processing order — insertion order does." Tics are the ordering key at insert (sorted-insert workorder `docs/workorder-2026-09-28-queue-sorted-insert.md`). They are also the countdown readout. The timing bar formula uses `tics / initialTics` to show progress.
+**Superseded:** "Tics are display values only. They do NOT drive processing order — insertion order does." Tics are the ordering key at insert (sorted-insert workorder `docs/workorder-2026-09-28-queue-sorted-insert.md`). They are also the countdown readout.
 
 **Important:** Buff expiry, DOT ticks, and other status effects are their own queue items. They sit in the queue alongside attacks and ready tokens. When they reach the front, they process (typewriter "X buff expired", resolve DOT damage), pop off, and the next item surfaces. They do NOT fire "at the same time" as anything else — the queue forces a linear sequence.
 

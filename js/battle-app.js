@@ -216,7 +216,8 @@ function waitForEvent(el, eventName, timeoutMs = dur('queueExit') + 50) {
  *   1) the resolved row(s) slide fully out over dur('queueExit') (stays in flow),
  *   2) dur('queueRemoveGap') pause,
  *   3) the remaining rows FLIP up together as one unit over dur('queueExit').
- * Callers must pass exactly one id (slice(0,1)) per removal per the shipped spec.
+ * Every passed id slides out in parallel. advance passes every non-head loss;
+ * one-at-a-time callers still slice.
  * The container is left with the remaining rows at their final positions; the
  * subsequent renderQueue() reconciles in place (stable-key pass) so this lift is
  * never clobbered mid-animation.
@@ -455,21 +456,33 @@ async function releaseProcessedHead(head, newQueue, bs, preset) {
   const key = queueRowKey(head);
   const id = row.dataset.rowId || head.id;
   // Landing on the player's turn: the same-key successor is a hand READY row
-  // becoming the head. That is the "wait for the player" state — nothing was
-  // removed, so do NOT run removal theater (slide out / slide back in). The
-  // player must see it settle at READY and be prompted. Only mid-stream phase
-  // changes (winding→impact→cooldown) slide.
+  // becoming the head. Same one-node slide as other same-key phase changes —
+  // the old cooldown box slides out, then the ready box slides in. No box
+  // holds still. Instant / reduced-motion relabels directly, no slide.
   const successor = (newQueue || []).find(r => queueRowKey(r) === key);
   const landsOnReady = !!(successor && (successor.label === 'LH' || successor.label === 'RH') && successor.event === 'ready');
   if (landsOnReady) {
-    if (row) {
+    if (animationsSkipped(preset)) {
+      // Instant / reduced-motion: relabel directly, no slide.
       const monsters = (bs && bs.monsters) || [];
       updateQueueRowInPlace(row, successor, monsters, bs);
       row.classList.remove('queue-row-current', 'queue-row-exit');
-      if (!animationsSkipped(preset)) armQueueRowEnter(row, successor);
       if (id != null) forgetQueueRowExiting(id);
       if (head.id != null) forgetQueueRowExiting(head.id);
+      return;
     }
+    // Animated: slide out, then relabel + slide in on the same node.
+    row.classList.remove('queue-row-current');
+    if (id != null) markQueueRowExiting(id);
+    await waitForEvent(row, 'animationend', dur('queueExit') + 80);
+    // The exit animation is `forwards` — strip it before the enter so the node
+    // is not left translated off-screen.
+    row.classList.remove('queue-row-exit');
+    const monsters = (bs && bs.monsters) || [];
+    updateQueueRowInPlace(row, successor, monsters, bs);
+    armQueueRowEnter(row, successor);
+    if (id != null) forgetQueueRowExiting(id);
+    if (head.id != null) forgetQueueRowExiting(head.id);
     return;
   }
   const successorSameKey = (newQueue || []).some(r => queueRowKey(r) === key);
@@ -983,45 +996,6 @@ function playIntroCountdown(bs, intro, onDone) {
   void bs;
   void intro;
   if (onDone) onDone();
-}
-
-function introFireLines(fire) {
-  if (!fire || !fire.line) return [];
-  return String(fire.line).split('\n').filter(s => s.length > 0);
-}
-
-function applyIntroFire(rail, fire) {
-  const cost = Number(fire.ticCost) || 0;
-  let target = rail.findIndex(r => r.label === fire.label && r.event === fire.event);
-  if (target === -1) target = rail.findIndex(r => r.label === fire.label);
-  for (let i = 0; i < rail.length; i++) {
-    if (i === target) continue;
-    rail[i].tics = Math.max(0, (Number(rail[i].tics) || 0) - cost);
-  }
-  if (target === -1) return;
-  if (fire.after) {
-    rail[target].event = fire.after.event;
-    rail[target].tics = fire.after.tics;
-    if (fire.after.monsterAttackName) rail[target].monsterAttackName = fire.after.monsterAttackName;
-  } else {
-    rail.splice(target, 1);
-  }
-}
-
-function paintIntroRail(el, rail, monsters, bs, changedLabel) {
-  if (!el) return;
-  el.innerHTML = '';
-  rail.forEach((row, i) => {
-    const node = buildQueueRow(row, monsters, bs, false, i);
-    // Every row this intro-theater repaint draws animates in — not just the one
-    // that just changed. paintIntroRail wipes the DOM, so any row left bare here
-    // (the tic-0 monster windups that have not fired yet) would lose the enter
-    // animation the first time a fire lands, reading as "the actions at tick zero
-    // are never animated." Same stagger as the initial intro build so entering
-    // rows sweep in one after another.
-    node.classList.add(isMonsterQueueRow(row) ? 'queue-row-monster-enter' : 'queue-row-enter');
-    el.appendChild(node);
-  });
 }
 
 function setIntroTicLabel(tic) {
@@ -2273,12 +2247,16 @@ async function advance(runId, { fromCommit = false, commitData = null } = {}) {
       const readyCommits = findReadyCommits(oldQueue, newQueue);
 
       // Genuine non-head removals still slide out + group-lift.
+      // Every loss, not the first only: one tick can drop two or more rows
+      // (multi-target kill, death plus a kill-cancel). One runQueueRemoval
+      // slides them all in parallel. Processed head and ready-commits stay
+      // excluded — those are handled in their existing places.
       const nonHead = oldQueue.filter(r => {
         const k = queueRowKey(r);
         if (processedKey && k === processedKey) return false;
         if (readyCommits.some(c => queueRowKey(c.ready) === k)) return false;
         return !newKeys.has(k);
-      }).slice(0, 1);
+      });
       if (nonHead.length > 0) {
         if (animationsSkipped(preset)) {
           nonHead.forEach(r => {
@@ -2288,6 +2266,44 @@ async function advance(runId, { fromCommit = false, commitData = null } = {}) {
         } else {
           await runQueueRemoval(nonHead.map(r => r.id));
         }
+      }
+
+      // Mid-queue same-key phase change (kill-cancel: a winding hand becomes
+      // cooldown without being the processed head). The stable key stays in
+      // both queues, so nonHead, added, and readyCommits all miss it and
+      // renderQueue only arms slide-in. Old phase slides out, then the new
+      // phase slides in — same node, never a box that holds still.
+      // Skip the processed head: releaseProcessedHead already slid it.
+      // Skip a committed hand: playCommitArrival already relabeled it into
+      // oldQueue, and playQueueTransition owns readyCommits. Do not animate
+      // either of those again.
+      const phaseChanges = oldQueue.filter(r => {
+        const k = queueRowKey(r);
+        if (processedKey && k === processedKey) return false;
+        if (readyCommits.some(c => queueRowKey(c.ready) === k || queueRowKey(c.attack) === k)) return false;
+        const next = newQueue.find(n => queueRowKey(n) === k);
+        return !!(next && next.event !== r.event);
+      });
+      for (const oldRow of phaseChanges) {
+        const el = findQueueRowByIdentity(oldRow);
+        if (!el) continue;
+        const successor = newQueue.find(n => queueRowKey(n) === queueRowKey(oldRow));
+        if (!successor) continue;
+        const monsters = (bs && bs.monsters) || [];
+        if (animationsSkipped(preset)) {
+          updateQueueRowInPlace(el, successor, monsters, bs);
+          continue;
+        }
+        const id = el.dataset.rowId || oldRow.id;
+        el.classList.remove('queue-row-current');
+        if (id != null) markQueueRowExiting(id);
+        await waitForEvent(el, 'animationend', dur('queueExit') + 80);
+        // Exit keyframe is `forwards` — strip it or the node stays off-screen.
+        el.classList.remove('queue-row-exit');
+        updateQueueRowInPlace(el, successor, monsters, bs);
+        armQueueRowEnter(el, successor);
+        if (id != null) forgetQueueRowExiting(id);
+        if (oldRow.id != null) forgetQueueRowExiting(oldRow.id);
       }
 
       // Attack ceremony first, then the ready placeholder slides out.

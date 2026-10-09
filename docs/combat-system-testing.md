@@ -113,7 +113,7 @@ Before entering the portal, the test account must have a **heal potion** and a *
    - [ ] Confirming returns "Yes" / commit proceeds
 4. **Post-commit:**
    - [ ] Message log shows "tic N — LH prepares a [Attack Name]..."
-   - [ ] Queue shows L. Hand [Attack Name] with tic countdown and timing bar
+   - [ ] Queue shows L. Hand [Attack Name] with tic countdown
    - [ ] ALL existential checks still pass (§1)
    - [ ] Monsters still present and visible
    - [ ] Player HP still shows numeric value

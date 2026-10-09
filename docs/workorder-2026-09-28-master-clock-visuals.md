@@ -67,11 +67,8 @@ The dashed-yellow `.queue-insert-preview` bordered/filled box is gone. Space cre
 clean open gap (rows pushed down), no visible bordered marker.
 
 ### F. Stages 3 & 4 (insert marker grows left→right + flashes) built as storyboarded
-Currently the grow+flash is folded into the *arriving row's own edge bar*
-(`queue-bar-entry`), not a separate marker filling the pushed-open slot. Per the wireframe,
-after the space opens a yellow insert marker must: wipe in from left to right (≈250ms
-ease-in-out) → flash once (brighten-dim ≈150ms) → then be replaced by the real row.
-Do not conflate this with the row's own `.queue-bar`.
+Per the wireframe, after the space opens a yellow insert marker must: wipe in from left to right
+(≈250ms ease-in-out) → flash once (brighten-dim ≈150ms) → then be replaced by the real row.
 
 ### G. Space-creation must fire on player commits (locked decision 2)
 Split the hand-ready commit's remove+insert into two beats so the full ceremony plays on the
@@ -106,7 +103,7 @@ Keep it consistent with what ships so the next agent isn't steered wrong.
 3. Autonomous-tick head stays pinned during narration: head removal is a silent pop after
    narration+visuals, NOT an exit slide. Non-head removals still slide out + group-lift.
 4. Narration completed (`typeFeedLines` promise or event) before the next `/tick` POST.
-5. Insert marker wipe + flash stages present as a DISTINCT element from `.queue-bar`, wired
+5. Insert marker wipe + flash stages present as a DISTINCT element, wired
    to `waitForEvent`.
 6. Hand-ready commit plays the full ceremony (space grows → wipe → flash → row settles).
 7. `js/combat/engine.js` still returns the processed head; `removeHead`/remove fires ONLY

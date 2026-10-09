@@ -1,6 +1,6 @@
 # Attack Queue Animation Testing
 
-**Purpose:** Define exactly what to check when visually testing the Action Queue rendering and animations during combat. Not a smoke test — this is the dedicated checklist for queue-specific behavior, run after any queue rendering, animation, or timing bar changes.
+**Purpose:** Define exactly what to check when visually testing the Action Queue rendering and animations during combat. Not a smoke test — this is the dedicated checklist for queue-specific behavior, run after any queue rendering or animation changes.
 
 **Based on:** `docs/action-visual-lifecycle.md` (Master Clock Model)
 
@@ -12,9 +12,9 @@
 
 Navigate to a fresh battle. The queue should contain:
 
-- **Approach rows**: One per hand, ordered by weapon speed (fastest first). Shows label ("L. Hand", "R. Hand") and tic count. No timing bar on approach rows.
-- **Monster attacks**: One per living monster at battle start, ordered by `mon.speed + prepare`. Shows monster name + tic count. No timing bar.
-- **Monster cooldown** (after an attack fires): "<Monster name> recovering" with the player-style timing bar. Not present at battle start.
+- **Approach rows**: One per hand, ordered by weapon speed (fastest first). Shows label ("L. Hand", "R. Hand") and tic count.
+- **Monster attacks**: One per living monster at battle start, ordered by `mon.speed + prepare`. Shows monster name + tic count.
+- **Monster cooldown** (after an attack fires): "<Monster name> recovering". Not present at battle start.
 - **Total entries**: Number of hands + number of monsters. Example: 2 hands + 1 Glimmerling = 3 entries.
 
 **Pass criteria:**
@@ -22,9 +22,7 @@ Navigate to a fresh battle. The queue should contain:
 - [ ] All entries visible and within the queue panel
 - [ ] Entries show correct label text per `action-visual-lifecycle.md §7` (label format table)
 - [ ] Tic counts display as numbers (not "—" or blank)
-- [ ] Approach rows show no timing bar (per §6: no bar for non-ready-non-monster rows — approach is excluded from bar display)
-- [ ] Monster attack rows show no timing bar, only tic count (per §6)
-- [ ] Monster cooldown rows (after an attack fires) show "<Monster name> recovering" and a player-style timing bar (option A: tics = mon.speed + rollStat(cooldown_time, cooldown_time_range))
+- [ ] Monster cooldown rows (after an attack fires) show "<Monster name> recovering" (option A: tics = mon.speed + rollStat(cooldown_time, cooldown_time_range))
 
 ### 1.2 Queue Sort Order
 
@@ -38,7 +36,7 @@ The queue is ordered at INSERTION time — no global re-sort ever runs.
 
 - [ ] Panel title displays "Action Queue"
 - [ ] Entries are stacked vertically (one per row)
-- [ ] Each row shows: label + tic count + optional timing bar
+- [ ] Each row shows: label + tic count
 - [ ] No scroll bar visible if entries fit (scroll only if >5 entries)
 - [ ] Font size matches configured preset (`queue-size-S`, `queue-size-M`, `queue-size-L` class on `.queue-panel`)
 
@@ -54,7 +52,6 @@ When a hand reaches "Ready" (surfaces to top):
 
 - [ ] Label shows: "L. Hand Ready" (or "R. Hand Ready")
 - [ ] Tic field shows "—" (dash, not a number)
-- [ ] No timing bar
 - [ ] Row sits at top of queue, player can act
 
 ### 2.2 Winding State
@@ -63,7 +60,6 @@ After player commits an attack:
 
 - [ ] Label shows: "L. Hand [Attack Name]" (e.g. "L. Hand Fire Bow")
 - [ ] Tic count shows the winding duration (e.g. 15 tics)
-- [ ] Timing bar is visible and starts at 0% width
 - [ ] Row is positioned at the correct sort position in the queue
 - [ ] Tic count decrements as the attack approaches fire
 
@@ -74,7 +70,6 @@ When winding finishes and attack fires:
 - [ ] Item is pinned at top briefly
 - [ ] Label shows same attack name
 - [ ] Tic field shows "—" (brief display only)
-- [ ] No timing bar (per §7)
 - [ ] Monster HP bar depletes simultaneously (visual parallel per §9)
 
 ### 2.4 Cooldown State
@@ -83,42 +78,15 @@ After impact resolves:
 
 - [ ] Label shows: "L. Hand Ready" (the cooldown row pre-labels as "Ready")
 - [ ] Tic count shows cooldown duration
-- [ ] Timing bar visible, starts at 0% and fills
 - [ ] Row is positioned at correct sort position
 
 ### 2.5 Monster Attack States
 
 - [ ] Monster "attack" row shows "Monster X's [Attack Name]" with tic count
-- [ ] No timing bar on monster attack rows (per §6)
 - [ ] After monster attack fires, damage narration appears in message log and player HP bar depletes
-- [ ] The fired attack is a silent successor replace into a cooldown row — no exit slide
-- [ ] Cooldown row label is "<Monster name> recovering" with a timing bar (option A formula: mon.speed + rollStat(cooldown_time, cooldown_time_range))
-- [ ] When that cooldown fires, the next attack row lands in place (silent successor), tics = mon.speed + rollStat(prepare_time, prepare_time_range)
-
----
-
-## 3. Timing Bar Rendering
-
-Per `action-visual-lifecycle.md §6`:
-
-### 3.1 Bar Formula
-
-- [ ] At 0% progress: bar width is 0 (just started winding/cooldown)
-- [ ] At 50% progress: bar width is 50% (halfway through)
-- [ ] At 100% progress: bar width is 100% (attack fires / cooldown finishes)
-
-### 3.2 Bar Color
-
-- [ ] Player winding/cooldown bars are blue/cyan (per §6)
-- [ ] No timing bar on ready rows, monster attack rows, or approach rows
-- [ ] Monster cooldown ("recovering") rows DO have the player-style timing bar
-
-### 3.3 Bar Updates
-
-- [ ] Bar width updates only on Master Clock ticks (when item is processed or a new item surfaces and tics are recalculated)
-- [ ] Bar never updates mid-tick (no smooth CSS transitions? — verify: is the bar using CSS transition or instant jump?)
-
-**Note on smoothness:** If the bar uses CSS `transition: width Xms linear`, it animates between ticks. If no transition, it jumps. This is a design decision — document what we see.
+- [ ] The fired attack is a successor replace into a cooldown row — the box slides out, the cooldown box slides in (no pop, no regenerate)
+- [ ] Cooldown row label is "<Monster name> recovering" (option A formula: mon.speed + rollStat(cooldown_time, cooldown_time_range))
+- [ ] When that cooldown fires, the next attack row lands in place (successor: slide out, slide in), tics = mon.speed + rollStat(prepare_time, prepare_time_range)
 
 ---
 
@@ -216,8 +184,7 @@ Per `action-visual-lifecycle.md §3-4` (peek → process → both parallel (type
 
 - [ ] Queue loads with correct number of entries on battle start
 - [ ] Entries are sorted correctly (player-first on ties)
-- [ ] Timing bars render and fill correctly
-- [ ] Ready tokens show "—" and no bar
+- [ ] Ready tokens show "—"
 - [ ] Attack labels display correctly per lifecycle doc §7
 - [ ] Winding → Impact → Cooldown → Ready cycles through cleanly
 - [ ] Monster attacks display and cycle
@@ -228,8 +195,7 @@ Per `action-visual-lifecycle.md §3-4` (peek → process → both parallel (type
 ### Programmatic Checks (Hermes-Runnable)
 
 - [ ] `document.querySelectorAll('#queue > *').length` matches expected queue length
-- [ ] Each entry has label text, tic text, and conditionally a timing bar
-- [ ] `getComputedStyle(barEl).width` reflects expected fill percentage
+- [ ] Each entry has label text and tic text
 - [ ] No entry shows "undefined" or "null" in its text
 - [ ] CSS class changes on entry/exit (`.queue-enter`, `.queue-exit`) — if these exist, verify they're applied
 - [ ] Queue entries have `data-event-type` or similar attribute matching the event type (ready/winding/impact/cooldown)

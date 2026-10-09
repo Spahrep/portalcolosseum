@@ -70,12 +70,11 @@ and a fired `cooldown` yields `after = { event: 'attack', tics: <next prepare> }
 two-phase cycle so the intro countdown replays it correctly. Preserve determinism/seeded RNG ordering.
 
 ### 4. `js/battle-app.js` + `run.html` — render + diff the new `cooldown` monster row
-- `run.html` §6/§7 of the visual lifecycle: a monster `cooldown` row is a NON-monster clear row —
-  give it the player-style timing bar (fill formula unchanged) and a readable label. Suggested
-  label `<Monster name> recovering`. Keep monster canonical `attack` rows as today (name + tic,
-  no bar) — do not re-scope into restyling attack rows.
+- `run.html` §7 of the visual lifecycle: a monster `cooldown` row is a NON-monster clear row —
+  give it a readable label. Suggested label `<Monster name> recovering`. Keep monster canonical
+  `attack` rows as today (name + tic) — do not re-scope into restyling attack rows.
 - `buildQueueRow` / `updateQueueRowInPlace` / `queueEventName`: handle the monster `cooldown` event
-  (label + timing bar + stable key). Monsters key on `i:<id>` per cycle — the cooldown row is a
+  (label + stable key). Monsters key on `i:<id>` per cycle — the cooldown row is a
   new row in the monster's cycle; ensure it doesn't get an erroneous exit animation on the
   attack→cooldown transition (it's a successor, not a removal; check `silentPopHead`/diff paths —
   the processed head should silent-pop / successor-replace, NOT slide out — consistent with the
@@ -114,7 +113,7 @@ statements accurate, with the option-A formula in each place it was wrong.
    (diff shows player lines unchanged).
 2. `startBattle` seeds first attack at `mon.speed + prepare` with stored cooldown.
 3. `captureFires` intro mirror handles both monster events (attack→cooldown, cooldown→attack).
-4. Client renders the monster cooldown row with timing bar + readable label; attack→cooldown and
+4. Client renders the monster cooldown row with a readable label; attack→cooldown and
    cooldown→attack are silent successor transitions (no spurious exit slide).
 5. Tests updated + new regression tests; `npm test` FULLY GREEN.
 6. Docs accurate in all six places above, option-A formula stated.

@@ -18,6 +18,11 @@ let queueBarInfo = null; // {kind:'bar',firstId,lastId} | null — PC-56 predict
 // Bug 4 fix: persistent cache for exit-animating queue rows (like deathCards for monsters)
 const exitingQueueRows = new Map(); // rowId -> { element, finished }
 
+// Set by renderQueue's full-rebuild fallback immediately before clearQueueDom
+// so that path can tell an orphan (in the DOM, absent from the new queue)
+// from a row that will be rebuilt. null keeps the old wipe for any other caller.
+let rebuildReconciled = null; // { keys: Set<string>, ids: Set<string> } | null
+
 export function setQueueBarInfo(info) {
   queueBarInfo = info;
 }
@@ -274,6 +279,13 @@ export function renderQueue(bs, fill = false, onDone = null) {
     paintPredictionBar(el);
     return;
   }
+  // Full rebuild. A DOM row that is not in this queue is an orphan: the clear
+  // below marks it queue-row-exit and leaves it in flow so the group-lift can
+  // release it after the rebuild. Never drop that box instantly.
+  rebuildReconciled = {
+    keys: new Set(queue.map(queueRowKey)),
+    ids: new Set(queue.filter(r => r && r.id != null).map(r => String(r.id))),
+  };
   clearQueueDom();
   const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
   if (titleEl) {
@@ -296,7 +308,11 @@ export function renderQueue(bs, fill = false, onDone = null) {
   paintPredictionBar(el);
   if (fill) {
     // Ceremony-intro fill: reveal rows in engine array order, top to bottom.
-    Array.from(el.children).forEach((row, i) => {
+    // Skip a row already sliding out — the fill must not clobber that exit.
+    let stagger = 0;
+    Array.from(el.children).forEach((row) => {
+      if (row.classList.contains('queue-row-exit')) return;
+      const i = stagger++;
       row.style.transition = `opacity ${dur('queueFill')}ms ease`;
       row.style.opacity = '0';
       setTimeout(() => { row.style.opacity = '1'; }, i * dur('queueFillStagger'));
@@ -323,9 +339,20 @@ export function diffQueueForAnimation(oldBs, newBs) {
   };
 }
 
+/** A queue row still present in the queue being rebuilt (stable key, else id). */
+function isReconciledQueueRow(child, reconciled) {
+  const key = child.dataset.stableKey;
+  if (key && reconciled.keys.has(key)) return true;
+  const id = child.dataset.rowId;
+  if (id && reconciled.ids.has(id)) return true;
+  return false;
+}
+
 // Bug 4 helpers: preserve exit-animating rows across renders (robust cache + clear)
 export function clearQueueDom() {
   const el = document.getElementById('queue');
+  const reconciled = rebuildReconciled;
+  rebuildReconciled = null;
   if (!el) return;
   [...el.children].forEach(child => {
     const id = child.dataset.rowId;
@@ -336,9 +363,20 @@ export function clearQueueDom() {
         exitingQueueRows.delete(id);
       }
       // else keep it (still animating), do not remove or replace
-    } else {
-      child.remove();
+      return;
     }
+    if (child.classList.contains('queue-row-exit')) {
+      // Slide already started. Stay in flow for groupLiftRemaining.
+      return;
+    }
+    // Orphan: in the DOM, not part of the reconciled queue, not yet exiting.
+    // Slide out. groupLiftRemaining releases the space after the rebuild.
+    if (reconciled && child.classList.contains('queue-row') && !isReconciledQueueRow(child, reconciled)) {
+      child.classList.add('queue-row-exit');
+      if (id) markQueueRowExiting(id);
+      return;
+    }
+    child.remove();
   });
 }
 

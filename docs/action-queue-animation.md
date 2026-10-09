@@ -39,7 +39,7 @@ After the action is confirmed, the slot where the new row will land grows open a
 
 After the space is grown, the bar (yellow/orange insert marker) grows in from left to right within the spacer area.
 
-The marker is a **distinct element** from the arriving row's `.queue-bar`. It fills the open `.queue-insert-gap`, then is replaced by the real row. Do not fold grow+flash into `.queue-bar` / `queue-bar-entry` (that keyframe is gone).
+The marker is a **distinct element**. It fills the open `.queue-insert-gap`, then is replaced by the real row.
 
 **Mechanism (`playInsertMarker`):**
 1. Append `.queue-insert-bar` (`width: 0`) inside the gap.
@@ -173,7 +173,7 @@ Trigger: Returning to a battle mid-fight (page reload or resume). All existing q
 ## 4. Edge Cases
 
 ### Row at top of queue (current item)
-The processed head stays pinned (`.queue-row-current`) while its typewriter line and hit/death visuals run. Both are awaited before removal. Removal of a fired head (attack, winding, impact, cooldown — including monster attack→cooldown) is a **silent pop** (`silentPopHead`), not an exit slide. A same-key successor stays the same key in data (`h:LH` / `m:<label>`), so the node stays in the DOM and `renderQueue` relabels it in place — no re-slide. A plain `ready` pause is not a fired head. Genuine **non-head** removals still slide out and group-lift.
+The processed head stays pinned (`.queue-row-current`) while its typewriter line and hit/death visuals run. Both are awaited before removal. When narration + visuals finish, the head **slides out** (`queue-row-exit`) — no box is ever popped silently. A same-key successor (hand winding→impact→cooldown→ready, monster winding→impact→cooldown) is the same logical row (`h:LH` / `m:<label>`): the DOM node is reused, slid out, relabeled, and slid back in — the box always slides, and is never regenerated. Genuine **non-head** removals also slide out and group-lift. See `docs/action-queue-visual-choreography.md` (authoritative).
 
 ### Multiple rows inserted simultaneously
 Each row follows the 5-stage sequence independently. The spacer grows for each row sequentially. Avoid batching — the queue processes one item at a time per the Master Clock model (`action-visual-lifecycle.md §1`).
@@ -192,13 +192,13 @@ When charMs=0 and lineDelayMs=0 (Instant preset), skip all 5 insert stages. Inse
 |---|---|---|
 | Stage 1: Prediction bar | ✅ Done | `computeTimingMarkers()` + `#prediction-bar` |
 | Stage 2: Space creation | ✅ Done | `.queue-insert-gap` + `openInsertGap()` — empty gap, event-gated. No dotted box. |
-| Stage 3: Bar grows in | ✅ Done | `.queue-insert-bar.wipe` / `queue-insert-wipe` (width 0→100%, 250ms). Distinct from `.queue-bar`. |
+| Stage 3: Bar grows in | ✅ Done | `.queue-insert-bar.wipe` / `queue-insert-wipe` (width 0→100%, 250ms). |
 | Stage 4: Flash | ✅ Done | `.queue-insert-bar.flash` / `insert-flash` (150ms), `waitForEvent(animationend)` |
 | Stage 5: Row appears | ✅ Done | gap replaced by `.queue-row-enter` / `.queue-row-monster-enter`, `waitForEvent` |
-| Exit animation | ✅ Done | Fired head: silent pop (`silentPopHead`). Non-head: `runQueueRemoval()` + `.queue-row-exit` + group-lift. Head stays pinned through narration, then is removed silently. |
+| Exit animation | ✅ Done | Every box slides. Fired head + same-key successor: node reused, slid out, relabeled, slid in. Non-head: `runQueueRemoval()` + `.queue-row-exit` + group-lift. |
 | Staggered entry (resume) | ⚠️ Partial | Only on fresh battle load, skip on resume |
 | Hand-ready commit split | ✅ Done | `playCommitArrival()` — attack ceremony first, then ready row slides out, then `/tick` |
-| Master-clock order | ✅ Done | `tickLoop`: pin head → typewriter ∥ visuals → await both → silent pop → ceremony → next `/tick` |
+| Master-clock order | ✅ Done | `tickLoop`: pin head → typewriter ∥ visuals → await both → slide-out/slide-in → ceremony → next `/tick` |
 
 ---
 
