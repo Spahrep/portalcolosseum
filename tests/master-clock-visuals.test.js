@@ -108,8 +108,8 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.match(settle, /waitForEvent\(rowEl, 'animationend'/);
   });
 
-  it('tickLoop pins the head through narration, then the successor lands before the head slides out', () => {
-    const loop = fnBody(app, 'tickLoop');
+  it('advance pins the head through narration, then the successor lands before the head slides out', () => {
+    const loop = fnBody(app, 'advance');
     const post = loop.indexOf('/tick');
     const pin = loop.indexOf('pinProcessedHead(processedHead)');
     const narrate = loop.indexOf('awaitNarration(');
@@ -140,8 +140,8 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.equal(/buildQueueRow\(successor,\s*monsters,\s*bs,\s*true\)/.test(reseatFn), false,
       '4th arg is withMarkers, not the enter flag');
     assert.match(loop, /runQueueRemoval/); // non-head path still slides
-    assert.match(loop, /playQueueTransition\(/, 'tickLoop delegates the queue-transition ceremony');
-    assert.equal(loop.includes('playInsertCeremony'), false, 'tickLoop does not inline the ceremony');
+    assert.match(loop, /playQueueTransition\(/, 'advance delegates the queue-transition ceremony');
+    assert.equal(loop.includes('playInsertCeremony'), false, 'advance does not inline the ceremony');
     const transition = fnBodyUntilNext(app, 'async function playQueueTransition', ['async function awaitTickVisuals']);
     const ceremonyAt = transition.indexOf('playInsertCeremony');
     const readyRemove = transition.indexOf('runQueueRemoval([c.ready.id])');

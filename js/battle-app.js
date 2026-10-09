@@ -212,7 +212,7 @@ function waitForEvent(el, eventName, timeoutMs = dur('queueExit') + 50) {
 }
 
 /**
- * Genuine-removal choreography (shared by BattleClock._runResolve and tickLoop):
+ * Genuine-removal choreography (shared by BattleClock._runResolve and advance):
  *   1) the resolved row(s) slide fully out over dur('queueExit') (stays in flow),
  *   2) dur('queueRemoveGap') pause,
  *   3) the remaining rows FLIP up together as one unit over dur('queueExit').
@@ -280,7 +280,7 @@ let supabase;
 let currentRunId = null;
 let lastBs = null; // last loaded battle_state (safeState) — source for attack/potion lookups
 let busy = false;
-let masterClockDepth = 0; // >0 while tickLoop / commit ceremony owns the clock; blocks setBusy(false)
+let masterClockDepth = 0; // >0 while advance / commit ceremony owns the clock; blocks setBusy(false)
 let pendingAttack = null; // {hand, attackId} for commit via re-click or Enter
 let playerName = 'Player';
 let shouldAnimateDice = false;
@@ -608,7 +608,7 @@ async function playInsertCeremony(entries, preset, bs, opts) {
 }
 
 /**
- * Queue-transition ceremony shared by BattleClock._renderNew and tickLoop.
+ * Queue-transition ceremony shared by BattleClock._renderNew and advance.
  * Attack rows land, ready placeholders slide out, then the queue reconciles.
  * Callers build ceremonyEntries (clock matches added ids; tick matches stable
  * keys) and pass the preset they already captured.
@@ -780,7 +780,7 @@ function showErrorState(title, detail, showReturn = true) {
 }
 
 function setBusy(state) {
-  // Don't release busy if the clock is mid-transition — let _finish() / tickLoop handle it.
+  // Don't release busy if the clock is mid-transition — let _finish() / advance handle it.
   // masterClockDepth covers the server tick loop, which is not the BattleClock state machine.
   if (!state && (battleClock.state !== 'IDLE' || masterClockDepth > 0)) return;
   busy = state;
@@ -794,7 +794,7 @@ function setBusy(state) {
 // Ceremony-intro: once every monster is in, the tic-0 timing track fills in
 // one row at a time. Battle start does not run the clock (PC-DEC-060), so no
 // hand is Ready yet. Do not replay intro.fires — that skip types both hands
-// Ready before the player can act. After the track is full, tickLoop plays
+// Ready before the player can act. After the track is full, advance plays
 // whatever is next, including a monster cooldown that comes before either hand.
 function finishBattleIntro() {
   debugLog('finishBattleIntro', `pending=${battleIntroPending}`);
@@ -840,7 +840,7 @@ function finishBattleIntro() {
     // Do not type a pre-advanced feed or both Ready lines.
     beginAfterIntro(() => {
       if (currentRunId && !readyHeadOf(lastBs)) {
-        tickLoop(currentRunId).catch(err => console.error('tickLoop ceremony:', err));
+        advance(currentRunId).catch(err => console.error('tickLoop ceremony:', err));
       } else {
         renderActionMenu(lastBs);
       }
@@ -904,7 +904,7 @@ function renderLoadout(bs) {
 // PC-DEC-060: do not replay intro.fires. That replay skips monster actions and
 // types both hands Ready before the player can act. shouldPlayIntroCountdown
 // remains hard-false. A fresh battle paints the tic-0 queue in finishBattleIntro
-// and then tickLoop.
+// and then advance.
 function beginAfterIntro(onDone) {
   const tic = lastBs?.tic ?? 0;
   if (shouldPlayIntroCountdown(tic, introCountdownPlayed)) {
@@ -954,7 +954,7 @@ function playThreeTwoOne(onDone) {
 function playIntroCountdown(bs, intro, onDone) {
   // 3-2-1 stays gone. Do not replay intro.fires — that skip types both hands
   // Ready before the player can act (PC-DEC-060). A fresh battle has empty
-  // fires; finishBattleIntro paints the tic-0 queue and tickLoop plays it.
+  // fires; finishBattleIntro paints the tic-0 queue and advance plays it.
   void bs;
   void intro;
   if (onDone) onDone();
@@ -1527,7 +1527,7 @@ async function commitThenTick(runId, postFn, { message, hideMenu } = {}) {
     const text = typeof message === 'function' ? message(data) : message;
     if (text) showMessage(text);
     if (hideMenu) {
-      // Hide the action menu — it will re-render on tickLoop break with fresh state
+      // Hide the action menu — it will re-render on advance break with fresh state
       const menuWrap = document.getElementById('action-choices');
       if (menuWrap) menuWrap.style.display = 'none';
     }
@@ -1537,7 +1537,7 @@ async function commitThenTick(runId, postFn, { message, hideMenu } = {}) {
     } catch (err) {
       console.error('commit ceremony:', err);
     }
-    await tickLoop(runId);
+    await advance(runId);
   } finally {
     leaveMasterClock();
     setBusy(false);
@@ -1972,7 +1972,7 @@ async function loadBattle(runId) {
         document.body.classList.remove('intro-pending', 'queue-filling');
         if (readyHeadOf(bs)) renderActionMenu(bs);
         else if (currentRunId && !((bs.monsters || []).length > 0 && (bs.monsters || []).every(m => m.dead))) {
-          tickLoop(currentRunId).catch(err => console.error('tickLoop resume:', err));
+          advance(currentRunId).catch(err => console.error('tickLoop resume:', err));
         }
       };
       const countdownFirst = !prevBs && introReady && !introAlreadySeen();
@@ -2159,7 +2159,14 @@ async function init() {
   }
 }
 
-async function tickLoop(runId) {
+/**
+ * Single-advance driver. One server response → one readable cycle → stop
+ * only when the server's returned player_ready says the player decides.
+ * Each iteration is one /tick and one complete presentation; the loop
+ * yields on that server gate (playerReady, needsInput, done, or battle over).
+ * The server queue head is the only turn authority.
+ */
+async function advance(runId) {
   debugLog('tickLoop', `runId=${runId}`);
   const outer = masterClockDepth === 0;
   enterMasterClock();
