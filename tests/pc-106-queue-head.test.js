@@ -55,9 +55,6 @@ describe('PC-106 ready head is the turn', () => {
     assert.equal(tick.includes('isMonsterThreat'), false);
     assert.equal(src.includes('isMonsterThreat'), false);
     assert.equal(src.includes('playerHasHandState'), false);
-    const removeAt = tick.indexOf('const removed = remove()');
-    const processAt = tick.indexOf('process(removed)');
-    assert.ok(removeAt > 0 && processAt > removeAt, 'live tick removes the head before process');
   });
 
   it('a strictly-earlier monster impact fires before the ready head is reached', () => {
@@ -181,5 +178,36 @@ describe('PC-106 ready head is the turn', () => {
     }
     assert.ok(turns >= 1, 'the player was granted a turn');
     assert.equal(eng.getState().monsters_dead, true, 'battle completes instead of softlocking');
+  });
+
+  it('a monster row strictly ahead of a ready row fires before the menu pause', () => {
+    const eng = createEngine(seededRNG(7));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 1, hand_r_speed: 2 },
+      monsters: [{ id: 1, max_hp: 80, damage: 1, speed: 8, accuracy: 1, label: 'B' }]
+    });
+    writeState(eng, snap => {
+      snap.player.hands.RH.state = 'Ready';
+      snap.queue = [
+        {
+          id: 'm1', label: 'B', event: 'impact', tics: 2,
+          monsterAttackName: 'Bite', damage: 1, accuracy: 1, cooldownTicks: 4
+        },
+        { id: 'p1', label: 'RH', event: 'ready', tics: 8 }
+      ];
+    });
+
+    const result = eng.tick();
+    assert.equal(result.playerReady, false, 'ready is still behind the monster successor');
+    assert.equal(result.needsInput, false);
+    assert.equal(result.row.id, 'm1');
+    assert.equal(persisted(eng).queue.some(r => r.id === 'p1'), true, 'ready row was not skipped or removed');
+
+    const mid = eng.tick();
+    assert.equal(mid.row.event, 'cooldown');
+    const paused = eng.tick();
+    assert.equal(paused.playerReady, true, 'menu opens when the ready row is the head');
+    assert.equal(paused.needsInput, true);
+    assert.equal(persisted(eng).queue[0].id, 'p1', 'pause does not remove the ready row');
   });
 });
