@@ -666,9 +666,16 @@ async function awaitTickVisuals(deathBefore) {
 }
 
 /**
- * Hand-ready commit beat: the attack row lands through the full ceremony,
- * THEN the ready placeholder slides out. Runs before the next /tick so the
- * clock does not swallow the insert.
+ * Commit-arrival beat of advance — not a ceremony owner. advance is the
+ * only caller. It owns every later queue transition and is the only thing
+ * that decides when to stop for player input.
+ *
+ * A hand commit shares the ready row's stable key, so this relabels that
+ * node in place (slide out → updateQueueRowInPlace → slide in). Never a
+ * second DOM node. The different-key block below is only the fallback when
+ * the ready row and its successor cannot be paired; attack, potion, and
+ * swap commits do not take it. Runs before the next /tick so the clock
+ * does not swallow the arrival.
  */
 async function playCommitArrival(runId, commitData) {
   const fullRun = await apiCall(`/runs/${runId}`, 'GET');
@@ -1517,6 +1524,12 @@ function showLossScreen(runId, state) {
  * cleared so each caller keeps its own message.
  * setBusy(false) stays in the finally, after leaveMasterClock: setBusy no-ops
  * while masterClockDepth > 0, and a thrown POST must still release the gate.
+ *
+ * Single-owner contract: POST, then advance. advance presents the commit
+ * arrival (same-key relabel) and every later queue transition, and it alone
+ * decides when to stop for input. This function does not play a ceremony.
+ * enterMasterClock stays so advance is not the outer clock owner and a
+ * thrown POST still releases the busy gate in this finally.
  */
 async function commitThenTick(runId, postFn, { message, hideMenu } = {}) {
   if (busy) return;
@@ -1532,12 +1545,7 @@ async function commitThenTick(runId, postFn, { message, hideMenu } = {}) {
       if (menuWrap) menuWrap.style.display = 'none';
     }
     enterMasterClock();
-    try {
-      await playCommitArrival(runId, data);
-    } catch (err) {
-      console.error('commit ceremony:', err);
-    }
-    await advance(runId);
+    await advance(runId, { fromCommit: true, commitData: data });
   } finally {
     leaveMasterClock();
     setBusy(false);
@@ -1991,6 +1999,11 @@ async function loadBattle(runId) {
         // Pin the departing head through narration — no exit slide until the clock resolves.
         const pinned = (prevBs.queue || []).find(r => r.id === diff.resolved[0]);
         if (pinned) pinProcessedHead(pinned);
+        // Not the player-commit path. commitThenTick POSTs and then advance
+        // is the single ceremony owner. This branch is a page-load / next-battle
+        // diff (fightOn still has lastBs) coordinated with feed narration via
+        // onNarrateDone. Routing it through advance would POST /tick during
+        // intro or next-battle setup and race the dice ceremony.
         battleClock.start(diff, bs, () => {
           renderQueue(bs);
         });
@@ -2160,17 +2173,30 @@ async function init() {
 }
 
 /**
- * Single-advance driver. One server response → one readable cycle → stop
- * only when the server's returned player_ready says the player decides.
- * Each iteration is one /tick and one complete presentation; the loop
- * yields on that server gate (playerReady, needsInput, done, or battle over).
- * The server queue head is the only turn authority.
+ * Single-advance driver and the only ceremony owner after a player commit.
+ * One server response → one readable cycle → stop only when the server's
+ * returned player_ready says the player decides. Each iteration is one
+ * /tick and one complete presentation; the loop yields on that server gate
+ * (playerReady, needsInput, done, or battle over). The server queue head
+ * is the only turn authority.
+ *
+ * fromCommit: the action POST already landed. Present that arrival here —
+ * playCommitArrival relabels the committed hand in place — before the first
+ * /tick. This function then owns every later queue transition and the stop.
+ * Intro and resume callers omit fromCommit; they must not replay a commit.
  */
-async function advance(runId) {
+async function advance(runId, { fromCommit = false, commitData = null } = {}) {
   debugLog('tickLoop', `runId=${runId}`);
   const outer = masterClockDepth === 0;
   enterMasterClock();
   try {
+    if (fromCommit) {
+      try {
+        await playCommitArrival(runId, commitData);
+      } catch (err) {
+        console.error('commit ceremony:', err);
+      }
+    }
     let oldQueue = lastBs?.queue ? [...lastBs.queue] : [];
     while (true) {
       // Inter-tick pacing so each event is readable. Not a preview/entry barrier.
@@ -2217,8 +2243,8 @@ async function advance(runId) {
       await Promise.all([narrateP, visualsP]);
 
       // Successor lands first (enter), then the processed row slides out.
-      // Player hands and enemy heads share that order. Commits already
-      // seat the attack row before the ready row slides out.
+      // Player hands and enemy heads share that order. A fromCommit beat
+      // already relabeled that hand before this loop; do not paint it again.
       if (!headStillQueued) {
         await releaseProcessedHead(processedHead, newQueue, bs, preset);
       }
