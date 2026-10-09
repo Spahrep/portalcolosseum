@@ -20,11 +20,6 @@
  *   POST   /api/admin/weapon-templates/:id/mappings
  *   PATCH  /api/admin/weapon-templates/:id/mappings/:mappingId
  *   DELETE /api/admin/weapon-templates/:id/mappings/:mappingId
- *   GET    /api/admin/consumable-templates
- *   POST   /api/admin/consumable-templates
- *   GET    /api/admin/consumable-templates/:id
- *   PUT    /api/admin/consumable-templates/:id
- *   DELETE /api/admin/consumable-templates/:id
  *   GET    /api/admin/monster-templates
  *   POST   /api/admin/monster-templates
  *   GET    /api/admin/monster-templates/:id
@@ -34,6 +29,28 @@
  *   POST   /api/admin/monster-templates/:id/mappings
  *   PATCH  /api/admin/monster-templates/:id/mappings/:mappingId
  *   DELETE /api/admin/monster-templates/:id/mappings/:mappingId
+ *   GET    /api/admin/monster-templates/:id/loot
+ *   POST   /api/admin/monster-templates/:id/loot
+ *   PATCH  /api/admin/monster-templates/:id/loot/:mappingId
+ *   DELETE /api/admin/monster-templates/:id/loot/:mappingId
+ *   GET    /api/admin/portal-templates
+ *   POST   /api/admin/portal-templates
+ *   GET    /api/admin/portal-templates/:id
+ *   PUT    /api/admin/portal-templates/:id
+ *   DELETE /api/admin/portal-templates/:id
+ *   GET    /api/admin/portal-templates/:id/monsters
+ *   POST   /api/admin/portal-templates/:id/monsters
+ *   PATCH  /api/admin/portal-templates/:id/monsters/:mappingId
+ *   DELETE /api/admin/portal-templates/:id/monsters/:mappingId
+ *   GET    /api/admin/portal-templates/:id/loot
+ *   POST   /api/admin/portal-templates/:id/loot
+ *   PATCH  /api/admin/portal-templates/:id/loot/:mappingId
+ *   DELETE /api/admin/portal-templates/:id/loot/:mappingId
+ *   GET    /api/admin/consumable-templates
+ *   POST   /api/admin/consumable-templates
+ *   GET    /api/admin/consumable-templates/:id
+ *   PUT    /api/admin/consumable-templates/:id
+ *   DELETE /api/admin/consumable-templates/:id
  */
 import { createClient } from '@supabase/supabase-js';
 
