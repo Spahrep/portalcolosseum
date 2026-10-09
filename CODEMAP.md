@@ -12,8 +12,8 @@ Scanned `.js` files under `js/`, `api/`, `lib/`, and `public/test/cli/`.
 Skipped directories: `node_modules`, `.git`, `.worktrees`, `.vercel`, `tests/`.
 Bracket filenames (`api/combat/[...path].js`) are literal paths, not globs.
 
-- Files: 60
-- Symbols: 621 (220 export, 401 local)
+- Files: 61
+- Symbols: 624 (226 export, 398 local)
 
 `visibility` is `export` or `local`. Kinds: `function`, `async function`, `class`, `const` (a `*` suffix marks a generator).
 Included: function declarations at any indent (including named function expressions), classes (exported or not), and exported consts whose value is a function, arrow, object, or array (including `Object.freeze` / `Object.seal` of those).
@@ -33,7 +33,7 @@ Omitted: scalar constants (strings, numbers, booleans), re-exports (`export { â€
 | `api/user/profile.js` | 6 | 3 |
 | `js/admin-app.js` | 41 | 0 |
 | `js/auth-helpers.js` | 5 | 5 |
-| `js/battle-app.js` | 77 | 0 |
+| `js/battle-app.js` | 66 | 0 |
 | `js/battle-debug.js` | 3 | 1 |
 | `js/battle/action-menu-rows.js` | 4 | 4 |
 | `js/battle/arena-letters.js` | 5 | 4 |
@@ -41,9 +41,10 @@ Omitted: scalar constants (strings, numbers, booleans), re-exports (`export { â€
 | `js/battle/feed-render.js` | 22 | 14 |
 | `js/battle/feed-skip.js` | 1 | 1 |
 | `js/battle/intro-countdown.js` | 2 | 2 |
+| `js/battle/loot-exit.js` | 13 | 6 |
 | `js/battle/monster-render.js` | 19 | 2 |
 | `js/battle/potion-target.js` | 1 | 1 |
-| `js/battle/queue-render.js` | 26 | 15 |
+| `js/battle/queue-render.js` | 27 | 15 |
 | `js/battle/text-speed.js` | 3 | 3 |
 | `js/battle/ux-controller.js` | 9 | 7 |
 | `js/combat/buffs.js` | 2 | 2 |
@@ -214,83 +215,72 @@ Omitted: scalar constants (strings, numbers, booleans), re-exports (`export { â€
 | `js/auth-helpers.js` | 100 | export | function | `validatePassword` |
 | `js/auth-helpers.js` | 113 | export | function | `getInviteVerifyUrl` |
 | `js/auth-helpers.js` | 128 | export | async function | `verifyInviteKey` |
-| `js/battle-app.js` | 75 | local | class | `BattleClock` |
-| `js/battle-app.js` | 179 | local | function | `sleep` |
-| `js/battle-app.js` | 190 | local | function | `waitForEvent` |
-| `js/battle-app.js` | 225 | local | async function | `runQueueRemoval` |
-| `js/battle-app.js` | 242 | local | async function | `groupLiftRemaining` |
-| `js/battle-app.js` | 307 | local | function | `onActionMenuMouseMove` |
-| `js/battle-app.js` | 312 | local | function | `bindActionMenuRowInput` |
-| `js/battle-app.js` | 319 | local | function | `onActionMenuKeyDown` |
-| `js/battle-app.js` | 348 | local | function | `enterMasterClock` |
-| `js/battle-app.js` | 349 | local | function | `leaveMasterClock` |
-| `js/battle-app.js` | 351 | local | function | `prefersReducedMotion` |
-| `js/battle-app.js` | 356 | local | function | `animationsSkipped` |
-| `js/battle-app.js` | 361 | local | function | `findQueueRowByIdentity` |
-| `js/battle-app.js` | 374 | local | function | `findReadyCommits` |
-| `js/battle-app.js` | 385 | local | function | `pinProcessedHead` |
-| `js/battle-app.js` | 400 | local | function | `silentPopHead` |
-| `js/battle-app.js` | 422 | local | function | `reseatSameKeySuccessor` |
-| `js/battle-app.js` | 452 | local | async function | `releaseProcessedHead` |
-| `js/battle-app.js` | 485 | local | function | `measuredRowHeight` |
-| `js/battle-app.js` | 492 | local | function | `domRowIsPlayer` |
-| `js/battle-app.js` | 500 | local | function | `insertIndexFor` |
-| `js/battle-app.js` | 531 | local | async function | `openInsertGap` |
-| `js/battle-app.js` | 548 | local | async function | `playInsertMarker` |
-| `js/battle-app.js` | 566 | local | async function | `playInsertCeremony` |
-| `js/battle-app.js` | 604 | local | async function | `playQueueTransition` |
-| `js/battle-app.js` | 635 | local | async function | `awaitTickVisuals` |
-| `js/battle-app.js` | 663 | local | async function | `playCommitArrival` |
-| `js/battle-app.js` | 727 | local | function | `showMessage` |
-| `js/battle-app.js` | 737 | local | function | `showErrorState` |
-| `js/battle-app.js` | 757 | local | function | `showSessionExpired` |
-| `js/battle-app.js` | 777 | local | function | `setBusy` |
-| `js/battle-app.js` | 794 | local | function | `finishBattleIntro` |
-| `js/battle-app.js` | 846 | local | function | `readyHeadOf` |
-| `js/battle-app.js` | 853 | local | function | `introSeenKey` |
-| `js/battle-app.js` | 857 | local | function | `introAlreadySeen` |
-| `js/battle-app.js` | 861 | local | function | `markIntroSeen` |
-| `js/battle-app.js` | 865 | local | function | `renderPlayerHP` |
-| `js/battle-app.js` | 890 | local | function | `renderLoadout` |
-| `js/battle-app.js` | 903 | local | function | `beginAfterIntro` |
-| `js/battle-app.js` | 926 | local | function | `playThreeTwoOne` |
-| `js/battle-app.js` | 949 | local | function | `playIntroCountdown` |
-| `js/battle-app.js` | 958 | local | function | `setIntroTicLabel` |
-| `js/battle-app.js` | 963 | local | function | `clearIntroTimer` |
-| `js/battle-app.js` | 971 | local | function | `finishIntroSnap` |
-| `js/battle-app.js` | 998 | local | function | `ensureAdvanceOverlayStyles` |
-| `js/battle-app.js` | 1150 | local | function | `mountOverlay` |
-| `js/battle-app.js` | 1158 | local | function | `showAdvanceUI` |
-| `js/battle-app.js` | 1178 | local | function | `mountAdvanceOverlay` |
-| `js/battle-app.js` | 1217 | local | function | `renderLootChoices` |
-| `js/battle-app.js` | 1295 | local | async function | `extractAndLeave` |
-| `js/battle-app.js` | 1318 | local | function | `revealRandomLoot` |
-| `js/battle-app.js` | 1342 | local | function | `orderedLootIds` |
-| `js/battle-app.js` | 1357 | local | function | `confirmSelectedLoot` |
-| `js/battle-app.js` | 1366 | local | function | `mountLootRoulette` |
-| `js/battle-app.js` | 1386 | local | function | `sweepLootPicks` |
-| `js/battle-app.js` | 1401 | local | function | `showExtractionSummary` |
-| `js/battle-app.js` | 1417 | local | async function | `fightOn` |
-| `js/battle-app.js` | 1441 | local | function | `showLossScreen` |
-| `js/battle-app.js` | 1483 | local | async function | `commitThenTick` |
-| `js/battle-app.js` | 1505 | local | async function | `doAttack` |
-| `js/battle-app.js` | 1525 | local | async function | `doSwap` |
-| `js/battle-app.js` | 1556 | local | function | `renderActionMenu` |
-| `js/battle-app.js` | 1595 | local | function | `setMarkers` |
-| `js/battle-app.js` | 1600 | local | function | `clearMarkers` |
-| `js/battle-app.js` | 1617 | local | function | `yesNoRows` |
-| `js/battle-app.js` | 1624 | local | function | `back` |
-| `js/battle-app.js` | 1635 | local | function | `pickTarget` |
-| `js/battle-app.js` | 1663 | local | function | `pickPotion` |
-| `js/battle-app.js` | 1679 | local | function | `pickEquip` |
-| `js/battle-app.js` | 1688 | local | function | `selectTop` |
-| `js/battle-app.js` | 1722 | local | function | `renderStack` |
-| `js/battle-app.js` | 1789 | local | function | `paintReadout` |
-| `js/battle-app.js` | 1843 | local | async function | `usePotion` |
-| `js/battle-app.js` | 1856 | local | async function | `loadBattle` |
-| `js/battle-app.js` | 2016 | local | function | `setupEndRunButton` |
-| `js/battle-app.js` | 2059 | local | async function | `init` |
-| `js/battle-app.js` | 2140 | local | async function | `advance` |
+| `js/battle-app.js` | 88 | local | class | `BattleClock` |
+| `js/battle-app.js` | 202 | local | function | `sleep` |
+| `js/battle-app.js` | 213 | local | function | `waitForEvent` |
+| `js/battle-app.js` | 248 | local | async function | `runQueueRemoval` |
+| `js/battle-app.js` | 265 | local | async function | `groupLiftRemaining` |
+| `js/battle-app.js` | 330 | local | function | `onActionMenuMouseMove` |
+| `js/battle-app.js` | 335 | local | function | `bindActionMenuRowInput` |
+| `js/battle-app.js` | 342 | local | function | `onActionMenuKeyDown` |
+| `js/battle-app.js` | 371 | local | function | `enterMasterClock` |
+| `js/battle-app.js` | 372 | local | function | `leaveMasterClock` |
+| `js/battle-app.js` | 374 | local | function | `prefersReducedMotion` |
+| `js/battle-app.js` | 379 | local | function | `animationsSkipped` |
+| `js/battle-app.js` | 384 | local | function | `findQueueRowByIdentity` |
+| `js/battle-app.js` | 403 | local | function | `findReadyCommits` |
+| `js/battle-app.js` | 416 | local | function | `queueEventChanges` |
+| `js/battle-app.js` | 448 | local | function | `pinProcessedHead` |
+| `js/battle-app.js` | 457 | local | function | `relabelMonsterPreparing` |
+| `js/battle-app.js` | 473 | local | function | `silentPopHead` |
+| `js/battle-app.js` | 491 | local | async function | `releaseProcessedHead` |
+| `js/battle-app.js` | 511 | local | function | `measuredRowHeight` |
+| `js/battle-app.js` | 518 | local | function | `domRowIsPlayer` |
+| `js/battle-app.js` | 527 | local | function | `insertIndexFor` |
+| `js/battle-app.js` | 558 | local | async function | `openInsertGap` |
+| `js/battle-app.js` | 575 | local | async function | `playInsertMarker` |
+| `js/battle-app.js` | 593 | local | async function | `playInsertCeremony` |
+| `js/battle-app.js` | 630 | local | async function | `playQueueTransition` |
+| `js/battle-app.js` | 663 | local | async function | `awaitTickVisuals` |
+| `js/battle-app.js` | 689 | local | async function | `playCommitArrival` |
+| `js/battle-app.js` | 748 | local | function | `showMessage` |
+| `js/battle-app.js` | 758 | local | function | `showErrorState` |
+| `js/battle-app.js` | 778 | local | function | `showSessionExpired` |
+| `js/battle-app.js` | 798 | local | function | `setBusy` |
+| `js/battle-app.js` | 815 | local | function | `finishBattleIntro` |
+| `js/battle-app.js` | 867 | local | function | `readyHeadOf` |
+| `js/battle-app.js` | 874 | local | function | `introSeenKey` |
+| `js/battle-app.js` | 878 | local | function | `introAlreadySeen` |
+| `js/battle-app.js` | 882 | local | function | `markIntroSeen` |
+| `js/battle-app.js` | 886 | local | function | `renderPlayerHP` |
+| `js/battle-app.js` | 911 | local | function | `renderLoadout` |
+| `js/battle-app.js` | 924 | local | function | `beginAfterIntro` |
+| `js/battle-app.js` | 947 | local | function | `playThreeTwoOne` |
+| `js/battle-app.js` | 970 | local | function | `playIntroCountdown` |
+| `js/battle-app.js` | 979 | local | function | `setIntroTicLabel` |
+| `js/battle-app.js` | 984 | local | function | `clearIntroTimer` |
+| `js/battle-app.js` | 992 | local | function | `finishIntroSnap` |
+| `js/battle-app.js` | 1020 | local | async function | `extractAndLeave` |
+| `js/battle-app.js` | 1041 | local | async function | `fightOn` |
+| `js/battle-app.js` | 1077 | local | async function | `commitThenTick` |
+| `js/battle-app.js` | 1099 | local | async function | `doAttack` |
+| `js/battle-app.js` | 1119 | local | async function | `doSwap` |
+| `js/battle-app.js` | 1150 | local | function | `renderActionMenu` |
+| `js/battle-app.js` | 1189 | local | function | `setMarkers` |
+| `js/battle-app.js` | 1194 | local | function | `clearMarkers` |
+| `js/battle-app.js` | 1211 | local | function | `yesNoRows` |
+| `js/battle-app.js` | 1218 | local | function | `back` |
+| `js/battle-app.js` | 1229 | local | function | `pickTarget` |
+| `js/battle-app.js` | 1257 | local | function | `pickPotion` |
+| `js/battle-app.js` | 1273 | local | function | `pickEquip` |
+| `js/battle-app.js` | 1282 | local | function | `selectTop` |
+| `js/battle-app.js` | 1316 | local | function | `renderStack` |
+| `js/battle-app.js` | 1383 | local | function | `paintReadout` |
+| `js/battle-app.js` | 1437 | local | async function | `usePotion` |
+| `js/battle-app.js` | 1450 | local | async function | `loadBattle` |
+| `js/battle-app.js` | 1610 | local | function | `setupEndRunButton` |
+| `js/battle-app.js` | 1653 | local | async function | `init` |
+| `js/battle-app.js` | 1735 | local | async function | `advance` |
 | `js/battle-debug.js` | 60 | local | function | `createDebugLog` |
 | `js/battle-debug.js` | 149 | local | function | `debugLog` |
 | `js/battle-debug.js` | 181 | export | function | `debugLog` |
@@ -336,6 +326,19 @@ Omitted: scalar constants (strings, numbers, booleans), re-exports (`export { â€
 | `js/battle/feed-skip.js` | 9 | export | function | `nextTypingStateAfterClick` |
 | `js/battle/intro-countdown.js` | 7 | export | const | `INTRO_COUNTDOWN_STEPS` |
 | `js/battle/intro-countdown.js` | 9 | export | function | `shouldPlayIntroCountdown` |
+| `js/battle/loot-exit.js` | 17 | export | function | `bindLootExit` |
+| `js/battle/loot-exit.js` | 22 | export | function | `ensureAdvanceOverlayStyles` |
+| `js/battle/loot-exit.js` | 174 | export | function | `mountOverlay` |
+| `js/battle/loot-exit.js` | 182 | export | function | `showAdvanceUI` |
+| `js/battle/loot-exit.js` | 202 | local | function | `mountAdvanceOverlay` |
+| `js/battle/loot-exit.js` | 241 | local | function | `renderLootChoices` |
+| `js/battle/loot-exit.js` | 321 | export | function | `revealRandomLoot` |
+| `js/battle/loot-exit.js` | 345 | local | function | `orderedLootIds` |
+| `js/battle/loot-exit.js` | 360 | local | function | `confirmSelectedLoot` |
+| `js/battle/loot-exit.js` | 369 | local | function | `mountLootRoulette` |
+| `js/battle/loot-exit.js` | 389 | local | function | `sweepLootPicks` |
+| `js/battle/loot-exit.js` | 404 | export | function | `showExtractionSummary` |
+| `js/battle/loot-exit.js` | 425 | local | function | `showLossScreen` |
 | `js/battle/monster-render.js` | 16 | export | function | `setMonstersPendingReveal` |
 | `js/battle/monster-render.js` | 24 | local | function | `bandClass` |
 | `js/battle/monster-render.js` | 36 | export | function | `setSuppressHitFeedback` |
@@ -356,32 +359,33 @@ Omitted: scalar constants (strings, numbers, booleans), re-exports (`export { â€
 | `js/battle/monster-render.js` | 317 | local | function | `hideForReveal` |
 | `js/battle/monster-render.js` | 322 | local | function | `revealMonsters` |
 | `js/battle/potion-target.js` | 8 | export | function | `potionCommitPayload` |
-| `js/battle/queue-render.js` | 26 | export | function | `setQueueBarInfo` |
-| `js/battle/queue-render.js` | 30 | export | function | `clearQueueBarInfo` |
-| `js/battle/queue-render.js` | 34 | export | function | `isQueueRowExiting` |
-| `js/battle/queue-render.js` | 39 | export | function | `forgetQueueRowExiting` |
-| `js/battle/queue-render.js` | 48 | export | function | `queueRowKey` |
-| `js/battle/queue-render.js` | 54 | local | function | `isMonsterLabel` |
-| `js/battle/queue-render.js` | 59 | export | function | `isMonsterQueueRow` |
-| `js/battle/queue-render.js` | 63 | local | function | `isMonsterCooldownRow` |
-| `js/battle/queue-render.js` | 69 | local | function | `queueAnimationsSkipped` |
-| `js/battle/queue-render.js` | 80 | export | function | `queueRowEnterClass` |
-| `js/battle/queue-render.js` | 91 | export | function | `armQueueRowEnter` |
-| `js/battle/queue-render.js` | 104 | local | function | `monsterQueueName` |
-| `js/battle/queue-render.js` | 121 | local | function | `paintPredictionBar` |
-| `js/battle/queue-render.js` | 138 | local | function | `yAtTics` |
-| `js/battle/queue-render.js` | 205 | export | function | `renderQueue` |
-| `js/battle/queue-render.js` | 324 | export | function | `diffQueueForAnimation` |
-| `js/battle/queue-render.js` | 343 | local | function | `isReconciledQueueRow` |
-| `js/battle/queue-render.js` | 352 | export | function | `clearQueueDom` |
-| `js/battle/queue-render.js` | 383 | export | function | `markQueueRowExiting` |
-| `js/battle/queue-render.js` | 407 | local | function | `queueRowDisplayLabel` |
-| `js/battle/queue-render.js` | 424 | local | function | `playerRowTargetName` |
-| `js/battle/queue-render.js` | 442 | export | function | `buildQueueRow` |
-| `js/battle/queue-render.js` | 511 | export | function | `updateQueueRowInPlace` |
-| `js/battle/queue-render.js` | 584 | export | function | `sortQueueRows` |
-| `js/battle/queue-render.js` | 593 | local | function | `queueLabel` |
-| `js/battle/queue-render.js` | 600 | local | function | `queueEventName` |
+| `js/battle/queue-render.js` | 28 | export | function | `setQueueBarInfo` |
+| `js/battle/queue-render.js` | 32 | export | function | `clearQueueBarInfo` |
+| `js/battle/queue-render.js` | 36 | export | function | `isQueueRowExiting` |
+| `js/battle/queue-render.js` | 41 | export | function | `forgetQueueRowExiting` |
+| `js/battle/queue-render.js` | 49 | export | function | `queueEventIdentity` |
+| `js/battle/queue-render.js` | 54 | local | function | `domEventIdentity` |
+| `js/battle/queue-render.js` | 59 | local | function | `isMonsterLabel` |
+| `js/battle/queue-render.js` | 64 | export | function | `isMonsterQueueRow` |
+| `js/battle/queue-render.js` | 68 | local | function | `isMonsterCooldownRow` |
+| `js/battle/queue-render.js` | 74 | local | function | `queueAnimationsSkipped` |
+| `js/battle/queue-render.js` | 85 | export | function | `queueRowEnterClass` |
+| `js/battle/queue-render.js` | 96 | export | function | `armQueueRowEnter` |
+| `js/battle/queue-render.js` | 109 | local | function | `monsterQueueName` |
+| `js/battle/queue-render.js` | 126 | local | function | `paintPredictionBar` |
+| `js/battle/queue-render.js` | 143 | local | function | `yAtTics` |
+| `js/battle/queue-render.js` | 210 | export | function | `renderQueue` |
+| `js/battle/queue-render.js` | 286 | export | function | `diffQueueForAnimation` |
+| `js/battle/queue-render.js` | 301 | local | function | `isReconciledQueueRow` |
+| `js/battle/queue-render.js` | 310 | export | function | `clearQueueDom` |
+| `js/battle/queue-render.js` | 341 | export | function | `markQueueRowExiting` |
+| `js/battle/queue-render.js` | 365 | local | function | `queueRowDisplayLabel` |
+| `js/battle/queue-render.js` | 383 | local | function | `playerRowTargetName` |
+| `js/battle/queue-render.js` | 401 | export | function | `buildQueueRow` |
+| `js/battle/queue-render.js` | 471 | export | function | `updateQueueRowInPlace` |
+| `js/battle/queue-render.js` | 531 | export | function | `sortQueueRows` |
+| `js/battle/queue-render.js` | 540 | local | function | `queueLabel` |
+| `js/battle/queue-render.js` | 547 | local | function | `queueEventName` |
 | `js/battle/text-speed.js` | 8 | export | const | `TEXT_SPEEDS` |
 | `js/battle/text-speed.js` | 32 | export | const | `TEXT_SPEED_KEYS` |
 | `js/battle/text-speed.js` | 35 | export | function | `normalizeSpeedKey` |
