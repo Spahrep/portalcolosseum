@@ -21,13 +21,15 @@
 
 import { supabaseClient } from '../js/utils.js';
 import { persistRefreshCookie } from './session.js';
+import {
+  showMessage,
+  signInWithProvider,
+  validatePassword,
+  getInviteVerifyUrl,
+  verifyInviteKey,
+} from './auth-helpers.js';
 
 let supabase;
-
-// Invite verification moved off Vercel (/api/invite-verify) onto Supabase
-// Edge Functions. The URL is derived from the runtime-injected SUPABASE_URL
-// rather than hardcoded, so the project ref never appears in source.
-const INVITE_VERIFY_URL = `${(window.ENV?.SUPABASE_URL || '').replace(/\/+$/, '')}/functions/v1/invite-verify`;
 
 // Store the validated invite key in session scope (not localStorage — too short
 // lived to be an XSS target, and sessionStorage is cleared on tab close)
@@ -39,38 +41,10 @@ function initSupabase() {
 }
 
 /**
- * Display a message (success or error) to the user.
- * Uses textContent by default to prevent XSS. For messages that need
- * an inline link, pass the link text and href separately — the function
- * builds the DOM safely rather than parsing HTML strings.
- * @param {string} message - The message text (already safe, no HTML)
- * @param {string} type - 'success' or 'error'
- * @param {object|null} link - { text: 'link text', href: '/login#reset' } for inline link
- */
-function showMessage(message, type = 'success', link = null) {
-  const msgEl = document.getElementById('auth-message');
-  msgEl.textContent = '';
-  if (link) {
-    msgEl.appendChild(document.createTextNode(message));
-    const a = document.createElement('a');
-    a.href = link.href;
-    a.textContent = link.text;
-    msgEl.appendChild(a);
-  } else {
-    msgEl.textContent = message;
-  }
-  msgEl.className = `auth-message ${type}`;
-  msgEl.style.display = 'block';
-  if (type === 'success') {
-    setTimeout(() => { msgEl.style.display = 'none'; }, 4000);
-  }
-}
-
-/**
- * Verify an invite key via the invite-verify Supabase Edge Function.
+ * Verify an invite key via the shared invite-verify helper.
  * If valid, reveals the auth provider buttons.
  */
-async function verifyInviteKey() {
+async function submitInviteKey() {
   const keyInput = document.getElementById('invite-key');
   const key = keyInput.value.trim();
   const verifyBtn = document.getElementById('invite-verify-btn');
@@ -86,21 +60,15 @@ async function verifyInviteKey() {
   inviteHint.textContent = 'Validating your invite key...';
 
   try {
-    const response = await fetch(INVITE_VERIFY_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key })
-    });
-
-    const result = await response.json();
+    const result = await verifyInviteKey(key);
 
     if (result.valid) {
       inviteKey = key;
       inviteHint.textContent = 'Invite key accepted!';
       inviteHint.style.color = '#4ade80';
 
-      // Persist to sessionStorage so the key survives page reloads (e.g., OAuth redirects)
-      sessionStorage.setItem('invite_key', key);
+      // invite_key is stored by verifyInviteKey so it survives reloads
+      // (OAuth redirects) the same way the landing page stores it.
 
       // Reveal auth provider buttons
       const inviteSection = document.getElementById('invite-section');
@@ -134,11 +102,17 @@ async function verifyInviteKey() {
 async function markInviteKeyUsed() {
   if (!inviteKey) return;
 
+  const inviteVerifyUrl = getInviteVerifyUrl();
+  if (!inviteVerifyUrl) {
+    console.error('Failed to mark invite key as used: missing invite verify URL');
+    return;
+  }
+
   try {
     // The key travels in the body, not the query string: URLs end up in
     // access logs, proxy logs and Referer headers, and an invite key is a
     // credential.
-    const response = await fetch(INVITE_VERIFY_URL, {
+    const response = await fetch(inviteVerifyUrl, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key: inviteKey })
@@ -152,51 +126,17 @@ async function markInviteKeyUsed() {
   }
 }
 
-async function signInWithProvider(provider) {
+function startOAuthSignup(provider) {
   if (!inviteKey) {
     showMessage('Please verify your invite key first.', 'error');
     return;
   }
-
-  if (!supabase) return showMessage('Authentication service not available. Please refresh.', 'error');
-  try {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: provider,
-      options: {
-        redirectTo: window.location.origin + '/signup',
-        // Pass the invite key via state so it survives the OAuth redirect
-        // (stored in sessionStorage which persists across tabs of same origin)
-      }
-    });
-
-    if (error) return showMessage(`${provider} login failed: ${error.message}`, 'error');
-
-    // In PKCE flow, signInWithOAuth returns a URL — we must navigate to it manually
-    // Without this, no redirect happens and the page "just sits there"
-    if (data && data.url) {
-      window.location.href = data.url;
-    }
-  } catch (err) {
-    showMessage(`${provider} error: ${err.message}`, 'error');
-  }
-}
-
-/**
- * Validates password strength.
- * Policy: at least 8 characters.
- * No mandatory character classes — see /passwords for guidance.
- * Returns { valid: bool, errors: string[] } so the caller can show
- * specific, actionable feedback to the user.
- */
-function validatePassword(password) {
-  const errors = [];
-  const minimumLength = password.length >= 8;
-
-  if (!minimumLength) {
-    errors.push(`Password must be at least 8 characters (currently ${password.length}).`);
-  }
-
-  return { valid: minimumLength, errors };
+  return signInWithProvider(supabase, provider, {
+    redirectTo: window.location.origin + '/signup',
+    showMessage,
+    unavailableMessage: 'Authentication service not available. Please refresh.',
+    exceptionLabel: 'error',
+  });
 }
 
 async function signUpWithEmail() {
@@ -356,11 +296,11 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Invite key verification
-  document.getElementById('invite-verify-btn')?.addEventListener('click', verifyInviteKey);
+  document.getElementById('invite-verify-btn')?.addEventListener('click', submitInviteKey);
 
   // OAuth signup handlers
-  document.getElementById('google-signup-btn')?.addEventListener('click', () => signInWithProvider('google'));
-  document.getElementById('github-signup-btn')?.addEventListener('click', () => signInWithProvider('github'));
+  document.getElementById('google-signup-btn')?.addEventListener('click', () => startOAuthSignup('google'));
+  document.getElementById('github-signup-btn')?.addEventListener('click', () => startOAuthSignup('github'));
 
   // Email signup handler
   document.getElementById('email-signup-btn')?.addEventListener('click', signUpWithEmail);
@@ -379,7 +319,7 @@ document.addEventListener('DOMContentLoaded', () => {
     inviteKeyInput.addEventListener('keypress', (e) => {
       if (e.key === 'Enter') {
         e.preventDefault();
-        verifyInviteKey();
+        submitInviteKey();
       }
     });
   }

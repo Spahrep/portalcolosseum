@@ -3,6 +3,8 @@
  * Moved from game-app.js and mobile-app.js. The seven functions are identical;
  * page-specific hideMenuSettings / logout / supabase are injected because the
  * game page also clears location markers and both close over a page-local client.
+ * showMenuSettings (open modal + four highlights) lives here too. Game passes
+ * onMenuShown to reset keyboard focus; mobile does not.
  *
  * Listeners attach once. mobile-app used to bind #menu-settings-close, the menu
  * backdrop, and #logout-confirm-yes/no in initGame AND here, so confirm-yes
@@ -18,9 +20,30 @@ const settingsHooks = {
   getSupabase: () => null,
   hideMenuSettings() {},
   logout() {},
+  // Game page resets keyboard focus after the modal opens. Mobile has no
+  // keyboard nav, so the default is a no-op.
+  onMenuShown() {},
 };
 
 let menuWired = false;
+
+/**
+ * Open the town settings modal and highlight the active option buttons.
+ * Game passes onMenuShown to reset keyboard focus; mobile does not.
+ */
+export function showMenuSettings() {
+  const modal = document.getElementById('menu-settings-modal');
+  if (modal) {
+    const confirm = document.getElementById('logout-confirm-dialog');
+    if (confirm) confirm.hidden = true;
+    modal.hidden = false;
+    highlightSpeedButtons();
+    highlightFontButtons();
+    highlightUxButtons();
+    highlightShakeButtons();
+    settingsHooks.onMenuShown();
+  }
+}
 
 export function showNotReadyModal() {
   const modal = document.getElementById('not-ready-modal');
@@ -111,12 +134,13 @@ export async function syncSettings(partial) {
  * Wire menu close, backdrop, speed/font buttons, and logout confirm.
  * Safe to call once per page. A second call refreshes hooks but does not
  * add another listener (the mobile double-logout bug).
- * @param {{ getSupabase?: function, hideMenuSettings?: function, logout?: function }} [hooks]
+ * @param {{ getSupabase?: function, hideMenuSettings?: function, logout?: function, onMenuShown?: function }} [hooks]
  */
 export function initMenuSettings(hooks = {}) {
   if (hooks.getSupabase) settingsHooks.getSupabase = hooks.getSupabase;
   if (hooks.hideMenuSettings) settingsHooks.hideMenuSettings = hooks.hideMenuSettings;
   if (hooks.logout) settingsHooks.logout = hooks.logout;
+  if (hooks.onMenuShown) settingsHooks.onMenuShown = hooks.onMenuShown;
   if (menuWired) return;
   menuWired = true;
 

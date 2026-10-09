@@ -12,6 +12,7 @@
 
 import { supabaseClient } from '../js/utils.js';
 import { persistRefreshCookie } from './session.js';
+import { showMessage, signInWithProvider } from './auth-helpers.js';
 
 // Supabase client instance (initialized via shared utils)
 let supabase;
@@ -27,16 +28,6 @@ function initSupabase() {
     // Check if already logged in (e.g., refresh from previous session)
     checkExistingSession();
   }
-}
-
-/**
- * Return the correct town URL for the current device.
- */
-function getTownUrl() {
-  var ua = navigator.userAgent;
-  var isPhone = /Mobi|Android|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
-  var isSmall = window.innerWidth < 768;
-  return (isPhone || isSmall) ? '/mobile' : '/game';
 }
 
 /**
@@ -57,65 +48,10 @@ async function checkExistingSession() {
           console.error('Failed to persist session cookie:', err);
         }
       }
-      window.location.href = getTownUrl();
+      window.location.href = window.getTownUrl();
     }
   } catch (error) {
     console.error('Session check error:', error);
-  }
-}
-
-/**
- * Display an authentication message (success or error) to the user.
- * @param {string} text - The message to display
- * @param {string} type - 'success' or 'error'
- */
-function showMessage(text, type = 'success') {
-  const msgEl = document.getElementById('auth-message');
-  msgEl.textContent = text;
-  msgEl.className = `auth-message ${type}`;
-  msgEl.style.display = 'block';
-
-  // Auto-hide success messages after 4 seconds
-  if (type === 'success') {
-    setTimeout(() => {
-      msgEl.style.display = 'none';
-    }, 4000);
-  }
-}
-
-/**
- * Sign in using an OAuth provider (Google or GitHub).
- * Redirects to the provider's authentication page, then returns to the game page.
- * @param {string} provider - The OAuth provider: 'google' or 'github'
- */
-async function signInWithProvider(provider) {
-  if (!supabase) {
-    console.error('Supabase not initialized');
-    return showMessage('Authentication service not available. Please refresh the page.', 'error');
-  }
-
-  try {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: provider,
-      options: {
-        redirectTo: window.location.origin + getTownUrl(),
-      }
-    });
-
-    if (error) {
-      console.error(`${provider} OAuth error:`, error);
-      return showMessage(`${provider} login failed: ${error.message}`, 'error');
-    }
-    // In PKCE flow, signInWithOAuth returns a URL — we must navigate to it manually
-    // Without this, no redirect happens and the page "just sits there"
-    if (data && data.url) {
-      window.location.href = data.url;
-    }
-    // If no URL returned, signInWithOAuth didn't succeed — the error path
-    // above handles error cases
-  } catch (err) {
-    console.error(`${provider} OAuth exception:`, err);
-    showMessage(`${provider} login error: ${err.message}`, 'error');
   }
 }
 
@@ -154,7 +90,7 @@ async function signInWithEmail() {
           console.error('Failed to persist session cookie:', err);
         }
       }
-      window.location.href = getTownUrl();
+      window.location.href = window.getTownUrl();
     }
   } catch (err) {
     console.error('Login exception:', err);
@@ -246,8 +182,18 @@ async function sendResetEmail() {
 
 // --- DOM ready: attach event listeners after DOM is parsed ---
 document.addEventListener('DOMContentLoaded', () => {
-  document.getElementById('google-login-btn').addEventListener('click', () => signInWithProvider('google'));
-  document.getElementById('github-login-btn').addEventListener('click', () => signInWithProvider('github'));
+  document.getElementById('google-login-btn').addEventListener('click', () => {
+    signInWithProvider(supabase, 'google', {
+      redirectTo: window.location.origin + window.getTownUrl(),
+      showMessage,
+    });
+  });
+  document.getElementById('github-login-btn').addEventListener('click', () => {
+    signInWithProvider(supabase, 'github', {
+      redirectTo: window.location.origin + window.getTownUrl(),
+      showMessage,
+    });
+  });
   document.getElementById('email-login-btn').addEventListener('click', signInWithEmail);
   document.getElementById('reset-link').addEventListener('click', sendResetEmail);
 

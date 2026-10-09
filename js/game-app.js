@@ -17,15 +17,11 @@
 
 import { supabaseClient } from '../js/utils.js';
 import {
-  ensureSession,
-  fillHudName,
-  redirectIfActiveRun,
-  loadServerSettings,
-  logout as sessionLogout,
+  bootstrapTownSession,
+  logout,
 } from './session.js';
 import {
-  showNotReadyModal, highlightSpeedButtons, highlightFontButtons,
-  highlightUxButtons, highlightShakeButtons, initMenuSettings,
+  showNotReadyModal, showMenuSettings, initMenuSettings,
 } from './settings-menu.js';
 
 // === SUPABASE CONFIGURATION ===
@@ -169,24 +165,6 @@ function isMenuSettingsOpen() {
   return modal ? !modal.hidden : false;
 }
 
-function showMenuSettings() {
-  const modal = document.getElementById('menu-settings-modal');
-  if (modal) {
-    // Reset confirmation dialog in case it was left open
-    const confirm = document.getElementById('logout-confirm-dialog');
-    if (confirm) confirm.hidden = true;
-    modal.hidden = false;
-    // Highlight the currently active speed & font buttons
-    highlightSpeedButtons();
-    highlightFontButtons();
-    highlightUxButtons();
-    highlightShakeButtons();
-    // Reset keyboard focus index to the first speed button
-    menuFocusIndex = 0;
-    updateMenuFocus();
-  }
-}
-
 function hideMenuSettings() {
   const modal = document.getElementById('menu-settings-modal');
   if (modal) modal.hidden = true;
@@ -288,7 +266,8 @@ function resetBackground() {
 
 /**
  * Initialize the game page.
- * Session bootstrap (PKCE, cookie restore, fail-closed /login) is ensureSession.
+ * Session bootstrap (PKCE, cookie restore, fail-closed /login, hud name,
+ * active-run bounce, settings) is bootstrapTownSession.
  * This function keeps the shared client for logout, then only town wiring.
  */
 async function initGame() {
@@ -299,20 +278,8 @@ async function initGame() {
     supabase = supabaseClient();
   }
 
-  const session = await ensureSession({ redirectTo: '/login' });
+  const session = await bootstrapTownSession({ redirectTo: '/login' });
   if (!session) return;
-
-  // PC-52: fill hud-name from session (front-end only, placeholder dock)
-  fillHudName(session);
-
-  // PC-50r: auto-resume into active run (never show town to a player with an active run)
-  // Fetch failure is soft (console + continue to town) — a redirect loop is worse.
-  if (await redirectIfActiveRun(session.access_token)) return;
-
-  // Load persisted settings from the server into localStorage
-  // This runs asynchronously — the game doesn't block on it.
-  // If it fails, localStorage already has the user's last-known values.
-  loadServerSettings(session.access_token);
 
   // Initialize the game canvas context (placeholder for future rendering)
   // No placeholder text drawn — the canvas is ready for arena battle rendering
@@ -325,22 +292,12 @@ async function initGame() {
   panToLocation(0);
 
   // Event listener bindings (no inline onclick handlers)
-  document.getElementById('logout-btn')?.addEventListener('click', logout);
+  document.getElementById('logout-btn')?.addEventListener('click', () => logout(supabase));
 
   // Click anywhere on the "not ready" modal dismisses it
   document.getElementById('not-ready-modal')?.addEventListener('click', hideNotReadyModal);
   // Explicit close (×) button
   document.getElementById('not-ready-close')?.addEventListener('click', hideNotReadyModal);
-}
-
-/**
- * Log out the current user.
- * Clears the Supabase session and the HttpOnly session cookie, then
- * redirects back to the login page. Body lives in session.js; this
- * wrapper closes over the page's shared client.
- */
-function logout() {
-  return sessionLogout(supabase);
 }
 
 // === ONBOARDING TUTORIAL (PC-11) ===
@@ -432,7 +389,11 @@ document.addEventListener('DOMContentLoaded', () => {
   initMenuSettings({
     getSupabase: () => supabase,
     hideMenuSettings,
-    logout,
+    logout: () => logout(supabase),
+    onMenuShown() {
+      menuFocusIndex = 0;
+      updateMenuFocus();
+    },
   });
 
   // Re-pan on resize to account for aspect ratio changes

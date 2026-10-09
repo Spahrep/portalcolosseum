@@ -7,7 +7,8 @@
  */
 
 import { supabaseClient } from '../js/utils.js';
-import { persistRefreshCookie } from './session.js';
+import { persistRefreshCookie, logout } from './session.js';
+import { signInWithProvider } from './auth-helpers.js';
 
 // === SUPABASE CONFIGURATION ===
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
@@ -113,23 +114,15 @@ function showDashboard() {
 }
 
 function setupOAuthButtons() {
+  const redirectTo = window.location.origin + '/admin';
   document.getElementById('google-login-btn')?.addEventListener('click', () => {
-    supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: { redirectTo: window.location.origin + '/admin' },
-    });
+    signInWithProvider(supabase, 'google', { redirectTo });
   });
   document.getElementById('github-login-btn')?.addEventListener('click', () => {
-    supabase.auth.signInWithOAuth({
-      provider: 'github',
-      options: { redirectTo: window.location.origin + '/admin' },
-    });
+    signInWithProvider(supabase, 'github', { redirectTo });
   });
-  document.getElementById('logout-btn')?.addEventListener('click', async () => {
-    await supabase.auth.signOut();
-    try { await fetch('/api/session', { method: 'DELETE', credentials: 'include' }); } catch {}
-    localStorage.removeItem('supabase.auth.token');
-    window.location.reload();
+  document.getElementById('logout-btn')?.addEventListener('click', () => {
+    logout(supabase);
   });
 }
 

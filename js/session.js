@@ -186,6 +186,25 @@ export async function loadServerSettings(tokenForHeader) {
 }
 
 /**
+ * Town and mobile shared bootstrap: session, hud name, active-run bounce,
+ * settings fetch. Callers assign supabaseClient() before awaiting this so
+ * logout can see the client while these awaits are in flight.
+ * Returns the session, or null when the caller should stop (no session, or
+ * already redirected into an active run).
+ * loadServerSettings is not awaited — same as the old inline calls.
+ * @param {{ redirectTo?: string }} [opts]
+ * @returns {Promise<object|null>}
+ */
+export async function bootstrapTownSession({ redirectTo = '/login' } = {}) {
+  const session = await ensureSession({ redirectTo });
+  if (!session) return null;
+  fillHudName(session);
+  if (await redirectIfActiveRun(session.access_token)) return null;
+  loadServerSettings(session.access_token);
+  return session;
+}
+
+/**
  * Log out: signOut (soft), DELETE the HttpOnly cookie (soft), clear the
  * PKCE localStorage key, redirect to /login.
  * @param {object|null|undefined} supabase the shared client the page holds

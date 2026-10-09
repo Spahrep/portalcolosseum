@@ -9,6 +9,7 @@
  */
 
 import { supabaseClient } from '../js/utils.js';
+import { showMessage, validatePassword } from './auth-helpers.js';
 
 
 let supabase;
@@ -31,38 +32,6 @@ let supabase;
  */
 function initSupabase() {
   supabase = supabaseClient();
-}
-
-/**
- * Display a message (success or error) to the user.
- * @param {string} text - The message to display
- * @param {string} type - 'success' or 'error'
- */
-function showMessage(text, type = 'success') {
-  const msgEl = document.getElementById('auth-message');
-  if (msgEl) {
-    msgEl.textContent = text;
-    msgEl.className = `auth-message ${type}`;
-    msgEl.style.display = 'block';
-    if (type === 'success') {
-      setTimeout(() => {
-        msgEl.style.display = 'none';
-      }, 4000);
-    }
-  }
-}
-
-/**
- * Validate the new password.
- * Policy: at least 8 characters.
- * @returns {object} { valid: bool, errors: string[] }
- */
-function validatePassword(password) {
-  const errors = [];
-  if (password.length < 8) {
-    errors.push(`Password must be at least 8 characters (currently ${password.length}).`);
-  }
-  return { valid: errors.length === 0, errors };
 }
 
 /**

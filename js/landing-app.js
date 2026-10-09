@@ -10,24 +10,10 @@
  *     → on success, redirects to /signup (with key in sessionStorage for signup-app.js)
  *     → on failure, shows error message
  *
- * This is an external script (not inline) to comply with CSP.
+ * This is an external module (not inline) to comply with CSP.
  */
 
-/**
- * Build the invite-verify Edge Function URL from window.ENV.SUPABASE_URL,
- * which /api/env.js injects at runtime. The project ref is deliberately not
- * hardcoded here: this file is a static asset, and baking the ref in would
- * mean a source edit (and a redeploy) to point at a different project.
- * Returns null if the environment config never loaded.
- */
-function getInviteVerifyUrl() {
-  const baseUrl = (window.ENV && window.ENV.SUPABASE_URL) || '';
-  if (!baseUrl) {
-    console.error('[landing-app] Missing window.ENV.SUPABASE_URL — is /api/env.js loaded?');
-    return null;
-  }
-  return `${baseUrl.replace(/\/+$/, '')}/functions/v1/invite-verify`;
-}
+import { getInviteVerifyUrl, verifyInviteKey } from './auth-helpers.js';
 
 // DOM elements
 const registerBtn = document.getElementById('register-btn');
@@ -86,19 +72,10 @@ if (inviteSubmitBtn) {
     inviteSubmitBtn.textContent = 'Verifying...';
 
     try {
-      const response = await fetch(inviteVerifyUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ key }),
-      });
-
-      const result = await response.json();
+      const result = await verifyInviteKey(key);
 
       if (result.valid) {
-        // Store the validated key so signup-app.js can display it
-        sessionStorage.setItem('invite_key', key);
+        // invite_key is stored by verifyInviteKey
         // Redirect to signup page
         window.location.href = '/signup';
       } else {

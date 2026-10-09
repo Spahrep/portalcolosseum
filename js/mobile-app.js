@@ -1,14 +1,10 @@
 import { supabaseClient } from '../js/utils.js';
 import {
-  ensureSession,
-  fillHudName,
-  redirectIfActiveRun,
-  loadServerSettings,
-  logout as sessionLogout,
+  bootstrapTownSession,
+  logout,
 } from './session.js';
 import {
-  showNotReadyModal, highlightSpeedButtons, highlightFontButtons,
-  highlightUxButtons, highlightShakeButtons, initMenuSettings,
+  showNotReadyModal, showMenuSettings, initMenuSettings,
 } from './settings-menu.js';
 
 // === SUPABASE CONFIGURATION ===
@@ -25,17 +21,8 @@ async function initGame() {
     supabase = supabaseClient();
   }
 
-  const session = await ensureSession({ redirectTo: '/login' });
+  const session = await bootstrapTownSession({ redirectTo: '/login' });
   if (!session) return;
-
-  // Fill hud-name from session
-  fillHudName(session);
-
-  // Active run check — fetch failure is soft
-  if (await redirectIfActiveRun(session.access_token)) return;
-
-  // Load persisted settings from the server (not awaited)
-  loadServerSettings(session.access_token);
 
   // Button wiring
   document.getElementById('btn-portal')?.addEventListener('click', () => {
@@ -55,28 +42,10 @@ async function initGame() {
   document.getElementById('not-ready-close')?.addEventListener('click', hideNotReadyModal);
 }
 
-function logout() {
-  return sessionLogout(supabase);
-}
-
 // === NOT-READY MODAL (mobile simplified - no location marker clearing) ===
 function hideNotReadyModal() {
   const modal = document.getElementById('not-ready-modal');
   if (modal) modal.hidden = true;
-}
-
-// === MENU / SETTINGS (mobile simplified - no keyboard nav) ===
-function showMenuSettings() {
-  const modal = document.getElementById('menu-settings-modal');
-  if (modal) {
-    const confirm = document.getElementById('logout-confirm-dialog');
-    if (confirm) confirm.hidden = true;
-    modal.hidden = false;
-    highlightSpeedButtons();
-    highlightFontButtons();
-    highlightUxButtons();
-    highlightShakeButtons();
-  }
 }
 
 function hideMenuSettings() {
@@ -89,6 +58,6 @@ document.addEventListener('DOMContentLoaded', () => {
   initMenuSettings({
     getSupabase: () => supabase,
     hideMenuSettings,
-    logout,
+    logout: () => logout(supabase),
   });
 });
