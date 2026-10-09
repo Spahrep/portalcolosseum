@@ -237,7 +237,7 @@ export function renderQueue(bs, fill = false, onDone = null) {
   // Move a node only if its engine slot actually changed. Prefer the non-exiting
   // node when a departing same-key row is still in the DOM.
   const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
-  const newKeys = queue.map(queueRowKey);
+  // newKeys is already declared at function scope above (fast-path check) — reuse it.
   if (domKeys.size === newKeys.length && newKeys.every(k => domKeys.has(k))) {
     const monsters = bs.monsters || [];
     const nonRows = Array.from(el.children).filter(c => !c.classList.contains('queue-row'));
