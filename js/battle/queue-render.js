@@ -202,25 +202,30 @@ export function renderQueue(bs, fill = false, onDone = null) {
   const el = document.getElementById('queue');
   if (!el) return;
   // Same rows in the same engine order: rewrite readouts in place. Never rebuild
-  // and never move nodes — a tick must not re-slide rows that did not change slot.
-  const queue = bs.queue || [];
-  const currentRows = Array.from(el.querySelectorAll('.queue-row'));
-  const currentIds = currentRows.map(r => r.dataset.rowId);
-  const newIds = queue.map(r => r.id);
-  if (currentIds.length === newIds.length && currentIds.every((id, i) => id === newIds[i])) {
-    const monsters = bs.monsters || [];
-    queue.forEach((row, index) => {
-      updateQueueRowInPlace(currentRows[index], row, monsters, bs, index);
-    });
-    const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
-    if (titleEl) titleEl.textContent = 'Action Queue';
-    if (fill && onDone) {
-      const rows = Math.max(queue.length, 1);
-      setTimeout(onDone, (rows - 1) * dur('queueFillStagger') + dur('queueFill'));
+    // and never move nodes — a tick must not re-slide rows that did not change slot.
+    // Compare STABLE KEYS, not raw ids: hand rows regenerate their id every tick
+    // (fresh randomUUID in commitNewRow), so an id comparison always fails for
+    // hands and forces the node-moving branch below — which kills the FLIP glide
+    // and flickers the tic readout. Stable keys (h:LH / h:RH / m:<label>) survive
+    // id regeneration, so they are the correct "same row, same order" test.
+    const queue = bs.queue || [];
+    const currentRows = Array.from(el.querySelectorAll('.queue-row'));
+    const currentKeys = currentRows.map(r => r.dataset.stableKey);
+    const newKeys = queue.map(queueRowKey);
+    if (currentKeys.length === newKeys.length && currentKeys.every((k, i) => k === newKeys[i])) {
+      const monsters = bs.monsters || [];
+      queue.forEach((row, index) => {
+        updateQueueRowInPlace(currentRows[index], row, monsters, bs, index);
+      });
+      const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
+      if (titleEl) titleEl.textContent = 'Action Queue';
+      if (fill && onDone) {
+        const rows = Math.max(queue.length, 1);
+        setTimeout(onDone, (rows - 1) * dur('queueFillStagger') + dur('queueFill'));
+      }
+      paintPredictionBar(el);
+      return;
     }
-    paintPredictionBar(el);
-    return;
-  }
   // Stable-key successor (hand phase, monster winding↔impact↔cooldown): relabel the
   // existing node. A phase change gets queue-row-enter / queue-row-monster-enter
   // inside updateQueueRowInPlace — never rebuild the queue to animate it.

@@ -261,6 +261,23 @@ describe('Master clock visual fidelity (client contract)', () => {
         'the landing guard specifically targets a ready successor');
     });
 
+    it('renderQueue fast path compares STABLE KEYS, not raw ids (no node move on tic)', () => {
+      // Hand rows regenerate their id every tick (fresh randomUUID in
+      // commitNewRow), so an id-based fast-path comparison always fails for
+      // hands and forces the node-moving branch — which kills the FLIP glide
+      // and flickers the tic readout. The fast path must compare stable keys
+      // (h:LH / h:RH / m:<label>) so a same-order tick updates in place and
+      // never moves a node (Spahrep live bug 2026-10-09).
+      const queueRender = read('js/battle/queue-render.js');
+      const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
+      assert.match(render, /currentKeys\.every\(/,
+        'fast path compares stable keys');
+      assert.ok(render.indexOf('currentKeys') < render.indexOf('insertBefore'),
+        'the stable-key fast path returns before any node move');
+      assert.ok(render.indexOf('queueRowKey') >= 0,
+        'fast path derives keys via queueRowKey');
+    });
+
     it('PC-118: renderQueue defensively drops a duplicate stable-key node', () => {
       const queueRender = read('js/battle/queue-render.js');
       const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
