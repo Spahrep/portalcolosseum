@@ -66,6 +66,15 @@ How work fits without spilling context — applies to Hermes, Grok, Claude, ALL 
    but the protocol above is the immediate fix — do it first, split later.
    Before grepping source for a symbol, check CODEMAP.md (repo root) —
    the generated file:line index (regenerate with `npm run codemap`).
+8. **Start every lookup at the indexes, never the source/docs tree.**
+   - Docs: open `llms.txt` (repo root) FIRST — it is the link index of the
+     docs map. Load the ONE mechanic doc it points to for the task. Do NOT
+     read the docs tree or `find docs` — it is ~149k tokens and will blow
+     the window. `DOCS.md` is the fuller read-order + skip list.
+   - Code symbols: grep `CODEMAP.md` (repo root) for the symbol's file:line.
+     Do NOT grep source files to locate symbols.
+   - Decisions: grep `docs/pending-decisions.md` by PC-DEC-### ID only;
+     do not read it whole.
 
 Full brief template + worked example: `portal-colosseum-agent-team` skill →
 `references/context-budget-discipline.md`.
