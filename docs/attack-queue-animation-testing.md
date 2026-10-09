@@ -1,4 +1,10 @@
-# Attack Queue Animation Testing
+# Attack Queue Animation — Testing Checklist
+
+> **⚠️ NOTE (2026-10-09):** The "successor replace / no pop, no regenerate" framing below is
+> **superseded**. The locked model is remove + insert on every transition (new box in, old box
+> out, exit last), with two text-only relabel cases (tic countdown, monster
+> recovering→preparing-to-attack). See `docs/action-queue-visual-choreography.md`. The timing
+> and label checks below are unchanged.
 
 **Purpose:** Define exactly what to check when visually testing the Action Queue rendering and animations during combat. Not a smoke test — this is the dedicated checklist for queue-specific behavior, run after any queue rendering or animation changes.
 

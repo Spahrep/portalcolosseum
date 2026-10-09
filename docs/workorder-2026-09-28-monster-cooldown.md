@@ -1,5 +1,11 @@
 # Workorder — Monster Cooldown Lifecycle (option A: strict player-mirror)
 
+> **⚠️ NOTE (2026-10-09):** The "silent pop / successor-replace / stable key" framing in
+> this workorder is **superseded**. The locked model is remove + insert on every
+> transition (new box in, old box out), with the single monster relabel exception
+> ("recovering" → "preparing to attack" in place at the top). See
+> `docs/action-queue-visual-choreography.md`. The engine formulas below are unchanged.
+
 **Date:** 2026-09-28
 **Author:** Hermes (foreman)
 **Builder:** Grok (via delegate_task)

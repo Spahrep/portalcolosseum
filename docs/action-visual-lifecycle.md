@@ -8,7 +8,7 @@
 
 ## Core Rules
 
-1. **Only one event is ever processed at a time.** The Master Clock peeks the front of the queue, processes that single item (all sub-actions, rolls, narration, visuals), pops it off, then moves to the next. No batching. No back-to-back processing before the first item is done.
+1. **Only one event is ever processed at a time.** The Master Clock peeks the front of the queue, processes that single item (all sub-actions, rolls, narration, visuals), then moves to the next. No batching. No back-to-back processing before the first item is done.
 
 2. **Every event HAS UX.** Typewriter text, screen shake, health bar sparkles, damage numbers — nothing happens silently. Even buff expiry writes "X buff expired" on the typewriter.
 
@@ -17,6 +17,16 @@
 4. **Tics are the insert-time ordering key, not a display-only label.** Each new row is spliced into its correct position ONCE at insert — a linked-list insert, not a sort (`addEvent` → `orderedInsertIndex`, `js/combat/tic-queue.js:34-52`). The array is never globally re-sorted after that, and it is not a sorted structure by tics — position is fixed at insert time and never reordered. Head is `queue[0]`; ready rows are not skipped (`tic-queue.js:56-59`). Same-tic ties: status/buff/expiry first, then other events, then `ready`; within a category, LH before RH before monsters (`tic-queue.js:14-31`).
 
    **Superseded (do not reapply):** "tics are display-only; insertion order drives; no global sort; no re-ordering." That wording (this rule, §7, §10, and the Glossary `Tic` entry) described FIFO append. It is superseded by the sorted-insert contract in `docs/workorder-2026-09-28-queue-sorted-insert.md`. The contradictory FIFO workorder `docs/workorder-2026-09-28-queue-insertion-order.md` does not match the shipped engine. A global re-sort on every peek/remove is also not what ships — order is fixed at insert.
+
+5. **Remove + insert, every transition** (Spahrep, 2026-10-09). A box gets to the top, it is
+   processed, a NEW box is inserted (new entry, fresh id, at its queue position), and the old
+   box is removed. The exit is the LAST action of the processed item. No morphing, no
+   re-insertion, no shared DOM node pretending to be the same entry.
+
+6. **The only text-only relabel cases** (box holds position, text swaps in place):
+   - Tic countdown updates (33 → 23).
+   - Monster "recovering" → "preparing to attack" when the cooldown row reaches the top.
+   Everything else that changes text is a new entry (new box) replacing an old one.
 
 ---
 
@@ -35,7 +45,10 @@ MasterClock.start():
     animateItem(event)               // effects, health bar, shake, sparkles
     await BOTH finish                // typewriter + visuals both must complete
     
-    removeHead()                     // silent pop the processed item — done
+    removeHead()                     // the processed item's exit is the LAST action,
+                                     // after the successor has been inserted and slid in.
+                                     // (The engine removes first so the insert lands clean;
+                                     // the VISUAL exit always plays last.)
     
     if (player hand is Ready):       // player's turn
       showActionMenu()
@@ -47,7 +60,9 @@ MasterClock.start():
     // otherwise → loop, next item at front of queue surfaces
 ```
 
-**Key rule:** peek → process (all sub-actions) → remove. Only then does the next item surface.
+**Key rule:** peek → process (all sub-actions) → insert successor → remove. The
+successor is inserted FIRST, the old item's exit is the LAST action. Only then does
+the next item surface.
 
 ---
 
@@ -205,7 +220,7 @@ Option A (Spahrep 2026-09-28) still holds: `mon.speed` is added into both the pr
 **When the `winding` row fires** (`engine.js:312-314`):
 
 1. Insert an `impact` row at 0 tics and carry the strike (name, damage, accuracy, crit, `cooldownTicks`). No damage roll here.
-2. **Remove** the `winding` item. The impact stays a same-key successor (`m:<label>`).
+2. **Remove** the `winding` item (exit is the last action, after the impact row has slid in).
 
 **When the `impact` row fires** (`resolveMonsterImpact`, `engine.js:266-302`):
 
@@ -218,14 +233,19 @@ Option A (Spahrep 2026-09-28) still holds: `mon.speed` is added into both the pr
    - **Typewriter:** "<Monster> <attackName> hits you for N damage!" (or "misses" / "CRITICAL!")
    - **Visuals:** Damage numbers on player, health bar depletion, shake/hit feedback
 3. If still alive: insert a `cooldown` successor at the stored `cooldownTicks` (`engine.js:296-301`). Label on the rail: "<Monster name> recovering".
-4. **Remove** the `impact` item (silent pop — no exit slide). The cooldown stays a same-key successor (`m:<label>`), so the node stays in the DOM and `renderQueue` relabels it in place.
+4. **Remove** the `impact` item (exit is the last action — the box slides out on the animated
+   path). The cooldown row is a new entry that slides in at its position; remove + insert per
+   the core rule.
 5. **Master Clock ticks** → next item.
 
 **When the `cooldown` row fires** (`engine.js:310-311`):
 
 1. `queueNextMonsterAttack` selects the next attack and inserts a new `winding` row (same formula as Phase 1).
 2. Feed: "<Monster> prepares a <attackName>..."
-3. **Remove** the cooldown item (silent pop — no exit slide). The next `winding` stays a same-key successor (`m:<label>`), so the node stays in the DOM and `renderQueue` relabels it in place.
+3. **Remove** the cooldown item (exit is the last action — the box slides out on the animated
+   path). The next `winding` is a new entry that slides in at its position; remove + insert per
+   the core rule. (The one monster relabel — "recovering" → "preparing to attack" — happens when
+   the cooldown row reaches the top, as a text-only swap, not a slide.)
 4. **Master Clock ticks** → next item.
 
 Last strike of a dead monster inserts no cooldown (`engine.js:296`). Death still cancels every queued row for that monster (PC-DEC-054).
@@ -335,7 +355,8 @@ MasterClock.tick():
   ├─ typewriter.print(narration) — char by char + animateItem(effects)
   │   → Await BOTH to complete
   │
-  ├─ removeHead() — silent pop the processed item — done
+  ├─ removeHead() — the processed item's exit is the LAST action (after the
+  │   successor has been inserted and its entry animation has played)
   │
   ├─ Check triggers:
   │   ├─ If player hand is Ready → show command menu, PAUSE
@@ -409,7 +430,9 @@ On reload, `loadState()` restores queue + state. Master Clock starts fresh. No p
 - **Master Clock:** The loop on the server that drives the combat sequence. One tick = one queue item processed end-to-end: peek → process (rolls, math, narration, visuals) → remove.
 - **peekHead:** Look at the item at the front of the queue without removing it. This is how the Master Clock sees what needs to process next.
 - **process:** Resolve the item's event type (roll accuracy, apply damage, pick monster attack, apply buff, etc.). Happens after peek, before removal.
-- **removeHead:** Pop the processed item off the front of the queue. Only called AFTER all sub-actions (narration, visuals) are complete.
+- **removeHead:** The processed item's exit — always the LAST action of its processing,
+  after the successor entry has been inserted and slid in. On the animated path the box
+  slides out; only the instant/reduced-motion path removes it silently.
 - **Sub-action:** A single step within an item's processing (e.g., "typewriter narrates", "AI picks attack", "remove item"). Some can run in parallel (typewriter + screen shake), some must be sequential.
 - **UI Action Queue:** The visual rendering of the engine's queue on screen. The front item is "currently happening" — its sub-actions are executing.
 - **Ready token:** A player-hand `ready` event row. Indicates that hand's turn. Surfaces when that hand's cooldown or recovery completes (`js/combat/engine.js:172-176`). Monsters do not get a `ready` row.

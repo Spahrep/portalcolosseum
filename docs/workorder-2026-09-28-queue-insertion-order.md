@@ -1,5 +1,11 @@
 # Workorder — Queue becomes a true insertion-ordered linked list (no sort, tics display-only)
 
+> **⚠️ NOTE (2026-10-09):** The "stable-key renderer" and "one row per hand via `h:LH`/`h:RH`"
+> mechanisms described in these workorders are **superseded**. The locked model is remove + insert
+> on every transition (new box in, old box out) — no shared DOM node. See
+> `docs/action-queue-visual-choreography.md`. These workorders are kept for their
+> tics-sort/ordering content, which is unchanged.
+>
 > **SUPERSEDED — do not implement.** The shipped engine splices each new row into tics-ascending position once at insert (`orderedInsertIndex`, `js/combat/tic-queue.js:32-50`). This FIFO contract contradicts that code and `docs/workorder-2026-09-28-queue-sorted-insert.md`. Kept as the rejected spec. PC-103.
 
 **Author:** Hermes (overseer)

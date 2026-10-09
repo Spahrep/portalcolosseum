@@ -1,7 +1,16 @@
 # Action Queue — Code Audit Against the Visual Choreography Rules
 
+> **⚠️ SUPERSEDED MODEL (2026-10-09).** This audit was run against the OLD invariants,
+> which included "R4: boxes are never regenerated (nodes reused)" and stable-key
+> in-place relabeling as the correct behavior. **Spahrep has since locked the opposite:
+> every transition is remove + insert — no shared DOM node, no in-place relabel except
+> the two text-only cases (tic countdown, monster recovering→preparing-to-attack).**
+> The current authoritative spec is `docs/action-queue-visual-choreography.md`. This
+> document is kept as a historical record of the audit; do NOT use its R3/R4 framing
+> as the design contract.
+
 **Date:** 2026-10-09
-**Audited against:** `docs/action-queue-visual-choreography.md` — the four invariants:
+**Audited against:** `docs/action-queue-visual-choreography.md` (pre-2026-10-09 version) — the four invariants:
 1. **R1** One event at a time (no batch visuals).
 2. **R2** Rows that didn't change slot never move.
 3. **R3** No box ever appears/disappears/holds-still — every entrance slides in, every exit slides out.

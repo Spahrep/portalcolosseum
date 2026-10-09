@@ -173,7 +173,7 @@ Trigger: Returning to a battle mid-fight (page reload or resume). All existing q
 ## 4. Edge Cases
 
 ### Row at top of queue (current item)
-The processed head stays pinned (`.queue-row-current`) while its typewriter line and hit/death visuals run. Both are awaited before removal. When narration + visuals finish, the head **slides out** (`queue-row-exit`) — no box is ever popped silently. A same-key successor (hand winding→impact→cooldown→ready, monster winding→impact→cooldown) is the same logical row (`h:LH` / `m:<label>`): the DOM node is reused, slid out, relabeled, and slid back in — the box always slides, and is never regenerated. Genuine **non-head** removals also slide out and group-lift. See `docs/action-queue-visual-choreography.md` (authoritative).
+The processed head stays pinned (`.queue-row-current`) while its typewriter line and hit/death visuals run. Both are awaited before removal. When narration + visuals finish, the successor entry (new id, at its queue position) slides in, then the head **slides out** (`queue-row-exit`) — the exit is the last action of its processing. Every phase transition is remove + insert: new box in, old box out. See `docs/action-queue-visual-choreography.md` (authoritative).
 
 ### Multiple rows inserted simultaneously
 Each row follows the 5-stage sequence independently. The spacer grows for each row sequentially. Avoid batching — the queue processes one item at a time per the Master Clock model (`action-visual-lifecycle.md §1`).
@@ -195,7 +195,7 @@ When charMs=0 and lineDelayMs=0 (Instant preset), skip all 5 insert stages. Inse
 | Stage 3: Bar grows in | ✅ Done | `.queue-insert-bar.wipe` / `queue-insert-wipe` (width 0→100%, 250ms). |
 | Stage 4: Flash | ✅ Done | `.queue-insert-bar.flash` / `insert-flash` (150ms), `waitForEvent(animationend)` |
 | Stage 5: Row appears | ✅ Done | gap replaced by `.queue-row-enter` / `.queue-row-monster-enter`, `waitForEvent` |
-| Exit animation | ✅ Done | Every box slides. Fired head + same-key successor: node reused, slid out, relabeled, slid in. Non-head: `runQueueRemoval()` + `.queue-row-exit` + group-lift. |
+| Exit animation | ✅ Done | Every box slides. Fired head: successor (new entry) lands first, then the head slides out and siblings group-lift. Non-head: `runQueueRemoval()` + `.queue-row-exit` + group-lift. |
 | Staggered entry (resume) | ⚠️ Partial | Only on fresh battle load, skip on resume |
 | Hand-ready commit split | ✅ Done | `playCommitArrival()` — attack ceremony first, then ready row slides out, then `/tick` |
 | Master-clock order | ✅ Done | `tickLoop`: pin head → typewriter ∥ visuals → await both → slide-out/slide-in → ceremony → next `/tick` |

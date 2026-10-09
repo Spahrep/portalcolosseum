@@ -63,7 +63,7 @@ hand Ready → select potion → [pre tics] → EFFECT LANDS → [post tics] →
 3. **post** — hand still locked; the `recovery` successor row is inserted, tics = post. Buff runs during post.
 4. hand returns to `Ready`.
 
-Row lifecycle on the one-row-per-hand queue: `drinking → effect → recovery → (removed, hand Ready)`. Each transition is mechanically a **remove + a new insert** (the processed head is popped; the successor row is inserted at its tics-out) — NOT an in-place morph. The stable-key renderer animates the swap as "the same row transforming."
+Row lifecycle on the one-row-per-hand queue: `drinking → effect → recovery → (removed, hand Ready)`. Each transition is a remove + insert (Spahrep, 2026-10-09): the box gets to the top, it is processed, a NEW entry is inserted at its tics-out, and the old box is removed (exit last). No morphing, no shared DOM node.
 
 ### 6.2 Formula (documented placeholder — tuning knob)
 

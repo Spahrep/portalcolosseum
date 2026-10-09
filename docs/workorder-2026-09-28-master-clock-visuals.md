@@ -1,5 +1,11 @@
 # Workorder — Master Clock Visual Fidelity (A–H)
 
+> **⚠️ NOTE (2026-10-09):** The "head removal = silent pop after narration" framing below is
+> **superseded**. The locked model: the successor entry slides in FIRST, the processed box's
+> exit is the LAST action (it slides out on the animated path). See
+> `docs/action-queue-visual-choreography.md`. The head-pinning-during-narration rule below
+> is unchanged.
+
 **Date:** 2026-09-28
 **Author:** Hermes (foreman)
 **Builder:** Grok (via delegate_task)

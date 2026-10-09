@@ -12,23 +12,57 @@ Not the engine, not the API, not damage/balance.
 
 ---
 
+## The core rule (Spahrep, 2026-10-09)
+
+> A box gets to the top, it is processed, a new box is inserted, and then it is removed.
+> That is the ONLY way things work.
+
+Every queue transition has exactly that shape:
+
+```
+box reaches the top
+  → it is processed (rolls, narration, state changes)
+  → a NEW box is inserted (new entry, fresh id, at its queue position)
+  → the old box is removed (its exit is the LAST action)
+```
+
+A box is never morphed into another box. A box is never re-inserted. A box that
+reached the top and was processed is gone. If a new entry exists, it is a new box.
+Remove + insert. Every time.
+
+### The only text-only exceptions
+
+Exactly two cases change a box's text without any entry change. These are the ONLY
+relabel cases — nothing else relabels:
+
+1. **Tic countdown updates.** The box holds its position; only the number changes
+   (33 → 23). No slide, no re-position.
+2. **Monster "recovering" → "preparing to attack."** When a monster's cooldown row
+   reaches the top and the clock types the "prepares a <attack>..." narration, the
+   box holds its position and swaps its text to match the narration. Optional:
+   old text fades out, new text fades in. The box itself never moves.
+
+Any other text change is NOT a relabel — it is a new entry (new box) replacing an
+old one.
+
+---
+
 ## The invariants that never break
 
 1. **One event at a time.** The queue processes one row per Master Clock tick. The
    visuals never batch — a tick animates exactly one transition, then the next.
-2. **Rows that didn't change slot never move.** A plain countdown tick only updates the
-   tic number in place. Rows are never re-sorted, never re-slid, never rebuilt.
-3. **No box ever appears or disappears — boxes always slide.** A box that enters the
-   queue always slides in; a box that leaves always slides out. A box never jumps into
-   existence, never vanishes, and never has its contents swapped in place with no motion
-   (no "hold still / relabel silently"). This includes the same logical row changing phase
-   (winding→impact→cooldown→ready): the old phase slides out, the new phase slides in.
-4. **Boxes are never regenerated.** The DOM node is reused and its contents relabeled,
-   then animated — never destroyed and rebuilt. This is what prevents flicker while still
-   sliding. "Slide in/out" is the *visible* motion; "reuse the node" is the *implementation*
-   that makes that motion smooth.
-
-Everything below is a consequence of these rules.
+2. **Remove + insert, every transition.** A processed box's exit is the last action
+   of its processing. The new box (its successor, or a genuinely new entry) is
+   inserted BEFORE the old box is removed, so the successor claims its space first.
+3. **New box lands first, old box leaves last.** On any tick that both inserts and
+   removes: the insert completes (space grows, new box slides in), THEN the processed
+   box slides out, THEN the remaining boxes slide up as one continuous FLIP motion.
+   No jumping, no teleporting, no double-animation.
+4. **A box only moves when entries come and go.** A box whose text changed but whose
+   position didn't (the two relabel cases) never slides. A box that is genuinely
+   leaving or arriving always slides.
+5. **No box is ever popped silently** on the animated path (instant preset and
+   reduced-motion are the only silent paths, and they are correct by design).
 
 ---
 
@@ -76,8 +110,6 @@ target and commits.
   queue (`prediction-bar`), spanning the tic range where the selected attack will land.
 - The band is a preview only — it does not change the queue. It clears when the selection
   is cancelled or committed.
-- (The `>` timing markers are the simpler preview; the full band is the richer one. Both
-  are preview-only.)
 
 ### D. Commit → windup computed → space grows → new action slides in
 On commit, in this exact order:
@@ -91,11 +123,12 @@ On commit, in this exact order:
 
 ### E. The top element slides out
 - After the new row has fully settled in, the processed `ready` head **slides out to the
-   right** (`queue-row-exit`). It stays in flow while sliding (space not yet released).
+  right** (`queue-row-exit`). Its exit is the last action of its processing.
 
 ### F. The rest of the queue slides up
 - Once the ready head has fully exited, the rows below **glide up together** as one unit
-   (FLIP group-lift) to fill the vacated slot. No per-row stagger, no jump.
+  (FLIP group-lift) to fill the vacated slot. No per-row stagger, no jump — one continuous
+  motion.
 
 ### The exact order (memorize this)
 ```
@@ -112,27 +145,24 @@ the reverse. A same-tick removal must never suppress the insert ceremony.
 
 ---
 
-## Scenario 3 — Autonomous tick (winding → impact → cooldown)
+## Scenario 3 — Autonomous tick (winding → impact → cooldown → ready)
 
-**Trigger:** A non-ready head fires on its own (a hand's winding→impact→cooldown, a hand's
-cooldown→ready, or a monster's cooldown→winding→impact→cooldown).
+**Trigger:** A non-ready head fires on its own (a hand's winding→impact→cooldown→ready,
+a hand's cooldown→ready, or a monster's cooldown→winding→impact→cooldown).
 
 ### What happens
 1. The head is **pinned** at top while its narration types and its visuals play
    (`queue-row-current` — golden glow). It does NOT move during narration — the pin
    is a pause, not a "stays forever."
-2. When narration + visuals finish, the head **slides out** (`queue-row-exit`).
-3. Its **successor slides in** at the same position (`queue-row-enter` / `queue-row-monster-enter`).
-   Because it's the same logical row (`h:LH` / `m:<label>`), the same DOM node is reused —
-   slid out, relabeled, slid back in. This satisfies "always slide" AND "never regenerate."
-4. If the successor is a hand **ready** row (cooldown→ready): the cooldown box still slides
-   out and the ready box slides in — it does NOT hold still or silently relabel. Landing on
-   the player's turn is visually just another slide-out → slide-in; the pause is the clock
-   waiting, not the row frozen.
+2. When narration + visuals finish, the engine has already inserted the successor
+   (fresh id, at its queue position). The successor **slides in** at its position.
+3. The processed box **slides out** — its exit is the last action of its processing.
+4. If the successor is a hand **ready** row (cooldown→ready): the cooldown box slides
+   out and the ready box slides in. Landing on the player's turn is visually just
+   another slide-out → slide-in; the pause is the clock waiting, not a box holding still.
 
 ### Consistency rules
-- Every phase change slides: old phase out, new phase in. There is no "silent successor"
-  and no "holds still" exception.
+- Every phase change is a remove + insert. Old box out, new box in.
 - The pin-during-narration is a wait, not a freeze — the box always slides out after.
 - A genuine non-head removal (e.g. a cancelled row) slides out + the rest group-lifts.
 
@@ -145,14 +175,20 @@ Monsters have no `ready` row. Their cycle is `cooldown → winding → impact �
 ### What the player sees
 1. A monster `cooldown` row ("<Name> recovering") fires → the next `winding` row
    ("<Name>'s <Attack>") is inserted at its sorted position. It slides in via the same
-   insert ceremony (Scenario 2 D), or — as a same-key successor — slides out and the
-   winding box slides in.
-2. `winding` fires → `impact` row lands at tic 0 (same-key successor: slide out, slide in).
+   insert ceremony (Scenario 2 D).
+2. `winding` fires → `impact` row lands at tic 0 (new entry, slides in).
 3. `impact` fires → damage narration + visuals, then `cooldown` row inserted.
+
+### The one monster relabel
+When a monster's `cooldown` row reaches the top, the box holds its position and
+relabels "recovering" → "preparing to attack" as the typewriter types the
+"prepares a <attack>..." narration. Optional fade on the text swap. The box never
+moves for this relabel. (This is relabel case #2 above.)
 
 ### Consistency rules
 - Monster rows are name + tic only — no bar, no fill.
-- Monster phase changes are same-key successors (in-place), not slide-out + slide-in.
+- Every monster phase change is remove + insert. The cooldown→winding relabel is the
+  ONLY monster case where the box holds still and swaps text.
 
 ---
 
@@ -202,12 +238,12 @@ This is locked. The silent path is correct and must remain.
 
 - ❌ A box never appears instantly — every box that enters the queue slides in.
 - ❌ A box never disappears instantly — every box that leaves slides out.
-- ❌ A box never sits still while its contents change phase (no "hold still / silently
-  relabel"). The old phase slides out, the new phase slides in.
-- ❌ A box is never regenerated (destroyed + rebuilt) — nodes are reused and animated.
-- ❌ The queue is never globally re-sorted on screen.
-- ❌ Rows that didn't change slot never move, re-slide, or rebuild.
+- ❌ A box is never morphed into another box. Every transition is remove + insert.
+- ❌ A box never holds still while its contents change, EXCEPT the two relabel cases
+  (tic countdown, monster recovering→preparing-to-attack). Those are text-only.
+- ❌ A box never gets a new identity without being removed. A new entry is a new box.
 - ❌ The processed head never slides out BEFORE its successor slides in.
 - ❌ A plain countdown tick never animates (only the tic number updates in place).
 - ❌ The insert ceremony is never suppressed by a same-tick removal.
 - ❌ No timing bar / fill bar / %-complete bar on any row. The countdown is the tic number.
+- ❌ No shared DOM node pretending to be the same hand across two different entries.

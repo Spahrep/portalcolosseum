@@ -199,15 +199,14 @@ PC-70: 7b388a5 (flash on every roll tick) → 56be7e0 (keep natural repeats) →
 - The full **preview band** (Phase 1 above) is deferred to PMVP; its eventual
   coexistence with the ">" markers is not yet designed.
 
-## Player Hand Row (Per-Phase Successor, Rendered In Place)
+## Player Hand Row (Remove + Insert, No Shared Node)
 
 A hand's attack runs the master loop `Peek → Process → Cleanup → Remove` one row at a
-time. Each phase boundary **replaces the processed head with a new successor row**
-inserted at its tics-out — mechanically a remove + a new insert, **NOT an in-place
-morph**. There is no row "morphing." The UI shows one row per hand at a time because
-hand rows carry a stable key (`h:LH`/`h:RH`); the renderer animates the old row's
-removal + the new row's slide-in as one continuous transform, so it *looks* like the
-same row relabeling. That illusion is renderer-only.
+time. Each phase boundary is a remove + insert (Spahrep, 2026-10-09): the box gets to the
+top, it is processed, a NEW box is inserted at its tics-out, and the old box is removed
+(exit is the last action). There is no row "morphing" and no shared DOM node pretending to
+be the same hand across entries. The UI shows one row per hand at a time simply because a
+hand only ever has one active queue entry at a time.
 
 ```
 commit Slash (cast 4, cd 1)
@@ -217,9 +216,9 @@ commit Slash (cast 4, cd 1)
   (hits 0: cooldown row removed, command box lights gold — hand free)
 ```
 
-- The successor row is a **new queue entry** (fresh id) inserted by `Process`; the
-  processed head is popped by `Remove` last. The stable-key renderer is what makes the
-  swap read as "the same row changing."
+- Each phase is a **new queue entry** (fresh id) inserted by `Process`; the processed
+  head is removed LAST, after the new box has slid in. The visual choreography (insert
+  first, exit last, group FLIP lift) is authoritative in `docs/action-queue-visual-choreography.md`.
 - Pre/cooldown profiles can be anything: short pre + long cd, long pre + short cd, balanced.
   The mechanism handles all of them — sorting does the work, not assumptions about typical values.
 - A long cooldown row sits near the bottom of the column for its duration. That IS the
@@ -238,7 +237,7 @@ events (`js/combat/engine.js:305-318`):
 - `impact` is inserted at 0 and resolves hit/damage/crit once (`engine.js:266-302`).
 - `cooldown` tics = stored `cooldownTicks` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)` (`engine.js:167`, inserted at `engine.js:301`).
 
-When cooldown fires, the next attack is picked and a new `winding` row is inserted (`engine.js:310-311`). One row per monster at a time, rendered in place via the stable key `m:<label>`. Monster `winding` / `impact` rows stay name + tic (`js/battle/queue-render.js:60-62`). The cooldown row is a clear row: label `<Monster name> recovering`. There is no live monster `attack` event; a persisted pre-PC-97 `attack` row resolves as `impact` (`engine.js:315-318`). Death still cancels every queued row for that monster (PC-DEC-054).
+When cooldown fires, the next attack is picked and a new `winding` row is inserted (`engine.js:310-311`). One row per monster at a time — the cooldown box is removed and the winding box slides in. Monster `winding` / `impact` rows stay name + tic (`js/battle/queue-render.js:60-62`). The cooldown row is a clear row: label `<Monster name> recovering` — which relabels to `<Monster name> preparing to attack` in place when the row reaches the top and the typewriter types the "prepares" narration (the one monster relabel). There is no live monster `attack` event; a persisted pre-PC-97 `attack` row resolves as `impact` (`engine.js:315-318`). Death still cancels every queued row for that monster (PC-DEC-054).
 
 ## Tie Resolution
 
