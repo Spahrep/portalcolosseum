@@ -424,38 +424,69 @@ describe('Player attack accuracy (weapon_instance.accuracy wiring)', () => {
   });
 });
 
-// Contract tests for rollStat (range behavior, range=0 must be deterministic base)
-describe('rollStat contract (range 0 unchanged, range N within bounds)', () => {
-  // Inline the exact implementation for test isolation (matches api/combat/[...path].js)
-  function rollStat(base, range) {
-    const b = Number(base) || 1;
-    const v = Number(range) || 0;
-    if (v <= 0) return Math.max(1, b);
-    const delta = Math.floor(Math.random() * (v * 2 + 1)) - v;
-    return Math.max(1, b + delta);
+// Monster impact is the exported engine path that still rolls a bounded integer.
+// range <= 0 consumes no RNG (rollDamage short-circuit). A missing range is not
+// that short-circuit: the engine substitutes 3.
+describe('engine damage roll (injected rng)', () => {
+  function seq(values) {
+    let i = 0;
+    return () => {
+      if (i >= values.length) throw new Error('rng exhausted');
+      return values[i++];
+    };
   }
 
-  it('range 0 or falsy always returns exactly base (clamped >=1)', () => {
-    assert.equal(rollStat(5, 0), 5);
-    assert.equal(rollStat(5, null), 5);
-    assert.equal(rollStat(5, undefined), 5);
-    assert.equal(rollStat(5, -3), 5);
-    assert.equal(rollStat(0, 0), 1); // clamp
-    assert.equal(rollStat(1, 0), 1);
+  function strike(rng, { damage, damageRange, accuracy = 100 }) {
+    const eng = createEngine(rng);
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2 },
+      monsters: [{ id: 1, max_hp: 500, damage, speed: 8, accuracy, label: 'A', name: 'Wolf' }],
+    });
+    writeState(eng, snap => {
+      snap.player.hp = 400;
+      snap.queue = [];
+      const row = addEvent(snap.queue, 'A', 'impact', 0);
+      row.monsterAttackName = 'Bite';
+      row.damage = damage;
+      row.accuracy = accuracy;
+      if (damageRange !== undefined) row.damageRange = damageRange;
+      row.cooldownTicks = 4;
+      row.critChance = 0;
+    });
+    const before = persisted(eng).player.hp;
+    eng.tick();
+    const feed = persisted(eng).feed.join('\n');
+    return { dealt: before - persisted(eng).player.hp, feed };
+  }
+
+  it('range <= 0 deals the stamped damage and does not consume rng', () => {
+    assert.equal(strike(() => 0.99, { damage: 8, damageRange: 0 }).dealt, 8);
+    assert.equal(strike(() => 0, { damage: 8, damageRange: -3 }).dealt, 8);
+    assert.equal(strike(() => 0.5, { damage: 0, damageRange: 0 }).dealt, 0);
+    // First draw would miss at accuracy 50. A range-0 roll must leave that draw for the hit check.
+    const skipped = strike(seq([0.99, 0]), { damage: 8, damageRange: 0, accuracy: 50 });
+    assert.match(skipped.feed, /misses/);
+    assert.equal(skipped.dealt, 0);
   });
 
-  it('range N produces values only in [base-N, base+N] and >=1 over many samples', () => {
-    const base = 10;
-    const v = 3;
-    const samples = 200;
+  it('a missing range is the engine default of 3, not a no-roll', () => {
+    const low = strike(seq([0, 0]), { damage: 10 });
+    const high = strike(seq([0.999, 0]), { damage: 10 });
+    assert.equal(low.dealt, 7);
+    assert.equal(high.dealt, 13);
+  });
+
+  it('range N stays in [base-N, base+N], clamps at 1, and is not a single value', () => {
+    assert.equal(strike(seq([0, 0]), { damage: 10, damageRange: 3 }).dealt, 7);
+    assert.equal(strike(seq([0.999, 0]), { damage: 10, damageRange: 3 }).dealt, 13);
+    assert.equal(strike(seq([0, 0]), { damage: 2, damageRange: 5 }).dealt, 1);
     const seen = new Set();
-    for (let i = 0; i < samples; i++) {
-      const r = rollStat(base, v);
-      assert.ok(r >= 1 && r <= base + v && r >= base - v, `rollStat(${base},${v})=${r} out of range`);
-      seen.add(r);
+    for (const u of [0, 0.1, 0.25, 0.4, 0.55, 0.7, 0.85, 0.999]) {
+      const dealt = strike(seq([u, 0]), { damage: 10, damageRange: 3 }).dealt;
+      assert.ok(dealt >= 1 && dealt >= 7 && dealt <= 13, `u=${u} dealt ${dealt}`);
+      seen.add(dealt);
     }
-    // Should hit multiple values (not always same)
-    assert.ok(seen.size > 1, 'should produce range in samples');
+    assert.ok(seen.size > 1, 'injected draws must produce a spread');
   });
 });
 
