@@ -70,6 +70,16 @@ How work fits without spilling context — applies to Hermes, Grok, Claude, ALL 
 Full brief template + worked example: `portal-colosseum-agent-team` skill →
 `references/context-budget-discipline.md`.
 
+## Authoring rules (write side)
+How files get WRITTEN or SPLIT (as opposed to the read-side protocol above):
+`pc-coding-standards` skill — byte budgets (`wc -c file ÷ 4` ≈ tokens; ≤15KB free,
+≤30KB comfortable, >60KB a context bomb), task-scoped cascade ≤3 files / ≤40k
+tokens, no import-back-up into app roots (`bind*()` hooks instead), data tables
+and tests exempt, split at seams not line counts. Auto-loaded in Hermes sessions
+(`skills.auto_load`) and force-available to dispatched kanban workers via
+`pc-coding-standards`. The README "Authoring rules" section is the human-facing
+copy of the same rules.
+
 ## Verification & scope (Spahrep 2026-09-16)
 - Vercel preview/branch deployment URLs are SSO-walled: they 302 to
   vercel.com/sso-api. NEVER verify, curl, or browse against them, and never try
