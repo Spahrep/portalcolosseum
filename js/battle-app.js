@@ -817,6 +817,28 @@ function showErrorState(title, detail, showReturn = true) {
   box.appendChild(err);
 }
 
+// PC session-expiry safety net: a 401 from any battle API call must never
+// strand the player. Show a full-screen escape with working buttons.
+function showSessionExpired() {
+  ensureAdvanceOverlayStyles();
+  if (document.getElementById('pc-session-expired')) return; // already showing
+  const overlay = document.createElement('div');
+  overlay.id = 'pc-session-expired';
+  overlay.className = 'advance-overlay';
+  overlay.innerHTML = `
+    <div class="advance-panel" style="text-align:center;">
+      <div class="advance-header">SESSION EXPIRED</div>
+      <div style="color:#e0f0ff;margin:12px 0;">Your login has expired. Log back in to continue your run.</div>
+      <div class="advance-btn-row">
+        <button class="action-btn advance-town" id="pc-session-login">Log In</button>
+        <button class="action-btn advance-extract" id="pc-session-town">Return to Town</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+  overlay.querySelector('#pc-session-login').onclick = () => { window.location.href = '/login.html'; };
+  overlay.querySelector('#pc-session-town').onclick = () => { window.location.href = '/game.html'; };
+}
+
 function setBusy(state) {
   // Don't release busy if the clock is mid-transition — let _finish() / advance handle it.
   // masterClockDepth covers the server tick loop, which is not the BattleClock state machine.
@@ -2120,6 +2142,9 @@ async function init() {
     showErrorState('Missing run ID', 'Add ?id=NNN to the URL.', true);
     return;
   }
+
+  // A 401 from any battle API call surfaces a session-expired escape screen.
+  window.addEventListener('pc:session-expired', showSessionExpired);
 
   // PC-72: the die ceremony plays only on a genuine first entry — the marker is
   // set by run-equip right before navigating to a NEW run. Any other load

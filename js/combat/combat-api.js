@@ -34,6 +34,15 @@ export async function apiCall(path, method = 'GET', body = null) {
   const opts = { method, headers, credentials: 'include' };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(`/api/combat${path}`, opts);
+  if (res.status === 401) {
+    // Never strand the player: a dead/expired session must always surface a
+    // way out. Dispatch a global event the battle screen listens for and shows
+    // a "session expired — log back in" screen with working buttons.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('pc:session-expired', { detail: { path } }));
+    }
+    throw new Error('SESSION_EXPIRED');
+  }
   if (!res.ok) {
     const text = await res.text();
     throw new Error(text || `HTTP ${res.status}`);
