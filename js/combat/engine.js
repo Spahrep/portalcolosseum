@@ -513,9 +513,12 @@ export function createEngine(rng = Math.random) {
   }
 
   // Live clock: one peek. A ready head pauses (needsInput, no removal).
-  // Any other head is removed BEFORE process so handleFire inserts onto a
-  // clean queue and cannot double-fire. playerReady is the new head's event,
-  // never hand state.
+  // Peek → process → insert successor → pop the processed head LAST (canon
+  // model). The head stays in the array while the handler runs; the handlers
+  // insert their successor by tic-ordering (addEvent/orderedInsertIndex), so
+  // the old head's presence never affects where the successor lands. Only
+  // after process completes is the head popped. playerReady is the new head's
+  // event, never hand state.
   function tick() {
     const head = peek();
     if (!head || battleIsOver(state)) {
@@ -542,9 +545,9 @@ export function createEngine(rng = Math.random) {
     }
     const ticCost = head.tics;
     state.tic += ticCost;
-    const removed = remove();
     applyTickCost(state.queue, ticCost);
-    const result = process(removed);
+    const result = process(head);
+    const removed = removeHead(state.queue); // exit is the LAST action
     const cleanupResult = cleanup();
     const next = peek();
     const playerReady = !!(next && next.event === 'ready');

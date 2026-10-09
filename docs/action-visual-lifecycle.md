@@ -47,8 +47,8 @@ MasterClock.start():
     
     removeHead()                     // the processed item's exit is the LAST action,
                                      // after the successor has been inserted and slid in.
-                                     // (The engine removes first so the insert lands clean;
-                                     // the VISUAL exit always plays last.)
+                                     // (The engine peeks, processes, inserts the successor,
+                                     // then pops the head last — matching the visual exit.)
     
     if (player hand is Ready):       // player's turn
       showActionMenu()
