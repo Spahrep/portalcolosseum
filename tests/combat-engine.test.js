@@ -166,12 +166,6 @@ describe('Engine core (deterministic seeded)', () => {
   });
 });
 
-describe('Damage + multi-target', () => {
-  it('multi-target reduces per target', () => {
-    assert.ok(true); // covered in engine resolve
-  });
-});
-
 // NEW DATA-DRIVEN TESTS (Slice 1) - adjusted for engine advance behavior while verifying param wiring
 describe('Data-driven engine parameterization', () => {
   it('commitAttack with explicit castTicks/cooldownTicks produces exact tics in queue', () => {
@@ -323,12 +317,6 @@ describe('F16 end-to-end attack lifecycle + security', () => {
     assert.ok(all.every(id => typeof id === 'string' && id.length > 20));
   });
 
-  // R2 note: single-target cleave restriction (slice to 1 target) is enforced in API commit route after live-monster validation.
-  // Engine-level resolveAttack applies damage to all passed targets when !isMulti (design); API prevents passing >1.
-  // Engine test cannot reach the API gate without duplicating route logic, so noted here per task.
-  it('R2 regression noted: single-target with 3 targets only first damaged (enforced by API slice)', () => {
-    assert.ok(true, 'R2 fix verified via API code + readback; engine allows multi-targetIds but API restricts for !isMultiTarget');
-  });
   it('single commit resolves the full cycle to Ready', () => {
     const eng = createEngine(seededRNG(42));
     eng.startBattle({

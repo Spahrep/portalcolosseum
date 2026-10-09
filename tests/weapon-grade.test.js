@@ -33,9 +33,6 @@ describe('weapon grade formula edges (PC-48)', () => {
     assert.equal(gradeFromZ(-2.1), 'F');
     assert.equal(gradeFromZ(-3), 'F');
   });
-  it('backfill default C for legacy rows', () => {
-    assert.equal('C', 'C');
-  });
 });
 
 function gradeForWeapon(dmg, spd, acc, baseDmg, rngDmg, baseSpd, rngSpd, baseAcc, rngAcc) {
