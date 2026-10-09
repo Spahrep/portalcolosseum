@@ -22,6 +22,39 @@ See AGENTS.md for the full protocol, including the Context Budget discipline (ne
 
 ---
 
+## Authoring rules (keeping files context-cheap)
+
+How files get written so a task stays cheap to load. Human-facing companion to the consumption rules in [`AGENTS.md`](AGENTS.md): read a range, never a whole file, and learn the cost with `wc -c ÷ 4` before touching it. The ~800-line cap there is when to stop reading a file whole; it is not a split target. Figures measured 2026-10-09.
+
+1. **Budget is bytes, not lines.** `wc -c ÷ 4` ≈ tokens. Line count is not the budget.
+   - ≤15KB — free to load.
+   - ≤30KB — comfortable.
+   - **>60KB — a context bomb**, regardless of cohesion.
+   Measured contrast: `js/battle-app.js` is 2,339 lines / 92KB / ~23k tokens (a bomb). `js/cli-app.js` is 967 lines / 37KB (over comfortable only).
+2. **Locality is the real metric.** Any single change touches ≤3 files, and the import cascade those files drag in stays under ~40k tokens. An individual file may bend the size rule; a cascade may not. Count the cascade, not the file you opened.
+   A `js/combat/` engine edit costs ~11k tokens. A queue-render edit costs ~45k (~181KB) because `js/battle-app.js` imports the battle UI — cascade listed under that file below.
+3. **No import-back-up.** Render and leaf modules never import an app root (`js/battle-app.js`, `js/cli-app.js`, `js/admin-app.js`). A leaf that imports the root pulls the cascade the split was meant to kill.
+   State flows down through `bind*()` hooks — the PC-78 pattern (`bindFeedRender`, `bindDiceRender`, `bindUxController`). The root calls the leaf and passes hooks in; the leaf does not reach back up.
+4. **Data tables are exempt.** Combat stats, seed data, and route configs live in data directories. Grep them; do not read them. A large table is not a context bomb. Size rules do not apply.
+5. **Tests and generated files are exempt.** Do not split a test or a generated artifact to chase the byte budget. The suite is the check when a real seam split lands — 283 tests, 0 fail, when these figures were measured.
+6. **Split at seams, not at line counts.** Split only where a boundary already exists, pass state explicitly, change no behavior.
+   Cutting an entangled block to hit a line count is not a split.
+   - Web CLI, command/panel seams (`9da2e51`): builders, panels, and dev commands left `cli-app.js`; the dispatcher and session stayed.
+   - Combat API, dev-route seam (`dc69f50`): `/dev/*` admin routes left the player catch-all. The catch-all is still a bomb; the seam was the right cut.
+
+### Files over budget today
+
+- **`js/battle-app.js`** — 2,339 lines / 92KB / ~23k tokens. Imports 10 modules. A queue-render edit drags ~181KB ≈ 45k tokens: `battle-app` + `queue-render` + `feed-render` + `monster-render` + `dice-render` + `ux-controller` + `tic-queue` + `potion-target` + `action-menu-rows` + `combat-api`.
+- **`api/combat/[...path].js`** — 1,544 lines / 75KB / ~19k tokens. Still a bomb after the `/dev/*` route split (`dc69f50`).
+- **`js/admin-app.js`** — 1,314 lines / 60KB. At the bomb threshold.
+- **`js/cli-app.js`** — 967 lines / 37KB. Over comfortable. Command/panel split already done (`9da2e51`).
+- **`js/run-equip-app.js`** — 968 lines / 36KB. Over comfortable.
+
+`js/battle/` and `js/combat/` are healthy — every file there is under 30KB.
+Do not split those trees to chase a budget they already meet.
+
+---
+
 ## docs/ Directory
 
 ### Design & Architecture
