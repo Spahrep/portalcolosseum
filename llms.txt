@@ -1,0 +1,45 @@
+# Portal Colosseum
+
+> Browser arena battler (HTML5 canvas, Supabase, Vercel). Coding agents load one mechanic doc, not the docs tree. DOCS.md is the full read-order; this file is the link index of that map.
+
+One task is the protocol, the design principles, and a single mechanic doc below. The docs tree is ~140k tokens — do not load it whole. Skip dated history (reviews, workorders, briefs); DOCS.md lists what to ignore.
+
+<!--
+llms-full.txt is intentionally not generated. Concatenating the docs tree
+(~140k tokens) would blow the context window this index exists to save.
+Do not rebuild llms-full.txt. Follow the links and fetch one mechanic doc.
+-->
+
+## Start here
+
+- [AGENTS.md](AGENTS.md): Standing working protocol for every session — who writes code, what Hermes may edit directly, verification rules, and the context-budget protocol. Workflow source of truth.
+- [DOCS.md](DOCS.md): Read-order map and skip list. Start here to pick the one doc for the task; do not load the docs tree.
+- [Core philosophy](docs/core-philosophy.md): Design-principles source of truth — why the game works the way it does (AP, push-your-luck, procedural gear).
+
+## Mechanic docs
+
+- [Action visual lifecycle](docs/action-visual-lifecycle.md): Combat-clock source of truth — master clock, turn order, and the action queue, one item at a time.
+- [Combat system](docs/combat-system.md): Player stats, weapon damage, hit chance, and the core battle loop.
+- [Weapon generation](docs/weapon-generation.md): Procedural weapon templates, stat randomization, and grade (D–S).
+- [Loot and prize pool](docs/loot-prize-pool.md): Equipment and gold drops. Finish takes all, stop takes a reduced share, death forfeits the pool.
+- [Consumables](docs/consumables.md): Potion design — template rolls, drink timing, buffs, and loadout Potion A/B slots. Weapons and consumables are the only MVP item types.
+- [Potion contract](docs/potion-contract.md): Effect schema and timing the engine, API, and tests implement. Design rules live in consumables.md.
+- [Run UX flow](docs/run-ux-flow.md): Web run start as a three-phase gate, including the hand-weapon entry rule.
+- [Battle status UI](docs/battle-status-ui.md): Vertical action-queue column that replaced the horizontal tic-track bar.
+- [AP economy](docs/ap-economy.md): Action Points as the primary meter (3× cap, sinks, entry costs). Gold is secondary.
+- [Encounter system](docs/encounter-system.md): Zombie-dice encounter generation — portal dice pool, point budget, 1–5 monsters per battle.
+- [Inventory slots](docs/inventory-slots.md): 20-slot backpack and the 5-item run loadout (Hand L/R, belt loop, Potion A/B). Loadout locks at entry.
+- [Portal runs](docs/portal-runs.md): Push-your-luck run loop — N fights (config, default 5), continue or stop, portal tiers as item power tiers.
+- [Shops and economy](docs/shops-and-economy.md): Output-based shop pricing, portal-gated tiers, exponential rerolls, and the three anti-grind gates.
+- [Progression gating](docs/progression-gating.md): Portal unlocks, the three-active-portals limit, and shop tiering. Old portals stay farmable.
+
+## Decisions
+
+- [Pending decisions](docs/pending-decisions.md): Decision log. Grep by ID (PC-DEC-###) only — do not read it whole (~15k tokens of mostly-decided history).
+
+## Optional
+
+- [README](README.md): Human-facing project index. It may drift; AGENTS.md is the workflow source of truth.
+- [Naming convention](docs/naming-convention.md): Singular snake_case table names and the primary-key strategy.
+- [Environment variables](docs/setup-environment-variables.md): Supabase and OAuth env setup for Vercel. Replaces the historical SUPABASE_SETUP.md.
+- [Browser verification](docs/browser-verification.md): How to drive the live /game UI. Verify on portalcolosseum.com only — never Vercel preview URLs and never local files when asked to test.
