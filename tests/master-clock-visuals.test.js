@@ -244,40 +244,27 @@ describe('Master clock visual fidelity (client contract)', () => {
       assert.match(commit, /keysEqual/);
     });
 
-    it('a hand landing on READY at the head slides out then in — no hold-still', () => {
-      // Cooldown→ready at the head is a same-key phase change. The old box
-      // must slide out (markQueueRowExiting applies queue-row-exit) before the
-      // ready box slides in. Instant / reduced-motion still relabels with no
-      // slide. Replaces the old "holds still" assertion, which contradicted
-      // the no-box-holds-still rule.
+    it('a hand landing on READY at the head relabels in place — never slides', () => {
+      // The head is the row being processed right now. It is pinned at the top
+      // and must NEVER slide out and back in. Cooldown→ready at the head is a
+      // same-key phase change: the node relabels in place (updateQueueRowInPlace),
+      // the text changes, the box stays put. No markQueueRowExiting, no
+      // waitForEvent, no armQueueRowEnter on the head.
       const app = read('js/battle-app.js');
       const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
-      assert.match(releaseFn, /landsOnReady/,
-        'releaseProcessedHead branches on a ready-head landing');
-      assert.match(releaseFn, /successor\.event === 'ready'/,
-        'the landing guard specifically targets a ready successor');
-      const readyAt = releaseFn.indexOf('if (landsOnReady)');
       const sameKeyAt = releaseFn.indexOf('const successorSameKey');
-      assert.ok(readyAt >= 0 && sameKeyAt > readyAt, 'landsOnReady branch precedes the other same-key path');
-      const readyBranch = releaseFn.slice(readyAt, sameKeyAt);
-      const skipIf = readyBranch.indexOf('if (animationsSkipped(preset))');
-      const skipReturn = readyBranch.indexOf('return;', skipIf);
-      const exitAt = readyBranch.indexOf('markQueueRowExiting');
-      const waitAt = readyBranch.indexOf("waitForEvent(row, 'animationend'");
-      assert.ok(skipIf >= 0 && skipReturn > skipIf && exitAt > skipReturn,
-        'exit slide is on the animated path, after the skipped-motion return');
-      assert.equal(readyBranch.slice(0, exitAt).includes('markQueueRowExiting'), false);
-      assert.match(readyBranch.slice(0, skipReturn), /updateQueueRowInPlace/,
-        'instant/reduced-motion path relabels directly');
-      assert.ok(waitAt > exitAt, 'animated path waits for the exit animationend');
-      assert.match(readyBranch, /waitForEvent\(row,\s*'animationend',\s*dur\('queueExit'\)\s*\+\s*80\)/);
-      const stripAt = readyBranch.indexOf("row.classList.remove('queue-row-exit')");
-      const relabelAt = readyBranch.indexOf('updateQueueRowInPlace', waitAt);
-      const enterAt = readyBranch.indexOf('armQueueRowEnter', waitAt);
-      assert.ok(stripAt > waitAt && relabelAt > stripAt && enterAt > relabelAt,
-        'strip exit class, relabel, then slide in — queue-row-exit was applied by markQueueRowExiting');
-      assert.ok(readyBranch.indexOf('forgetQueueRowExiting', enterAt) > enterAt,
-        'exit mark is cleared after the slide-in');
+      assert.ok(sameKeyAt >= 0, 'releaseProcessedHead computes a same-key successor');
+      const sameKeyBranch = releaseFn.slice(sameKeyAt);
+      assert.match(sameKeyBranch, /updateQueueRowInPlace/,
+        'same-key head phase change relabels the node in place');
+      assert.equal(sameKeyBranch.includes('markQueueRowExiting'), false,
+        'the head never slides out — no exit mark on a same-key phase change');
+      assert.equal(sameKeyBranch.includes('armQueueRowEnter'), false,
+        'the head never slides in — no enter animation on a same-key phase change');
+      assert.equal(sameKeyBranch.includes('waitForEvent'), false,
+        'the head never waits on an exit animation');
+      assert.match(sameKeyBranch, /forgetQueueRowExiting/,
+        'any stale exit mark is cleared so the head stays put');
     });
 
     it('renderQueue fast path compares STABLE KEYS, not raw ids (no node move on tic)', () => {

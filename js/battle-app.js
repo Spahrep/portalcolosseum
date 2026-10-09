@@ -455,67 +455,19 @@ async function releaseProcessedHead(head, newQueue, bs, preset) {
   if (!row) return;
   const key = queueRowKey(head);
   const id = row.dataset.rowId || head.id;
-  // Landing on the player's turn: the same-key successor is a hand READY row
-  // becoming the head. Same one-node slide as other same-key phase changes —
-  // the old cooldown box slides out, then the ready box slides in. No box
-  // holds still. Instant / reduced-motion relabels directly, no slide.
+  // The head is the row being processed right now — it is pinned at the top
+  // and must NEVER slide out and back in. If its phase changes (cooldown→ready,
+  // winding→impact→cooldown, ready→winding), the same-key successor relabels
+  // the node in place. The text changes; the box stays put. A slide-out→slide-in
+  // on the head reads as the current action leaving and returning — wrong.
   const successor = (newQueue || []).find(r => queueRowKey(r) === key);
-  const landsOnReady = !!(successor && (successor.label === 'LH' || successor.label === 'RH') && successor.event === 'ready');
-  if (landsOnReady) {
-    if (animationsSkipped(preset)) {
-      // Instant / reduced-motion: relabel directly, no slide.
-      const monsters = (bs && bs.monsters) || [];
-      updateQueueRowInPlace(row, successor, monsters, bs);
-      row.classList.remove('queue-row-current', 'queue-row-exit');
-      if (id != null) forgetQueueRowExiting(id);
-      if (head.id != null) forgetQueueRowExiting(head.id);
-      return;
-    }
-    // Animated: slide out, then relabel + slide in on the same node.
-    row.classList.remove('queue-row-current');
-    if (id != null) markQueueRowExiting(id);
-    await waitForEvent(row, 'animationend', dur('queueExit') + 80);
-    // The exit animation is `forwards` — strip it before the enter so the node
-    // is not left translated off-screen.
-    row.classList.remove('queue-row-exit');
+  const successorSameKey = !!successor;
+  if (successorSameKey) {
+    // Same-key phase change on the head: relabel in place, no slide, no enter
+    // animation. The head is the live row — its label updates, it does not move.
     const monsters = (bs && bs.monsters) || [];
     updateQueueRowInPlace(row, successor, monsters, bs);
-    armQueueRowEnter(row, successor);
-    if (id != null) forgetQueueRowExiting(id);
-    if (head.id != null) forgetQueueRowExiting(head.id);
-    return;
-  }
-  const successorSameKey = (newQueue || []).some(r => queueRowKey(r) === key);
-  if (successorSameKey) {
-    // Same-key phase change (hand ready→winding→impact→cooldown→ready, monster
-    // winding→impact→cooldown): the row is BOTH removed and re-added. Slide the
-    // existing node out, then relabel it in place and slide it in — one node,
-    // both animations, never two live nodes with the same stable key.
-    if (animationsSkipped(preset)) {
-      // Instant / reduced-motion: relabel directly, no slide.
-      const successor = (newQueue || []).find(r => queueRowKey(r) === key);
-      if (successor) {
-        const monsters = (bs && bs.monsters) || [];
-        updateQueueRowInPlace(row, successor, monsters, bs);
-      }
-      row.classList.remove('queue-row-current', 'queue-row-exit');
-      if (id != null) forgetQueueRowExiting(id);
-      if (head.id != null) forgetQueueRowExiting(head.id);
-      return;
-    }
-    // Animated: slide out, then relabel + slide in on the same node.
-    row.classList.remove('queue-row-current');
-    if (id != null) markQueueRowExiting(id);
-    await waitForEvent(row, 'animationend', dur('queueExit') + 80);
-    // The exit animation is `forwards` — strip it before the enter so the node
-    // is not left translated off-screen.
-    row.classList.remove('queue-row-exit');
-    const successor = (newQueue || []).find(r => queueRowKey(r) === key);
-    if (successor) {
-      const monsters = (bs && bs.monsters) || [];
-      updateQueueRowInPlace(row, successor, monsters, bs);
-      armQueueRowEnter(row, successor);
-    }
+    row.classList.remove('queue-row-current', 'queue-row-exit');
     if (id != null) forgetQueueRowExiting(id);
     if (head.id != null) forgetQueueRowExiting(head.id);
     return;
@@ -738,48 +690,31 @@ async function playCommitArrival(runId, commitData) {
   const commits = findReadyCommits(prevQueue, local);
   const narrateP = awaitNarration(bs.feed || rich.feed || []);
   const keysEqual = (c) => !!(c.ready && c.attack) && queueRowKey(c.ready) === queueRowKey(c.attack);
-  const relabeled = commits.filter(keysEqual);
-  const ceremonyCommits = commits.filter(c => !keysEqual(c));
+    const ceremonyCommits = commits.filter(c => !keysEqual(c));
   const visualP = (async () => {
-    const monsters = (bs && bs.monsters) || [];
-    // A hand commit's attack shares the ready row's stable key — the row is
-    // BOTH removed and re-added. Slide the ready node out, then relabel it in
-    // place and slide it in: one node, both animations, never a second DOM node.
-    for (const c of relabeled) {
-        const el = findQueueRowByIdentity(c.ready);
-        if (!el) continue;
+      const monsters = (bs && bs.monsters) || [];
+      // A hand commit is NOT a relabel. The ready placeholder ("RH Ready —")
+      // is processed and removed — it is done. A NET-NEW winding row slides in
+      // at its sorted position. The ready box slides out; the winding box slides
+      // in as a fresh box. Never relabel the ready node into the winding row.
+      const entries = ceremonyCommits.length ? ceremonyCommits.map(c => c.attack) : (commits.length ? commits.map(c => c.attack) : (inserted ? [inserted] : []));
+      if (entries.length === 0) {
+        renderQueue(bs);
+        return;
+      }
+      await playInsertCeremony(entries, preset, bs, { reconcile: false });
+      const readyRows = ceremonyCommits.length ? ceremonyCommits : (commits.length ? commits : (removed ? [{ ready: removed }] : []));
+      for (const c of readyRows) {
+        if (!c.ready) continue;
         if (animationsSkipped(preset)) {
-          updateQueueRowInPlace(el, c.attack, monsters, bs);
-          continue;
+          const el = findQueueRowByIdentity(c.ready);
+          if (el) el.remove();
+        } else {
+          await runQueueRemoval([c.ready.id]);
         }
-        const id = el.dataset.rowId || c.ready.id;
-        el.classList.remove('queue-row-current');
-        if (id != null) markQueueRowExiting(id);
-        await waitForEvent(el, 'animationend', dur('queueExit') + 80);
-        el.classList.remove('queue-row-exit');
-        updateQueueRowInPlace(el, c.attack, monsters, bs);
-        armQueueRowEnter(el, c.attack);
-        if (id != null) forgetQueueRowExiting(id);
-        if (c.ready.id != null) forgetQueueRowExiting(c.ready.id);
       }
-    const entries = ceremonyCommits.length ? ceremonyCommits.map(c => c.attack) : (commits.length ? [] : (inserted ? [inserted] : []));
-    if (entries.length === 0) {
-      renderQueue(bs);
-      return;
-    }
-    await playInsertCeremony(entries, preset, bs, { reconcile: false });
-    const readyRows = ceremonyCommits.length ? ceremonyCommits : (commits.length ? [] : (removed ? [{ ready: removed }] : []));
-    for (const c of readyRows) {
-      if (!c.ready) continue;
-      if (animationsSkipped(preset)) {
-        const el = findQueueRowByIdentity(c.ready);
-        if (el) el.remove();
-      } else {
-        await runQueueRemoval([c.ready.id]);
-      }
-    }
-    renderQueue(bs);
-  })();
+            renderQueue(bs);
+          })();
   await Promise.all([narrateP, visualP]);
   lastBs = bs;
   renderPlayerHP(bs);
