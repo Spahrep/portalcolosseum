@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import createEngine, { resumeEngine } from '../js/combat/engine.js';
 import { buildPotionPayload } from '../js/combat/potion-effects.js';
+import { persisted, writeState, tickUntilInput, tickPast } from './live-clock.js';
 import {
   mapPotionFeedLine,
   formatPotionSummary,
@@ -35,13 +36,7 @@ function makeParticipants(consumeA = null, consumeB = null) {
 }
 
 function advanceUntilUsed(eng, maxSteps = 20) {
-  let s = eng.getState();
-  let steps = 0;
-  while (steps < maxSteps && s.potions && !(s.potions.A?.used || s.potions.B?.used)) {
-    s = eng.advanceToNextDecision();
-    steps++;
-  }
-  return s;
+  return tickPast(eng, s => s.potions && (s.potions.A?.used || s.potions.B?.used), maxSteps);
 }
 
 function buildTranscript(state, meta, consumables) {
@@ -84,8 +79,10 @@ describe('Potion E2E parity (PC-39)', () => {
   it('free-hand error parity: both busy -> classify amber exact', () => {
     const eng = createEngine(seededRNG(1));
     eng.startBattle(makeParticipants(healPotion));
-    eng.state.player.hands.LH.state = 'winding';
-    eng.state.player.hands.RH.state = 'winding';
+    writeState(eng, snap => {
+      snap.player.hands.LH.state = 'winding';
+      snap.player.hands.RH.state = 'winding';
+    });
     assert.throws(() => eng.commitPotion('A'), /No free hand/);
     const err = classifyPotionError('No free hand');
     assert.equal(err.level, 'amber');
@@ -96,8 +93,8 @@ describe('Potion E2E parity (PC-39)', () => {
     const eng = createEngine(seededRNG(100));
     const p = makeParticipants({ ...healPotion });
     eng.startBattle(p);
-    eng.state.player.hp = 800;
-    eng.advanceToNextDecision();
+    writeState(eng, snap => { snap.player.hp = 800; });
+    tickUntilInput(eng);
     eng.commitPotion('A', { weaponSpeed: 0 });
     const state = advanceUntilUsed(eng);
     assertParity(state, 900, null, true, 'none');
@@ -111,8 +108,8 @@ describe('Potion E2E parity (PC-39)', () => {
     const eng = createEngine(seededRNG(101));
     const p = makeParticipants({ ...healPotion });
     eng.startBattle(p);
-    eng.state.player.hp = 800;
-    eng.advanceToNextDecision();
+    writeState(eng, snap => { snap.player.hp = 800; });
+    tickUntilInput(eng);
     const state = eng.commitPotion('A', { phase: 'between-fights' });
     assertParity(state, 900, null, true, 'none');
     const meta = { slot: 'A', phase: 'between-fights', potion_used: true, player_hp: state.participants.player.hp, state };
@@ -125,8 +122,8 @@ describe('Potion E2E parity (PC-39)', () => {
     const eng = createEngine(seededRNG(102));
     const p = makeParticipants({ ...healPotion, rolled_floor: 50 });
     eng.startBattle(p);
-    eng.state.player.hp = 990;
-    eng.advanceToNextDecision();
+    writeState(eng, snap => { snap.player.hp = 990; });
+    tickUntilInput(eng);
     eng.commitPotion('A', { weaponSpeed: 0 });
     const state = advanceUntilUsed(eng);
     assert.equal(state.participants.player.hp, 1000);
@@ -143,7 +140,7 @@ describe('Potion E2E parity (PC-39)', () => {
     // snapshot stays about buff timing, not monster cadence.
     p.monsters[0].speed = 12;
     eng.startBattle(p);
-    eng.advanceToNextDecision();
+    tickUntilInput(eng);
     eng.commitPotion('A', { weaponSpeed: 4 });
     const state = advanceUntilUsed(eng);
     assert.equal(state.buffs.length, 1);
@@ -159,7 +156,7 @@ describe('Potion E2E parity (PC-39)', () => {
     const eng = createEngine(seededRNG(104));
     const p = makeParticipants({ ...healPotion });
     eng.startBattle(p);
-    eng.advanceToNextDecision();
+    tickUntilInput(eng);
     eng.commitPotion('A', { phase: 'between-fights' });
     const persisted = eng.getState();
     const eng2 = resumeEngine(persisted, seededRNG(104));
@@ -172,7 +169,7 @@ describe('Potion E2E parity (PC-39)', () => {
   it('empty slot classify error with period', () => {
     const eng = createEngine(seededRNG(105));
     eng.startBattle(makeParticipants(null, null));
-    eng.advanceToNextDecision();
+    tickUntilInput(eng);
     assert.throws(() => eng.commitPotion('A'), /No potion in slot A/);
     const err = classifyPotionError('No potion in slot A');
     assert.equal(err.level, 'error');
@@ -198,7 +195,7 @@ describe('Potion E2E parity (PC-39)', () => {
     eng.startBattle(p);
     // Drinking row is placed by its ordering key, ahead of the still-queued monster.
     // endTic is land tic + duration.
-    eng.advanceToNextDecision();
+    tickUntilInput(eng);
     eng.commitPotion('A', { weaponSpeed: 0 });
     const landed = advanceUntilUsed(eng);
     assert.equal(landed.buffs.length, 1);
@@ -208,7 +205,7 @@ describe('Potion E2E parity (PC-39)', () => {
     let s = landed;
     let expired = false;
     for (let i = 0; i < 20 && !expired; i++) {
-      s = eng.advanceToNextDecision();
+      s = tickPast(eng, st => st.feed.some(l => l.includes('buff expired')), 1);
       expired = s.feed.some(l => l.includes('buff expired'));
     }
     assert.ok(expired, 'expiry feed line not found');
@@ -268,11 +265,11 @@ describe('PC-106: potion effect rolls within the window', () => {
       effect_type: 'heal', rolled_floor: FLOOR, rolled_window: WINDOW,
       rolled_speed: 2, template_name: 'Heal'
     }));
-    assert.equal(eng.state.potions.A.rolled_window, WINDOW);
-    eng.state.player.hp = 100;
+    assert.equal(persisted(eng).potions.A.rolled_window, WINDOW);
+    writeState(eng, snap => { snap.player.hp = 100; });
     const before = draws.length;
     eng.commitPotion('A', { phase: 'between-fights' });
-    const healed = eng.state.player.hp - 100;
+    const healed = persisted(eng).player.hp - 100;
     assert.ok(healed >= FLOOR && healed <= FLOOR + WINDOW, `healed ${healed} outside window`);
     // 0.5 * 21 = 10.5 → floor + 10
     assert.equal(healed, FLOOR + 10);
@@ -290,10 +287,10 @@ describe('PC-106: potion effect rolls within the window', () => {
       effect_type: 'heal', rolled_floor: FLOOR, rolled_window: WINDOW, rolled_speed: 2,
       template_name: 'Heal', crit_chance: 100, critEffectMultiplier: 1.5
     }));
-    eng.state.player.hp = 100;
+    writeState(eng, snap => { snap.player.hp = 100; });
     eng.commitPotion('A', { phase: 'between-fights' });
     // round(120 * 1.5) = 180, not round(100 * 1.5) = 150
-    assert.equal(eng.state.player.hp, 280);
-    assert.ok(eng.state.feed.some(l => l.includes('healed 180 CRITICAL!')));
+    assert.equal(persisted(eng).player.hp, 280);
+    assert.ok(persisted(eng).feed.some(l => l.includes('healed 180 CRITICAL!')));
   });
 });

@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import createEngine from '../js/combat/engine.js';
 import { applyPotionEffect } from '../js/combat/potion-effects.js';
+import { persisted, writeState, readyHand, tickPast } from './live-clock.js';
 
 function seededRNG(seed = 42) {
   let s = seed;
@@ -82,20 +83,16 @@ describe('Heal effects (PC-39)', () => {
   });
 
   function stepUntil(eng, pred, max = 40) {
-    let s = eng.getState();
-    for (let i = 0; i < max && !pred(s); i++) s = eng.stepQueue();
-    return s;
+    return tickPast(eng, pred, max);
   }
 
   it('engine between-fights: full restore applies instantly, slot used, feed reports healed 100', () => {
     const eng = createEngine(seededRNG(201));
     eng.startBattle(makeParticipants(healPotion(100)));
-    eng.advanceToNextDecision();
-    // Baseline after the insertion-order approach (monster acts first). The
-    // heal itself is instant and must not depend on tics-sort.
-    eng.state.player.hp = 900;
+    eng.tick();
+    writeState(eng, snap => { snap.player.hp = 900; });
     const res = eng.commitPotion('A', { phase: 'between-fights' });
-    assert.equal(eng.state.player.hp, 1000);
+    assert.equal(persisted(eng).player.hp, 1000);
     assert.equal(res.potions.A.used, true);
     assert.ok(res.feed.some(l => l.includes('healed 100')));
   });
@@ -103,12 +100,11 @@ describe('Heal effects (PC-39)', () => {
   it('engine in-battle: overheal reports actual healed (10) in feed, hp capped at 1000', () => {
     const eng = createEngine(seededRNG(202));
     eng.startBattle(makeParticipants(healPotion(50)));
-    eng.state.player.hp = 990;
-    eng.advanceToNextDecision();
-    eng.commitPotion('A', { weaponSpeed: 0 }); // pre = ceil((0+2)/2) = 1
-    // Drinking row is behind already-queued rows. Walk insertion order until it fires.
+    writeState(eng, snap => { snap.player.hp = 990; });
+    readyHand(eng, 'LH');
+    eng.commitPotion('A', { weaponSpeed: 0 });
     const s = stepUntil(eng, st => st.feed.some(l => l.includes('healed')));
-    assert.equal(eng.state.player.hp, 1000);
+    assert.equal(persisted(eng).player.hp, 1000);
     const healLine = s.feed.find(l => l.includes('healed'));
     assert.ok(healLine, 'heal feed line not found');
     assert.ok(healLine.includes('healed 10'), `feed reported wrong delta: ${healLine}`);
@@ -118,17 +114,17 @@ describe('Heal effects (PC-39)', () => {
   it('engine in-battle: hp 0 is death, so a queued drink does not resolve', () => {
     const eng = createEngine(seededRNG(203));
     eng.startBattle(makeParticipants(healPotion(100)));
-    eng.advanceToNextDecision();
-    eng.state.player.hp = 0;
+    readyHand(eng, 'LH');
+    const ticBefore = persisted(eng).tic;
+    writeState(eng, snap => { snap.player.hp = 0; });
     eng.commitPotion('A', { weaponSpeed: 0 });
-    const ticBefore = eng.state.tic;
     stepUntil(eng, st => st.feed.some(l => l.includes('healed 100')));
     const snap = eng.getState();
     assert.equal(snap.player_dead, true);
     assert.equal(snap.battle_over, true);
-    assert.equal(eng.state.player.hp, 0, 'a dead player is not healed by a later queue row');
-    assert.equal(eng.state.tic, ticBefore, 'stepQueue stops once the player is dead');
-    assert.equal(eng.state.potions.A.used, false);
+    assert.equal(persisted(eng).player.hp, 0, 'a dead player is not healed by a later queue row');
+    assert.equal(persisted(eng).tic, ticBefore, 'tick stops once the player is dead');
+    assert.equal(persisted(eng).potions.A.used, false);
     assert.equal(snap.feed.some(l => l.includes('healed 100')), false);
   });
 });

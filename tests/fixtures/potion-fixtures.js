@@ -1,9 +1,10 @@
 // tests/fixtures/potion-fixtures.js
 // Potion fixture objects and exact CLI parity snapshot strings for PC-39 e2e tests.
 // Queue order is the ordering key (tics ascending, player rows first on ties).
-// PC-DEC-060: battle start does not log a tic-0 prepares line. Default hand
-// approach (1) is ahead of a speed-5 monster cooldown, so the hands surface
-// before that monster action.
+// PC-DEC-060: battle start does not log a tic-0 prepares line. The live clock
+// pauses on the first ready head, so a second approach behind that head does
+// not fire until the player commits. Snapshots follow tick(), not the retired
+// walker that skipped ready rows.
 
 export const healPotion = {
   id: 1,
@@ -31,7 +32,6 @@ export const buffPotion = {
 
 export const inBattleHealSnapshot = [
   "tic 1 — LH Ready",
-  "tic 1 — RH Ready",
   "Your left hand drinks Heal Potion...",
   "Your left hand's potion restores 100 HP.",
   "Potion A used — in battle.  HP: 900/1000  buffs: none",
@@ -41,7 +41,6 @@ export const inBattleHealSnapshot = [
 
 export const betweenFightsHealSnapshot = [
   "tic 1 — LH Ready",
-  "tic 1 — RH Ready",
   "You drink potion a — healed 100.",
   "Potion A used — between fights.  HP: 900/1000  buffs: none",
   "#1 Heal Potion Heal grade C (used)"
@@ -49,7 +48,6 @@ export const betweenFightsHealSnapshot = [
 
 export const overhealSnapshot = [
   "tic 1 — LH Ready",
-  "tic 1 — RH Ready",
   "Your left hand drinks Heal Potion...",
   "Your left hand's potion restores 10 HP.",
   "Potion A used — in battle.  HP: 1000/1000  buffs: none"
@@ -57,8 +55,9 @@ export const overhealSnapshot = [
 
 export const buffLandSnapshot = [
   "tic 1 — LH Ready",
-  "tic 1 — RH Ready",
   "Your left hand drinks Dmg Potion...",
+  "tic 1 — RH Ready",
+  "tic 1 — RH prepares to Hold...",
   "Your left hand's potion grants damage +3 until tic 11.",
   "Potion A used — in battle.  HP: 1000/1000  buffs: damage +3 until tic 11",
   "#2 Dmg Potion Dmg grade B (used)"
@@ -66,10 +65,12 @@ export const buffLandSnapshot = [
 
 export const buffExpirySnapshot = [
   "tic 1 — LH Ready",
-  "tic 1 — RH Ready",
   "Your left hand drinks Dmg Potion...",
+  "tic 1 — RH Ready",
+  "tic 1 — RH prepares to Hold...",
   "Your left hand's potion grants damage +3 until tic 4.",
   "tic 3 — LH Ready",
+  "tic 3 — LH prepares to Hold...",
   "The Dmg Potion buff fades.",
   "Potion A used — in battle.  HP: 1000/1000  buffs: none"
 ];

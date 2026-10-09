@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import createEngine from '../js/combat/engine.js';
 import { createQueue, addEvent, peekHead } from '../js/combat/tic-queue.js';
 import { createPlayer, applyDamage, isPlayerDead, isMonsterDead } from '../js/combat/participants.js';
+import { persisted, writeState } from './live-clock.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -36,19 +37,20 @@ describe('PC-98 player death at hp 0', () => {
       loadout: { hand_l_speed: 3, hand_r_speed: 4 },
       monsters: [{ id: 1, max_hp: 50, damage: 20, speed: 1, accuracy: 100, label: 'A' }]
     });
-    // Death assertion needs the seeded clock, not the already-advanced battle.
-    const intro = eng.state.intro;
-    eng.state.tic = 0;
-    eng.state.queue = intro.rows.map(r => ({ ...r }));
-    eng.state.player.hands.LH.state = 'Approach';
-    eng.state.player.hands.RH.state = 'Approach';
-    eng.state.player.hp = intro.hpStart;
-    eng.state.feed = [...(intro.seedFeed || [])];
-    eng.state.player.hp = 1;
+    // Death assertion needs the seeded clock, not a later queue.
+    const intro = persisted(eng).intro;
+    writeState(eng, snap => {
+      snap.tic = 0;
+      snap.queue = intro.rows.map(r => ({ ...r }));
+      snap.player.hands.LH.state = 'Approach';
+      snap.player.hands.RH.state = 'Approach';
+      snap.player.hp = 1;
+      snap.feed = [...(intro.seedFeed || [])];
+    });
     let sawDeath = false;
     for (let i = 0; i < 8; i++) {
       const result = eng.tick();
-      if (eng.state.player.hp === 0) {
+      if (persisted(eng).player.hp === 0) {
         assert.equal(result.battleOver, true, 'cleanupPhase must treat hp 0 as death');
         const snap = eng.getState();
         assert.equal(snap.player_dead, true);
@@ -69,17 +71,19 @@ describe('PC-98 live tick clock', () => {
       monsters: [{ id: 1, max_hp: 80, damage: 1, speed: 20, accuracy: 1, label: 'A' }]
     });
     // Clock assertion needs the seeded head, not the post-decision queue.
-    const intro = eng.state.intro;
-    eng.state.tic = 0;
-    eng.state.queue = intro.rows.map(r => ({ ...r }));
-    eng.state.player.hands.LH.state = 'Approach';
-    eng.state.player.hands.RH.state = 'Approach';
-    assert.equal(eng.state.tic, 0);
-    const head = peekHead(eng.state.queue);
+    const intro = persisted(eng).intro;
+    writeState(eng, snap => {
+      snap.tic = 0;
+      snap.queue = intro.rows.map(r => ({ ...r }));
+      snap.player.hands.LH.state = 'Approach';
+      snap.player.hands.RH.state = 'Approach';
+    });
+    assert.equal(persisted(eng).tic, 0);
+    const head = peekHead(persisted(eng).queue);
     assert.equal(head.label, 'LH');
     assert.equal(head.tics, 4);
     eng.tick();
-    assert.equal(eng.state.tic, 4, 'live clock must advance by the processed head cost');
+    assert.equal(persisted(eng).tic, 4, 'live clock must advance by the processed head cost');
   });
 });
 
@@ -93,26 +97,24 @@ describe('PC-98 dead monster queue rows', () => {
         { id: 2, max_hp: 80, damage: 1, speed: 7, accuracy: 1, label: 'B', name: 'Wolf' }
       ]
     });
-    addEvent(eng.state.queue, 'A', 'winding', 12);
-    addEvent(eng.state.queue, 'A', 'cooldown', 9);
-    addEvent(eng.state.queue, 'B', 'winding', 6);
-    assert.ok(eng.state.queue.filter(r => r.label === 'A').length >= 2);
+    writeState(eng, snap => {
+      addEvent(snap.queue, 'A', 'winding', 12);
+      addEvent(snap.queue, 'A', 'cooldown', 9);
+      addEvent(snap.queue, 'B', 'winding', 6);
+      const impact = addEvent(snap.queue, 'LH', 'impact', 0);
+      impact.targetIds = [1];
+      impact.damage = 100;
+      impact.accuracy = 100;
+      impact.attackName = 'Slash';
+      impact.cooldownTicks = 2;
+    });
+    assert.ok(persisted(eng).queue.filter(r => r.label === 'A').length >= 2);
 
-    const impact = {
-      label: 'LH',
-      event: 'impact',
-      tics: 0,
-      targetIds: [1],
-      damage: 100,
-      accuracy: 100,
-      attackName: 'Slash',
-      cooldownTicks: 2
-    };
-    eng.stepOnce(impact);
+    eng.tick();
 
-    assert.ok(eng.state.feed.some(l => l.includes('A is defeated')));
-    assert.equal(eng.state.queue.filter(r => r.label === 'A').length, 0, 'killed monster rows leave immediately');
-    assert.ok(eng.state.queue.some(r => r.label === 'B'), 'a living monster keeps its rows');
+    assert.ok(persisted(eng).feed.some(l => l.includes('A is defeated')));
+    assert.equal(persisted(eng).queue.filter(r => r.label === 'A').length, 0, 'killed monster rows leave immediately');
+    assert.ok(persisted(eng).queue.some(r => r.label === 'B'), 'a living monster keeps its rows');
   });
 });
 
@@ -145,19 +147,24 @@ describe('PC-98 buff expiry is its own queue item', () => {
       loadout: { hand_l_speed: 20, hand_r_speed: 20 },
       monsters: [{ id: 1, max_hp: 100, damage: 1, speed: 1, accuracy: 1, label: 'A' }]
     });
-    eng.state.tic = 5;
-    eng.state.buffs = [{ name: 'Vigor', type: 'damage', value: 2, endTic: 5 }];
+    writeState(eng, snap => {
+      snap.tic = 5;
+      snap.buffs = [{ name: 'Vigor', type: 'damage', value: 2, endTic: 5 }];
+      snap.queue = [{ id: 'ap', label: 'LH', event: 'approach', tics: 0 }];
+    });
 
-    eng.stepOnce({ label: 'LH', event: 'approach', tics: 0 });
+    eng.tick();
 
-    assert.equal(eng.state.buffs.length, 1, 'a non-expiry fire must not drop a due buff');
-    assert.equal(eng.state.feed.some(l => l.includes('Vigor buff expired')), false);
+    assert.equal(persisted(eng).buffs.length, 1, 'a non-expiry fire must not drop a due buff');
+    assert.equal(persisted(eng).feed.some(l => l.includes('Vigor buff expired')), false);
 
-    const exp = addEvent(eng.state.queue, null, 'buff_expiry', 0);
-    exp.buffName = 'Vigor';
-    eng.stepOnce(exp);
-    assert.equal(eng.state.buffs.length, 0);
-    assert.ok(eng.state.feed.some(l => l.includes('Vigor buff expired')));
+    writeState(eng, snap => {
+      const exp = addEvent(snap.queue, null, 'buff_expiry', 0);
+      exp.buffName = 'Vigor';
+    });
+    eng.tick();
+    assert.equal(persisted(eng).buffs.length, 0);
+    assert.ok(persisted(eng).feed.some(l => l.includes('Vigor buff expired')));
   });
 });
 

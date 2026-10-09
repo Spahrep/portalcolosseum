@@ -496,18 +496,6 @@ export function createEngine(rng = Math.random) {
     rng
   };
 
-  function stepOnce(firedRow = null) {
-    const row = firedRow || peekHead(state.queue);
-    if (!row) return null;
-    const feedBefore = fireAndExpireBuffs(state, row);
-    const narrate = state.feed.length > feedBefore ? state.feed[feedBefore] : (state.feed[state.feed.length - 1] || '');
-    return { row, narrate };
-  }
-
-  function removeProcessedHead() {
-    return removeHead(state.queue);
-  }
-
   function peek() {
     return peekPhase(state);
   }
@@ -571,99 +559,6 @@ export function createEngine(rng = Math.random) {
     };
   }
 
-  // Legacy test clock. NOT the live /tick path. Walks the first non-ready row
-  // so advanceToNextDecision can finish an approach that sits behind a ready
-  // token. tick() never skips a ready head.
-  function legacyNonReadyIndex() {
-    let i = 0;
-    while (i < state.queue.length && state.queue[i].event === 'ready') i++;
-    return i < state.queue.length ? i : -1;
-  }
-
-  function stepQueue(captureFires = null) {
-    if (isBattleOver()) {
-      return getState();
-    }
-    const idx = legacyNonReadyIndex();
-    if (idx === -1) {
-      return getState();
-    }
-    const rowHead = state.queue[idx];
-    const ticOffset = rowHead.tics;
-    state.tic += ticOffset;
-    // Not applyTickCost: this clock also moves state.tic and ready rows.
-    for (const r of state.queue) {
-      r.tics = Math.max(0, r.tics - ticOffset);
-    }
-    // Remove the row BEFORE firing so handleFire's addEvent/commitNewRow
-    // don't leave the original row duplicating in the queue.
-    const removedRow = state.queue.splice(idx, 1)[0];
-    if (!removedRow) {
-      return getState();
-    }
-    const result = stepOnce(removedRow);
-    if (!result) {
-      return getState();
-    }
-    const { row } = result;
-    if (captureFires) {
-      const mon = state.monsters.find(m => m.label === row.label);
-      let after = null;
-      // Read the successor already inserted by handleFire — do not roll again.
-      const nextEvent = (mon && !isMonsterDead(mon))
-        ? (row.event === 'winding' ? 'impact'
-          : row.event === 'impact' ? 'cooldown'
-          : row.event === 'attack' ? 'cooldown'
-          : row.event === 'cooldown' ? 'winding'
-          : null)
-        : (row.label === 'LH' || row.label === 'RH')
-          ? (row.event === 'approach' || row.event === 'cooldown' || row.event === 'recovery' ? 'ready'
-            : row.event === 'winding' ? 'impact'
-            : row.event === 'impact' ? 'cooldown'
-            : null)
-          : null;
-      if (nextEvent) {
-        const successor = state.queue.find(r => r.label === row.label && r.event === nextEvent);
-        if (successor) {
-          after = { event: nextEvent, tics: successor.tics };
-        }
-      }
-      captureFires.push({
-        tic: state.tic,
-        ticCost: ticOffset,
-        label: row.label,
-        event: row.event,
-        line: result.narrate,
-        hp: state.player.hp,
-        after
-      });
-    }
-    return getState();
-  }
-
-  // Test/legacy helper. Live /tick does not call this. Stops when a ready row
-  // is queued and no approach row remains — both opening approaches can finish
-  // even after the first ready token exists, because stepQueue walks past it.
-  function advanceToNextDecision(captureFires = null) {
-    const fires = captureFires || [];
-    let iterations = 0;
-    while (true) {
-      if (isBattleOver()) break;
-      const beforeIds = state.queue.map(r => r.id).join(',');
-      const beforeTic = state.tic;
-      stepQueue(fires);
-      const approachLeft = state.queue.some(r => r.event === 'approach');
-      const hasReady = state.queue.some(r => r.event === 'ready');
-      if (!approachLeft && hasReady) break;
-      // A 0-tic morph keeps length and tic but changes row ids. Only a true
-      // no-op (nothing to fire) stops the legacy walker.
-      if (state.queue.map(r => r.id).join(',') === beforeIds && state.tic === beforeTic) break;
-      iterations++;
-      if (iterations > 500) break;
-    }
-    return getState();
-  }
-
   function isBattleOver() {
     return battleIsOver(state);
   }
@@ -720,6 +615,23 @@ export function createEngine(rng = Math.random) {
     return buildStateSnapshot(state);
   }
 
+  // Persist shape is the closure, not getState(). Deep-copied so a caller
+  // cannot mutate queue rows, hands, or monsters through the returned object.
+  // rng is omitted: it is a function, and sharing it would advance the engine.
+  function getPersistedState() {
+    const copy = JSON.parse(JSON.stringify({
+      queue: state.queue,
+      player: state.player,
+      monsters: state.monsters,
+      feed: state.feed,
+      tic: state.tic,
+      buffs: state.buffs,
+      potions: state.potions
+    }));
+    if (state.intro) copy.intro = JSON.parse(JSON.stringify(state.intro));
+    return copy;
+  }
+
   function loadState(persisted) {
     if (!persisted) return;
     state.queue = persisted.queue ? JSON.parse(JSON.stringify(persisted.queue)) : createQueue();
@@ -765,7 +677,7 @@ export function createEngine(rng = Math.random) {
     return { success: true, delay: result.delay, newWeaponId: result.newWeaponId, oldWeaponId: result.oldWeaponId, removed, inserted };
   }
 
-  return { startBattle, commitAttack, commitPotion, swapHandWithBelt, advanceToNextDecision, stepQueue, getState, state, loadState, stepOnce, removeProcessedHead, tick };
+  return { startBattle, commitAttack, commitPotion, swapHandWithBelt, getState, getPersistedState, loadState, tick };
 }
 
 // PC-68: when an attack kills the last target of another hand's queued

@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import createEngine from '../js/combat/engine.js';
+import { persisted, writeState } from './live-clock.js';
 
 function seededRNG(seed = 42) {
   let s = seed;
@@ -17,19 +18,22 @@ describe('Master clock decision point (PC-106)', () => {
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 1, hand_r_speed: 2 },
       monsters: [{ id: 1, max_hp: 80, damage: 1, speed: 8, accuracy: 1, label: 'B' }]
     });
-    eng.state.player.hands.RH.state = 'Ready';
-    eng.state.queue.length = 0;
-    eng.state.queue.push({
-      id: 'm1', label: 'B', event: 'impact', tics: 2,
-      monsterAttackName: 'Bite', damage: 1, accuracy: 1, cooldownTicks: 4
+    writeState(eng, snap => {
+      snap.player.hands.RH.state = 'Ready';
+      snap.queue = [
+        {
+          id: 'm1', label: 'B', event: 'impact', tics: 2,
+          monsterAttackName: 'Bite', damage: 1, accuracy: 1, cooldownTicks: 4
+        },
+        { id: 'p1', label: 'RH', event: 'ready', tics: 8 }
+      ];
     });
-    eng.state.queue.push({ id: 'p1', label: 'RH', event: 'ready', tics: 8 });
 
     const result = eng.tick();
     assert.equal(result.playerReady, false, 'ready is still behind the monster successor');
     assert.equal(result.needsInput, false);
     assert.equal(result.row.id, 'm1');
-    assert.equal(eng.state.queue.some(r => r.id === 'p1'), true, 'ready row was not skipped or removed');
+    assert.equal(persisted(eng).queue.some(r => r.id === 'p1'), true, 'ready row was not skipped or removed');
 
     // Monster cooldown landed at 4; ready is at 6. One more tick reaches the ready head.
     const mid = eng.tick();
@@ -37,6 +41,6 @@ describe('Master clock decision point (PC-106)', () => {
     const paused = eng.tick();
     assert.equal(paused.playerReady, true, 'menu opens when the ready row is the head');
     assert.equal(paused.needsInput, true);
-    assert.equal(eng.state.queue[0].id, 'p1', 'pause does not remove the ready row');
+    assert.equal(persisted(eng).queue[0].id, 'p1', 'pause does not remove the ready row');
   });
 });

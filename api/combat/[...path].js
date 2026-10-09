@@ -43,7 +43,7 @@ export function rollMultiplier(base, range, rng = Math.random) {
 }
 
 /**
- * Monsters that contribute loot. Persisted battle_state is engine.state,
+ * Monsters that contribute loot. Persisted battle_state is getPersistedState(),
  * whose monsters live at state.monsters (full objects, including template_id).
  * participants.monsters exists only on the in-memory getState() snapshot and
  * is NOT what gets saved. Do not filter on .dead — death is current_hp <= 0,
@@ -503,7 +503,7 @@ async function handle(request) {
               };
               const eng = createEngine();
               eng.startBattle(participants, null, null, maxPlayerHp);
-              battleStateForRun1 = eng.state;
+              battleStateForRun1 = eng.getPersistedState();
               await admin.from('portal_run').update({ battle_state: battleStateForRun1 }).eq('id', run.id).eq('user_id', user.id);
             }
           }
@@ -826,8 +826,9 @@ async function handle(request) {
       };
       const engine = createEngine();
       const battleStateOut = engine.startBattle(participants, null, null, await startingHp(admin));
+      const persisted = engine.getPersistedState();
       await admin.from('portal_run')
-        .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp })
+        .update({ battle_state: persisted, player_hp: persisted.player ? persisted.player.hp : run.player_hp })
         .eq('id', id).eq('user_id', user.id);
       return json({
         queue: battleStateOut.queue,
@@ -933,11 +934,12 @@ async function handle(request) {
       }
 
       const committed = engine.commitAttack(hand, attackIdNum, effectiveTargetIds, { castTicks, cooldownTicks, playerDamage, isMultiTarget, attackName, playerAccuracy, playerCritChance, playerCritMultiplier });
-      // NO advanceToNextDecision — commit removes the ready head, inserts the
+      // NO clock walk — commit removes the ready head, inserts the
       // winding row, and returns immediately. The client drives /tick.
 
+      const nextState = engine.getPersistedState();
       await admin.from('portal_run')
-        .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp, ...potionUsedFlags(engine.state) })
+        .update({ battle_state: nextState, player_hp: nextState.player ? nextState.player.hp : run.player_hp, ...potionUsedFlags(nextState) })
         .eq('id', id).eq('user_id', user.id);
       return json(commitSnapshot(engine, committed));
     }
@@ -965,8 +967,9 @@ async function handle(request) {
       // Persist state. A drink resolves on tick, so used-flags must land here
       // or the potion comes back next fight when no later commit rewrites them.
       const newState = engine.getState();
+      const saved = engine.getPersistedState();
       await admin.from('portal_run')
-        .update({ battle_state: engine.state, player_hp: engine.state.player ? engine.state.player.hp : run.player_hp, ...potionUsedFlags(engine.state) })
+        .update({ battle_state: saved, player_hp: saved.player ? saved.player.hp : run.player_hp, ...potionUsedFlags(saved) })
         .eq('id', id).eq('user_id', user.id);
 
       return json({
@@ -1177,13 +1180,14 @@ async function handle(request) {
           };
           const freshEngine = createEngine();
           // F10: carry HP via initialPlayerHp param into startBattle
-          const carryHp = engine && engine.state.player ? engine.state.player.hp : run.player_hp;
+          const prior = engine ? engine.getPersistedState() : null;
+          const carryHp = prior && prior.player ? prior.player.hp : run.player_hp;
           freshEngine.startBattle(participants, null, carryHp, await startingHp(admin));
-          newBattleState = freshEngine.state;
+          newBattleState = freshEngine.getPersistedState();
           await admin.from('portal_run')
             .update({ battle_state: newBattleState, current_battle: newBattle, player_hp: carryHp, prize_pool: prizePool })
             .eq('id', id).eq('user_id', user.id);
-          return json({ status: 'active', current_battle: newBattle, prize_pool: prizePool, battle_state: { participants: freshEngine.getState().participants, intro: freshEngine.state.intro || null, tic: freshEngine.state.tic, queue: freshEngine.state.queue, feed: freshEngine.state.feed } });
+          return json({ status: 'active', current_battle: newBattle, prize_pool: prizePool, battle_state: { participants: freshEngine.getState().participants, intro: newBattleState.intro || null, tic: newBattleState.tic, queue: newBattleState.queue, feed: newBattleState.feed } });
         } else {
           // only complete if monsters_dead on final battle
           if (s.monsters_dead) {
@@ -1275,10 +1279,13 @@ async function handle(request) {
       let engine = null;
       if (persisted && persisted.player) {
         engine = resumeEngine(persisted, Math.random);
-        // PC-39: legacy battle_state may predate potion seeding — backfill from DB
-        if (!engine.state.potions || !engine.state.potions[slot]) {
+        // PC-39: legacy battle_state may predate potion seeding — backfill from DB.
+        // Write through loadState; the persisted snapshot is a deep copy.
+        const seeded = engine.getPersistedState();
+        if (!seeded.potions || !seeded.potions[slot]) {
           const potionLoadout = await buildPotionLoadout(run);
-          engine.state.potions = { A: potionLoadout.A, B: potionLoadout.B };
+          seeded.potions = { A: potionLoadout.A, B: potionLoadout.B };
+          engine.loadState(seeded);
         }
       } else {
         const potionLoadout = await buildPotionLoadout(run);
@@ -1289,19 +1296,20 @@ async function handle(request) {
         }, null, run.player_hp > 0 ? run.player_hp : null, await startingHp(admin));
       }
 
-      const inBattle = !!engine.state.player && engine.state.monsters.some(m => (m.current_hp || 0) > 0);
+      const battle = engine.getPersistedState();
+      const inBattle = !!battle.player && battle.monsters.some(m => (m.current_hp || 0) > 0);
       const params = { phase: inBattle ? 'in-battle' : 'between-fights' };
       if (inBattle) {
         const requested = String(body.hand || '').toUpperCase();
         let hand;
         if (requested === 'LH' || requested === 'RH') {
           // The open menu names the hand. Do not fall back to the other ready hand.
-          if (engine.state.player?.hands?.[requested]?.state !== 'Ready') {
+          if (battle.player?.hands?.[requested]?.state !== 'Ready') {
             return json({ error: 'Hand not ready' }, 400);
           }
           hand = requested;
         } else {
-          hand = ['LH', 'RH'].find(h => engine.state.player?.hands?.[h]?.state === 'Ready');
+          hand = ['LH', 'RH'].find(h => battle.player?.hands?.[h]?.state === 'Ready');
           if (!hand) return json({ error: 'No free hand' }, 400);
         }
         const weaponId = hand === 'LH' ? run.hand_l_weapon_id : run.hand_r_weapon_id;
@@ -1324,11 +1332,12 @@ async function handle(request) {
       } catch (e) {
         return json({ error: e.message || 'Potion use failed' }, 400);
       }
-      const potionUsed = !!(engine.state.potions?.[slot]?.used);
+      const afterPotion = engine.getPersistedState();
+      const potionUsed = !!(afterPotion.potions?.[slot]?.used);
       await admin.from('portal_run')
         .update({
-          battle_state: engine.state,
-          player_hp: engine.state.player ? engine.state.player.hp : run.player_hp,
+          battle_state: afterPotion,
+          player_hp: afterPotion.player ? afterPotion.player.hp : run.player_hp,
           [slot === 'A' ? 'consume_a_used' : 'consume_b_used']: potionUsed
         })
         .eq('id', id).eq('user_id', user.id);
@@ -1339,7 +1348,7 @@ async function handle(request) {
     // POST /api/combat/runs/:id/swap {hand: 'LH'|'RH'}  (PC-54: mid-battle belt swap)
     // Exchanges the hand weapon with the belt weapon when the hand is Ready.
     // Delay = max(speed hand, speed belt) applied as a cooldown row on the hand.
-    // NOTE: battle_state (engine.state) carries no weapons object — the GET
+    // NOTE: persisted battle_state carries no weapons object — the GET
     // /runs/:id response rebuilds weapons from the run's weapon-pointer columns,
     // so a durable swap MUST update those columns here too.
     if (path.includes('/swap') && method === 'POST') {
@@ -1397,10 +1406,11 @@ async function handle(request) {
 
       // Persist engine state AND the weapon-pointer columns (source of truth for
       // the GET weapons rebuild — without this the swap reverts on reload).
+      const swapped = engine.getPersistedState();
       await admin.from('portal_run')
         .update({
-          battle_state: engine.state,
-          player_hp: engine.state.player ? engine.state.player.hp : run.player_hp,
+          battle_state: swapped,
+          player_hp: swapped.player ? swapped.player.hp : run.player_hp,
           hand_l_weapon_id: weapons.hand_l ? weapons.hand_l.id : null,
           hand_r_weapon_id: weapons.hand_r ? weapons.hand_r.id : null,
           belt_weapon_id: weapons.belt ? weapons.belt.id : null
@@ -1789,7 +1799,7 @@ async function handle(request) {
       };
       const freshEngine = createEngine();
       freshEngine.startBattle(participants, null, playerHp, await startingHp(admin));
-      const newState = freshEngine.state;
+      const newState = freshEngine.getPersistedState();
       // persist
       try {
         await admin.from('portal_run').update({ battle_state: newState, player_hp: playerHp }).eq('id', run.id).eq('user_id', run.user_id);
@@ -1961,7 +1971,8 @@ async function handle(request) {
         const m = await generateOneMonster(templateId, usedLabels);
         if (m.error) return json({ error: m.error }, m.status || 400);
         const eng = resumeEngine(run.battle_state, Math.random);
-        const playerHp = eng && eng.state.player ? eng.state.player.hp : run.player_hp;
+        const snap = eng.getPersistedState();
+        const playerHp = snap && snap.player ? snap.player.hp : run.player_hp;
         try {
           const s = await rebuildBattleState(run, [...live, m], playerHp);
           return json({ monster: m, battle_state: s });
@@ -1989,7 +2000,8 @@ async function handle(request) {
         if (foundIdx === -1) return json({ error: 'no such monster' }, 404);
         const remaining = live.filter((_, i) => i !== foundIdx);
         const eng = resumeEngine(run.battle_state, Math.random);
-        const playerHp = eng && eng.state.player ? eng.state.player.hp : run.player_hp;
+        const snap = eng.getPersistedState();
+        const playerHp = snap && snap.player ? snap.player.hp : run.player_hp;
         try {
           const s = await rebuildBattleState(run, remaining, playerHp);
           return json({ removed, battle_state: s });

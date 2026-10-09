@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import createEngine from '../js/combat/engine.js';
 import { peekHead } from '../js/combat/tic-queue.js';
+import { persisted, writeState } from './live-clock.js';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(root, rel), 'utf8');
@@ -46,35 +47,37 @@ describe('Master clock tick order (PC-94)', () => {
       loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 1, hand_r_speed: 2 },
       monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 8, accuracy: 70, label: 'A' }]
     });
-    // startBattle advances to the first decision. Rewind to the seeded queue
-    // so this test still proves tick() processes the peeked approach head.
-    const intro = eng.state.intro;
-    eng.state.tic = 0;
-    eng.state.queue = intro.rows.map(r => ({ ...r }));
-    eng.state.player.hands.LH.state = 'Approach';
-    eng.state.player.hands.RH.state = 'Approach';
-    eng.state.player.hp = intro.hpStart;
-    eng.state.feed = [...(intro.seedFeed || [])];
-    const head = peekHead(eng.state.queue);
+    // startBattle leaves the tic-0 seed. Rewind anyway so this test still
+    // proves tick() processes the peeked approach head, not a later row.
+    const intro = persisted(eng).intro;
+    writeState(eng, snap => {
+      snap.tic = 0;
+      snap.queue = intro.rows.map(r => ({ ...r }));
+      snap.player.hands.LH.state = 'Approach';
+      snap.player.hands.RH.state = 'Approach';
+      snap.player.hp = intro.hpStart;
+      snap.feed = [...(intro.seedFeed || [])];
+    });
+    const head = peekHead(persisted(eng).queue);
     assert.ok(head, 'queue has a non-ready head');
-    // LH approach key 1 is ahead of RH 2 and the monster attack (speed 8 + prepare 1).
+    // LH approach key 1 is ahead of RH 2 and the monster cooldown (speed 8).
     assert.equal(head.label, 'LH');
     assert.equal(head.event, 'approach');
     assert.equal(head.tics, 1);
-    const feedBefore = eng.state.feed.length;
+    const feedBefore = persisted(eng).feed.length;
     const result = eng.tick();
-    assert.equal(result.row, head, 'tick returns the peeked head');
+    assert.equal(result.row.id, head.id, 'tick returns the peeked head');
     assert.equal(result.row.event, 'approach');
-    assert.equal(eng.state.queue.includes(head), false, 'processed head is gone after tick');
-    assert.ok(eng.state.feed.length > feedBefore, 'process ran and wrote narration before return');
-    assert.equal(eng.state.player.hands.LH.state, 'Ready');
+    assert.equal(persisted(eng).queue.some(r => r.id === head.id), false, 'processed head is gone after tick');
+    assert.ok(persisted(eng).feed.length > feedBefore, 'process ran and wrote narration before return');
+    assert.equal(persisted(eng).player.hands.LH.state, 'Ready');
     assert.equal(result.needsInput, true, 'approach insert leaves a ready head, so the clock pauses');
-    assert.equal(peekHead(eng.state.queue).event, 'ready');
+    assert.equal(peekHead(persisted(eng).queue).event, 'ready');
   });
 
   it('tick() source removes the head before process', () => {
     const src = read('js/combat/engine.js');
-    const tick = src.slice(src.indexOf('function tick()'), src.indexOf('function legacyNonReadyIndex'));
+    const tick = src.slice(src.indexOf('function tick()'), src.indexOf('function isBattleOver'));
     const processAt = tick.indexOf('process(removed)');
     const removeAt = tick.indexOf('const removed = remove()');
     assert.ok(removeAt > 0, 'remove() is in tick()');

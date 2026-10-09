@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { resolveAttack } from '../js/combat/damage.js';
 import createEngine from '../js/combat/engine.js';
+import { persisted, writeState, readyHand, tickPast } from './live-clock.js';
 
 function seededRNG(seed = 42) {
   let s = seed;
@@ -113,31 +114,31 @@ describe('PC-72: player attack crit through the engine (feed marker)', () => {
   it('player crit: damage doubled and feed line carries exactly " CRITICAL!"', () => {
     const eng = createEngine(() => 0.001); // hit + crit both pass
     eng.startBattle(makeParticipants());
-    eng.advanceToNextDecision();
-    const hpBefore = eng.state.monsters[0].current_hp;
+    readyHand(eng, 'LH');
+    const hpBefore = persisted(eng).monsters[0].current_hp;
     eng.commitAttack('LH', 1, [1], {
       castTicks: 1, cooldownTicks: 1, playerDamage: 10,
       playerAccuracy: 100, playerCritChance: 100, playerCritMultiplier: 2.0
     });
-    for (let i = 0; i < 5; i++) eng.advanceToNextDecision();
-    assert.equal(hpBefore - eng.state.monsters[0].current_hp, 20, 'crit damage = 2×10');
-    const critLine = eng.state.feed.find(l => l.includes(' CRITICAL!'));
+    tickPast(eng, s => s.feed.some(l => l.includes(' CRITICAL!')));
+    assert.equal(hpBefore - persisted(eng).monsters[0].current_hp, 20, 'crit damage = 2×10');
+    const critLine = persisted(eng).feed.find(l => l.includes(' CRITICAL!'));
     assert.ok(critLine, 'feed carries a CRITICAL! line');
     assert.match(critLine, /hits A for 20 CRITICAL!$/);
-    assert.ok(!/CRITICAL!{2,}/.test(eng.state.feed.join(' ')), 'no doubled marker');
+    assert.ok(!/CRITICAL!{2,}/.test(persisted(eng).feed.join(' ')), 'no doubled marker');
   });
 
   it('player crit 0 → no CRITICAL! marker even with crit-favorable RNG', () => {
     const eng = createEngine(() => 0.001);
     eng.startBattle(makeParticipants());
-    eng.advanceToNextDecision();
+    readyHand(eng, 'LH');
     eng.commitAttack('LH', 1, [1], {
       castTicks: 1, cooldownTicks: 1, playerDamage: 10,
       playerAccuracy: 100, playerCritChance: 0, playerCritMultiplier: 2.0
     });
-    for (let i = 0; i < 5; i++) eng.advanceToNextDecision();
-    assert.equal(eng.state.monsters[0].current_hp, 90, 'normal 10 damage, no crit');
-    assert.ok(!eng.state.feed.some(l => l.includes(' CRITICAL!')), 'no crit marker');
+    tickPast(eng, s => /hits A for \d+/.test(s.feed.join('\n')));
+    assert.equal(persisted(eng).monsters[0].current_hp, 90, 'normal 10 damage, no crit');
+    assert.ok(!persisted(eng).feed.some(l => l.includes(' CRITICAL!')), 'no crit marker');
   });
 });
 
@@ -154,8 +155,8 @@ describe('PC-72: monster attack crit (feed marker + multiplier)', () => {
     });
     let critLine = null;
     for (let i = 0; i < 40 && !critLine; i++) {
-      eng.advanceToNextDecision();
-      critLine = eng.state.feed.find(l => l.includes(' CRITICAL!'));
+      tickPast(eng, s => s.feed.some(l => l.includes(' CRITICAL!')), 1);
+      critLine = persisted(eng).feed.find(l => l.includes(' CRITICAL!'));
     }
     assert.ok(critLine, 'monster crit line present');
     // damage 10 (rng 0.5 → ±3 roll lands 0) × 2.5 = 25
@@ -172,8 +173,8 @@ describe('PC-72: monster attack crit (feed marker + multiplier)', () => {
         attacks: [{ id: 9, name: 'slam', crit_factor: 2, crit_multiplier: 2.5 }]
       }]
     });
-    for (let i = 0; i < 30; i++) eng.advanceToNextDecision();
-    assert.ok(!eng.state.feed.some(l => l.includes(' CRITICAL!')), 'no crit marker');
+    tickPast(eng, () => false, 30);
+    assert.ok(!persisted(eng).feed.some(l => l.includes(' CRITICAL!')), 'no crit marker');
   });
 });
 
@@ -184,11 +185,11 @@ describe('PC-72: potion crit (effect ×1.5, duration ×1.5)', () => {
       effect_type: 'heal', rolled_floor: 100, rolled_speed: 2, template_name: 'Heal',
       crit_chance: 100, critEffectMultiplier: 1.5, critDurationMultiplier: 1.5
     }));
-    eng.state.player.hp = 800;
+    writeState(eng, snap => { snap.player.hp = 800; });
     eng.commitPotion('A', { phase: 'between-fights' });
     // round(100 × 1.5) = 150
-    assert.equal(eng.state.player.hp, 950);
-    assert.ok(eng.state.feed.some(l => l.includes('healed 150 CRITICAL!')), 'heal crit line');
+    assert.equal(persisted(eng).player.hp, 950);
+    assert.ok(persisted(eng).feed.some(l => l.includes('healed 150 CRITICAL!')), 'heal crit line');
   });
 
   it('buff potion crit: value ×1.5 AND duration_ticks ×1.5 (rounded)', () => {
@@ -199,11 +200,11 @@ describe('PC-72: potion crit (effect ×1.5, duration ×1.5)', () => {
     }));
     eng.commitPotion('A', { phase: 'between-fights' });
     // value = round(10 × 1.5) = 15; duration = round(4 × 1.5) = 6 → endTic = tic + 6
-    const tic = eng.state.tic;
-    const buff = eng.state.buffs[0];
+    const tic = persisted(eng).tic;
+    const buff = persisted(eng).buffs[0];
     assert.equal(buff.value, 15);
     assert.equal(buff.endTic, tic + 6);
-    assert.ok(eng.state.feed.some(l => l.includes(`damage +15 until tic ${tic + 6} CRITICAL!`)), 'buff crit line');
+    assert.ok(persisted(eng).feed.some(l => l.includes(`damage +15 until tic ${tic + 6} CRITICAL!`)), 'buff crit line');
   });
 
   it('legacy potion (no crit_chance) → exact base effect, no CRITICAL!, no extra RNG', () => {
@@ -213,10 +214,10 @@ describe('PC-72: potion crit (effect ×1.5, duration ×1.5)', () => {
       effect_type: 'heal', rolled_floor: 100, rolled_speed: 2, template_name: 'Heal'
       // no crit_chance, no multipliers — legacy shape
     }));
-    eng.state.player.hp = 800;
+    writeState(eng, snap => { snap.player.hp = 800; });
     eng.commitPotion('A', { phase: 'between-fights' });
-    assert.equal(eng.state.player.hp, 900, 'exact base heal');
-    assert.ok(!eng.state.feed.some(l => l.includes('CRITICAL!')), 'no crit marker');
+    assert.equal(persisted(eng).player.hp, 900, 'exact base heal');
+    assert.ok(!persisted(eng).feed.some(l => l.includes('CRITICAL!')), 'no crit marker');
     assert.equal(draws, 0, 'no RNG consumed at all when crit_chance is absent');
   });
 
@@ -227,9 +228,9 @@ describe('PC-72: potion crit (effect ×1.5, duration ×1.5)', () => {
       effect_type: 'heal', rolled_floor: 100, rolled_speed: 2, template_name: 'Heal',
       crit_chance: 0, critEffectMultiplier: 1.5, critDurationMultiplier: 1.5
     }));
-    eng.state.player.hp = 800;
+    writeState(eng, snap => { snap.player.hp = 800; });
     eng.commitPotion('A', { phase: 'between-fights' });
-    assert.equal(eng.state.player.hp, 900, 'crit 0 → exact base heal');
+    assert.equal(persisted(eng).player.hp, 900, 'crit 0 → exact base heal');
     assert.equal(draws, 0, 'no crit roll consumed at 0%');
   });
 
@@ -243,11 +244,11 @@ describe('PC-72: potion crit (effect ×1.5, duration ×1.5)', () => {
       // accuracy 0 → monster always misses; player HP only changes via potion
       monsters: [{ id: 1, max_hp: 100, damage: 10, speed: 5, accuracy: 0, label: 'A' }]
     });
-    eng.state.player.hp = 800;
-    eng.advanceToNextDecision();
+    writeState(eng, snap => { snap.player.hp = 800; });
+    readyHand(eng, 'LH');
     eng.commitPotion('A', { weaponSpeed: 0 });
-    for (let i = 0; i < 8; i++) eng.advanceToNextDecision();
-    assert.equal(eng.state.player.hp, 950, 'in-battle heal crit applies ×1.5');
-    assert.ok(eng.state.feed.some(l => l.includes('healed 150 CRITICAL!')), 'drinking crit line');
+    tickPast(eng, s => s.feed.some(l => l.includes('healed 150 CRITICAL!')));
+    assert.equal(persisted(eng).player.hp, 950, 'in-battle heal crit applies ×1.5');
+    assert.ok(persisted(eng).feed.some(l => l.includes('healed 150 CRITICAL!')), 'drinking crit line');
   });
 });
