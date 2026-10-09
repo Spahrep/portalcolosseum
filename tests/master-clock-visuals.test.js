@@ -140,9 +140,12 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.equal(/buildQueueRow\(successor,\s*monsters,\s*bs,\s*true\)/.test(reseatFn), false,
       '4th arg is withMarkers, not the enter flag');
     assert.match(loop, /runQueueRemoval/); // non-head path still slides
-    const ceremonyAt = loop.indexOf('playInsertCeremony');
-    const readyRemove = loop.indexOf('runQueueRemoval([c.ready.id])');
-    assert.ok(ceremonyAt >= 0 && readyRemove > ceremonyAt, 'tickLoop: attack ceremony before ready slide-out');
+    assert.match(loop, /playQueueTransition\(/, 'tickLoop delegates the queue-transition ceremony');
+    assert.equal(loop.includes('playInsertCeremony'), false, 'tickLoop does not inline the ceremony');
+    const transition = fnBodyUntilNext(app, 'async function playQueueTransition', ['async function awaitTickVisuals']);
+    const ceremonyAt = transition.indexOf('playInsertCeremony');
+    const readyRemove = transition.indexOf('runQueueRemoval([c.ready.id])');
+    assert.ok(ceremonyAt >= 0 && readyRemove > ceremonyAt, 'playQueueTransition: attack ceremony before ready slide-out');
   });
 
   it('live render follows engine array order and does not re-sort or rebuild a same-id tick', () => {
@@ -179,8 +182,12 @@ describe('Master clock visual fidelity (client contract)', () => {
     const insert = fnBodyUntilNext(app, 'async _runInsert()', ['class BattleClock', 'async _runResolve()', 'async _renderNew()']);
     assert.equal(insert.includes('resolved.length === 0'), false);
     const renderNew = fnBodyUntilNext(app, 'async _renderNew()', ['/** All done']);
-    const clockCeremony = renderNew.indexOf('playInsertCeremony');
-    const clockRemove = renderNew.indexOf('runQueueRemoval');
+    assert.match(renderNew, /playQueueTransition\(/, 'battle clock delegates the queue-transition ceremony');
+    assert.equal(renderNew.includes('playInsertCeremony'), false, 'battle clock does not inline the ceremony');
+    assert.equal(renderNew.includes('runQueueRemoval'), false, 'battle clock does not inline the ready slide-out');
+    const transition = fnBodyUntilNext(app, 'async function playQueueTransition', ['async function awaitTickVisuals']);
+    const clockCeremony = transition.indexOf('playInsertCeremony');
+    const clockRemove = transition.indexOf('runQueueRemoval');
     assert.ok(clockCeremony >= 0 && clockRemove > clockCeremony, 'battle clock: attack ceremony before ready slide-out');
   });
 

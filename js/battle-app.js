@@ -149,31 +149,15 @@ class BattleClock {
       || (newBs.queue || []).filter(r => (diff.added || []).some(a => a.id === r.id));
     const ceremonyEntries = [...addedRows, ...commits.map(c => c.attack)];
 
-    // Attack lands in its slot first. Skip the closing reconcile when a ready
-    // placeholder still has to slide out — renderQueue would wipe it.
-    if (ceremonyEntries.length > 0) {
-      await playInsertCeremony(ceremonyEntries, preset, newBs, { reconcile: commits.length === 0 });
-    }
-
-    for (const c of commits) {
-      if (animationsSkipped(preset)) {
-        const el = findQueueRowByIdentity(c.ready);
-        if (el) el.remove();
-      } else {
-        await runQueueRemoval([c.ready.id]);
-      }
-    }
-
-    if (commits.length > 0 || ceremonyEntries.length === 0) {
-      renderQueue(newBs);
-    }
-
-    const qp = document.querySelector('.queue-panel');
-    if (qp && ceremonyEntries.length > 0 && !animationsSkipped(preset)) {
-      qp.classList.add('queue-arrived');
-      await waitForEvent(qp, 'animationend', 400);
-      qp.classList.remove('queue-arrived');
-    }
+    // Id-matched adds. Pulse is post-commit only; the tick loop does not flash.
+    await playQueueTransition({
+      ceremonyEntries,
+      readyCommits: commits,
+      bs: newBs,
+      preset,
+      reconcile: commits.length === 0,
+      pulse: true,
+    });
 
     this._finish();
   }
@@ -621,6 +605,47 @@ async function playInsertCeremony(entries, preset, bs, opts) {
     }
   }
   if (bs && reconcile) renderQueue(bs);
+}
+
+/**
+ * Queue-transition ceremony shared by BattleClock._renderNew and tickLoop.
+ * Attack rows land, ready placeholders slide out, then the queue reconciles.
+ * Callers build ceremonyEntries (clock matches added ids; tick matches stable
+ * keys) and pass the preset they already captured.
+ *
+ * reconcile stays false while a ready placeholder still has to slide out —
+ * playInsertCeremony's closing renderQueue would wipe it. Both callers pass
+ * readyCommits.length === 0. pulse is the post-commit panel flash only; the
+ * tick loop must not pulse or the live clock gains a beat it never had.
+ */
+async function playQueueTransition({ ceremonyEntries, readyCommits, bs, preset, reconcile, pulse }) {
+  const closeReconcile = reconcile !== undefined ? reconcile : readyCommits.length === 0;
+
+  if (ceremonyEntries.length > 0) {
+    await playInsertCeremony(ceremonyEntries, preset, bs, { reconcile: closeReconcile });
+  }
+
+  for (const c of readyCommits) {
+    if (animationsSkipped(preset)) {
+      const el = findQueueRowByIdentity(c.ready);
+      if (el) el.remove();
+    } else {
+      await runQueueRemoval([c.ready.id]);
+    }
+  }
+
+  if (readyCommits.length > 0 || ceremonyEntries.length === 0) {
+    renderQueue(bs);
+  }
+
+  if (pulse) {
+    const qp = document.querySelector('.queue-panel');
+    if (qp && ceremonyEntries.length > 0 && !animationsSkipped(preset)) {
+      qp.classList.add('queue-arrived');
+      await waitForEvent(qp, 'animationend', 400);
+      qp.classList.remove('queue-arrived');
+    }
+  }
 }
 
 /** Hit-shake / fresh death cards started this tick. Resolves on animationend. */
@@ -2216,22 +2241,17 @@ async function tickLoop(runId) {
 
       // Attack ceremony first, then the ready placeholder slides out.
       // added stays key-based so a same-key successor is not a new insert.
+      // No panel pulse — that flash belongs to the post-commit clock only.
       const added = newQueue.filter(r => !oldKeys.has(queueRowKey(r)));
       const ceremonyEntries = [...added, ...readyCommits.map(c => c.attack)];
-      if (ceremonyEntries.length > 0) {
-        await playInsertCeremony(ceremonyEntries, preset, bs, { reconcile: readyCommits.length === 0 });
-      }
-      for (const c of readyCommits) {
-        if (animationsSkipped(preset)) {
-          const el = findQueueRowByIdentity(c.ready);
-          if (el) el.remove();
-        } else {
-          await runQueueRemoval([c.ready.id]);
-        }
-      }
-      if (readyCommits.length > 0 || ceremonyEntries.length === 0) {
-        renderQueue(bs);
-      }
+      await playQueueTransition({
+        ceremonyEntries,
+        readyCommits,
+        bs,
+        preset,
+        reconcile: readyCommits.length === 0,
+        pulse: false,
+      });
 
       lastBs = bs;
       oldQueue = [...newQueue];
