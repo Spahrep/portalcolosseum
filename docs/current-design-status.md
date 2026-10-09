@@ -1,5 +1,12 @@
 # Current Design Status (as of 2026-09-30)
 
+> **⚠️ INDEX ONLY — line anchors unreliable (updated 2026-10-08).** This file's
+> `file:line` pointers into `js/`, `api/`, and migrations have historically been
+> wrong (verified 2026-10-08: several cite nonexistent lines/functions). Use this
+> file ONLY as a broad topic index. When you need a symbol's actual location,
+> `grep` the codebase for the symbol (or check `DOCS.md` → the one mechanic doc
+> for your task). Never "fix" code to match a line number quoted here.
+
 This file captures the current state of design decisions for Portal Colosseum. It is intended as a living reference until decisions are moved into more permanent documents.
 
 ## Weapon Generation (documented in weapon-generation.md)
@@ -113,7 +120,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - **Death = kicked out, prize pool forfeited; brought items never lost**
 - **No inventory access between fights** — 5-item loadout (Hand L/R, BL, C1/C2) locked at entry
 - Entry costs: X AP + Y gold, deeper portals cost more (P2 = 4×Y example)
-- **SCHEMA (2026-09-10, consumable FKs shipped 2026-09-11):** `portal_run` loadout FKs (hand_l/r_weapon_id, belt_weapon_id, consume_a/b_id), current_battle, total_battles, player_hp, battle_state jsonb. Consume A/B were a weapon_instance placeholder; they now FK to `consumable_instance` (`supabase/migrations/20260911130000_consumable_instances.sql:68-78`). Consumable use ships: the engine seeds `consume_a`/`consume_b` (`js/combat/engine.js:635-639`) and applies effects in `js/combat/potion-effects.js:28`.
+- **SCHEMA (2026-09-10, consumable FKs shipped 2026-09-11):** `portal_run` loadout FKs (hand_l/r_weapon_id, belt_weapon_id, consume_a/b_id), current_battle, total_battles, player_hp, battle_state jsonb. Consume A/B were a weapon_instance placeholder; they now FK to `consumable_instance` (`supabase/migrations/20260911130000_consumable_instances.sql:68-78`). Consumable use ships: the engine seeds `consume_a`/`consume_b` (grep `potionSlot` / `POTION_SLOTS` in `js/combat/engine.js` — line numbers move; verify by symbol) and applies effects in `js/combat/potion-effects.js:28`.
 
 ## Loot & Prize Pool (documented in loot-prize-pool.md)
 
@@ -125,7 +132,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - No 100% guaranteed drops (just very high weights)
 - Same item can drop multiple times (no stack cap for MVP)
 - Leftover LP below cheapest item cost is voided
-- **Stop-share (shipped, re-designed PC-DEC-056 2026-09-30):** early stop pays `portal_template.stop_share_tiers` via `computeStopShare` (`api/combat/[...path].js:213-227`, applied at `:1141-1185`): player-selected items up to `sel_items`, then a random slice of the remainder up to `rand_items`, gold scaled by `gold_pct`. Tiers are now **progress-keyed** (each entry `{progress, gold_pct, sel_items, rand_items}`, `progress` = fraction of run cleared) so they auto-scale to any portal length — not positional by fight number. Default accelerating curve: gold 15/30/50/70/100%, items 0/0/1/1/2 sel + 0/1/1/2/2 rand. Full clear keeps the pool (`:153-154`). Death forfeits prize-pool weapons (`:1003-1010`). Random picks are revealed with a roulette-style sweep (same theater as the dice ceremony) — a reveal, not a silent server pick. Migration: `supabase/migrations/20260930XXXXXX_stop_share_progress_tiers.sql`.
+- **Stop-share (shipped, re-designed PC-DEC-056 2026-09-30):** early stop pays `portal_template.stop_share_tiers` via `computeStopShare` (`api/combat/[...path].js:213-227`, applied at `:1141-1185`): player-selected items up to `sel_items`, then a random slice of the remainder up to `rand_items`, gold scaled by `gold_pct`. Tiers are now **progress-keyed** (each entry `{progress, gold_pct, sel_items, rand_items}`, `progress` = fraction of run cleared) so they auto-scale to any portal length — not positional by fight number. Default accelerating curve: gold 15/30/50/70/100%, items 0/0/1/1/2 sel + 0/1/1/2/2 rand. Full clear keeps the pool (`:153-154`). Death forfeits prize-pool weapons (`:1003-1010`). Random picks are revealed with a roulette-style sweep (same theater as the dice ceremony) — a reveal, not a silent server pick. Migration: `supabase/migrations/20260930130000_stop_share_progress_tiers.sql`.
 - **Consumables are equipment-class loot** — take LP like weapons, template-costed, same portal/monster assignment
 
 ### Gold Drops

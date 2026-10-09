@@ -577,14 +577,13 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
 
 ## Open
 
+> No open items. Everything previously listed has been decided or superseded (see ## Rejected / Superseded).
+
+## Rejected / Superseded
+
 - ID: PC-DEC-004
   Date: 2026-09-16
   Source: CLI session (C3 follow-up)
   Speaker: Spahrep
   Verbatim: "the current preview marker system doesnt exsit, and the timing column isn't exactly workign as intended either, so we need to come back to that oo"
-  Status: OPEN
-  Notes: Implementation-reality statement, not a design decision. Confirmed against code: no preview/marker system in js/battle-app.js (grep preview = 0); only renderQueue() exists. Recorded in battle-status-ui.md status banner. Whole timing/preview area is an open revisit — no ticket yet.
-
-## Rejected / Superseded
-
-(none yet)
+  Status: SUPERSEDED (2026-10-08) — the ">" timing markers shipped in PC-56 (see PC-DEC-020); the full preview band is tracked as PMVP in battle-status-ui.md. The "doesn't exist" premise is no longer true, so this is closed, not open.

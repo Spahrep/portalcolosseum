@@ -2,6 +2,8 @@
 
 > Web arena battler built with HTML5 canvas + Supabase + Vercel. Developed by Spahrep with his son DarkJester. Live at [portalcolosseum.com](https://portalcolosseum.com).
 
+> **🗺️ READ THIS FIRST: [`DOCS.md`](DOCS.md)** — the read-order map to the docs, one source of truth per role, and what to skip. The full `docs/` tree is ~140k tokens; load the one doc you need, never the tree.
+
 ---
 
 ## Project Overview
@@ -10,12 +12,13 @@ Portal Colosseum is a text-based browser arena battler being co-developed by fat
 
 ## Agent Team & Workflow
 
-The project uses a 3-hat model (not 6 separate bots):
-- **Foreman** (Hermes, Laguna S 2.1) — plans, git, deploys, explains
-- **Builder** (Laguna via `delegate_task`) — writes code, escalates to Grok after 2 failures
-- **Security Reviewer** (Claude, one pass) — only when auth/RLS/secrets are touched
+**The workflow source of truth is [`AGENTS.md`](AGENTS.md)** — this README is the human-facing index and may drift. The current model allocation (updated 2026-10-08):
+- **Hermes** — Foreman/orchestrator: plans, git, deploys, explains, mechanical-only direct edits.
+- **Grok (via `delegate_task`, pinned xai-oauth)** — the **default Builder** for all non-mechanical code, per AGENTS.md. Grok is PAID (SuperGrok weekly-reset quota, not free); batch deliberately.
+- **Claude (Claude Code CLI)** — Security Reviewer, ON REQUEST ONLY (Spahrep), one pass, batched.
+- Approval: on-script work (anything Spahrep asked for) commits + ships WITHOUT approval. Approval required ONLY for off-script scope expansion.
 
-Model allocation: **Laguna is the default** (free). Grok (paid) is for hard problems. Claude ($20 pot) is for security ONLY. See the decision flow: plan → delegate (Laguna) → escalate to Grok if 2 failures → Claude review only if security triggers fire → preview deploy → commit.
+See AGENTS.md for the full protocol, including the Context Budget discipline (never read a whole file over ~800 lines; one self-contained subagent per change).
 
 ---
 
@@ -32,21 +35,16 @@ Model allocation: **Laguna is the default** (free). Grok (paid) is for hard prob
 - **`progression-gating.md`** — How player progression is gated: portal unlocks, the 3-active-portals limit, and the "magical aura" shop tiering.
 - **`shops-and-economy.md`** — Shops & item economy: output-based pricing (shop by roll, drops by template), per-category price curves, portal-gated shop tiers, exponential rerolls with AP reset, three gates against grinding.
 
-### Technical Docs
-- **`aws-future-stack.md`** — Future deployment architecture on AWS (S3 + CloudFront + Route 53), including cost estimates and migration from Vercel. Documents the roadmap for moving to AWS.
-- **`naming-convention.md`** — Database naming conventions: singular snake_case table names (e.g., `weapon_template`, `attack_pool`, `user`), column naming rules, and SQL schema patterns.
-- **`setup-environment-variables.md`** — Complete guide to configuring Supabase, Google OAuth, GitHub OAuth, and Vercel environment variables. Includes .env.local setup, OAuth redirect URIs, and troubleshooting.
-- **`current-design-status.md`** — The authoritative snapshot of what's implemented vs. planned. Covers completed work (auth refactoring, PKCE migration), current bugs, and the next 5 milestones.
-- **`weapon-generation.md`** — How weapons are procedurally generated: template system, stat randomization, grade assignment, and the attack pool mechanism.
+- `docs/main` — see `DOCS.md` for the read-order. Notable: `naming-convention.md` (singular snake_case DB conventions), `setup-environment-variables.md` (Supabase/OAuth config — replaces SUPABASE_SETUP.md, which is historical), `weapon-generation.md` (template system, stat randomization, grade). **`current-design-status.md` is an INDEX only — its file:line anchors are historically unreliable; verify any pointer against real code.**
 
 ### Agent Workflow
-- **`coding-agent-playbook.md`** — How the Hermes/Grok/Claude team collaborates: delegation patterns, constraint rules (no new stack, no SladeMini production), definition of done, and the commit/push/preview cycle.
+- **`coding-agent-playbook.md`** — OUTDATED and contradicts AGENTS.md (it names OpenCode as the default coder; AGENTS.md pins Grok). Ignore it; **AGENTS.md is the workflow source of truth.**
 
 ---
 
 ## Root-Level Documents
 
-- **`SUPABASE_SETUP.md`** — Step-by-step Supabase project creation, OAuth provider configuration (Google, GitHub), site URL setup, and code integration. Includes troubleshooting for "Invalid API key" and redirect loops. Replaces the old "code 1234" login with real accounts.
+- **`SUPABASE_SETUP.md`** — **HISTORICAL.** Superseded by `docs/setup-environment-variables.md` and the live `/api/env.js` auth path. Ignore for setup.
 
 
 ## Shared Documents (/home/spahrep/shared/)
