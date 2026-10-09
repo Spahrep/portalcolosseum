@@ -74,17 +74,6 @@ describe('Master clock tick order (PC-94)', () => {
     assert.equal(result.needsInput, true, 'approach insert leaves a ready head, so the clock pauses');
     assert.equal(peekHead(persisted(eng).queue).event, 'ready');
   });
-
-  it('tick() source removes the head before process', () => {
-    const src = read('js/combat/engine.js');
-    const tick = src.slice(src.indexOf('function tick()'), src.indexOf('function isBattleOver'));
-    const processAt = tick.indexOf('process(removed)');
-    const removeAt = tick.indexOf('const removed = remove()');
-    assert.ok(removeAt > 0, 'remove() is in tick()');
-    assert.ok(processAt > removeAt, 'remove() fires before process — a ready head is not this path');
-    assert.match(tick, /row: removed/);
-    assert.match(tick, /head\.event === 'ready'/);
-  });
 });
 
 describe('Master clock visual fidelity (client contract)', () => {

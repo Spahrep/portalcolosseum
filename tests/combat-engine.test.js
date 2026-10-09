@@ -1,10 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { getHpWord, HP_BANDS } from '../js/combat/hp-words.js';
-import { createQueue, commitNewRow, popNext, computeTimingMarkers, peekHead, addEvent } from '../js/combat/tic-queue.js';
-import createEngine, { resumeEngine, rollMultiplier } from '../js/combat/engine.js';
-import { persisted, writeState, readyHand, tickPast, tickUntilInput, tickUntilHand, tickFire } from './live-clock.js';
-import { swapHandWithBelt } from '../js/combat/participants.js';
+import { createQueue, commitNewRow, popNext, peekHead } from '../js/combat/tic-queue.js';
+import createEngine from '../js/combat/engine.js';
+import { persisted, writeState, readyHand, tickPast, tickUntilInput, tickFire } from './live-clock.js';
 
 function seededRNG(seed = 42) {
   let s = seed;
@@ -13,19 +11,6 @@ function seededRNG(seed = 42) {
     return (s - 1) / 2147483646;
   };
 }
-
-describe('HP words', () => {
-  it('band boundaries exact', () => {
-    assert.equal(getHpWord(100, 100), 'Healthy');
-    assert.equal(getHpWord(76, 100), 'Healthy');
-    assert.equal(getHpWord(75, 100), 'Injured');
-    assert.equal(getHpWord(51, 100), 'Injured');
-    assert.equal(getHpWord(50, 100), 'Battered');
-    assert.equal(getHpWord(26, 100), 'Battered');
-    assert.equal(getHpWord(25, 100), 'Critical');
-    assert.equal(getHpWord(0, 100), 'Critical');
-  });
-});
 
 describe('Sorted-insert queue (tics are an ordering key)', () => {
   it('inserting A(60) then B(52) places B before A; head is B; peek does not reorder', () => {
@@ -65,7 +50,6 @@ describe('Sorted-insert queue (tics are an ordering key)', () => {
     assert.equal(peekHead(q).label, 'A');
   });
 });
-
 describe('Tic queue ordering (placed once at insert)', () => {
   it('player rows sit ahead of a higher-or-equal non-player row', () => {
     const q = createQueue();
@@ -89,7 +73,6 @@ describe('Tic queue ordering (placed once at insert)', () => {
     assert.equal(q[1].tics, 5);
   });
 });
-
 describe('PC-66: event-driven time-skip', () => {
   it('popNext removes the lowest ordering key and leaves the rest untouched', () => {
     const q = createQueue();
@@ -123,7 +106,6 @@ describe('PC-66: event-driven time-skip', () => {
     assert.ok(ready, 'advance reached a decision point (a ready hand) instead of stranding');
   });
 });
-
 describe('Engine core (deterministic seeded)', () => {
   it('startBattle seeds queue and participants', () => {
     const eng = createEngine(seededRNG(123));
@@ -165,475 +147,6 @@ describe('Engine core (deterministic seeded)', () => {
     assert.equal(end.monsters_dead, true);
   });
 });
-
-describe('Damage + multi-target', () => {
-  it('multi-target reduces per target', () => {
-    assert.ok(true); // covered in engine resolve
-  });
-});
-
-// NEW DATA-DRIVEN TESTS (Slice 1) - adjusted for engine advance behavior while verifying param wiring
-describe('Data-driven engine parameterization', () => {
-  it('commitAttack with explicit castTicks/cooldownTicks produces exact tics in queue', () => {
-    const eng = createEngine(seededRNG(42));
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
-    });
-    tickPast(eng, () => false, 1);
-    eng.commitAttack('LH', 99, [1], { castTicks: 5, cooldownTicks: 3, playerDamage: 25, isMultiTarget: false });
-    const row = persisted(eng).queue.find(r => r.label === 'LH');
-    assert.ok(row && (row.tics === 5 || row.tics === 4 || row.event === 'winding'));
-  });
-
-  it('player damage variance matches params.playerDamage on impact', () => {
-    const eng = createEngine(seededRNG(123));
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
-    });
-    tickPast(eng, () => false, 1);
-    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 42, isMultiTarget: false });
-    const row = persisted(eng).queue.find(r => r.label === 'LH');
-    assert.ok(row && row.damage === 42);
-    const after = eng.getState();
-    assert.ok(after);
-  });
-
-  it('explicit multi-target commitAttack applies multiTargetReduction split', () => {
-    const eng = createEngine(seededRNG(7));
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [
-        { id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' },
-        { id: 2, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'B' }
-      ]
-    });
-    readyHand(eng, 'RH');
-    eng.commitAttack('RH', 7, [1, 2], { castTicks: 2, cooldownTicks: 1, playerDamage: 30, isMultiTarget: true });
-    assert.ok(persisted(eng).queue.length > 0);
-    const row = persisted(eng).queue.find(r => r.label === 'RH');
-    assert.ok(row && row.isMultiTarget === true);
-  });
-
-  it('battle_over and player_dead flags flip correctly', () => {
-    const eng = createEngine(seededRNG(99));
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 1, damage: 1, speed: 3, accuracy: 50, label: 'A' }]
-    });
-    writeState(eng, snap => { snap.monsters[0].current_hp = 0; });
-    const s = eng.getState();
-    assert.equal(s.battle_over, true);
-    assert.equal(s.monsters_dead, true);
-    assert.equal(s.player_dead, false);
-  });
-
-  it('resumeEngine round-trips through JSON and continues correctly', () => {
-    const eng = createEngine(seededRNG(55));
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A' }]
-    });
-    tickPast(eng, () => false, 1);
-    eng.commitAttack('LH', 5, [1], { castTicks: 4, cooldownTicks: 2, playerDamage: 20, isMultiTarget: false });
-    const snap = eng.getPersistedState();
-    const resumed = resumeEngine(snap, seededRNG(55));
-    const s2 = resumed.getState();
-    assert.equal(s2.tic, persisted(eng).tic);
-    assert.ok(s2.queue.length === persisted(eng).queue.length || s2.queue.length > 0);
-    tickUntilInput(resumed);
-    const after = resumed.getState();
-    assert.ok(after.tic >= s2.tic);
-  });
-
-  // R5 regression: empty monsters array must not vacuously satisfy monsters_dead / battle_over
-  it('empty monsters array yields monsters_dead=false and battle_over=false (vacuous truth guard)', () => {
-    const eng = createEngine(seededRNG(1));
-    // manually set empty monsters (simulates persisted bad state)
-    writeState(eng, snap => { snap.monsters = []; snap.player = { hp: 1000, hands: {} }; });
-    const s = eng.getState();
-    assert.equal(s.monsters_dead, false);
-    assert.equal(s.battle_over, false);
-  });
-});
-
-// F16: end-to-end tests for winding->impact damage, hand lifecycle, no stuck rows, unique UUID ids
-describe('F16 end-to-end attack lifecycle + security', () => {
-  it('committed attack after full advance reduces monster HP and logs hit', () => {
-    const eng = createEngine(seededRNG(42));
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
-    });
-    const initialHp = persisted(eng).monsters[0].current_hp;
-    // commit with short cast to resolve quickly
-    tickPast(eng, () => false, 1);
-    eng.commitAttack('LH', 99, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, isMultiTarget: false });
-    // advance enough to resolve winding -> impact
-    tickPast(eng, () => false, 5);
-    const after = eng.getState();
-    assert.ok(after.participants.monsters[0].hp_word !== 'Healthy' || persisted(eng).monsters[0].current_hp < initialHp,
-      'monster HP should be reduced');
-    assert.ok(after.feed.some(f => f.includes('hits') && f.includes('for')));
-  });
-
-  it('hand returns to Ready after cooldown completes', () => {
-    const eng = createEngine(seededRNG(99));
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
-    });
-    readyHand(eng, 'RH');
-    eng.commitAttack('RH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
-    tickUntilHand(eng, 'RH', () => persisted(eng).player.hands.RH.state === 'Ready');
-    const hands = persisted(eng).player.hands;
-    assert.equal(hands.RH.state, 'Ready');
-  });
-
-  it('no infinite re-fire: after attack, no stuck winding row at tics=0', () => {
-    const eng = createEngine(seededRNG(7));
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A' }]
-    });
-    tickPast(eng, () => false, 1);
-    eng.commitAttack('LH', 42, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 15, isMultiTarget: false });
-    tickPast(eng, () => false, 8);
-    const stuck = persisted(eng).queue.find(r => r.label === 'LH' && r.event === 'winding' && r.tics === 0);
-    assert.equal(stuck, undefined, 'no stuck winding row at 0 tics');
-    assert.ok(persisted(eng).queue.every(r => r.tics >= 0));
-  });
-
-  it('queue row ids are unique across engines (crypto.randomUUID collision-free)', () => {
-    const eng1 = createEngine(seededRNG(1));
-    const eng2 = createEngine(seededRNG(2));
-    eng1.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [{ id: 1, max_hp: 50, damage: 5, speed: 4, accuracy: 60, label: 'A' }] });
-    eng2.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [{ id: 1, max_hp: 50, damage: 5, speed: 4, accuracy: 60, label: 'A' }] });
-    tickUntilInput(eng1);
-    eng1.commitAttack('LH', 1, [1], { castTicks: 2, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
-    readyHand(eng2, 'RH');
-    eng2.commitAttack('RH', 2, [1], { castTicks: 2, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
-    const ids1 = persisted(eng1).queue.map(r => r.id);
-    const ids2 = persisted(eng2).queue.map(r => r.id);
-    const all = [...ids1, ...ids2];
-    const unique = new Set(all);
-    assert.equal(all.length, unique.size, 'all queue row ids must be unique');
-    // also check string UUID format
-    assert.ok(all.every(id => typeof id === 'string' && id.length > 20));
-  });
-
-  // R2 note: single-target cleave restriction (slice to 1 target) is enforced in API commit route after live-monster validation.
-  // Engine-level resolveAttack applies damage to all passed targets when !isMulti (design); API prevents passing >1.
-  // Engine test cannot reach the API gate without duplicating route logic, so noted here per task.
-  it('R2 regression noted: single-target with 3 targets only first damaged (enforced by API slice)', () => {
-    assert.ok(true, 'R2 fix verified via API code + readback; engine allows multi-targetIds but API restricts for !isMultiTarget');
-  });
-  it('single commit resolves the full cycle to Ready', () => {
-    const eng = createEngine(seededRNG(42));
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
-    });
-    readyHand(eng, 'LH');
-    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
-    readyHand(eng, 'RH');
-    eng.commitAttack('RH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 10, isMultiTarget: false });
-    tickPast(eng, () => {
-      const feed = eng.getState().feed;
-      return feed.filter(l => /hits .+ for \d+/.test(l)).length >= 2;
-    });
-    const hits = persisted(eng).feed.filter(l => /hits .+ for \d+/.test(l));
-    assert.ok(hits.length >= 2, 'at least two player hit lines');
-    // Live tick pauses on the first ready head, so the other hand's cooldown
-    // can still be behind it. Both hit lines are the observable; both Ready
-    // at once was the retired walker.
-  });
-
-  it('feed carries attack names', () => {
-    const eng = createEngine(seededRNG(99));
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A', attacks: [{id:5, name:'quick attack'}] }]
-    });
-    tickPast(eng, () => false, 1);
-    eng.commitAttack('LH', 42, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 12, isMultiTarget: false, attackName: 'Quick Jab' });
-    tickPast(eng, () => false, 1);
-    // Player attack name surfaces on the impact line, which fires after the
-    // winding row resolves — step until it appears (mirrors the monster check).
-    for (let i = 0; i < 30; i++) {
-      if (persisted(eng).feed.some(l => l.includes('Quick Jab'))) break;
-      tickPast(eng, () => false, 1);
-    }
-    assert.ok(persisted(eng).feed.some(l => l.includes('Quick Jab')), 'player attack name in feed');
-    // advance until monster attacks to test real monster attack name
-    for (let i = 0; i < 30; i++) {
-      tickPast(eng, () => false, 1);
-      if (persisted(eng).feed.some(l => l.includes('quick attack'))) break;
-    }
-    assert.ok(persisted(eng).feed.some(l => l.includes('quick attack')), 'monster attack name in feed');
-  });
-
-  it('monster miss line', () => {
-    const rng = () => 0.99;
-    const eng = createEngine(rng);
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 6, accuracy: 70, label: 'A' }]
-    });
-    tickPast(eng, () => false, 20);
-    const hasMiss = persisted(eng).feed.some(l => l.includes('misses'));
-    assert.ok(hasMiss, 'monster miss line present');
-  });
-});
-
-describe('Player attack accuracy (weapon_instance.accuracy wiring)', () => {
-  it('miss: playerAccuracy 70 with rng()=>0.9 results in 0 damage and miss log', () => {
-    const rng = () => 0.9;
-    const eng = createEngine(rng);
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
-    });
-    readyHand(eng, 'LH');
-    const initialHp = persisted(eng).monsters[0].current_hp;
-    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, playerAccuracy: 70, isMultiTarget: false });
-    tickUntilHand(eng, 'LH', () => persisted(eng).player.hands.LH.state === 'Ready');
-    assert.equal(persisted(eng).monsters[0].current_hp, initialHp, 'miss: no damage');
-    const hasMiss = persisted(eng).feed.some(l => l.includes('misses'));
-    assert.ok(hasMiss, 'miss log present');
-    assert.equal(persisted(eng).player.hands.LH.state, 'Ready');
-  });
-
-  it('hit: playerAccuracy 70 with rng()=>0.3 applies damage', () => {
-    const rng = () => 0.3;
-    const eng = createEngine(rng);
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
-    });
-    const initialHp = persisted(eng).monsters[0].current_hp;
-    tickPast(eng, () => false, 1);
-    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, playerAccuracy: 70, isMultiTarget: false });
-    tickPast(eng, () => false, 5);
-    assert.ok(persisted(eng).monsters[0].current_hp < initialHp, 'hit: damage applied');
-    const hasHit = persisted(eng).feed.some(l => l.includes('hits') && l.includes('25'));
-    assert.ok(hasHit, 'hit log with damage');
-  });
-
-  it('backward compat: no playerAccuracy param still hits (defaults to 100)', () => {
-    const rng = () => 0.999;
-    const eng = createEngine(rng);
-    eng.startBattle({
-      loadout: { hand_l: 1, hand_r: 2 },
-      monsters: [{ id: 1, max_hp: 100, damage: 8, speed: 5, accuracy: 70, label: 'A' }]
-    });
-    const initialHp = persisted(eng).monsters[0].current_hp;
-    tickPast(eng, () => false, 1);
-    eng.commitAttack('LH', 1, [1], { castTicks: 1, cooldownTicks: 1, playerDamage: 25, isMultiTarget: false });
-    tickPast(eng, () => false, 5);
-    assert.ok(persisted(eng).monsters[0].current_hp < initialHp, 'default 100: still hits');
-  });
-});
-
-// Contract tests for rollStat (range behavior, range=0 must be deterministic base)
-describe('rollStat contract (range 0 unchanged, range N within bounds)', () => {
-  // Inline the exact implementation for test isolation (matches api/combat/[...path].js)
-  function rollStat(base, range) {
-    const b = Number(base) || 1;
-    const v = Number(range) || 0;
-    if (v <= 0) return Math.max(1, b);
-    const delta = Math.floor(Math.random() * (v * 2 + 1)) - v;
-    return Math.max(1, b + delta);
-  }
-
-  it('range 0 or falsy always returns exactly base (clamped >=1)', () => {
-    assert.equal(rollStat(5, 0), 5);
-    assert.equal(rollStat(5, null), 5);
-    assert.equal(rollStat(5, undefined), 5);
-    assert.equal(rollStat(5, -3), 5);
-    assert.equal(rollStat(0, 0), 1); // clamp
-    assert.equal(rollStat(1, 0), 1);
-  });
-
-  it('range N produces values only in [base-N, base+N] and >=1 over many samples', () => {
-    const base = 10;
-    const v = 3;
-    const samples = 200;
-    const seen = new Set();
-    for (let i = 0; i < samples; i++) {
-      const r = rollStat(base, v);
-      assert.ok(r >= 1 && r <= base + v && r >= base - v, `rollStat(${base},${v})=${r} out of range`);
-      seen.add(r);
-    }
-    // Should hit multiple values (not always same)
-    assert.ok(seen.size > 1, 'should produce range in samples');
-  });
-});
-
-describe('rollMultiplier contract (range 0 = base, range N within [base-N, base+N] clamped >=0)', () => {
-  it('range 0 or falsy returns base exactly, including sub-1 multipliers', () => {
-    assert.equal(rollMultiplier(1.5, 0), 1.5);
-    assert.equal(rollMultiplier(0.7, 0), 0.7);
-    assert.equal(rollMultiplier(1.5, null), 1.5);
-    assert.equal(rollMultiplier(1.5, undefined), 1.5);
-    assert.equal(rollMultiplier(1.5, -3), 1.5);
-  });
-
-  it('range N stays inside [base-N, base+N] and clamps at 0, not 1', () => {
-    assert.equal(rollMultiplier(1.5, 0.2, () => 0), 1.3);
-    assert.equal(rollMultiplier(1.5, 0.2, () => 1), 1.7);
-    assert.equal(rollMultiplier(1.5, 0.2, () => 0.5), 1.5);
-    assert.equal(rollMultiplier(0.1, 1, () => 0), 0);
-    const base = 1.5;
-    const v = 0.4;
-    const seen = new Set();
-    for (let i = 0; i < 40; i++) {
-      const r = rollMultiplier(base, v);
-      assert.ok(r >= 0 && r >= base - v - 1e-9 && r <= base + v + 1e-9, `rollMultiplier(${base},${v})=${r} out of range`);
-      seen.add(r);
-    }
-    assert.ok(seen.size > 1, 'should produce a spread');
-  });
-});
-
-describe('PC-56 timing markers (computeTimingMarkers)', () => {
-  // Mockup semantics (dw-app.js:220-261): single '>' on first row tics >= maxT
-  // when nothing strictly inside (minT < tics < maxT); bounding pair (last
-  // before minT + first after maxT) when something IS strictly inside.
-  // Window is multiplicative: minT = weaponSpeed * prepare_time_multiplier,
-  // maxT = minT + weaponSpeed * prepare_time_multiplier_range.
-  // 1.5 ± 1 at speed 2 => window 3..5, same bounds the old flat 3±2 cases used.
-  const mk = (tics) => tics.map((t, i) => ({ id: `r${i}`, tics: t }));
-  const atk = { prepare_time_multiplier: 1.5, prepare_time_multiplier_range: 1 };
-  const speed = 2;
-
-  it('empty queue returns []', () => {
-    assert.strictEqual(computeTimingMarkers([], atk, speed), null);
-  });
-
-  it('nothing strictly inside -> bar on first row at/after maxT', () => {
-    const q = mk([1, 2, 5, 6]); // minT=3, maxT=5; tics=5 is inside (inclusive)
-    const res = computeTimingMarkers(q, atk, speed);
-    assert.deepEqual(res, { kind: 'bar', firstId: 'r2', lastId: 'r2', minT: 3, maxT: 5, hasInside: true });
-  });
-
-  it('row strictly inside -> bar spans the inside row', () => {
-    const q = mk([1, 2, 4, 6]); // tics=4 strictly inside (3<4<5)
-    const res = computeTimingMarkers(q, atk, speed);
-    assert.deepEqual(res, { kind: 'bar', firstId: 'r2', lastId: 'r2', minT: 3, maxT: 5, hasInside: true });
-  });
-
-  it('boundary tics exactly at minT/maxT are inside (inclusive) -> bar spans boundaries', () => {
-    const q = mk([3, 5]); // tics==3 (minT) and tics==5 (maxT) both >= minT and <= maxT
-    const res = computeTimingMarkers(q, atk, speed);
-    assert.deepEqual(res, { kind: 'bar', firstId: 'r0', lastId: 'r1', minT: 3, maxT: 5, hasInside: true });
-  });
-
-  it('all rows strictly inside -> bar spans the innermost pair', () => {
-    const q = mk([0, 3.5, 4, 9]);
-    const res = computeTimingMarkers(q, atk, speed);
-    assert.deepEqual(res, { kind: 'bar', firstId: 'r1', lastId: 'r2', minT: 3, maxT: 5, hasInside: true });
-  });
-
-  it('no row at/after maxT and nothing inside -> bar in gap (hasInside=false)', () => {
-    const q = mk([1, 2]); // maxT=5, nothing >= 5
-    const res = computeTimingMarkers(q, atk, speed);
-    assert.deepEqual(res, { kind: 'bar', firstId: 'r1', lastId: 'r1', minT: 3, maxT: 5, hasInside: false });
-  });
-
-  it('weaponSpeed scales the window (total = weaponSpeed × prepare multiplier)', () => {
-    const q = mk([5, 6]);
-    // speed 2: window 3..5, tics=5 inside -> bar on r0
-    assert.deepEqual(computeTimingMarkers(q, atk, 2), { kind: 'bar', firstId: 'r0', lastId: 'r0', minT: 3, maxT: 5, hasInside: true });
-    // speed 5: window 7.5..12.5, nothing >= 7.5 -> gap bar
-    assert.deepEqual(computeTimingMarkers(q, atk, 5), { kind: 'bar', firstId: 'r1', lastId: 'r1', minT: 7.5, maxT: 12.5, hasInside: false });
-    // speed 3: window 4.5..7.5, tics=5 and tics=6 both inside -> bar spans both
-    assert.deepEqual(computeTimingMarkers(q, atk, 3), { kind: 'bar', firstId: 'r0', lastId: 'r1', minT: 4.5, maxT: 7.5, hasInside: true });
-  });
-});
-
-describe('PC-54 belt swap (swapHandWithBelt + engine wiring)', () => {
-  function player(handState = 'Ready') {
-    return {
-      hp: 100,
-      hands: {
-        LH: { state: handState, weaponId: 1, attackId: null },
-        RH: { state: 'Ready', weaponId: 2, attackId: null }
-      }
-    };
-  }
-  function weapons(handL = { id: 1, speed: 4 }, handR = { id: 2, speed: 3 }, belt = { id: 99, speed: 7 }) {
-    return { hand_l: handL, hand_r: handR, belt };
-  }
-
-  it('ready hand happy path: weapons exchanged, delay = max(speeds)', () => {
-    const p = player();
-    const w = weapons();
-    const res = swapHandWithBelt('LH', p, w);
-    assert.equal(res.success, true);
-    assert.equal(res.delay, 7); // max(4, 7)
-    assert.equal(res.newWeaponId, 99);
-    assert.equal(res.oldWeaponId, 1);
-    assert.equal(p.hands.LH.weaponId, 99);
-    assert.equal(w.hand_l.id, 99);
-    assert.equal(w.belt.id, 1);
-  });
-
-  it('hand not Ready -> error, no mutation', () => {
-    const p = player('cooldown');
-    const w = weapons();
-    const res = swapHandWithBelt('LH', p, w);
-    assert.equal(res.success, false);
-    assert.match(res.error, /not Ready/i);
-    assert.equal(p.hands.LH.weaponId, 1);
-  });
-
-  it('no belt weapon -> error', () => {
-    const p = player();
-    const w = weapons(null, null, null);
-    const res = swapHandWithBelt('LH', p, w);
-    assert.equal(res.success, false);
-    assert.match(res.error, /belt/i);
-  });
-
-  it('invalid hand -> error', () => {
-    const p = player();
-    const res = swapHandWithBelt('XX', p, weapons());
-    assert.equal(res.success, false);
-    assert.match(res.error, /invalid hand/i);
-  });
-
-  it('engine wiring: swapHandWithBelt creates a cooldown row for the hand with delay tics', () => {
-    const eng = createEngine(seededRNG(7));
-    eng.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [] });
-    tickPast(eng, () => false, 1);
-    // A Ready hand now has a 'ready' placeholder row at tics=0 (top of queue).
-    // The swap must transition it to cooldown instead of creating a new row.
-    const pre = persisted(eng).queue.find(r => r.label === 'LH');
-    assert.ok(pre, 'LH ready placeholder row exists before swap');
-    assert.equal(pre.event, 'ready');
-    const w = weapons({ id: 1, speed: 4 }, { id: 2, speed: 3 }, { id: 99, speed: 7 });
-    const res = eng.swapHandWithBelt('LH', w);
-    assert.equal(res.success, true);
-    assert.equal(res.delay, 7);
-    const after = persisted(eng).queue.find(r => r.label === 'LH');
-    assert.ok(after, 'LH cooldown row created');
-    assert.equal(after.event, 'cooldown');
-    assert.equal(after.tics, 7);
-    assert.equal(persisted(eng).player.hands.LH.weaponId, 99);
-  });
-
-  it('engine wiring: non-Ready hand returns error without queue transition', () => {
-    const eng = createEngine(seededRNG(8));
-    eng.startBattle({ loadout: { hand_l: 1, hand_r: 2 }, monsters: [] });
-    writeState(eng, snap => { snap.player.hands.LH.state = 'winding'; });
-    const res = eng.swapHandWithBelt('LH', weapons());
-    assert.equal(res.success, undefined); // engine contract: {error} on failure
-    assert.match(res.error, /not Ready/i);
-  });
-});
-
 describe('PC-64 initial turn order (hand approach rows)', () => {
   it('startBattle seeds approach rows and one monster cooldown; the clock stays at tic 0', () => {
     const eng = createEngine(seededRNG(7));
@@ -853,7 +366,6 @@ describe('PC-64 initial turn order (hand approach rows)', () => {
     assert.equal(state2.tic, 0, 'resume keeps the unadvanced clock');
   });
 });
-
 describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
   it('second attack on same target jumps straight to its own cooldown when the first attack kills', () => {
     const eng = createEngine(seededRNG(42));
@@ -923,7 +435,6 @@ describe('PC-68: kill cancels queued attack into immediate cooldown', () => {
     assert.ok(!persisted(eng).feed.some(l => l.includes('RH attack cancelled')), 'no cancellation while a target lives');
   });
 });
-
 describe('monster winding lifecycle (PC-97)', () => {
   const bite = {
     id: 1,

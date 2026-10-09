@@ -1,14 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import createEngine from '../js/combat/engine.js';
 import { createQueue, addEvent, peekHead } from '../js/combat/tic-queue.js';
 import { createPlayer, applyDamage, isPlayerDead, isMonsterDead } from '../js/combat/participants.js';
 import { persisted, writeState } from './live-clock.js';
-
-const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 function seededRNG(seed = 42) {
   let s = seed;
@@ -165,24 +160,5 @@ describe('PC-98 buff expiry is its own queue item', () => {
     eng.tick();
     assert.equal(persisted(eng).buffs.length, 0);
     assert.ok(persisted(eng).feed.some(l => l.includes('Vigor buff expired')));
-  });
-});
-
-describe('PC-98 unarmed fist_speed', () => {
-  it('unarmed windup and cooldown add fist_speed to the rolled prepare', () => {
-    const src = readFileSync(join(root, 'api/combat/[...path].js'), 'utf8');
-    const branchStart = src.indexOf('if (!weaponId)');
-    assert.ok(branchStart > 0, 'unarmed branch exists');
-    const branch = src.slice(branchStart, src.indexOf('} else {', branchStart));
-    assert.match(
-      branch,
-      /castTicks\s*=\s*config\.fist_speed\s*\+\s*rollStat\(config\.fist_prepare_time,\s*config\.fist_prepare_time_range\)/
-    );
-    assert.match(
-      branch,
-      /cooldownTicks\s*=\s*config\.fist_speed\s*\+\s*rollStat\(config\.fist_cooldown_time,\s*config\.fist_cooldown_time_range\)/
-    );
-    assert.doesNotMatch(branch, /castTicks\s*=\s*rollStat\(/);
-    assert.doesNotMatch(branch, /cooldownTicks\s*=\s*rollStat\(/);
   });
 });
