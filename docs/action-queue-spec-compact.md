@@ -64,5 +64,5 @@ cooldown → winding → impact → cooldown (no ready, no live `attack`; legacy
 - `advance()` = single ceremony owner after commit. One /tick → one presentation → stop on
   playerReady/needsInput/done/battleOver.
 - Menu opens ONLY when head is a ready row (`readyHeadOf`).
-- `renderQueue` fast path compares stable keys (not raw ids) so a tic never moves/re-slides rows.
+- `renderQueue` fast path compares (label, event) — not raw ids — so a tic-only update never moves or re-slides the row. An event change is remove + insert.
 - No shared DOM node pretending to be the same hand across entries — each entry is its own box.
