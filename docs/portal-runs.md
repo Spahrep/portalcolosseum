@@ -8,7 +8,7 @@
 - After each combat the player chooses: **Continue** or **Stop**
 - Loot received after each fight is added to a **prize pool**
 - **Finishing the run** awards the full prize pool
-- **Stopping early** awards a reduced portion of the pool (exact % TBD)
+- **Stopping early** awards a reduced portion of the pool, scaled by an accelerating progress-keyed CURVE (PC-DEC-056/069): gold 15/30/50/70/100% by progress, items 0/0/1/1/2 sel + 0/1/1/2/2 rand — see loot-prize-pool.md §Stop-Share Curve (shipped config, not TBD)
 - **Dying** = kicked out of the portal, **prize pool forfeited**. Items you BROUGHT IN are never lost — you only lose what you hadn't banked yet.
 - **No inventory access between fights.** The 5-item loadout (Hand L, Hand R, Belt Loop (BL), Consumable C1, Consumable C2) is locked at entry — see `inventory-slots.md` and `consumables.md`.
 

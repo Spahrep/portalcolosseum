@@ -559,6 +559,22 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Confirms the Master Clock / single-driver architecture (docs/action-visual-lifecycle.md §17): the queue is the single source of truth, the clock advances ONE step at a time off the queue head ("the first non-ready row" — tic-queue.js:54-61), and the player is prompted only when the head is a player-decision row. Adds an "all aspects" conformance mandate — the engine must NOT derive turn authority from a separate hand-state check (`playerHasHandState`); that is a second puppetmaster. Any bug caused by drift from the single-driver contract is to be fixed by conforming the code to the design (queue-as-sole-authority), not patched at the symptom. Raised after the run-226 wolf desync: `tick()` answered "prompt" from hand readiness while the queue head was the wolf's non-ready row. The clean alignment (PC-100 guard re-applied earlier is a reconciliation patch) = make `playerReady` derive solely from the head being a player-decision row, dispatched to Grok as a single-file engine refactor + test. Applied to current-design-status.md. Decided by Spahrep, 2026-10-08.
 
+- ID: PC-DEC-068
+  Date: 2026-10-08
+  Source: Hermes audit session (queue-head semantics ruling)
+  Speaker: Spahrep
+  Verbatim: "the queue should never need to be sorted because the items are inserted in the correct location, it isnt so much a que as a linked list."
+  Status: DECIDED
+  Notes: Confirms the queue is NOT a sorted structure — it is a linked-list insert. Each new row is spliced into its correct position ONCE at insert (`addEvent` → `orderedInsertIndex`, js/combat/tic-queue.js:34-52) and the array is NEVER globally re-sorted. Head = queue[0]; ready rows are not skipped (tic-queue.js:56-59). Fixed the doc drift that claimed "head = first non-ready row" and "rows re-sort": action-visual-lifecycle.md:17 "first non-ready row / spliced into tics-ascending" and current-design-status.md:74 "first non-ready row" now say queue[0], never re-sorted, correct-position-at-insert. Applied to action-visual-lifecycle.md + current-design-status.md. Decided by Spahrep, 2026-10-08.
+
+- ID: PC-DEC-069
+  Date: 2026-10-08
+  Source: Hermes audit session (early-stop share ruling)
+  Speaker: Spahrep
+  Verbatim: "we are doing a curve." (on the early-stop loot share)
+  Status: DECIDED
+  Notes: Confirms the already-shipped accelerating stop-share curve (PC-DEC-056): gold 15/30/50/70/100% by progress (20/40/60/80/100%), items 0/0/1/1/2 sel + 0/1/1/2/2 rand. The "exact % TBD" lines are STALE — replaced: portal-runs.md:11 and current-design-status.md:111 now point at loot-prize-pool.md §Stop-Share Curve (the shipped config), not "$ TBD". Applied to portal-runs.md + current-design-status.md. Decided by Spahrep, 2026-10-08.
+
 ## Open
 
 - ID: PC-DEC-004
