@@ -1,7 +1,9 @@
 /**
  * Queue rendering subsystem (PC-77).
- * Moved verbatim from battle-app.js: DOM render, stable-key reconciliation,
- * exit-row cache, and the PC-56 prediction bar. No behavior change.
+ * DOM render, (label, event) reconciliation, exit-row cache, and the PC-56
+ * prediction bar. A phase change is a new box. Only a tic countdown, or a
+ * monster cooldown swapping "recovering" → "preparing to attack", retouches
+ * the node that is already on screen.
  */
 import { debugLog } from '../battle-debug.js';
 import { assignArenaLetters, letterForMonster } from './arena-letters.js';
@@ -21,7 +23,7 @@ const exitingQueueRows = new Map(); // rowId -> { element, finished }
 // Set by renderQueue's full-rebuild fallback immediately before clearQueueDom
 // so that path can tell an orphan (in the DOM, absent from the new queue)
 // from a row that will be rebuilt. null keeps the old wipe for any other caller.
-let rebuildReconciled = null; // { keys: Set<string>, ids: Set<string> } | null
+let rebuildReconciled = null; // { idents: Set<string>, ids: Set<string> } | null
 
 export function setQueueBarInfo(info) {
   queueBarInfo = info;
@@ -40,15 +42,18 @@ export function forgetQueueRowExiting(rowId) {
   exitingQueueRows.delete(rowId);
 }
 
-/** Stable identity for a queue row across renders: hands are singletons keyed
- * by label (LH/RH) — their id regenerates every tick, so label is the only
- * stable key. Monster winding, impact, legacy attack, and cooldown are one
- * cycle keyed by label (`m:<label>`) so winding→impact→cooldown→next winding
- * is a successor replace, not a removal+insert. Other rows key on id. */
-export function queueRowKey(row) {
-  if (row.label === 'LH' || row.label === 'RH') return `h:${row.label}`;
-  if (row.label && (row.event === 'winding' || row.event === 'impact' || row.event === 'attack' || row.event === 'cooldown')) return `m:${row.label}`;
-  return `i:${row.id}`;
+/** Identity across renders is (label, event). The engine mints a fresh id per
+ * entry and rewrites tics in place, so an id compare cannot tell a countdown
+ * from a new box. Same label + same event = the same box (tic relabel).
+ * A different event is a different box. */
+export function queueEventIdentity(row) {
+  if (!row) return '';
+  return `${row.label}|${row.event}`;
+}
+
+function domEventIdentity(el) {
+  if (!el) return '';
+  return `${el.dataset.queueLabel}|${el.dataset.queueEvent}`;
 }
 
 function isMonsterLabel(row) {
@@ -206,70 +211,19 @@ export function renderQueue(bs, fill = false, onDone = null) {
   debugLog('renderQueue', `fill=${fill} n_queue=${bs.queue?.length || 0} n_monsters=${bs.monsters?.length || 0}`);
   const el = document.getElementById('queue');
   if (!el) return;
-  // Same rows in the same engine order: rewrite readouts in place. Never rebuild
-    // and never move nodes — a tick must not re-slide rows that did not change slot.
-    // Compare STABLE KEYS, not raw ids: hand rows regenerate their id every tick
-    // (fresh randomUUID in commitNewRow), so an id comparison always fails for
-    // hands and forces the node-moving branch below — which kills the FLIP glide
-    // and flickers the tic readout. Stable keys (h:LH / h:RH / m:<label>) survive
-    // id regeneration, so they are the correct "same row, same order" test.
-    const queue = bs.queue || [];
-    const currentRows = Array.from(el.querySelectorAll('.queue-row'));
-    const currentKeys = currentRows.map(r => r.dataset.stableKey);
-    const newKeys = queue.map(queueRowKey);
-    if (currentKeys.length === newKeys.length && currentKeys.every((k, i) => k === newKeys[i])) {
-      const monsters = bs.monsters || [];
-      queue.forEach((row, index) => {
-        updateQueueRowInPlace(currentRows[index], row, monsters, bs, index);
-      });
-      const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
-      if (titleEl) titleEl.textContent = 'Action Queue';
-      if (fill && onDone) {
-        const rows = Math.max(queue.length, 1);
-        setTimeout(onDone, (rows - 1) * dur('queueFillStagger') + dur('queueFill'));
-      }
-      paintPredictionBar(el);
-      return;
-    }
-  // Stable-key successor (hand phase, monster winding↔impact↔cooldown): relabel the
-  // existing node. A phase change gets queue-row-enter / queue-row-monster-enter
-  // inside updateQueueRowInPlace — never rebuild the queue to animate it.
-  // Move a node only if its engine slot actually changed. Prefer the non-exiting
-  // node when a departing same-key row is still in the DOM.
-  const domKeys = new Set(currentRows.map(r => r.dataset.stableKey));
-  // newKeys is already declared at function scope above (fast-path check) — reuse it.
-  if (domKeys.size === newKeys.length && newKeys.every(k => domKeys.has(k))) {
+  // Same (label, event) pairs in the same engine order: only the tic number
+  // (or other text on that same entry) changed. Rewrite in place. Never move
+  // a node and never slide — a countdown must not re-enter the row.
+  // Ignore a row already sliding out; it is a different box leaving.
+  const queue = bs.queue || [];
+  const currentRows = Array.from(el.querySelectorAll('.queue-row:not(.queue-row-exit)'));
+  const currentIdent = currentRows.map(domEventIdentity);
+  const newIdent = queue.map(queueEventIdentity);
+  if (currentIdent.length === newIdent.length && currentIdent.every((k, i) => k === newIdent[i])) {
     const monsters = bs.monsters || [];
-    const nonRows = Array.from(el.children).filter(c => !c.classList.contains('queue-row'));
-    nonRows.forEach(c => c.remove());
-    // PC-118 defensive: a same stable key must never leave two live nodes in the
-    // DOM. If a duplicate slipped through, keep the non-exiting row and drop the
-    // extra so a relabel-in-place render never leaves a ghost copy behind.
-    const seenLive = new Set();
-    for (const r of Array.from(currentRows)) {
-      const k = r.dataset.stableKey;
-      if (!k) continue;
-      if (seenLive.has(k)) {
-        r.remove();
-        continue;
-      }
-      if (!r.classList.contains('queue-row-exit')) seenLive.add(k);
-    }
-    const liveRows = Array.from(el.querySelectorAll('.queue-row'));
     queue.forEach((row, index) => {
-      const key = queueRowKey(row);
-      const domEl = liveRows.find(r => r.dataset.stableKey === key && !r.classList.contains('queue-row-exit'))
-        || liveRows.find(r => r.dataset.stableKey === key);
-      if (!domEl || !domEl.parentNode) return;
-      const rowsNow = Array.from(el.querySelectorAll('.queue-row'));
-      if (rowsNow[index] !== domEl) {
-        const ref = rowsNow[index] || null;
-        if (ref) el.insertBefore(domEl, ref);
-        else el.appendChild(domEl);
-      }
-      updateQueueRowInPlace(domEl, row, monsters, bs, index);
+      updateQueueRowInPlace(currentRows[index], row, monsters, bs, index);
     });
-    nonRows.forEach(c => el.appendChild(c));
     const titleEl = el.closest('.queue-panel')?.querySelector('.panel-title');
     if (titleEl) titleEl.textContent = 'Action Queue';
     if (fill && onDone) {
@@ -279,11 +233,12 @@ export function renderQueue(bs, fill = false, onDone = null) {
     paintPredictionBar(el);
     return;
   }
-  // Full rebuild. A DOM row that is not in this queue is an orphan: the clear
-  // below marks it queue-row-exit and leaves it in flow so the group-lift can
-  // release it after the rebuild. Never drop that box instantly.
+  // Structural change: an event changed, a label arrived, or a label left.
+  // The ceremony owns slide-in then slide-out. This fallback paints the
+  // settled queue (initial load, skip path, post-ceremony reconcile).
+  // An orphan is marked queue-row-exit and left in flow — never popped.
   rebuildReconciled = {
-    keys: new Set(queue.map(queueRowKey)),
+    idents: new Set(queue.map(queueEventIdentity)),
     ids: new Set(queue.filter(r => r && r.id != null).map(r => String(r.id))),
   };
   clearQueueDom();
@@ -291,7 +246,6 @@ export function renderQueue(bs, fill = false, onDone = null) {
   if (titleEl) {
     titleEl.textContent = 'Action Queue';
   }
-  // queue already declared in no-flicker check above
   if (fill && onDone) {
     // Ceremony-intro: signal completion after the last row's fade lands, so the
     // command window never waits on an animation that cannot start (empty queue).
@@ -301,9 +255,15 @@ export function renderQueue(bs, fill = false, onDone = null) {
   if (queue.length === 0) return;
   const monsters = bs.monsters || [];
   queue.forEach((row, index) => {
-    if (!exitingQueueRows.has(row.id)) {
-      el.appendChild(buildQueueRow(row, monsters, bs, true, index));
+    if (exitingQueueRows.has(row.id)) return;
+    const ident = queueEventIdentity(row);
+    const already = Array.from(el.querySelectorAll('.queue-row:not(.queue-row-exit)'))
+      .find(node => domEventIdentity(node) === ident);
+    if (already) {
+      updateQueueRowInPlace(already, row, monsters, bs, index);
+      return;
     }
+    el.appendChild(buildQueueRow(row, monsters, bs, true, index));
   });
   paintPredictionBar(el);
   if (fill) {
@@ -320,29 +280,27 @@ export function renderQueue(bs, fill = false, onDone = null) {
   }
 }
 
-// diff for resolve/enter animations (non-blocking)
+// diff for resolve/enter animations (non-blocking).
+// Same label + same event stays (tic relabel). A different event is a removal
+// plus an insert — never a successor replace on one node.
 export function diffQueueForAnimation(oldBs, newBs) {
   const oldRows = oldBs.queue || [];
   const newRows = newBs.queue || [];
-  // Hand rows use stable label key (LH/RH singleton identity preserved across
-  // tics/state updates). Monster winding/impact/cooldown share m:<label> so a
-  // phase change is a successor, not a removal+insert. This prevents value-update
-  // slide-out+slide-in.
-  const oldKeys = new Set(oldRows.map(queueRowKey));
-  const newKeys = new Set(newRows.map(queueRowKey));
+  const oldIdents = new Set(oldRows.map(queueEventIdentity));
+  const newIdents = new Set(newRows.map(queueEventIdentity));
   return {
-    resolved: oldRows.filter(r => !newKeys.has(queueRowKey(r))).map(r => r.id),
-    added: newRows.filter(r => !oldKeys.has(queueRowKey(r))).map(r => ({
+    resolved: oldRows.filter(r => !newIdents.has(queueEventIdentity(r))).map(r => r.id),
+    added: newRows.filter(r => !oldIdents.has(queueEventIdentity(r))).map(r => ({
       id: r.id,
       isMonster: isMonsterQueueRow(r)
     }))
   };
 }
 
-/** A queue row still present in the queue being rebuilt (stable key, else id). */
+/** A queue row still present in the queue being rebuilt ((label, event), else id). */
 function isReconciledQueueRow(child, reconciled) {
-  const key = child.dataset.stableKey;
-  if (key && reconciled.keys.has(key)) return true;
+  const ident = domEventIdentity(child);
+  if (ident && reconciled.idents && reconciled.idents.has(ident)) return true;
   const id = child.dataset.rowId;
   if (id && reconciled.ids.has(id)) return true;
   return false;
@@ -404,7 +362,7 @@ export function markQueueRowExiting(rowId) {
 // sub-line under the action (Option 4): "L. Hand Power Attack" / "  └─ Wolf A".
 // Monster rows never get a target sub-line — monsters only ever target the
 // player, so it would be dead weight.
-function queueRowDisplayLabel(row, monsters, bs, initial = false) {
+function queueRowDisplayLabel(row, monsters, bs, initial = false, preparing = false) {
   if (row.event === 'ready' || row.event === 'approach') {
     return `${queueLabel(row)} Ready`;
   }
@@ -412,7 +370,8 @@ function queueRowDisplayLabel(row, monsters, bs, initial = false) {
     return `${monsterQueueName(row, monsters)}'s ${queueEventName(row, monsters, bs)}`;
   }
   if (isMonsterCooldownRow(row)) {
-    return `${monsterQueueName(row, monsters)} ${initial ? 'getting ready' : 'recovering'}`;
+    const verb = preparing ? 'preparing to attack' : (initial ? 'getting ready' : 'recovering');
+    return `${monsterQueueName(row, monsters)} ${verb}`;
   }
   return `${queueLabel(row)} ${queueEventName(row, monsters, bs)}`;
 }
@@ -447,7 +406,7 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1, initia
   }
   div.dataset.rowId = row.id;
   div.dataset.tics = row.tics;
-  div.dataset.stableKey = queueRowKey(row);
+  div.dataset.queueLabel = row.label == null ? '' : String(row.label);
   div.dataset.queueEvent = row.event || '';
   if (index === 0 && row.event === 'ready') div.classList.add('queue-row-ready-head');
   const nameSpan = document.createElement('span');
@@ -505,16 +464,22 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1, initia
   return div;
 }
 
-// In-place text/tics mutation for a same-logical-row update (Behavior A). Mirrors
-// buildQueueRow's output but reuses the existing DOM node so nothing slides or
-// flickers. Hand rows and monsters already carry .stableKey from buildQueueRow.
+// In-place text/tics mutation for the two relabel cases only: a tic countdown
+// on the same (label, event), and a monster cooldown swapping "recovering"
+// to "preparing to attack" (dataset.preparing, same cooldown row). A phase
+// change is a new box — this function refuses to morph the node.
 export function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
+  const preparing = div.dataset.preparing === '1' && isMonsterCooldownRow(row);
+  const prevEvent = div.dataset.queueEvent || '';
+  const nextEvent = row.event || '';
+  if (prevEvent && prevEvent !== nextEvent && !preparing) return;
   div.dataset.rowId = row.id;
   div.dataset.tics = row.tics;
+  div.dataset.queueLabel = row.label == null ? '' : String(row.label);
+  div.dataset.queueEvent = nextEvent;
   div.classList.toggle('top-row', index >= 0 && index < 3);
   div.classList.toggle('queue-row-ready-head', index === 0 && row.event === 'ready');
   const isMonster = isMonsterQueueRow(row);
-  const isRecovering = isMonsterCooldownRow(row);
   const hasBar = !isMonster && row.event !== 'ready' && row.event !== 'approach';
   let nameSpan = div.querySelector('.name');
   let ticSpan = div.querySelector('.tic');
@@ -529,20 +494,12 @@ export function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
     ticSpan.className = 'tic';
     div.appendChild(ticSpan);
   }
+  const label = queueRowDisplayLabel(row, monsters, bs, false, preparing);
   if (row.event === 'ready') {
-    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
+    nameSpan.textContent = label;
     ticSpan.textContent = '—';
-  } else if (row.event === 'approach') {
-    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
-    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
-  } else if (isMonster) {
-    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
-    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
-  } else if (isRecovering) {
-    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
-    ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   } else {
-    nameSpan.textContent = queueRowDisplayLabel(row, monsters, bs);
+    nameSpan.textContent = label;
     ticSpan.textContent = String(row.tics != null ? row.tics : 0);
   }
   if (hasBar && !bar) {
@@ -566,16 +523,6 @@ export function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
     targetSpan.textContent = `└─ ${targetName}`;
   } else if (targetSpan) {
     targetSpan.remove();
-  }
-  // Phase change (cooldown→ready, winding→impact→cooldown) slides in on this
-  // node. Tic-only updates keep the same event and must not re-enter. A node
-  // just built by reseat already has queueEvent set, so a follow-up render
-  // does not replay the enter class that path added.
-  const prevEvent = div.dataset.queueEvent || '';
-  const nextEvent = row.event || '';
-  div.dataset.queueEvent = nextEvent;
-  if (prevEvent && prevEvent !== nextEvent) {
-    armQueueRowEnter(div, row);
   }
 }
 

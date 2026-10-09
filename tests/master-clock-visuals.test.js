@@ -118,15 +118,17 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.ok(post >= 0 && pin > post && narrate > pin && both > narrate && release > both,
       'order is POST → pin → narrate → await both → release head');
     const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
-    // PC-107: player hands use the same reseat-then-exit order as enemies.
-    // The old isEnemyQueueHead early-return pinned the silent pop.
+    // Exit is the last action. The successor is inserted by playQueueTransition
+    // before this function runs — release only slides the processed box out.
     assert.equal(releaseFn.includes('isEnemyQueueHead'), false);
     assert.match(releaseFn, /runQueueRemoval/);
-    assert.match(releaseFn, /reseatSameKeySuccessor/);
     assert.match(releaseFn, /animationsSkipped/);
-    assert.ok(releaseFn.indexOf('reseatSameKeySuccessor') < releaseFn.indexOf('runQueueRemoval'),
-      'successor lands before the processed row leaves');
-    const popFn = fnBodyUntilNext(app, 'function silentPopHead', ['function reseatSameKeySuccessor']);
+    assert.equal(releaseFn.includes('updateQueueRowInPlace'), false,
+      'the processed box is removed, not relabeled into its successor');
+    const insertAt = loop.indexOf('playQueueTransition(');
+    assert.ok(insertAt > both && release > insertAt,
+      'successor slides in before the processed box slides out');
+    const popFn = fnBodyUntilNext(app, 'function silentPopHead', ['Slide departing boxes out']);
     assert.equal(popFn.includes('runQueueRemoval'), false, 'pop marks exiting; the lift stays in releaseProcessedHead');
     assert.match(popFn, /markQueueRowExiting/, 'animated path slides out with queue-row-exit');
     assert.match(popFn, /animationsSkipped/);
@@ -134,12 +136,6 @@ describe('Master clock visual fidelity (client contract)', () => {
       'instant remove stays on the skipped path only');
     assert.ok(popFn.indexOf('row.remove()') < popFn.indexOf('markQueueRowExiting'),
       'row.remove() is not the animated branch');
-    const reseatFn = fnBodyUntilNext(app, 'function reseatSameKeySuccessor', ['async function releaseProcessedHead']);
-    assert.match(reseatFn, /armQueueRowEnter/);
-    assert.match(reseatFn, /animationsSkipped/);
-    assert.equal(/buildQueueRow\(successor,\s*monsters,\s*bs,\s*true\)/.test(reseatFn), false,
-      '4th arg is withMarkers, not the enter flag');
-    assert.match(loop, /runQueueRemoval/); // non-head path still slides
     assert.match(loop, /playQueueTransition\(/, 'advance delegates the queue-transition ceremony');
     assert.equal(loop.includes('playInsertCeremony'), false, 'advance does not inline the ceremony');
     const transition = fnBodyUntilNext(app, 'async function playQueueTransition', ['async function awaitTickVisuals']);
@@ -191,107 +187,86 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.ok(clockCeremony >= 0 && clockRemove > clockCeremony, 'battle clock: attack ceremony before ready slide-out');
   });
 
-  it('same-key phase change arms the enter class without rebuilding the queue', () => {
+  it('tic-only change relabels in place — no slide', () => {
     const queueRender = read('js/battle/queue-render.js');
-    const upd = fnBodyUntilNext(queueRender, 'function updateQueueRowInPlace', ['function sortQueueRows']);
-    assert.match(upd, /dataset\.queueEvent/);
-    assert.match(upd, /armQueueRowEnter/);
-    const arm = fnBodyUntilNext(queueRender, 'function armQueueRowEnter', ['function monsterQueueName']);
-    assert.match(arm, /queue-row-enter/);
-    assert.match(arm, /queue-row-monster-enter/);
-    assert.match(arm, /queueAnimationsSkipped/);
     const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
-    const stable = render.indexOf('domKeys.size === newKeys.length');
+    assert.match(render, /queueEventIdentity/);
+    assert.match(render, /currentIdent\.every\(/, 'fast path compares (label, event)');
+    const branchStart = render.indexOf('currentIdent.every');
+    const branchEnd = render.indexOf('return;', branchStart);
+    const branch = render.slice(branchStart, branchEnd);
+    assert.ok(branch.includes('updateQueueRowInPlace'), 'tic path updates the number in place');
+    assert.equal(branch.includes('queue-row-exit'), false, 'tic path does not slide out');
+    assert.equal(branch.includes('markQueueRowExiting'), false, 'tic path does not mark an exit');
+    assert.equal(branch.includes('insertBefore'), false, 'tic path does not move a node');
+    const upd = fnBodyUntilNext(queueRender, 'function updateQueueRowInPlace', ['function sortQueueRows']);
+    assert.equal(upd.includes('armQueueRowEnter'), false, 'in-place update does not play an enter slide');
+    assert.equal(upd.includes('queue-row-exit'), false, 'in-place update does not exit');
+    assert.match(upd, /prevEvent !== nextEvent/, 'a phase change is refused — not painted onto this node');
+  });
+
+  it('event change is remove + insert, and the processed box exits last', () => {
+    const loop = fnBody(app, 'advance');
+    const insertAt = loop.indexOf('playQueueTransition(');
+    const releaseAt = loop.indexOf('releaseProcessedHead(processedHead');
+    assert.ok(insertAt >= 0 && releaseAt > insertAt, 'new box slides in before the processed box slides out');
+    assert.equal(loop.includes('playInsertCeremony'), false, 'advance delegates the insert ceremony');
+    const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
+    assert.match(releaseFn, /runQueueRemoval/, 'departing boxes slide out');
+    assert.equal(releaseFn.includes('updateQueueRowInPlace'), false, 'exit does not relabel the departing box');
+    const commit = fnBodyUntilNext(app, 'async function playCommitArrival', ['function showMessage']);
+    assert.ok(commit.indexOf('playInsertCeremony') < commit.indexOf('runQueueRemoval'),
+      'a commit inserts the new entry before the ready box exits');
+    assert.equal(commit.includes('updateQueueRowInPlace'), false, 'a commit is a new entry, not an in-place relabel');
+    const diff = fnBodyUntilNext(read('js/battle/queue-render.js'), 'function diffQueueForAnimation', ['function isReconciledQueueRow']);
+    assert.match(diff, /queueEventIdentity/);
+    assert.equal(diff.includes('queueRowKey'), false);
+  });
+
+  it('monster recovering → preparing to attack relabels in place', () => {
+    const queueRender = read('js/battle/queue-render.js');
+    const relabel = fnBodyUntilNext(app, 'function relabelMonsterPreparing', ['Mark a processed head for exit']);
+    assert.match(relabel, /updateQueueRowInPlace/);
+    assert.match(relabel, /dataset\.preparing/);
+    assert.equal(relabel.includes('runQueueRemoval'), false, 'the preparing swap does not slide the box out');
+    assert.equal(relabel.includes('markQueueRowExiting'), false, 'the preparing swap does not mark an exit');
+    assert.match(queueRender, /preparing to attack/);
+    const loop = fnBody(app, 'advance');
+    const pin = loop.indexOf('pinProcessedHead(processedHead)');
+    const relabelCall = loop.indexOf('relabelMonsterPreparing(');
+    const narrate = loop.indexOf('awaitNarration(');
+    assert.ok(pin >= 0 && relabelCall > pin && narrate > relabelCall,
+      'text swaps while the box is pinned, before narration finishes');
+  });
+
+  it('a hand landing on READY at the head is remove + insert — ready slides in, cooldown slides out', () => {
+    const loop = fnBody(app, 'advance');
+    const insertAt = loop.indexOf('playQueueTransition(');
+    const releaseAt = loop.indexOf('releaseProcessedHead(processedHead');
+    assert.ok(insertAt >= 0 && releaseAt > insertAt,
+      'the ready box slides in before the cooldown box slides out');
+    const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
+    assert.match(releaseFn, /runQueueRemoval/);
+    assert.equal(releaseFn.includes('updateQueueRowInPlace'), false,
+      'cooldown→ready does not relabel the cooldown node into ready');
+    assert.equal(app.includes('reseatSameKeySuccessor'), false);
+    assert.equal(app.includes('queueRowKey'), false);
+  });
+
+  it('renderQueue fast path compares (label, event), not raw ids (no node move on tic)', () => {
+    const queueRender = read('js/battle/queue-render.js');
+    const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
+    assert.match(render, /queueEventIdentity/, 'fast path derives identity from label + event');
+    assert.match(render, /domEventIdentity/);
+    assert.match(queueRender, /dataset\.queueLabel/);
+    assert.match(queueRender, /dataset\.queueEvent/);
+    assert.match(render, /currentIdent\.every\(/);
+    assert.equal(render.includes('queueRowKey'), false);
+    assert.equal(render.includes('stableKey'), false);
+    const upd = render.indexOf('updateQueueRowInPlace');
     const clear = render.indexOf('clearQueueDom()');
-    assert.ok(stable >= 0 && clear > stable, 'stable-key path returns before any full rebuild');
-    assert.ok(render.slice(stable, clear).includes('return;'), 'stable-key path does not fall through to clearQueueDom');
-    assert.equal(render.slice(stable, clear).includes('clearQueueDom'), false);
+    assert.ok(upd >= 0 && upd < clear, 'in-place tic update returns before any rebuild');
+    assert.ok(render.slice(0, clear).includes('return;'));
+    assert.equal(render.includes('insertBefore'), false, 'a tic does not move a node');
   });
-
-  it('monster winding, impact, and cooldown stay one stable key', () => {
-      const queueRender = read('js/battle/queue-render.js');
-      const keyFn = fnBodyUntilNext(queueRender, 'function queueRowKey', ['function isMonsterLabel']);
-      assert.match(keyFn, /row\.event === 'winding'/);
-      assert.match(keyFn, /row\.event === 'impact'/);
-      assert.match(keyFn, /row\.event === 'cooldown'/);
-      assert.match(keyFn, /`m:\$\{row\.label\}`/);
-    });
-
-    it('PC-118: a same-key successor relabels the existing node, never a second DOM node', () => {
-      const app = read('js/battle-app.js');
-      // reseatSameKeySuccessor must short-circuit on a live same-stable-key node
-      // BEFORE it can build/insert a second row.
-      const reseatFn = fnBodyUntilNext(app, 'function reseatSameKeySuccessor', ['async function releaseProcessedHead']);
-      const liveCheck = reseatFn.indexOf('dataset.stableKey === key');
-      const buildAt = reseatFn.indexOf('buildQueueRow');
-      assert.ok(liveCheck >= 0 && buildAt > liveCheck,
-        'reseat checks for a live same-key node before it can build a second row');
-      assert.match(reseatFn, /classList\.contains\('queue-row-exit'\)/,
-        'the live-node check ignores an exiting row so a genuine removal still reseats');
-      // releaseProcessedHead must NOT runQueueRemoval when the head has a same-key
-      // successor (the node was relabeled in place, not removed).
-      const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
-      const sameKeyAt = releaseFn.indexOf('successorSameKey');
-      const removeAt = releaseFn.indexOf('runQueueRemoval');
-      assert.ok(sameKeyAt >= 0 && removeAt > sameKeyAt,
-        'same-key successor returns before any runQueueRemoval');
-      assert.match(releaseFn, /forgetQueueRowExiting/,
-        'relabeled head clears its exit mark instead of sliding out');
-      // playCommitArrival relabels the ready row in place for a same-key commit.
-      const commit = fnBody(app, 'playCommitArrival');
-      assert.ok(commit.indexOf('updateQueueRowInPlace') >= 0 && commit.indexOf('updateQueueRowInPlace') < commit.indexOf('playInsertCeremony'),
-        'commit relabels the ready node in place before any ceremony insert');
-      assert.match(commit, /keysEqual/);
-    });
-
-    it('a hand landing on READY at the head relabels in place — never slides', () => {
-      // The head is the row being processed right now. It is pinned at the top
-      // and must NEVER slide out and back in. Cooldown→ready at the head is a
-      // same-key phase change: the node relabels in place (updateQueueRowInPlace),
-      // the text changes, the box stays put. No markQueueRowExiting, no
-      // waitForEvent, no armQueueRowEnter on the head.
-      const app = read('js/battle-app.js');
-      const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
-      const sameKeyAt = releaseFn.indexOf('const successorSameKey');
-      assert.ok(sameKeyAt >= 0, 'releaseProcessedHead computes a same-key successor');
-      const sameKeyBranch = releaseFn.slice(sameKeyAt);
-      assert.match(sameKeyBranch, /updateQueueRowInPlace/,
-        'same-key head phase change relabels the node in place');
-      assert.equal(sameKeyBranch.includes('markQueueRowExiting'), false,
-        'the head never slides out — no exit mark on a same-key phase change');
-      assert.equal(sameKeyBranch.includes('armQueueRowEnter'), false,
-        'the head never slides in — no enter animation on a same-key phase change');
-      assert.equal(sameKeyBranch.includes('waitForEvent'), false,
-        'the head never waits on an exit animation');
-      assert.match(sameKeyBranch, /forgetQueueRowExiting/,
-        'any stale exit mark is cleared so the head stays put');
-    });
-
-    it('renderQueue fast path compares STABLE KEYS, not raw ids (no node move on tic)', () => {
-      // Hand rows regenerate their id every tick (fresh randomUUID in
-      // commitNewRow), so an id-based fast-path comparison always fails for
-      // hands and forces the node-moving branch — which kills the FLIP glide
-      // and flickers the tic readout. The fast path must compare stable keys
-      // (h:LH / h:RH / m:<label>) so a same-order tick updates in place and
-      // never moves a node (Spahrep live bug 2026-10-09).
-      const queueRender = read('js/battle/queue-render.js');
-      const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
-      assert.match(render, /currentKeys\.every\(/,
-        'fast path compares stable keys');
-      assert.ok(render.indexOf('currentKeys') < render.indexOf('insertBefore'),
-        'the stable-key fast path returns before any node move');
-      assert.ok(render.indexOf('queueRowKey') >= 0,
-        'fast path derives keys via queueRowKey');
-    });
-
-    it('PC-118: renderQueue defensively drops a duplicate stable-key node', () => {
-      const queueRender = read('js/battle/queue-render.js');
-      const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
-      const stable = render.indexOf('domKeys.size === newKeys.length');
-      const dedup = render.indexOf('seenLive');
-      assert.ok(stable >= 0 && dedup > stable,
-        'stable-key branch dedups duplicate stable keys before relabeling');
-      assert.match(render.slice(stable, render.indexOf('clearQueueDom()')), /r\.remove\(\)/,
-        'the extra same-key node is removed, never left asas a ghost');
-    });
-  });
+});
