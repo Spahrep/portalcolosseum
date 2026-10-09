@@ -1,7 +1,7 @@
 # Portal Colosseum — Docs Read-Order
 
 **Read this file first.** It is the map to the other docs. It exists because
-the full `docs/` tree is ~140k tokens (~73 files) — loading it whole blows the
+the full `docs/` tree is ~149k tokens (~78 files) — loading it whole blows the
 context window before a single line of code is read. You do not read the docs;
 you read the ONE doc for the task at hand.
 
@@ -11,6 +11,10 @@ you read the ONE doc for the task at hand.
    (Grok via delegate_task), what Hermes touches directly (mechanical only),
    verification rules, and the Context Budget protocol. Load this in every
    session. This is the **workflow source of truth**.
+1a. **CODEMAP.md** (repo root) — the generated symbol index: every function
+   and class with its file:line. Grep it to locate a symbol, then read the
+   tight range — never grep source files or read whole files to find
+   symbols. Regenerate after edits: `npm run codemap`.
 2. **docs/core-philosophy.md** — the design principles (north star). The one
    page that explains WHY the game works how it does. This is the **design-principles source of truth**.
 3. **The ONE mechanic doc for your task** — never the whole tree. Pick just:
@@ -46,4 +50,4 @@ One task = AGENTS.md + core-philosophy.md + **one** mechanic doc. That's ~11k to
 
 ## Test-suite baseline (record it, don't invent it)
 
-Current full-suite baseline (updated 2026-10-08): **273 tests / 64 suites / 273 pass / 0 fail** in ~185ms. Run `npm test` (= `node --test tests/*.test.js`). When you change code, re-run ONE test file first (`node --test tests/<file>.test.js`) for the verify loop, then the full suite at the end. Several docs cite stale baselines (84/166/173/178) — ignore those; 273 is current. If the count changes, update this line and the fix-workorder that moved it.
+Current full-suite baseline (updated 2026-10-09): **284 tests / 67 suites / 284 pass / 0 fail** in ~260ms. Run `npm test` (= `node --test tests/*.test.js`). When you change code, re-run ONE test file first (`node --test tests/<file>.test.js`) for the verify loop, then the full suite at the end. Several docs cite stale baselines (84/166/173/178/273) — ignore those; 284 is current. If the count changes, update this line and the fix-workorder that moved it.

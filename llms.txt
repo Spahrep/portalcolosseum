@@ -2,11 +2,11 @@
 
 > Browser arena battler (HTML5 canvas, Supabase, Vercel). Coding agents load one mechanic doc, not the docs tree. DOCS.md is the full read-order; this file is the link index of that map.
 
-One task is the protocol, the design principles, and a single mechanic doc below. The docs tree is ~140k tokens — do not load it whole. Skip dated history (reviews, workorders, briefs); DOCS.md lists what to ignore.
+One task is the protocol, the design principles, and a single mechanic doc below. The docs tree is ~149k tokens — do not load it whole. Skip dated history (reviews, workorders, briefs); DOCS.md lists what to ignore. For a code symbol's file:line, grep CODEMAP.md (repo root) — do not grep source files to locate symbols.
 
 <!--
 llms-full.txt is intentionally not generated. Concatenating the docs tree
-(~140k tokens) would blow the context window this index exists to save.
+(~149k tokens) would blow the context window this index exists to save.
 Do not rebuild llms-full.txt. Follow the links and fetch one mechanic doc.
 -->
 

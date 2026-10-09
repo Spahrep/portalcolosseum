@@ -12,7 +12,8 @@
   "scripts": {
     "test": "node --experimental-test-module-mocks --test tests/*.test.js",
     "lint": "eslint .",
-    "check": "for f in js/*.js; do node --check \"$f\" || exit 1; done"
+    "check": "for f in js/*.js; do node --check \"$f\" || exit 1; done",
+    "codemap": "node scripts/generate-codemap.mjs"
   },
   "engines": {
     "node": ">=18.x"

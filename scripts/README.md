@@ -31,3 +31,13 @@ PLAYTHROUGH_JWT=ey... node scripts/playthrough.mjs
 - No new deps
 - No silent catch; explicit errors
 - Uses exact routes/shapes from api/combat/[...path].js (commit, target_ids, {weapons}, battle_state nesting, 'start a run first', Ready state, feed cap=10)
+
+## Codemap
+
+Regenerate the repo-root symbol index (overwrites `CODEMAP.md`):
+
+```bash
+node scripts/generate-codemap.mjs
+```
+
+Indexes `.js` files in `js/`, `api/`, `lib/`, and `public/test/cli/`. No dependencies. Filenames with brackets (`api/combat/[...path].js`) are walked with `fs.readdir`, not a shell glob.
