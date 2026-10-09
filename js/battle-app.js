@@ -453,8 +453,26 @@ async function releaseProcessedHead(head, newQueue, bs, preset) {
   const row = findQueueRowByIdentity(head);
   if (!row) return;
   const key = queueRowKey(head);
-  const successorSameKey = (newQueue || []).some(r => queueRowKey(r) === key);
   const id = row.dataset.rowId || head.id;
+  // Landing on the player's turn: the same-key successor is a hand READY row
+  // becoming the head. That is the "wait for the player" state — nothing was
+  // removed, so do NOT run removal theater (slide out / slide back in). The
+  // player must see it settle at READY and be prompted. Only mid-stream phase
+  // changes (winding→impact→cooldown) slide.
+  const successor = (newQueue || []).find(r => queueRowKey(r) === key);
+  const landsOnReady = !!(successor && (successor.label === 'LH' || successor.label === 'RH') && successor.event === 'ready');
+  if (landsOnReady) {
+    if (row) {
+      const monsters = (bs && bs.monsters) || [];
+      updateQueueRowInPlace(row, successor, monsters, bs);
+      row.classList.remove('queue-row-current', 'queue-row-exit');
+      if (!animationsSkipped(preset)) armQueueRowEnter(row, successor);
+      if (id != null) forgetQueueRowExiting(id);
+      if (head.id != null) forgetQueueRowExiting(head.id);
+    }
+    return;
+  }
+  const successorSameKey = (newQueue || []).some(r => queueRowKey(r) === key);
   if (successorSameKey) {
     // Same-key phase change (hand ready→winding→impact→cooldown→ready, monster
     // winding→impact→cooldown): the row is BOTH removed and re-added. Slide the

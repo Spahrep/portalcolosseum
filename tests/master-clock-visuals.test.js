@@ -244,6 +244,23 @@ describe('Master clock visual fidelity (client contract)', () => {
       assert.match(commit, /keysEqual/);
     });
 
+    it('a hand landing on READY at the head holds still — no slide-out/slide-back', () => {
+      // When the same-key successor is a hand READY row becoming the head, the
+      // transition is "wait for the player", not a removal. releaseProcessedHead
+      // must relabel in place and return BEFORE markQueueRowExiting can slide the
+      // ready row out and back in (Spahrep live bug 2026-10-09).
+      const app = read('js/battle-app.js');
+      const releaseFn = fnBodyUntilNext(app, 'async function releaseProcessedHead', ['function measuredRowHeight']);
+      assert.match(releaseFn, /landsOnReady/,
+        'releaseProcessedHead branches on a ready-head landing');
+      const readyAt = releaseFn.indexOf('landsOnReady');
+      const exitingAt = releaseFn.indexOf('markQueueRowExiting');
+      assert.ok(readyAt >= 0 && (exitingAt === -1 || exitingAt > readyAt),
+        'the ready-head landing returns before any exit-slide animation');
+      assert.match(releaseFn, /successor\.event === 'ready'/,
+        'the landing guard specifically targets a ready successor');
+    });
+
     it('PC-118: renderQueue defensively drops a duplicate stable-key node', () => {
       const queueRender = read('js/battle/queue-render.js');
       const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
