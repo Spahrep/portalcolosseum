@@ -8,12 +8,21 @@
  * IDOR closed: all UPDATEs chain .eq('user_id', user.id); all path ids NaN-guarded; non-active rejected; consume_a/b ownership via consumable_instance (R7/F7).
  */
 
-import { createClient } from '@supabase/supabase-js';
 import { createEngine, resumeEngine } from '../../js/combat/engine.js';
 import { getHpWord } from '../../js/combat/hp-words.js';
 import { drawRandomDie, rollDieFace, selectMonsterGroup } from '../../js/combat/dice.js';
 import { generateLoot } from '../../js/combat/loot.js';
 import { handleCombatDev } from './dev/[...path].js';
+import {
+  json,
+  CORS,
+  verifyUser,
+  loadOwnedActiveRun,
+  persistBattle,
+  potionUsedFlags,
+  __setAdminClientForTests,
+} from '../../lib/combat-http.js';
+export { __setAdminClientForTests, potionUsedFlags };
 import {
   generateOneMonster as generateOneMonsterShared,
   findActiveRun as findActiveRunShared,
@@ -61,15 +70,6 @@ export function rollMultiplier(base, range, rng = Math.random) {
 export function monstersForLoot(persisted) {
   const list = persisted && Array.isArray(persisted.monsters) ? persisted.monsters : [];
   return list.filter(m => m);
-}
-
-/** DB used-flags mirror engine potion state. Spread into every battle_state persist. */
-export function potionUsedFlags(state) {
-  const pots = state && state.potions;
-  return {
-    consume_a_used: !!(pots && pots.A && pots.A.used),
-    consume_b_used: !!(pots && pots.B && pots.B.used)
-  };
 }
 
 /** X AP + Y gold. ap_cost is on portal_template; Y is entry_gold_cost (gold_cost alias). */
@@ -190,23 +190,6 @@ async function loadGrantedAttacks(admin, instances, style) {
   };
 }
 
-let adminClientOverride = null;
-/** Test-only injection. Production leaves this null. */
-export function __setAdminClientForTests(client) {
-  adminClientOverride = client;
-}
-
-const CORS = {
-  'Content-Type': 'application/json',
-  'Access-Control-Allow-Origin': 'https://portalcolosseum.com',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-};
-
-function json(body, status = 200) {
-  return new Response(JSON.stringify(body), { status, headers: CORS });
-}
-
 // Commit/swap snapshot the client ceremony reconciles against. playerReady is
 // the queue head, matching engine.tick(). Nested state stays so existing
 // readers of data.state / data.result keep working.
@@ -263,27 +246,6 @@ function computeStopShare(battleNum, totalBattles, prizePool, tiers) {
     rand_items: tier.rand_items,
     total_weapons: totalWeapons
   };
-}
-
-function getAdminClient() {
-  if (adminClientOverride) return adminClientOverride;
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key) throw new Error('Missing server config');
-  return createClient(url, key, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-}
-
-async function verifyUser(request) {
-  let admin;
-  try { admin = getAdminClient(); } catch (e) { return { error: 'Server config error', status: 500 }; }
-  const authHeader = request.headers.get('authorization') || '';
-  const token = authHeader.replace('Bearer ', '').trim();
-  if (!token) return { error: 'No auth token', status: 401 };
-  const { data: { user }, error } = await admin.auth.getUser(token);
-  if (error || !user) return { error: 'Invalid token', status: 401 };
-  return { admin, user };
 }
 
 async function handle(request) {
@@ -484,7 +446,7 @@ async function handle(request) {
               const eng = createEngine();
               eng.startBattle(participants, null, null, maxPlayerHp);
               battleStateForRun1 = eng.getPersistedState();
-              await admin.from('portal_run').update({ battle_state: battleStateForRun1 }).eq('id', run.id).eq('user_id', user.id);
+              await persistBattle(admin, user, run, battleStateForRun1, {});
             }
           }
         }
@@ -505,11 +467,9 @@ async function handle(request) {
 
     // GET /api/combat/runs/:id  (state route updated for dice visibility)
     if (path.startsWith('/runs/') && !path.includes('/battle') && method === 'GET') {
-      const idStr = path.split('/')[2];
-      const id = parseInt(idStr, 10);
-      if (isNaN(id)) return json({ error: 'Invalid run id' }, 400);
-      const { data: run } = await admin.from('portal_run').select('*').eq('id', id).eq('user_id', user.id).single();
-      if (!run) return json({ error: 'Not found or not owner' }, 404);
+      const owned = await loadOwnedActiveRun(admin, user, path.split('/')[2], { notFound: 'Not found or not owner', allowInactive: true });
+      if (owned.error) return json({ error: owned.error }, owned.status);
+      const { run, id } = owned;
       const state = run.battle_state || {};
 
       // Dice state: fetch all dice for this run, compute remaining/used/current
@@ -699,9 +659,9 @@ async function handle(request) {
       const idStr = path.split('/')[2];
       const id = parseInt(idStr, 10);
       if (isNaN(id)) return json({ error: 'Invalid run id' }, 400);
-      const { data: run } = await admin.from('portal_run').select('*').eq('id', id).eq('user_id', user.id).single();
-      if (!run) return json({ error: 'Run not found' }, 404);
-      if (run.status !== 'active') return json({ error: 'Run not active' }, 400);
+      const owned = await loadOwnedActiveRun(admin, user, id);
+      if (owned.error) return json({ error: owned.error }, owned.status);
+      const run = owned.run;
 
       // F3: gate against re-start mid-battle (live queue or monsters in battle_state)  -- KEPT
       if (run.battle_state && (run.battle_state.queue?.length > 0 || run.battle_state.monsters?.length > 0)) {
@@ -783,9 +743,9 @@ async function handle(request) {
       const engine = createEngine();
       const battleStateOut = engine.startBattle(participants, null, null, await startingHp(admin));
       const persisted = engine.getPersistedState();
-      await admin.from('portal_run')
-        .update({ battle_state: persisted, player_hp: persisted.player ? persisted.player.hp : run.player_hp })
-        .eq('id', id).eq('user_id', user.id);
+      await persistBattle(admin, user, run, persisted, {
+        player_hp: persisted.player ? persisted.player.hp : run.player_hp,
+      });
       return json({
         queue: battleStateOut.queue,
         participants: battleStateOut.participants,
@@ -818,9 +778,9 @@ async function handle(request) {
         .eq('id', attackIdNum).single();
       const isMultiTarget = !!attackRow?.is_multi_target;
 
-      const { data: run } = await admin.from('portal_run').select('*').eq('id', id).eq('user_id', user.id).single();
-      if (!run) return json({ error: 'Run not found' }, 404);
-      if (run.status !== 'active') return json({ error: 'Run not active' }, 400);
+      const owned = await loadOwnedActiveRun(admin, user, id);
+      if (owned.error) return json({ error: owned.error }, owned.status);
+      const run = owned.run;
 
       // R4: player-death gate on commit
       if (run.player_hp <= 0) return json({ error: 'Run over — player dead' }, 400);
@@ -893,10 +853,7 @@ async function handle(request) {
       // NO clock walk — commit removes the ready head, inserts the
       // winding row, and returns immediately. The client drives /tick.
 
-      const nextState = engine.getPersistedState();
-      await admin.from('portal_run')
-        .update({ battle_state: nextState, player_hp: nextState.player ? nextState.player.hp : run.player_hp, ...potionUsedFlags(nextState) })
-        .eq('id', id).eq('user_id', user.id);
+      await persistBattle(admin, user, run, engine);
       return json(commitSnapshot(engine, committed));
     }
 
@@ -906,9 +863,9 @@ async function handle(request) {
       const id = parseInt(idStr, 10);
       if (isNaN(id)) return json({ error: 'Invalid run id' }, 400);
 
-      const { data: run } = await admin.from('portal_run').select('*, battle_state, player_hp, status').eq('id', id).eq('user_id', user.id).single();
-      if (!run) return json({ error: 'Not found' }, 404);
-      if (run.status !== 'active') return json({ error: 'Run not active' }, 400);
+      const owned = await loadOwnedActiveRun(admin, user, id, { notFound: 'Not found', select: '*, battle_state, player_hp, status' });
+      if (owned.error) return json({ error: owned.error }, owned.status);
+      const run = owned.run;
 
       const persisted = run.battle_state || {};
       let engine;
@@ -923,10 +880,7 @@ async function handle(request) {
       // Persist state. A drink resolves on tick, so used-flags must land here
       // or the potion comes back next fight when no later commit rewrites them.
       const newState = engine.getState();
-      const saved = engine.getPersistedState();
-      await admin.from('portal_run')
-        .update({ battle_state: saved, player_hp: saved.player ? saved.player.hp : run.player_hp, ...potionUsedFlags(saved) })
-        .eq('id', id).eq('user_id', user.id);
+      await persistBattle(admin, user, run, engine);
 
       return json({
         result,
@@ -957,9 +911,9 @@ async function handle(request) {
       if (!['continue', 'stop'].includes(choice)) {
         return json({ error: 'Invalid choice' }, 400);
       }
-      const { data: run } = await admin.from('portal_run').select('*').eq('id', id).eq('user_id', user.id).single();
-      if (!run) return json({ error: 'Not found' }, 404);
-      if (run.status !== 'active') return json({ error: 'Run not active' }, 400);
+      const owned = await loadOwnedActiveRun(admin, user, id, { notFound: 'Not found' });
+      if (owned.error) return json({ error: owned.error }, owned.status);
+      const run = owned.run;
 
       let newStatus = run.status;
       let newBattle = run.current_battle;
@@ -1140,9 +1094,9 @@ async function handle(request) {
           const carryHp = prior && prior.player ? prior.player.hp : run.player_hp;
           freshEngine.startBattle(participants, null, carryHp, await startingHp(admin));
           newBattleState = freshEngine.getPersistedState();
-          await admin.from('portal_run')
-            .update({ battle_state: newBattleState, current_battle: newBattle, player_hp: carryHp, prize_pool: prizePool })
-            .eq('id', id).eq('user_id', user.id);
+          await persistBattle(admin, user, run, newBattleState, {
+            current_battle: newBattle, player_hp: carryHp, prize_pool: prizePool,
+          });
           return json({ status: 'active', current_battle: newBattle, prize_pool: prizePool, battle_state: { participants: freshEngine.getState().participants, intro: newBattleState.intro || null, tic: newBattleState.tic, queue: newBattleState.queue, feed: newBattleState.feed } });
         } else {
           // only complete if monsters_dead on final battle
@@ -1198,15 +1152,15 @@ async function handle(request) {
           lp_earned: awardedLp
         };
         // update run with awarded_pool (note: prize_pool left as-is for history)
-        await admin.from('portal_run')
-          .update({ status: newStatus, current_battle: newBattle, battle_state: newBattleState, awarded_pool: awardedPool })
-          .eq('id', id).eq('user_id', user.id);
+        await persistBattle(admin, user, run, newBattleState, {
+          status: newStatus, current_battle: newBattle, awarded_pool: awardedPool,
+        });
         return json({ status: newStatus, awarded_pool: awardedPool, prize_pool: prizePool });
       }
 
-      await admin.from('portal_run')
-        .update({ status: newStatus, current_battle: newBattle, battle_state: newBattleState, prize_pool: prizePool })
-        .eq('id', id).eq('user_id', user.id);
+      await persistBattle(admin, user, run, newBattleState, {
+        status: newStatus, current_battle: newBattle, prize_pool: prizePool,
+      });
       return json({ status: newStatus, current_battle: newBattle, prize_pool: prizePool });
     }
 
@@ -1219,9 +1173,9 @@ async function handle(request) {
       const slot = String(body.slot || '').toUpperCase();
       if (slot !== 'A' && slot !== 'B') return json({ error: 'Invalid potion slot' }, 400);
 
-      const { data: run } = await admin.from('portal_run').select('*').eq('id', id).eq('user_id', user.id).single();
-      if (!run) return json({ error: 'Run not found' }, 404);
-      if (run.status !== 'active') return json({ error: 'Run not active' }, 400);
+      const owned = await loadOwnedActiveRun(admin, user, id);
+      if (owned.error) return json({ error: owned.error }, owned.status);
+      const run = owned.run;
       if (run.player_hp <= 0) return json({ error: 'Run over — player dead' }, 400);
 
       // DB flag is the source of truth: a consumed potion can never be re-drunk.
@@ -1290,13 +1244,10 @@ async function handle(request) {
       }
       const afterPotion = engine.getPersistedState();
       const potionUsed = !!(afterPotion.potions?.[slot]?.used);
-      await admin.from('portal_run')
-        .update({
-          battle_state: afterPotion,
-          player_hp: afterPotion.player ? afterPotion.player.hp : run.player_hp,
-          [slot === 'A' ? 'consume_a_used' : 'consume_b_used']: potionUsed
-        })
-        .eq('id', id).eq('user_id', user.id);
+      await persistBattle(admin, user, run, afterPotion, {
+        player_hp: afterPotion.player ? afterPotion.player.hp : run.player_hp,
+        [slot === 'A' ? 'consume_a_used' : 'consume_b_used']: potionUsed,
+      });
 
       return json(commitSnapshot(engine, committed));
     }
@@ -1315,9 +1266,9 @@ async function handle(request) {
       const hand = String(body.hand || '').toUpperCase();
       if (hand !== 'LH' && hand !== 'RH') return json({ error: 'Invalid hand' }, 400);
 
-      const { data: run } = await admin.from('portal_run').select('*').eq('id', id).eq('user_id', user.id).single();
-      if (!run) return json({ error: 'Run not found' }, 404);
-      if (run.status !== 'active') return json({ error: 'Run not active' }, 400);
+      const owned = await loadOwnedActiveRun(admin, user, id);
+      if (owned.error) return json({ error: owned.error }, owned.status);
+      const run = owned.run;
       if (run.player_hp <= 0) return json({ error: 'Run over — player dead' }, 400);
       if (!run.belt_weapon_id) return json({ error: 'no belt weapon' }, 400);
       const handCol = hand === 'LH' ? run.hand_l_weapon_id : run.hand_r_weapon_id;
@@ -1363,15 +1314,12 @@ async function handle(request) {
       // Persist engine state AND the weapon-pointer columns (source of truth for
       // the GET weapons rebuild — without this the swap reverts on reload).
       const swapped = engine.getPersistedState();
-      await admin.from('portal_run')
-        .update({
-          battle_state: swapped,
-          player_hp: swapped.player ? swapped.player.hp : run.player_hp,
-          hand_l_weapon_id: weapons.hand_l ? weapons.hand_l.id : null,
-          hand_r_weapon_id: weapons.hand_r ? weapons.hand_r.id : null,
-          belt_weapon_id: weapons.belt ? weapons.belt.id : null
-        })
-        .eq('id', id).eq('user_id', user.id);
+      await persistBattle(admin, user, run, swapped, {
+        player_hp: swapped.player ? swapped.player.hp : run.player_hp,
+        hand_l_weapon_id: weapons.hand_l ? weapons.hand_l.id : null,
+        hand_r_weapon_id: weapons.hand_r ? weapons.hand_r.id : null,
+        belt_weapon_id: weapons.belt ? weapons.belt.id : null,
+      });
 
       const out = engine.getState();
       const snap = commitSnapshot(engine, result);

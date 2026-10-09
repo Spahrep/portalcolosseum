@@ -17,7 +17,7 @@ import {
   buildPotionLoadout as buildPotionLoadoutShared,
   startingHp,
 } from '../../../lib/combat-run.js';
-import { json as httpJson, CORS, verifyUser } from '../../../lib/combat-http.js';
+import { json as httpJson, CORS, verifyUser, verifyAdmin } from '../../../lib/combat-http.js';
 
 export async function handleCombatDev({ request, path, method, admin, user, json }) {
   async function generateOneMonster(templateId, usedLabels) {
@@ -101,18 +101,8 @@ export async function handleCombatDev({ request, path, method, admin, user, json
 
     // GET /dev/users — admin-gated list of accounts for targeting (PC-68)
     if (path === '/dev/users' && method === 'GET') {
-      let profile;
-      try {
-        const pRes = await admin.from('profiles').select('is_admin').eq('id', user.id).single();
-        profile = pRes.data;
-        if (pRes.error) throw pRes.error;
-      } catch (e) {
-        console.error('admin profile check error', e);
-        return json({ error: 'Internal server error' }, 500);
-      }
-      if (!profile || !profile.is_admin) {
-        return json({ error: 'Admin access required' }, 403);
-      }
+      const adminGate = await verifyAdmin(admin, user);
+      if (adminGate.error) return json({ error: adminGate.error }, adminGate.status);
       let users;
       try {
         const uRes = await admin.from('profiles').select('id, username, is_admin').order('username');
@@ -126,18 +116,8 @@ export async function handleCombatDev({ request, path, method, admin, user, json
 
     // GET /dev/templates — admin-gated template catalog
     if (path === '/dev/templates' && method === 'GET') {
-      let profile;
-      try {
-        const pRes = await admin.from('profiles').select('is_admin').eq('id', user.id).single();
-        profile = pRes.data;
-        if (pRes.error) throw pRes.error;
-      } catch (e) {
-        console.error('admin profile check error', e);
-        return json({ error: 'Internal server error' }, 500);
-      }
-      if (!profile || !profile.is_admin) {
-        return json({ error: 'Admin access required' }, 403);
-      }
+      const adminGate = await verifyAdmin(admin, user);
+      if (adminGate.error) return json({ error: adminGate.error }, adminGate.status);
       let weapons = [];
       let monsters = [];
       let consumables = [];
@@ -171,18 +151,8 @@ export async function handleCombatDev({ request, path, method, admin, user, json
     // POST /api/combat/dev/grant — admin-gated dev helper: create starter weapon_instance for caller
     if (path === '/dev/grant' && method === 'POST') {
       // Gate exactly like api/admin routes (profiles.is_admin check)
-      let profile;
-      try {
-        const pRes = await admin.from('profiles').select('is_admin').eq('id', user.id).single();
-        profile = pRes.data;
-        if (pRes.error) throw pRes.error;
-      } catch (e) {
-        console.error('admin profile check error', e);
-        return json({ error: 'Internal server error' }, 500);
-      }
-      if (!profile || !profile.is_admin) {
-        return json({ error: 'Admin access required' }, 403);
-      }
+      const adminGate = await verifyAdmin(admin, user);
+      if (adminGate.error) return json({ error: adminGate.error }, adminGate.status);
 
       // Rev2: dev-mode unlock only — no weapon creation
       return json({ dev_mode: true });
@@ -193,18 +163,8 @@ export async function handleCombatDev({ request, path, method, admin, user, json
 
     if (isDevPath(path) && method === 'POST') {
       // admin gate (reuse grant pattern)
-      let profile;
-      try {
-        const pRes = await admin.from('profiles').select('is_admin').eq('id', user.id).single();
-        profile = pRes.data;
-        if (pRes.error) throw pRes.error;
-      } catch (e) {
-        console.error('admin profile check error', e);
-        return json({ error: 'Internal server error' }, 500);
-      }
-      if (!profile || !profile.is_admin) {
-        return json({ error: 'Admin access required' }, 403);
-      }
+      const adminGate = await verifyAdmin(admin, user);
+      if (adminGate.error) return json({ error: adminGate.error }, adminGate.status);
 
       // 1. POST /dev/equip
       if (path === '/dev/equip') {
