@@ -575,6 +575,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Confirms the already-shipped accelerating stop-share curve (PC-DEC-056): gold 15/30/50/70/100% by progress (20/40/60/80/100%), items 0/0/1/1/2 sel + 0/1/1/2/2 rand. The "exact % TBD" lines are STALE — replaced: portal-runs.md:11 and current-design-status.md:111 now point at loot-prize-pool.md §Stop-Share Curve (the shipped config), not "$ TBD". Applied to portal-runs.md + current-design-status.md. Decided by Spahrep, 2026-10-08.
 
+- ID: PC-DEC-070
+  Date: 2026-10-09
+  Source: Hermes audit session (action-queue model revisit; applied to docs by commit 6e8492a, captured late by the 2026-10-10 nightly sweep — the apply landed but the PC-DEC log entry was missed)
+  Speaker: Spahrep
+  Verbatim: "A box gets to the top, it is processed, a new box is inserted, and then it is removed. That is the ONLY way things work."
+  Status: DECIDED
+  Notes: The action-queue transition model is remove + insert, EVERY transition. A box reaches the top, is processed (rolls/narration/state), a NEW box (fresh entry, new id, at its queue position) is inserted, then the old box is removed — the exit is the LAST action. No morphing, no re-insertion, no shared DOM node across entries: on screen the new box slides in first, the old box slides out last, siblings lift as one FLIP motion. Kills the old stable-key node-reuse / in-place-relabel illusion. Exactly TWO text-only relabel cases keep a box still and swap text only: (1) tic countdown updates (33 → 23), (2) monster cooldown "recovering" → "preparing to attack" when the row reaches the top. Any other text change = a new entry replacing an old one. Engine (046b988, 1ba0523) and renderer aligned; supersedes earlier "node reused, slid out, relabeled, slid back in" phrasing across action-queue-animation.md / battle-status-ui.md / combat-engine-plan.md / potion-contract.md / action-visual-lifecycle.md / action-queue-audit.md. Applied to action-queue-visual-choreography.md (canon core rule), action-queue-spec-compact.md, current-design-status.md, battle-status-ui.md, combat-engine-plan.md, potion-contract.md, action-queue-animation.md. Decided by Spahrep, 2026-10-09.
+
 ## Open
 
 > No open items. Everything previously listed has been decided or superseded (see ## Rejected / Superseded).

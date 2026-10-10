@@ -247,3 +247,7 @@ This is locked. The silent path is correct and must remain.
 - ❌ The row-arrival is never suppressed by a same-tick removal.
 - ❌ No timing bar / fill bar / %-complete bar on any row. The countdown is the tic number.
 - ❌ No shared DOM node pretending to be the same hand across two different entries.
+
+---
+
+Decided by Spahrep, 2026-10-09. (PC-DEC-070; supersedes the earlier node-reuse/relabel framing in action-queue-audit.md and attack-queue-animation-testing.md, now marked superseded.)
