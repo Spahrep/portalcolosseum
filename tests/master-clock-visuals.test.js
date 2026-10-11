@@ -245,15 +245,17 @@ describe('Master clock visual fidelity (client contract)', () => {
     assert.ok(relabelCall >= 0 && narrate > relabelCall, 'text swaps while the box holds, before narration');
     assert.ok(insertAt > relabelCall && releaseAt > insertAt, 'a real successor still slides in before a processed box slides out');
     const changes = fnBodyUntilNext(app, 'function queueEventChanges', ['function pinProcessedHead']);
-    assert.match(changes, /isHandReadyRelabel/, 'cooldown/approach → ready is not classified as remove+insert');
+    assert.match(changes, /isTopRelabelOnSameBox/, 'cooldown/approach → ready is not classified as remove+insert');
     assert.match(changes, /relabels/);
     const queueRender = read('js/battle/queue-render.js');
-    const helper = fnBodyUntilNext(queueRender, 'function isHandReadyRelabel', ['function domRowSnapshot']);
+    const helper = fnBodyUntilNext(queueRender, 'function isHandReadyRelabel', ['function isWindingImpactRelabel']);
     assert.match(helper, /cooldown/);
     assert.match(helper, /approach/);
     assert.match(helper, /ready/);
+    const top = fnBodyUntilNext(queueRender, 'function isTopRelabelOnSameBox', ['function domRowSnapshot']);
+    assert.match(top, /isHandReadyRelabel/, 'Ready stays a same-box relabel');
     const upd = fnBodyUntilNext(queueRender, 'function updateQueueRowInPlace', ['function sortQueueRows']);
-    assert.match(upd, /isHandReadyRelabel/, 'the in-place update accepts a hand reaching Ready');
+    assert.match(upd, /isTopRelabelOnSameBox/, 'the in-place update accepts a hand reaching Ready');
     assert.match(upd, /prevEvent !== nextEvent/, 'any other phase change is still refused');
     assert.match(upd, /ticSpan\.textContent = '—'/ , 'the countdown number swaps to the actionable signal');
     assert.equal(upd.includes('queue-row-exit'), false, 'in-place update does not exit');
@@ -361,15 +363,7 @@ describe('PC-DEC-071 hand reaching Ready is a relabel', () => {
     assert.notEqual(committed.inserted.id, ready.id, 'the successor is a new entry');
     assert.equal(persisted(eng).queue.some(r => r.id === ready.id), false);
     assert.equal(handRows(eng, 'LH').length, 1);
-
-    const winding = handRows(eng, 'LH')[0];
-    const fired = eng.tick();
-    assert.equal(fired.row.id, winding.id, 'clock fire returns the processed winding head');
-    assert.equal(persisted(eng).queue.some(r => r.id === winding.id), false, 'processed head is removed');
-    const impact = handRows(eng, 'LH')[0];
-    assert.equal(impact.event, 'impact');
-    assert.notEqual(impact.id, winding.id, 'impact is an insert, not a relabel');
-    assert.equal(handRows(eng, 'LH').length, 1);
+    // winding → impact is a relabel, not this remove+insert. Covered below.
   });
 
   it('one row per hand through ready → winding → impact → cooldown → ready', () => {
@@ -408,5 +402,147 @@ describe('PC-DEC-071 hand reaching Ready is a relabel', () => {
     assert.equal(result.playerReady, true);
     assert.equal(result.needsInput, true);
     assert.equal(handRows(eng, 'RH').length, 1);
+  });
+});
+
+describe('PC-DEC-071 winding → impact is a relabel', () => {
+  it('hand winding → impact relabels in place (same id, tic 0, no second row)', () => {
+    const eng = createEngine(seededRNG(4));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 40, hand_r_speed: 40 },
+      monsters: [{ id: 1, max_hp: 500, damage: 1, speed: 40, accuracy: 1, label: 'A' }]
+    });
+    writeState(eng, snap => {
+      snap.queue = [
+        {
+          id: 'wind-rh', label: 'RH', event: 'winding', tics: 3,
+          targetIds: [1], damage: 12, isMultiTarget: false, cooldownTicks: 1,
+          accuracy: 0, critChance: 5, critMultiplier: 2, attackName: 'Slash'
+        },
+        { id: 'ap-lh', label: 'LH', event: 'approach', tics: 40 },
+        { id: 'mon-a', label: 'A', event: 'cooldown', tics: 40 }
+      ];
+      snap.player.hands.RH.state = 'winding';
+    });
+    const before = persisted(eng).queue.length;
+    const fired = eng.tick();
+    const rh = handRows(eng, 'RH');
+    assert.equal(rh.length, 1, 'no second hand row');
+    assert.equal(rh[0].id, 'wind-rh', 'same entry, not a fresh impact insert');
+    assert.equal(rh[0].event, 'impact');
+    assert.equal(rh[0].tics, 0, 'tic swaps to the terminal 0');
+    assert.equal(rh[0].attackName, 'Slash');
+    assert.deepEqual(rh[0].targetIds, [1]);
+    assert.equal(rh[0].damage, 12);
+    assert.equal(rh[0].cooldownTicks, 1);
+    assert.equal(rh[0].accuracy, 0);
+    assert.equal(rh[0].critChance, 5);
+    assert.equal(fired.row.id, 'wind-rh', 'tick returns the relabeled head');
+    assert.equal(fired.row.event, 'impact');
+    assert.equal(fired.needsInput, false, 'impact still has to resolve; do not pause yet');
+    assert.equal(fired.playerReady, false);
+    assert.equal(persisted(eng).queue.length, before, 'no insert');
+    assert.equal(peekHead(persisted(eng).queue).id, 'wind-rh');
+
+    const resolved = eng.tick();
+    assert.equal(resolved.row.id, 'wind-rh', 'tick returns the processed impact head');
+    assert.equal(persisted(eng).queue.some(r => r.id === 'wind-rh'), false, 'processed impact is removed');
+    const cd = handRows(eng, 'RH')[0];
+    assert.equal(cd.event, 'cooldown');
+    assert.notEqual(cd.id, 'wind-rh', 'cooldown is a real successor insert');
+    assert.equal(handRows(eng, 'RH').length, 1);
+
+    const ready = eng.tick();
+    assert.equal(handRows(eng, 'RH')[0].id, cd.id, 'cooldown → ready still relabels');
+    assert.equal(handRows(eng, 'RH')[0].event, 'ready');
+    assert.equal(ready.needsInput, true, 'clock pauses on the Ready head');
+    assert.equal(ready.playerReady, true);
+  });
+
+  it('monster winding → impact relabels in place (same id, strike kept)', () => {
+    const eng = createEngine(seededRNG(6));
+    eng.startBattle({
+      loadout: { hand_l: 1, hand_r: 2, hand_l_speed: 40, hand_r_speed: 40 },
+      monsters: [{ id: 1, max_hp: 80, damage: 10, speed: 40, accuracy: 1, label: 'A', name: 'Wolf' }]
+    });
+    writeState(eng, snap => {
+      snap.queue = [
+        {
+          id: 'wind-a', label: 'A', event: 'winding', tics: 2,
+          monsterAttackName: 'Bite', damage: 10, accuracy: 0, damageRange: 3,
+          critChance: 0, critMultiplier: 2, cooldownTicks: 9
+        },
+        { id: 'ap-lh', label: 'LH', event: 'approach', tics: 40 },
+        { id: 'ap-rh', label: 'RH', event: 'approach', tics: 40 }
+      ];
+    });
+    const hpBefore = persisted(eng).player.hp;
+    const fired = eng.tick();
+    const mon = persisted(eng).queue.filter(r => r.label === 'A');
+    assert.equal(mon.length, 1, 'no second monster row');
+    assert.equal(mon[0].id, 'wind-a');
+    assert.equal(mon[0].event, 'impact');
+    assert.equal(mon[0].tics, 0);
+    assert.equal(mon[0].monsterAttackName, 'Bite');
+    assert.equal(mon[0].damage, 10);
+    assert.equal(mon[0].accuracy, 0);
+    assert.equal(mon[0].cooldownTicks, 9);
+    assert.equal(fired.row.id, 'wind-a');
+    assert.equal(fired.needsInput, false);
+    assert.equal(fired.playerReady, false);
+    assert.equal(persisted(eng).player.hp, hpBefore, 'winding→impact deals no damage');
+    assert.equal(persisted(eng).queue.some(r => r.label === 'A' && r.event === 'winding'), false);
+
+    eng.tick();
+    assert.equal(persisted(eng).queue.some(r => r.id === 'wind-a'), false, 'processed impact leaves');
+    const cd = persisted(eng).queue.find(r => r.label === 'A');
+    assert.equal(cd.event, 'cooldown');
+    assert.notEqual(cd.id, 'wind-a', 'cooldown is still a successor insert');
+    assert.equal(cd.tics, 9);
+  });
+});
+
+describe('winding → impact client contract (no slide)', () => {
+  const app = read('js/battle-app.js');
+
+  it('recognizes winding → impact as a same-box relabel, not remove+insert', () => {
+    const queueRender = read('js/battle/queue-render.js');
+    const wind = fnBodyUntilNext(queueRender, 'function isWindingImpactRelabel', ['function isTopRelabelOnSameBox']);
+    assert.match(wind, /winding/);
+    assert.match(wind, /impact/);
+    assert.match(wind, /from\.id/, 'same id; a new id is a different box');
+    const top = fnBodyUntilNext(queueRender, 'function isTopRelabelOnSameBox', ['function domRowSnapshot']);
+    assert.match(top, /isWindingImpactRelabel/);
+    assert.match(top, /isHandReadyRelabel/);
+    const changes = fnBodyUntilNext(app, 'function queueEventChanges', ['function pinProcessedHead']);
+    assert.match(changes, /isTopRelabelOnSameBox/, 'winding → impact is not classified as remove+insert');
+    assert.equal(changes.includes('queue-row-exit'), false, 'classification does not arm a slide-out');
+    assert.equal(changes.includes('queue-row-enter'), false, 'classification does not arm a slide-in');
+    const diff = fnBodyUntilNext(queueRender, 'function diffQueueForAnimation', ['function isReconciledQueueRow']);
+    assert.match(diff, /isTopRelabelOnSameBox/);
+    const domMatch = fnBodyUntilNext(queueRender, 'function domMatchesQueueRow', ['function domEventIdentity']);
+    assert.match(domMatch, /isTopRelabelOnSameBox/, 'fast path reuses the node');
+    const render = fnBodyUntilNext(queueRender, 'function renderQueue', ['function diffQueueForAnimation']);
+    assert.match(render, /isTopRelabelOnSameBox/, 'rebuild reuses the node instead of building a new one');
+    const upd = fnBodyUntilNext(queueRender, 'function updateQueueRowInPlace', ['function sortQueueRows']);
+    assert.match(upd, /isTopRelabelOnSameBox/);
+    assert.equal(upd.includes('queue-row-exit'), false, 'in-place update does not slide out');
+    assert.equal(upd.includes('queue-row-enter'), false, 'in-place update does not slide in');
+    assert.equal(upd.includes('buildQueueRow'), false, 'in-place update does not create a new DOM node');
+    const relabel = fnBodyUntilNext(app, 'function relabelHandReady', ['function relabelMonsterPreparing']);
+    assert.match(relabel, /updateQueueRowInPlace/);
+    assert.equal(relabel.includes('queue-row-exit'), false);
+    assert.equal(relabel.includes('queue-row-enter'), false);
+    assert.equal(relabel.includes('buildQueueRow'), false, 'the relabel does not insert a new node');
+    const loop = fnBody(app, 'advance');
+    assert.ok(loop.includes('relabelHandReady('), 'advance swaps the text on the held box');
+    const engine = read('js/combat/engine.js');
+    const hand = fnBodyUntilNext(engine, 'function handleHandFire', ['function resolveMonsterImpact']);
+    assert.equal(/addEvent\([^)]*'impact'/.test(hand), false, 'hand winding fire does not addEvent an impact row');
+    assert.match(hand, /row\.event = 'impact'/);
+    const mon = fnBodyUntilNext(engine, 'function handleMonsterFire', ['function handleFire']);
+    assert.equal(/addEvent\([^)]*'impact'/.test(mon), false, 'monster winding fire does not addEvent an impact row');
+    assert.match(mon, /row\.event = 'impact'/);
+    assert.equal(mon.includes('carryMonsterStrike'), false, 'the strike stays on the same row');
   });
 });
