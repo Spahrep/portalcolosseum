@@ -1,10 +1,11 @@
 /**
  * Queue rendering subsystem (PC-77).
  * DOM render, (label, event) reconciliation, exit-row cache, and the PC-56
- * prediction bar. A phase change is a new box. Three cases retouch the node
- * already on screen: a tic countdown, a monster cooldown swapping
- * "recovering" → "preparing to attack", and a hand cooldown/approach/recovery
- * row reaching Ready (PC-DEC-071 — relabel in place, never remove+insert).
+ * prediction bar. A phase change is a new box. The node already on screen
+ * is retouched only for a tic countdown, a monster cooldown swapping
+ * "recovering" → "preparing to attack", a hand cooldown/approach/recovery
+ * row reaching Ready, and a winding row (hand or monster) becoming impact
+ * (PC-DEC-071 — relabel in place, never remove+insert).
  */
 import { debugLog } from '../battle-debug.js';
 import { assignArenaLetters, letterForMonster } from './arena-letters.js';
@@ -46,7 +47,8 @@ export function forgetQueueRowExiting(rowId) {
 /** Identity across renders is (label, event). The engine mints a fresh id per
  * entry and rewrites tics in place, so an id compare cannot tell a countdown
  * from a new box. Same label + same event = the same box (tic relabel).
- * A different event is a different box — except a hand reaching Ready. */
+ * A different event is a different box — except a reaching-the-top relabel
+ * (hand → Ready, or winding → impact). */
 export function queueEventIdentity(row) {
   if (!row) return '';
   return `${row.label}|${row.event}`;
@@ -65,6 +67,23 @@ export function isHandReadyRelabel(from, to) {
   return true;
 }
 
+/** A winding row that reached the top and became impact is the same box
+ * (PC-DEC-071). Same label, same id, event winding → impact. Hands and
+ * monsters. Not a removal and not an insert. */
+export function isWindingImpactRelabel(from, to) {
+  if (!from || !to) return false;
+  if (!from.label || to.label !== from.label) return false;
+  if (from.event !== 'winding' || to.event !== 'impact') return false;
+  if (from.id != null && to.id != null && String(from.id) !== String(to.id)) return false;
+  return true;
+}
+
+/** Reaching the top on the same box: hand countdown → Ready, or winding →
+ * impact. Text swaps in place. No slide. */
+export function isTopRelabelOnSameBox(from, to) {
+  return isHandReadyRelabel(from, to) || isWindingImpactRelabel(from, to);
+}
+
 function domRowSnapshot(el) {
   if (!el) return null;
   return {
@@ -77,7 +96,7 @@ function domRowSnapshot(el) {
 function domMatchesQueueRow(el, row) {
   if (!el || !row) return false;
   if (domEventIdentity(el) === queueEventIdentity(row)) return true;
-  return isHandReadyRelabel(domRowSnapshot(el), row);
+  return isTopRelabelOnSameBox(domRowSnapshot(el), row);
 }
 
 function domEventIdentity(el) {
@@ -248,7 +267,8 @@ export function renderQueue(bs, fill = false, onDone = null) {
   const currentRows = Array.from(el.querySelectorAll('.queue-row:not(.queue-row-exit)'));
   const currentIdent = currentRows.map(domEventIdentity);
   const newIdent = queue.map(queueEventIdentity);
-  // Same identities, or a hand countdown that became Ready on the same node.
+  // Same identities, or a reaching-the-top relabel on the same node
+  // (hand → Ready, or winding → impact).
   if (currentIdent.length === newIdent.length && currentIdent.every((k, i) => k === newIdent[i] || domMatchesQueueRow(currentRows[i], queue[i]))) {
     const monsters = bs.monsters || [];
     queue.forEach((row, index) => {
@@ -288,7 +308,7 @@ export function renderQueue(bs, fill = false, onDone = null) {
     if (exitingQueueRows.has(row.id)) return;
     const ident = queueEventIdentity(row);
     const already = Array.from(el.querySelectorAll('.queue-row:not(.queue-row-exit)'))
-      .find(node => domEventIdentity(node) === ident || isHandReadyRelabel(domRowSnapshot(node), row));
+      .find(node => domEventIdentity(node) === ident || isTopRelabelOnSameBox(domRowSnapshot(node), row));
     if (already) {
       updateQueueRowInPlace(already, row, monsters, bs, index);
       return;
@@ -311,9 +331,10 @@ export function renderQueue(bs, fill = false, onDone = null) {
 }
 
 // diff for resolve/enter animations (non-blocking).
-// Same label + same event stays (tic relabel). A hand reaching Ready is also
-// the same box (PC-DEC-071). Any other event change is a removal plus an
-// insert — never a successor replace on one node.
+// Same label + same event stays (tic relabel). Reaching the top on the same
+// box (hand → Ready, winding → impact) is also the same box (PC-DEC-071).
+// Any other event change is a removal plus an insert — never a successor
+// replace on one node.
 export function diffQueueForAnimation(oldBs, newBs) {
   const oldRows = oldBs.queue || [];
   const newRows = newBs.queue || [];
@@ -322,7 +343,7 @@ export function diffQueueForAnimation(oldBs, newBs) {
   const relabelFrom = new Set();
   const relabelTo = new Set();
   for (const oldRow of oldRows) {
-    const next = newRows.find(r => isHandReadyRelabel(oldRow, r));
+    const next = newRows.find(r => isTopRelabelOnSameBox(oldRow, r));
     if (!next) continue;
     relabelFrom.add(oldRow);
     relabelTo.add(next);
@@ -505,15 +526,15 @@ export function buildQueueRow(row, monsters, bs, withMarkers, index = -1, initia
 
 // In-place text/tics mutation for the relabel cases: a tic countdown on the
 // same (label, event), a monster cooldown swapping "recovering" to
-// "preparing to attack" (dataset.preparing, same cooldown row), and a hand
-// countdown reaching Ready (PC-DEC-071). Any other phase change is a new
-// box — this function refuses to morph the node.
+// "preparing to attack" (dataset.preparing, same cooldown row), a hand
+// countdown reaching Ready, and a winding row becoming impact (PC-DEC-071).
+// Any other phase change is a new box — this function refuses to morph the node.
 export function updateQueueRowInPlace(div, row, monsters, bs, index = -1) {
   const preparing = div.dataset.preparing === '1' && isMonsterCooldownRow(row);
   const prevEvent = div.dataset.queueEvent || '';
   const nextEvent = row.event || '';
-  const handReady = isHandReadyRelabel(domRowSnapshot(div), row);
-  if (prevEvent && prevEvent !== nextEvent && !preparing && !handReady) return;
+  const topRelabel = isTopRelabelOnSameBox(domRowSnapshot(div), row);
+  if (prevEvent && prevEvent !== nextEvent && !preparing && !topRelabel) return;
   div.dataset.rowId = row.id;
   div.dataset.tics = row.tics;
   div.dataset.queueLabel = row.label == null ? '' : String(row.label);

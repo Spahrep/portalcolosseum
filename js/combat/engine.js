@@ -158,16 +158,6 @@ function stampMonsterStrike(row, mon, atk) {
   row.critMultiplier = Number(atkForCrit?.crit_multiplier) || 2.0;
 }
 
-function carryMonsterStrike(from, to) {
-  to.monsterAttackName = from.monsterAttackName ?? null;
-  to.cooldownTicks = from.cooldownTicks;
-  to.damage = from.damage;
-  to.accuracy = from.accuracy;
-  to.damageRange = from.damageRange;
-  to.critChance = from.critChance;
-  to.critMultiplier = from.critMultiplier;
-}
-
 function monsterStrikeLabel(mon, row) {
   return mon.name
     ? `${mon.name} ${row.label.replace(/^Monster /i, '')}`
@@ -212,16 +202,11 @@ function markHandReady(state, row) {
 
 function handleHandFire(state, row) {
   if (row.event === 'winding') {
-    // winding → impact: carry over attack data (damage, targets, etc.)
-    const impactRow = addEvent(state.queue, row.label, 'impact', 0);
-    impactRow.targetIds = row.targetIds;
-    impactRow.damage = row.damage;
-    impactRow.isMultiTarget = row.isMultiTarget;
-    impactRow.cooldownTicks = row.cooldownTicks;
-    impactRow.accuracy = row.accuracy;
-    impactRow.critChance = row.critChance;
-    impactRow.critMultiplier = row.critMultiplier;
-    impactRow.attackName = row.attackName;
+    // winding → impact: the box that reached the top relabels in place
+    // (PC-DEC-071). Attack data is already on this row. Do not addEvent —
+    // a fresh impact row slides the box out and back in.
+    row.event = 'impact';
+    row.tics = 0;
   } else if (row.event === 'impact') {
     let targets = [];
     if (row.targetIds && row.targetIds.length > 0) {
@@ -346,8 +331,9 @@ function handleMonsterFire(state, row) {
     if (row.event === 'cooldown') {
       queueNextMonsterAttack(state, mon, row.label);
     } else if (row.event === 'winding') {
-      const impactRow = addEvent(state.queue, row.label, 'impact', 0);
-      carryMonsterStrike(row, impactRow);
+      // Same entry. The strike is already on this row — do not insert.
+      row.event = 'impact';
+      row.tics = 0;
     } else if (row.event === 'impact' || row.event === 'attack') {
       // 'attack' is the pre-PC-97 combined row. Resolve it as impact so a
       // persisted in-flight strike still lands instead of vanishing.
@@ -533,8 +519,11 @@ export function createEngine(rng = Math.random) {
   // the old head's presence never affects where the successor lands. Only
   // after process completes is the head popped. playerReady is the new head's
   // event, never hand state.
-  // PC-DEC-071: a hand cooldown/approach/recovery that reached the top becomes
-  // Ready on that same entry. It is not popped, and no ready row is inserted.
+  // PC-DEC-071: reaching the top is a relabel of the same entry, never a
+  // pop. A hand cooldown/approach/recovery becomes Ready. A winding row
+  // (hand or monster) becomes impact. Neither is popped, and no successor
+  // row is inserted. A processed head (impact resolving, monster cooldown
+  // firing, player commit) is still remove + insert.
   function tick() {
     const head = peek();
     if (!head || battleIsOver(state)) {
@@ -563,9 +552,12 @@ export function createEngine(rng = Math.random) {
     state.tic += ticCost;
     applyTickCost(state.queue, ticCost);
     const reachesReady = isHandReachingReady(head);
+    const windingHead = head.event === 'winding';
     const result = process(head);
-    // Exit is the last action, except a hand that became Ready in place.
-    const removed = (reachesReady && head.event === 'ready') ? null : removeHead(state.queue);
+    // Exit is the last action, except a box that relabeled in place.
+    const heldInPlace = (reachesReady && head.event === 'ready')
+      || (windingHead && head.event === 'impact');
+    const removed = heldInPlace ? null : removeHead(state.queue);
     const cleanupResult = cleanup();
     const next = peek();
     const playerReady = !!(next && next.event === 'ready');
