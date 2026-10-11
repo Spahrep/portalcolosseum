@@ -46,8 +46,10 @@ ready → (commit) → winding → impact → cooldown → ready
   drinking → recovery → ready.
 - swap: remove ready + insert cooldown (delay = max speeds).
 - winding→impact carries attack data; impact resolves damage; cooldown→ready via markHandReady.
-- EVERY transition (except buff expiry) is remove + insert — the fired box is replaced by a NEW
-  box; the old one exits last. New box in, old box out. No relabel.
+- A box is removed from the top ONLY after it is processed (Spahrep, 2026-10-09, refined
+  2026-10-11): its successor is inserted first, the processed box exits last. Reaching the
+  top is NOT a removal — a hand's cooldown/approach row becoming "Ready" relabels in place
+  and holds. No relabel for a processed head (that is remove + insert).
 
 ## Row lifecycle (monster)
 cooldown → winding → impact → cooldown (no ready, no live `attack`; legacy `attack` resolves as impact)
@@ -55,13 +57,15 @@ cooldown → winding → impact → cooldown (no ready, no live `attack`; legacy
 - winding fires → insert impact at 0 (no damage), carry strike.
 - impact fires → roll once, apply to player, insert cooldown at stored `cooldownTicks`.
 - death: no cooldown inserted; cancel queued rows for that monster (PC-DEC-054).
-- Every transition is remove + insert. The ONLY monster relabel: cooldown row at the top
-  swaps text "recovering" → "preparing to attack" in place, matching the typewriter narration.
+- Every processed head is remove + insert. The relabels: a hand's cooldown/approach row
+  reaching the top becomes "Ready" in place; a monster cooldown row at the top swaps text
+  "recovering" → "preparing to attack" in place, matching the typewriter narration.
 
-## The only two relabel cases (everything else is remove + insert)
+## The only relabel cases (a processed head is remove + insert)
 1. **Tic countdown updates** — box holds position, only the number changes (33 → 23).
-2. **Monster recovering → preparing to attack** — when the cooldown row reaches the top,
-   box holds position, text swaps (optional fade). No other text change is a relabel.
+2. **A row reaching the top** — a hand's `approach`/`cooldown` row becoming "Ready", or a
+   monster "recovering" → "preparing to attack" when the cooldown row reaches the top.
+   Box holds position, text swaps (optional fade). No other text change is a relabel.
 
 ## Animation contract
 - Enter: `.queue-row-enter` (player, slide) / `.queue-row-monster-enter` (monster, pulse). Armed on
@@ -90,5 +94,5 @@ cooldown → winding → impact → cooldown (no ready, no live `attack`; legacy
 - `advance()` = single presentation owner after commit. One /tick → one presentation → stop on
   playerReady/needsInput/done/battleOver.
 - Menu opens ONLY when head is a ready row (`readyHeadOf`).
-- `renderQueue` fast path compares (label, event) — not raw ids — so a tic-only update never moves or re-slides the row. An event change is remove + insert.
+- `renderQueue` fast path compares (label, event) — not raw ids — so a tic-only update never moves or re-slides the row. An event change on a processed head is remove + insert; a row reaching the top (cooldown/approach → Ready) relabels in place.
 - No shared DOM node pretending to be the same hand across entries — each entry is its own box.

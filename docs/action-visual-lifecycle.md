@@ -18,14 +18,17 @@
 
    **Superseded (do not reapply):** "tics are display-only; insertion order drives; no global sort; no re-ordering." That wording (this rule, §7, §10, and the Glossary `Tic` entry) described FIFO append. It is superseded by the sorted-insert contract in `docs/workorder-2026-09-28-queue-sorted-insert.md`. The contradictory FIFO workorder `docs/workorder-2026-09-28-queue-insertion-order.md` does not match the shipped engine. A global re-sort on every peek/remove is also not what ships — order is fixed at insert.
 
-5. **Remove + insert, every transition** (Spahrep, 2026-10-09). A box gets to the top, it is
-   processed, a NEW box is inserted (new entry, fresh id, at its queue position), and the old
-   box is removed. The exit is the LAST action of the processed item. No morphing, no
-   re-insertion, no shared DOM node pretending to be the same entry.
+5. **Remove + insert, for processed heads only** (Spahrep, 2026-10-09, refined 2026-10-11).
+   A box is removed from the top ONLY after it has been processed (clock fire / player
+   commit). Its successor is inserted first (new entry, fresh id, at its queue position),
+   then the processed box is removed — the exit is the LAST action. No morphing, no
+   re-insertion, no shared DOM node pretending to be the same entry. Reaching the top is
+   NOT a removal: a box that becomes the head relabels in place and holds.
 
 6. **The only text-only relabel cases** (box holds position, text swaps in place):
    - Tic countdown updates (33 → 23).
-   - Monster "recovering" → "preparing to attack" when the cooldown row reaches the top.
+   - A row reaching the top: a hand's `approach`/`cooldown` row becoming "Ready", or a
+     monster "recovering" → "preparing to attack" when the cooldown row reaches the top.
    Everything else that changes text is a new entry (new box) replacing an old one.
 
 ---

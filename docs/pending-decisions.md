@@ -583,6 +583,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: The action-queue transition model is remove + insert, EVERY transition. A box reaches the top, is processed (rolls/narration/state), a NEW box (fresh entry, new id, at its queue position) is inserted, then the old box is removed — the exit is the LAST action. No morphing, no re-insertion, no shared DOM node across entries: on screen the new box slides in first, the old box slides out last, siblings lift as one FLIP motion. Kills the old stable-key node-reuse / in-place-relabel illusion. Exactly TWO text-only relabel cases keep a box still and swap text only: (1) tic countdown updates (33 → 23), (2) monster cooldown "recovering" → "preparing to attack" when the row reaches the top. Any other text change = a new entry replacing an old one. Engine (046b988, 1ba0523) and renderer aligned; supersedes earlier "node reused, slid out, relabeled, slid back in" phrasing across action-queue-animation.md / battle-status-ui.md / combat-engine-plan.md / potion-contract.md / action-visual-lifecycle.md / action-queue-audit.md. Applied to action-queue-visual-choreography.md (canon core rule), action-queue-spec-compact.md, current-design-status.md, battle-status-ui.md, combat-engine-plan.md, potion-contract.md, action-queue-animation.md. Decided by Spahrep, 2026-10-09.
 
+- ID: PC-DEC-071
+  Date: 2026-10-11
+  Source: Hermes audit session (action-queue model correction)
+  Speaker: Spahrep
+  Verbatim: "When something gets to the top it should never get removed and re-inserted at the top. The only time something at the top should get removed is after it has been processed and its successor has been inserted."
+  Status: DECIDED
+  Notes: REFINES PC-DEC-070. PC-DEC-070's phrasing ("a box gets to the top, it is processed, a new box is inserted, then it is removed") conflated "reaches the top" with "is processed" — that conflation is the corruption. Reaching the top is NOT a transition and NOT a removal: a box that becomes the head relabels in place and holds (a hand's approach/cooldown row becoming "Ready", or a monster "recovering" → "preparing to attack"). A box is removed from the top ONLY after it has been processed (clock fire / player commit), and then its successor is inserted first, the processed box's exit last. Applied to action-queue-visual-choreography.md (core rule, Scenario 3, anti-spec), action-visual-lifecycle.md (§5-6), current-design-status.md (hand-rows bullet). The engine's cooldown→ready path (markHandReady inserting a fresh ready row) and the client's advance() (treating the ready row as an added entry that slides in) must be conformed to this rule — a hand reaching Ready at the top must relabel in place, not slide-out/slide-in. Decided by Spahrep, 2026-10-11.
+
 ## Open
 
 > No open items. Everything previously listed has been decided or superseded (see ## Rejected / Superseded).

@@ -63,7 +63,7 @@ hand Ready → select potion → [pre tics] → EFFECT LANDS → [post tics] →
 3. **post** — hand still locked; the `recovery` successor row is inserted, tics = post. Buff runs during post.
 4. hand returns to `Ready`.
 
-Row lifecycle on the one-row-per-hand queue: `drinking → effect → recovery → (removed, hand Ready)`. Each transition is a remove + insert (Spahrep, 2026-10-09): the box gets to the top, it is processed, a NEW entry is inserted at its tics-out, and the old box is removed (exit last). No morphing, no shared DOM node.
+Row lifecycle on the one-row-per-hand queue: `drinking → effect → recovery → (removed, hand Ready)`. A box is removed from the top ONLY after it is processed (Spahrep, 2026-10-09, refined 2026-10-11): its successor is inserted first at its tics-out, then the processed box is removed (exit last). Reaching the top is NOT a removal — a hand's recovery row becoming "Ready" relabels in place and holds. No morphing, no shared DOM node.
 
 ### 6.2 Formula (documented placeholder — tuning knob)
 

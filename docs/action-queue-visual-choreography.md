@@ -12,35 +12,46 @@ Not the engine, not the API, not damage/balance.
 
 ---
 
-## The core rule (Spahrep, 2026-10-09)
+## The core rule (Spahrep, 2026-10-09, as refined 2026-10-11)
 
-> A box gets to the top, it is processed, a new box is inserted, and then it is removed.
-> That is the ONLY way things work.
+> When something gets to the top it should never get removed and re-inserted at
+> the top. The only time something at the top should get removed is after it has
+> been processed and its successor has been inserted. (Spahrep, 2026-10-11)
 
-Every queue transition has exactly that shape:
+Reaching the top is NOT a transition and NOT a removal. A box that reaches the head
+becomes the actionable element and **holds** — if its text changes as it arrives it
+relabels in place (e.g. a hand's cooldown row reaching 0 becomes "Ready"; a monster's
+cooldown row reaching the top swaps "recovering" → "preparing to attack"). The box is
+**never** removed-and-re-inserted just for reaching the top.
+
+A box is removed from the top ONLY after it has been **processed** (the clock fires it,
+or the player commits it), and its successor is inserted first:
 
 ```
-box reaches the top
-  → it is processed (rolls, narration, state changes)
-  → a NEW box is inserted (new entry, fresh id, at its queue position)
-  → the old box is removed (its exit is the LAST action)
+head sits at the top (relabeled in place if its text changed)
+  → it is processed (rolls, narration, state changes / player commit)
+  → a NEW box is inserted (its successor, fresh id, at its queue position)
+  → the processed head is removed (its exit is the LAST action)
 ```
 
-A box is never morphed into another box. A box is never re-inserted. A box that
-reached the top and was processed is gone. If a new entry exists, it is a new box.
-Remove + insert. Every time.
+A box is never morphed into another box. A box is never re-inserted. A box that was
+processed is gone — if a successor exists it is a new box. Remove + insert happens
+for **processed** heads only. Ever.
 
-### The only text-only exceptions
+### The text-only relabel cases (box holds position, text swaps, no entry change)
 
-Exactly two cases change a box's text without any entry change. These are the ONLY
+Exactly these cases change a box's text without any entry change. These are the ONLY
 relabel cases — nothing else relabels:
 
 1. **Tic countdown updates.** The box holds its position; only the number changes
    (33 → 23). No slide, no re-position.
-2. **Monster "recovering" → "preparing to attack."** When a monster's cooldown row
-   reaches the top and the clock types the "prepares a <attack>..." narration, the
-   box holds its position and swaps its text to match the narration. Optional:
-   old text fades out, new text fades in. The box itself never moves.
+2. **A row reaching the top.** When a row ticks to 0 and becomes the head, it relabels
+   in place — no slide, no re-insert. Two sub-cases:
+   - A hand's `approach`/`cooldown` row reaching 0 relabels to **Ready** (the countdown
+     number → the "—" actionable signal).
+   - A monster's `cooldown` row reaching the top relabels "recovering" → "preparing to
+     attack" as the clock types the narration.
+
 
 Any other text change is NOT a relabel — it is a new entry (new box) replacing an
 old one.
@@ -147,23 +158,32 @@ the reverse. A same-tick removal must never suppress the row-arrival.
 
 ## Scenario 3 — Autonomous tick (winding → impact → cooldown → ready)
 
-**Trigger:** A non-ready head fires on its own (a hand's winding→impact→cooldown→ready,
-a hand's cooldown→ready, or a monster's cooldown→winding→impact→cooldown).
+**Trigger:** A ready head commits, or a non-ready head fires on its own (a hand's
+winding→impact→cooldown→ready, a hand's cooldown→ready, or a monster's
+cooldown→winding→impact→cooldown).
 
 ### What happens
 1. The head is **pinned** at top while its narration types and its visuals play
    (`queue-row-current` — golden glow). It does NOT move during narration — the pin
    is a pause, not a "stays forever."
-2. When narration + visuals finish, the engine has already inserted the successor
-   (fresh id, at its queue position). The successor **slides in** at its position.
-3. The processed box **slides out** — its exit is the last action of its processing.
-4. If the successor is a hand **ready** row (cooldown→ready): the cooldown box slides
-   out and the ready box slides in. Landing on the player's turn is visually just
-   another slide-out → slide-in; the pause is the clock waiting, not a box holding still.
+2. When the head fires (is processed), its successor is inserted first (fresh id,
+   at its queue position). The successor **slides in** at its position.
+3. Then the processed box **slides out** — its exit is the last action of its
+   processing. The remaining boxes group-lift as one FLIP motion.
+4. When the successor is a hand **ready** row (cooldown→ready), the ready row is
+   the hand reaching the top. This is a **relabel in place** — the cooldown box
+   becoming the actionable Ready head does NOT slide out and a new box does NOT
+   slide in. The box holds, swaps its countdown for the "—" actionable signal, and
+   the clock pauses waiting for the player. It is only removed when the player
+   commits it (Scenario 2), after which its successor is inserted.
 
 ### Consistency rules
-- Every phase change is a remove + insert. Old box out, new box in.
-- The pin-during-narration is a wait, not a freeze — the box always slides out after.
+- Reaching the top is never a remove + insert. A box that becomes the head relabels
+  in place (Ready, or a monster "preparing to attack") and holds.
+- A box is removed only after it is **processed**. Every processed head is remove +
+  insert: old box out (last action), successor box in (first action).
+- The pin-during-narration is a wait, not a freeze — the box always slides out after
+  it is processed.
 - A genuine non-head removal (e.g. a cancelled row) slides out + the rest group-lifts.
 
 ---
@@ -238,9 +258,10 @@ This is locked. The silent path is correct and must remain.
 
 - ❌ A box never appears instantly — every box that enters the queue slides in.
 - ❌ A box never disappears instantly — every box that leaves slides out.
-- ❌ A box is never morphed into another box. Every transition is remove + insert.
-- ❌ A box never holds still while its contents change, EXCEPT the two relabel cases
-  (tic countdown, monster recovering→preparing-to-attack). Those are text-only.
+- ❌ A box is never morphed into another box. A processed head is remove + insert.
+- ❌ A box never holds still while its contents change, EXCEPT the relabel cases
+  (tic countdown; a row reaching the top — hand cooldown→Ready, monster
+  recovering→preparing-to-attack). Those are text-only.
 - ❌ A box never gets a new identity without being removed. A new entry is a new box.
 - ❌ The processed head never slides out BEFORE its successor slides in.
 - ❌ A plain countdown tick never animates (only the tic number updates in place).
@@ -250,4 +271,7 @@ This is locked. The silent path is correct and must remain.
 
 ---
 
-Decided by Spahrep, 2026-10-09. (PC-DEC-070; supersedes the earlier node-reuse/relabel framing in action-queue-audit.md and attack-queue-animation-testing.md, now marked superseded.)
+Decided by Spahrep, 2026-10-09 and refined 2026-10-11. (PC-DEC-070, refined by
+PC-DEC-071; supersedes the earlier node-reuse/relabel framing in action-queue-audit.md
+and attack-queue-animation-testing.md, now marked superseded. PC-DEC-071 restores the
+"reaching the top is a relabel, never a remove + insert" rule.)

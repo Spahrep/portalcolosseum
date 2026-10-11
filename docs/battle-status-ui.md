@@ -202,11 +202,13 @@ PC-70: 7b388a5 (flash on every roll tick) → 56be7e0 (keep natural repeats) →
 ## Player Hand Row (Remove + Insert, No Shared Node)
 
 A hand's attack runs the master loop `Peek → Process → Cleanup → Remove` one row at a
-time. Each phase boundary is a remove + insert (Spahrep, 2026-10-09): the box gets to the
-top, it is processed, a NEW box is inserted at its tics-out, and the old box is removed
-(exit is the last action). There is no row "morphing" and no shared DOM node pretending to
-be the same hand across entries. The UI shows one row per hand at a time simply because a
-hand only ever has one active queue entry at a time.
+time. A box is removed from the top ONLY after it is processed (Spahrep, 2026-10-09,
+refined 2026-10-11): its successor is inserted first at its tics-out, then the processed
+box is removed (exit is the last action). Reaching the top is NOT a removal — a hand's
+cooldown/approach row becoming "Ready" relabels in place and holds. There is no row
+"morphing" and no shared DOM node pretending to be the same hand across entries. The UI
+shows one row per hand at a time simply because a hand only ever has one active queue
+entry at a time.
 
 ```
 commit Slash (cast 4, cd 1)
