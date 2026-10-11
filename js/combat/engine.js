@@ -189,10 +189,24 @@ function queueNextMonsterAttack(state, mon, labelForLog) {
   return newRow;
 }
 
-function markHandReady(state, label) {
-  const handState = state.player.hands[label];
+// A hand countdown that reached the top (PC-DEC-071). Becoming Ready is a
+// relabel of that entry, not a fresh insert.
+function isHandReachingReady(row) {
+  return !!row
+    && (row.label === 'LH' || row.label === 'RH')
+    && (row.event === 'cooldown' || row.event === 'approach' || row.event === 'recovery');
+}
+
+function markHandReady(state, row) {
+  const label = row && row.label;
+  const handState = label && state.player.hands[label];
   if (handState) handState.state = 'Ready';
-  addEvent(state.queue, label, 'ready', 0);
+  // Same entry. Do not addEvent a ready row — that removes and re-inserts
+  // the box that just reached the top.
+  if (row) {
+    row.event = 'ready';
+    row.tics = 0;
+  }
   logLine(state, `${label} Ready`);
 }
 
@@ -253,11 +267,11 @@ function handleHandFire(state, row) {
     // impact → cooldown: remove old (already popped), add fresh cooldown row
     addEvent(state.queue, row.label, 'cooldown', cd);
   } else if (row.event === 'cooldown') {
-    // cooldown → ready: remove old (already popped), add fresh ready row
-    markHandReady(state, row.label);
+    // cooldown → ready: the row that reached the top relabels in place (PC-DEC-071)
+    markHandReady(state, row);
   } else if (row.event === 'approach') {
-    // approach → ready: remove old (already popped), add fresh ready row
-    markHandReady(state, row.label);
+    // approach → ready: same entry, not a fresh insert
+    markHandReady(state, row);
   } else if (row.event === 'drinking') {
     const potion = state.potions?.[row.potionSlot];
     if (!potion || potion.used) {
@@ -280,8 +294,8 @@ function handleHandFire(state, row) {
     // drinking → recovery: remove old (already popped), add fresh recovery row
     addEvent(state.queue, row.label, 'recovery', row.postTicks ?? 0);
   } else if (row.event === 'recovery') {
-    // recovery → ready: remove old (already popped), add fresh ready row
-    markHandReady(state, row.label);
+    // recovery → ready: same reaching-the-top relabel as cooldown/approach
+    markHandReady(state, row);
   }
 }
 
@@ -519,6 +533,8 @@ export function createEngine(rng = Math.random) {
   // the old head's presence never affects where the successor lands. Only
   // after process completes is the head popped. playerReady is the new head's
   // event, never hand state.
+  // PC-DEC-071: a hand cooldown/approach/recovery that reached the top becomes
+  // Ready on that same entry. It is not popped, and no ready row is inserted.
   function tick() {
     const head = peek();
     if (!head || battleIsOver(state)) {
@@ -546,14 +562,16 @@ export function createEngine(rng = Math.random) {
     const ticCost = head.tics;
     state.tic += ticCost;
     applyTickCost(state.queue, ticCost);
+    const reachesReady = isHandReachingReady(head);
     const result = process(head);
-    const removed = removeHead(state.queue); // exit is the LAST action
+    // Exit is the last action, except a hand that became Ready in place.
+    const removed = (reachesReady && head.event === 'ready') ? null : removeHead(state.queue);
     const cleanupResult = cleanup();
     const next = peek();
     const playerReady = !!(next && next.event === 'ready');
     return {
       narrate: result ? result.narrate : '',
-      row: removed,
+      row: removed || head,
       feed: result ? result.feed : [],
       needsInput: playerReady,
       playerReady,
