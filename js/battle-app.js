@@ -19,6 +19,7 @@ import {
   buildQueueRow, updateQueueRowInPlace,
   setQueueBarInfo, clearQueueBarInfo, isQueueRowExiting,
   isMonsterQueueRow, forgetQueueRowExiting, queueEventIdentity,
+  isHandReadyRelabel,
 } from './battle/queue-render.js';
 
 import {
@@ -412,7 +413,9 @@ function findReadyCommits(oldQueue, newQueue) {
 }
 
 /** Compare queues by (label, event). Tic-only rows stay; an event change is
- * a removal plus an insert. Ids are not identity. */
+ * a removal plus an insert. A hand countdown that became Ready is a relabel
+ * of the same entry (PC-DEC-071), not a removal and not an insert. Ids are
+ * not identity except to confirm that relabel. */
 function queueEventChanges(oldQueue, newQueue) {
   const oldCounts = new Map();
   for (const r of oldQueue || []) {
@@ -442,7 +445,16 @@ function queueEventChanges(oldQueue, newQueue) {
     seenOld.set(k, used + 1);
     if (used >= (newCounts.get(k) || 0)) removed.push(row);
   }
-  return { unchanged, added, removed };
+  const relabels = [];
+  for (let i = removed.length - 1; i >= 0; i--) {
+    const oldRow = removed[i];
+    const nextIdx = added.findIndex(r => isHandReadyRelabel(oldRow, r));
+    if (nextIdx < 0) continue;
+    relabels.push({ from: oldRow, to: added[nextIdx] });
+    added.splice(nextIdx, 1);
+    removed.splice(i, 1);
+  }
+  return { unchanged, added, removed, relabels };
 }
 
 function pinProcessedHead(head) {
@@ -450,6 +462,16 @@ function pinProcessedHead(head) {
   if (!row) return;
   row.classList.add('queue-row-current');
   row.classList.remove('queue-row-exit');
+}
+
+/** Hand cooldown/approach/recovery reaching Ready: the box holds and the text
+ * swaps (countdown number → "—"). Not a new entry. No slide. PC-DEC-071.
+ * Same mechanism as relabelMonsterPreparing. */
+function relabelHandReady(from, to, bs, index) {
+  if (!from || !to) return;
+  const row = findQueueRowByIdentity(from);
+  if (!row) return;
+  updateQueueRowInPlace(row, to, (bs && bs.monsters) || [], bs, index == null ? 0 : index);
 }
 
 /** Monster cooldown at the top: the box holds and the text swaps
@@ -1782,6 +1804,13 @@ async function advance(runId, { fromCommit = false, commitData = null } = {}) {
         relabelMonsterPreparing(processedHead, bs);
       }
 
+      // A hand that reached the top and became Ready keeps its box. Swap the
+      // text before narration. Do not slide it out or insert a second node.
+      const changes = queueEventChanges(oldQueue, newQueue);
+      for (const relabel of changes.relabels) {
+        relabelHandReady(relabel.from, relabel.to, bs, newQueue.indexOf(relabel.to));
+      }
+
       const deathBefore = new Set(deathCards.keys());
       renderPlayerHP(bs);
       renderMonsters(bs.monsters || []);
@@ -1793,8 +1822,8 @@ async function advance(runId, { fromCommit = false, commitData = null } = {}) {
       await Promise.all([narrateP, visualsP]);
 
       // Tic countdown: same label + same event, only the number changes.
-      // The box stays. An event change is not in this list.
-      const changes = queueEventChanges(oldQueue, newQueue);
+      // The box stays. An event change is not in this list. A hand reaching
+      // Ready was already relabeled above and is not in added/removed.
       const monstersNow = bs.monsters || [];
       changes.unchanged.forEach((row) => {
         const el = findQueueRowByIdentity(row);
