@@ -577,8 +577,8 @@ async function handle(request) {
       // used mirrors the portal_run.consume_*_used flag (DB is the source of truth,
       // so a reloaded run cannot re-drink an already-consumed potion).
       const { data: cfg } = await admin.from('game_config')
-        .select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed, fist_crit_chance, potion_crit_effect_multiplier, potion_crit_duration_multiplier')
-        .eq('id', 1).maybeSingle();
+              .select('fist_prepare_time_multiplier, fist_prepare_time_multiplier_range, fist_cooldown_time_multiplier, fist_cooldown_time_multiplier_range, fist_damage, fist_accuracy, fist_speed, fist_crit_chance, potion_crit_effect_multiplier, potion_crit_duration_multiplier')
+                            .eq('id', 1).maybeSingle();
       const pCritEffect = Number(cfg?.potion_crit_effect_multiplier) || 1.5;
       const pCritDuration = Number(cfg?.potion_crit_duration_multiplier) || 1.5;
 
@@ -643,7 +643,7 @@ async function handle(request) {
         feed: state.feed || [],
         tic: state.tic || 0,
         buffs: state.buffs || [],
-        weapons: { hand_l: handL, hand_r: handR, belt: beltW, fist: cfg ? { name: 'Fist (unarmed)', damage: cfg.fist_damage, speed: cfg.fist_speed ?? 6, accuracy: cfg.fist_accuracy, crit_chance: cfg.fist_crit_chance ?? 0, base_damage: cfg.fist_damage, damage_range: 0, grade: null, attacks: [{ id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time: cfg.fist_prepare_time, cooldown_time: cfg.fist_cooldown_time, prepare_time_range: cfg.fist_prepare_time_range, cooldown_time_range: cfg.fist_cooldown_time_range, description: '', base_damage_multiplier: 1 }] } : null },
+        weapons: { hand_l: handL, hand_r: handR, belt: beltW, fist: cfg ? { name: 'Fist (unarmed)', damage: cfg.fist_damage, speed: cfg.fist_speed ?? 6, accuracy: cfg.fist_accuracy, crit_chance: cfg.fist_crit_chance ?? 0, base_damage: cfg.fist_damage, damage_range: 0, grade: null, attacks: [{ id: 1, name: 'Fist (unarmed)', is_multi_target: false, prepare_time_multiplier: cfg.fist_prepare_time_multiplier ?? 1, prepare_time_multiplier_range: cfg.fist_prepare_time_multiplier_range ?? 0, cooldown_time_multiplier: cfg.fist_cooldown_time_multiplier ?? 1, cooldown_time_multiplier_range: cfg.fist_cooldown_time_multiplier_range ?? 0, description: '', base_damage_multiplier: 1 }] } : null },
         potions: { potion_a: potionA, potion_b: potionB },
         monsters,
         dice,
@@ -806,10 +806,11 @@ async function handle(request) {
       const weaponId = hand === 'LH' ? run.hand_l_weapon_id : run.hand_r_weapon_id;
       let castTicks, cooldownTicks, playerDamage, playerAccuracy, playerCritChance, playerCritMultiplier, attackName;
       if (!weaponId) {
-        const { data: config } = await admin.from('game_config').select('fist_prepare_time, fist_prepare_time_range, fist_cooldown_time, fist_cooldown_time_range, fist_damage, fist_accuracy, fist_speed, fist_crit_chance').eq('id', 1).single();
+        const { data: config } = await admin.from('game_config').select('fist_prepare_time_multiplier, fist_prepare_time_multiplier_range, fist_cooldown_time_multiplier, fist_cooldown_time_multiplier_range, fist_damage, fist_accuracy, fist_speed, fist_crit_chance').eq('id', 1).single();
         if (!config) return json({ error: 'Game config missing' }, 500);
-        castTicks = config.fist_speed + rollStat(config.fist_prepare_time, config.fist_prepare_time_range);
-        cooldownTicks = config.fist_speed + rollStat(config.fist_cooldown_time, config.fist_cooldown_time_range);
+        // PC-113: fist timing is the same multiplier model as every weapon attack (PC-DEC-072).
+        castTicks = Math.floor(config.fist_speed * rollMultiplier(config.fist_prepare_time_multiplier ?? 1, config.fist_prepare_time_multiplier_range ?? 0));
+        cooldownTicks = Math.floor(config.fist_speed * rollMultiplier(config.fist_cooldown_time_multiplier ?? 1, config.fist_cooldown_time_multiplier_range ?? 0));
         playerDamage = config.fist_damage;
         playerAccuracy = config.fist_accuracy;
         playerCritChance = config.fist_crit_chance ?? 0;

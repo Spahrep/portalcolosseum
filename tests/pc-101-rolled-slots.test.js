@@ -180,8 +180,8 @@ function menuResponder(instances) {
     if (snap.table === 'game_config') {
       return {
         data: {
-          fist_prepare_time: 1, fist_prepare_time_range: 0,
-          fist_cooldown_time: 1, fist_cooldown_time_range: 0,
+          fist_prepare_time_multiplier: 1, fist_prepare_time_multiplier_range: 0,
+          fist_cooldown_time_multiplier: 1, fist_cooldown_time_multiplier_range: 0,
           fist_damage: 4, fist_accuracy: 50, fist_speed: 6, fist_crit_chance: 5,
         },
       };
@@ -228,8 +228,8 @@ function commitResponder(weapon) {
     if (snap.table === 'game_config') {
       return {
         data: {
-          fist_speed: 6, fist_prepare_time: 2, fist_prepare_time_range: 0,
-          fist_cooldown_time: 3, fist_cooldown_time_range: 0,
+          fist_speed: 6, fist_prepare_time_multiplier: 2, fist_prepare_time_multiplier_range: 0,
+          fist_cooldown_time_multiplier: 3, fist_cooldown_time_multiplier_range: 0,
           fist_damage: 4, fist_accuracy: 50, fist_crit_chance: 0,
         },
       };

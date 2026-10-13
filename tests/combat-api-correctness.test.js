@@ -221,23 +221,23 @@ describe('POST /commit unarmed fist_speed and multiplier range', () => {
     };
   }
 
-  it('adds fist_speed to unarmed cast and cooldown', async () => {
-    const run = {
-      id: 1, user_id: 'user-1', status: 'active', player_hp: 1000,
-      hand_l_weapon_id: null, hand_r_weapon_id: null,
-      battle_state: readyBattle(),
-    };
-    const admin = mockAdmin(commitResponder(run, {
-      attack: { is_multi_target: false, base_damage_multiplier: 1, name: 'Fist', crit_factor: 1, crit_multiplier: 2 },
-      config: { fist_speed: 6, fist_prepare_time: 2, fist_prepare_time_range: 0, fist_cooldown_time: 3, fist_cooldown_time_range: 0, fist_damage: 4, fist_accuracy: 50, fist_crit_chance: 0 },
-    }));
-    __setAdminClientForTests(admin);
-    const res = await POST(post('/runs/1/commit', { hand: 'LH', attack_id: 1, target_ids: [1] }));
-    assert.equal(res.status, 200, await res.clone().text());
-    const upd = admin.calls.find(c => c.table === 'portal_run' && c.op === 'update');
-    const winding = upd.payload.battle_state.queue.find(r => r.label === 'LH' && r.event === 'winding');
-    assert.equal(winding.tics, 6 + 2);
-    assert.equal(winding.cooldownTicks, 6 + 3);
+  it('applies fist_speed × multiplier to unarmed cast and cooldown', async () => {
+      const run = {
+        id: 1, user_id: 'user-1', status: 'active', player_hp: 1000,
+        hand_l_weapon_id: null, hand_r_weapon_id: null,
+        battle_state: readyBattle(),
+      };
+      const admin = mockAdmin(commitResponder(run, {
+        attack: { is_multi_target: false, base_damage_multiplier: 1, name: 'Fist', crit_factor: 1, crit_multiplier: 2 },
+        config: { fist_speed: 6, fist_prepare_time_multiplier: 2, fist_prepare_time_multiplier_range: 0, fist_cooldown_time_multiplier: 3, fist_cooldown_time_multiplier_range: 0, fist_damage: 4, fist_accuracy: 50, fist_crit_chance: 0 },
+      }));
+      __setAdminClientForTests(admin);
+      const res = await POST(post('/runs/1/commit', { hand: 'LH', attack_id: 1, target_ids: [1] }));
+      assert.equal(res.status, 200, await res.clone().text());
+      const upd = admin.calls.find(c => c.table === 'portal_run' && c.op === 'update');
+      const winding = upd.payload.battle_state.queue.find(r => r.label === 'LH' && r.event === 'winding');
+      assert.equal(winding.tics, 6 * 2);
+      assert.equal(winding.cooldownTicks, 6 * 3);
   });
 
   it('rolls base_damage_multiplier ± range before multiplying weapon damage', async () => {

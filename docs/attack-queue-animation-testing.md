@@ -28,7 +28,7 @@ Navigate to a fresh battle. The queue should contain:
 - [ ] All entries visible and within the queue panel
 - [ ] Entries show correct label text per `action-visual-lifecycle.md §7` (label format table)
 - [ ] Tic counts display as numbers (not "—" or blank)
-- [ ] Monster cooldown rows (after an attack fires) show "<Monster name> recovering" (option A: tics = mon.speed + rollStat(cooldown_time, cooldown_time_range))
+- [ ] Monster cooldown rows (after an attack fires) show "<Monster name> recovering" (option A: tics = mon.speed × rolled cooldown_time_multiplier, floored min 1 — PC-DEC-072)
 
 ### 1.2 Queue Sort Order
 
@@ -91,8 +91,8 @@ After impact resolves:
 - [ ] Monster "attack" row shows "Monster X's [Attack Name]" with tic count
 - [ ] After monster attack fires, damage narration appears in message log and player HP bar depletes
 - [ ] The fired attack is a successor replace into a cooldown row — the box slides out, the cooldown box slides in (no pop, no regenerate)
-- [ ] Cooldown row label is "<Monster name> recovering" (option A formula: mon.speed + rollStat(cooldown_time, cooldown_time_range))
-- [ ] When that cooldown fires, the next attack row lands in place (successor: slide out, slide in), tics = mon.speed + rollStat(prepare_time, prepare_time_range)
+- [ ] Cooldown row label is "<Monster name> recovering" (option A formula: mon.speed × rolled cooldown_time_multiplier, floored min 1)
+- [ ] When that cooldown fires, the next attack row lands in place (successor: slide out, slide in), tics = mon.speed × rolled prepare_time_multiplier, floored min 1
 
 ---
 

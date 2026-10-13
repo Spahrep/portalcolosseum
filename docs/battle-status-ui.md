@@ -161,12 +161,14 @@ There is **no "3,2,1" countdown** (PC-DEC-059). Ties → player first (LH/RH bef
 monsters on the same tic, PC-DEC-030).
 
 The approach row is **initial placement only**: the attack timing formula
-(weapon speed + rolled prepare/cooldown) is unchanged, and after an attack's
-cooldown fires the hand is actionable immediately, as before. Confirmed
-engine-enforced 2026-09-17 (PC-DEC-034, Decided by Spahrep, 2026-09-17):
-windup = weapon base speed + rolled prepare, cooldown = weapon base speed +
-rolled cooldown — the weapon's base speed is added into every attack timing
-computation. Both-hands-ready hand order is PC-DEC-028 (above).
+(player weapon: `weaponSpeed × rollMultiplier(prepare_time_multiplier)`,
+cooldown `weaponSpeed × rollMultiplier(cooldown_time_multiplier)` — floored,
+min 1; multiplier model, PC-DEC-072, 2026-10-13) is unchanged by placement,
+and after an attack's cooldown fires the hand is actionable immediately, as
+before. Confirmed engine-enforced 2026-09-17 (PC-DEC-034, Decided by Spahrep,
+2026-09-17; timing formula since updated to the multiplier model by PC-DEC-072):
+the weapon's speed is the base, multiplied by each attack's rolled multiplier.
+Both-hands-ready hand order is PC-DEC-028 (above).
 
 ### Battle Intro Sequence — battle initialization (PC-DEC-038, Decided by Spahrep, 2026-09-17)
 
@@ -235,9 +237,9 @@ Monsters mirror the player attack lifecycle (option A, Spahrep 2026-09-28). `mon
 plays the `weaponSpeed` role. PC-97 split the old combined attack row into three successor
 events (`js/combat/engine.js:305-318`):
 
-- `winding` tics = `mon.speed + rollStat(prepare_time, prepare_time_range)` (`engine.js:165`). Does not deal damage (`engine.js:312-314`).
-- `impact` is inserted at 0 and resolves hit/damage/crit once (`engine.js:266-302`).
-- `cooldown` tics = stored `cooldownTicks` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)` (`engine.js:167`, inserted at `engine.js:301`).
+- `winding` tics = `mon.speed × rollMultiplier(prepare_time_multiplier, prepare_time_multiplier_range)`, floored, min 1 (`engine.js:174-175`). Does not deal damage — firing it only relabels the row to `impact` (`engine.js:328, 333-336`).
+- `impact` is inserted at 0 and resolves hit/damage/crit once (`engine.js:287-324`).
+- `cooldown` tics = stored `cooldownTicks` = `mon.speed × rollMultiplier(cooldown_time_multiplier, cooldown_time_multiplier_range)`, floored, min 1 (`engine.js:177`; re-inserted via `resolveMonsterImpact` at `engine.js:319-322`).
 
 When cooldown fires, the next attack is picked and a new `winding` row is inserted (`engine.js:310-311`). One row per monster at a time — the cooldown box is removed and the winding box slides in. Monster `winding` / `impact` rows stay name + tic (`js/battle/queue-render.js:60-62`). The cooldown row is a clear row: label `<Monster name> recovering` — which relabels to `<Monster name> preparing to attack` in place when the row reaches the top and the typewriter types the "prepares" narration (the one monster relabel). There is no live monster `attack` event; a persisted pre-PC-97 `attack` row resolves as `impact` (`engine.js:315-318`). Death still cancels every queued row for that monster (PC-DEC-054).
 

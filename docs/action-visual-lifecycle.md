@@ -208,24 +208,24 @@ When that cooldown later fires on a normal tick, `queueNextMonsterAttack` picks 
 **Sub-actions (sequential):**
 
 1. `pickMonsterAttack` selects an attack (`engine.js:163`).
-2. Engine inserts a `winding` row at `mon.speed + rollStat(prepare_time, prepare_time_range)` and stores `cooldownTicks = mon.speed + rollStat(cooldown_time, cooldown_time_range)` on that row (`engine.js:164-167`).
+2. Engine inserts a `winding` row at `mon.speed × rollMultiplier(prepare_time_multiplier, prepare_time_multiplier_range)` (floored, min 1) and stores `cooldownTicks = mon.speed × rollMultiplier(cooldown_time_multiplier, cooldown_time_multiplier_range)` (floored, min 1) on that row (`engine.js:174-177`).
 3. Feed: "<Monster> prepares a <attackName>..." (`engine.js:168`).
 4. The `winding` card animates into the UI Action Queue at its sorted-insert position.
 5. There is no monster `ready` row to remove.
 
 ### Phase 2: Winding fires, then impact, then cooldown
 
-Option A (Spahrep 2026-09-28) still holds: `mon.speed` is added into both the prepare and the cooldown, same shape as `weapon.speed + attack.<prepare|cooldown>_time`. PC-97 split the old combined monster `attack` row into `winding` then `impact`. Winding does not deal damage (`js/combat/engine.js:306-307`).
+Option A (Spahrep 2026-09-28) still holds the lifecycle; the timing formula is the multiplier model (PC-DEC-072, 2026-10-13): `mon.speed` plays the `weaponSpeed` base role and each attack's prepare/cooldown are rolled multipliers on it — same shape as `weaponSpeed × attack.<prepare|cooldown>_time_multiplier` for the player. PC-97 split the old combined monster `attack` row into `winding` then `impact`. Winding does not deal damage (`js/combat/engine.js:328, 333-336`).
 
-- `winding` tics = `mon.speed + rollStat(prepare_time, prepare_time_range)` (`engine.js:165`)
-- `cooldown` tics = stored `cooldownTicks` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)` (`engine.js:167`, inserted at `engine.js:301`)
+- `winding` tics = `mon.speed × rollMultiplier(prepare_time_multiplier, prepare_time_multiplier_range)` (floored, min 1) (`engine.js:174-175`)
+- `cooldown` tics = stored `cooldownTicks` = `mon.speed × rollMultiplier(cooldown_time_multiplier, cooldown_time_multiplier_range)` (floored, min 1) (`engine.js:177`, re-inserted at `engine.js:319-322`)
 
-**When the `winding` row fires** (`engine.js:312-314`):
+**When the `winding` row fires** (`engine.js:333-336` — relabels the same row to `impact` at tic 0, it does NOT insert a fresh entry):
 
-1. Insert an `impact` row at 0 tics and carry the strike (name, damage, accuracy, crit, `cooldownTicks`). No damage roll here.
-2. **Remove** the `winding` item (exit is the last action, after the impact row has slid in).
+1. The struck data (name, damage, accuracy, crit, `cooldownTicks`) is already on the row from `queueNextMonsterAttack`. No damage roll here.
+2. **Remove** the `winding` event once it has been processed as `impact` (exit is the last action).
 
-**When the `impact` row fires** (`resolveMonsterImpact`, `engine.js:266-302`):
+**When the `impact` row fires** (`resolveMonsterImpact`, `engine.js:287-324`):
 
 1. **Engine resolves** (rolls once, from the carried strike — does not re-pick the attack):
    - Rolls damage
@@ -397,8 +397,8 @@ Tics are set when the item is inserted:
 - Player `winding` = castTicks (from weapon params)
 - Player `cooldown` = cooldownTicks (from weapon params)
 - `ready` = 0
-- Monster `winding` = `mon.speed + rollStat(prepare_time, prepare_time_range)` (`engine.js:165`)
-- Monster `cooldown` = stored `cooldownTicks` = `mon.speed + rollStat(cooldown_time, cooldown_time_range)` (`engine.js:167`, inserted at `engine.js:301`)
+- Monster `winding` = `mon.speed × rollMultiplier(prepare_time_multiplier, prepare_time_multiplier_range)` (floored, min 1) (`engine.js:174-175`)
+- Monster `cooldown` = stored `cooldownTicks` = `mon.speed × rollMultiplier(cooldown_time_multiplier, cooldown_time_multiplier_range)` (floored, min 1) (`engine.js:177`, re-inserted at `engine.js:319-322`)
 
 **Superseded:** "Tics are display values only. They do NOT drive processing order — insertion order does." Tics are the ordering key at insert (sorted-insert workorder `docs/workorder-2026-09-28-queue-sorted-insert.md`). They are also the countdown readout.
 

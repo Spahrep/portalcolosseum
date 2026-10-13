@@ -292,7 +292,7 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Source: Discord thread 1550127819139579909, 09:54–09:58 — captured by the 2026-09-17 midday sweep
   Speaker: Spahrep
   Verbatim: "When an attack is selected, the time (tics) before it fires should be weapon base speed + a roll on the attack's speed (Base + delta roll). Then after the attack fires, the hand goes back into the que with a delay of X tics, where X is the weapon's speed." + "if attacks alreayd have pre/post speeds, keep those, just make sure that the base speed of the weapon is added into each computation" + "i forgot we had a pre-post range field seperately. This still works though, Any time an attack's speed is calcualted, pre or post, you add in the weapon"
-  Status: DECIDED
+  Status: SUPERSEDED (by PC-DEC-072, 2026-10-13) — the additive windup formula it confirmed is replaced by the multiplier model (speed × rolled multiplier), which had already shipped for player weapons at api/combat/[...path].js:833-834.
   Notes: CONFIRMS the documented attack timing formula (battle-status-ui.md): windup = weapon base speed + rolled prepare, cooldown = weapon base speed + rolled cooldown — attack pre/post ranges are kept and the weapon's base speed is added into each computation. The engine had drifted (weapon speed missing from timings); fixed same day (6a996bd: weapon base speed added into every attack timing computation). Applied to battle-status-ui.md.
 
 - ID: PC-DEC-035
@@ -460,7 +460,7 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Source: docs/workorder-2026-09-28-monster-cooldown.md (design lock recorded by Hermes)
   Speaker: Spahrep
   Verbatim: "Option A — monsters mirror the player attack lifecycle (windup → impact/common → cooldown → next windup), with mon.speed added into BOTH phases, exactly like the player formula weapon.speed + attack.<prepare|cooldown>_time."
-  Status: DECIDED
+  Status: SUPERSEDED (by PC-DEC-072, 2026-10-13) — the additive monster timing formula is replaced by the multiplier model (`mon.speed × rollMultiplier(prepare|cooldown_time_multiplier)`, js/combat/engine.js:174-177, 321). The "strict player-mirror" lifecycle and "monsters slower on purpose / do not retune to be balance-neutral" intent are UNCHANGED.
   Notes: Locked option A (strict player-mirror). Monsters are slower on purpose — do not retune the formula to be balance-neutral; template base_speed may be retuned later. Attack tics = mon.speed + rollStat(prepare_time, prepare_time_range). Cooldown tics = mon.speed + rollStat(cooldown_time, cooldown_time_range). Attack fire inserts that attack's cooldown; cooldown fire picks the next attack. Death-cancels-everything (PC-DEC-054) unchanged. Applied to battle-status-ui.md, action-visual-lifecycle.md, combat-engine-plan.md, attack-queue-animation-testing.md, current-design-status.md.
 
 - ID: PC-DEC-056
@@ -590,6 +590,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Verbatim: "When something gets to the top it should never get removed and re-inserted at the top. The only time something at the top should get removed is after it has been processed and its successor has been inserted."
   Status: DECIDED
   Notes: REFINES PC-DEC-070. PC-DEC-070's phrasing ("a box gets to the top, it is processed, a new box is inserted, then it is removed") conflated "reaches the top" with "is processed" — that conflation is the corruption. Reaching the top is NOT a transition and NOT a removal: a box that becomes the head relabels in place and holds (a hand's approach/cooldown row becoming "Ready", or a monster "recovering" → "preparing to attack"). A box is removed from the top ONLY after it has been processed (clock fire / player commit), and then its successor is inserted first, the processed box's exit last. Applied to action-queue-visual-choreography.md (core rule, Scenario 3, anti-spec), action-visual-lifecycle.md (§5-6), current-design-status.md (hand-rows bullet). The engine's cooldown→ready path (markHandReady inserting a fresh ready row) and the client's advance() (treating the ready row as an added entry that slides in) must be conformed to this rule — a hand reaching Ready at the top must relabel in place, not slide-out/slide-in. Decided by Spahrep, 2026-10-11.
+
+- ID: PC-DEC-072
+  Date: 2026-10-13
+  Source: CLI session (docs-conflict-sweep follow-up — flag 1, carried since 2026-09-28)
+  Speaker: Spahrep
+  Verbatim: "we are goiong to go with multiplier, i belive this call was made by jester and I think it is correc,t the documetnation should be udpated"
+  Status: DECIDED
+  Notes: LOCKS the attack-timing formula as MULTIPLIER (speed × rolled multiplier), not additive (speed + flat ticks). This supersedes the additive formula in PC-DEC-034 and PC-DEC-055. The multiplier model had already shipped in code before this lock — player weapons at api/combat/[...path].js:833-834 (`weaponSpeed × rollMultiplier(prepare_time_multiplier | cooldown_time_multiplier)`, floored, min 1) and monsters at js/combat/engine.js:174-177, 321 (`mon.speed × rollMultiplier(prepare|cooldown_time_multiplier)`, floored, min 1), with the flat `prepare_time`/`cooldown_time` columns dropped by migrations 20260930190000_attack_timing_multipliers.sql + 20261001000000_drop_flat_attack_timing.sql. ONE formula for both player and monster windup + cooldown. Range 0 consumes no RNG and returns base exactly. The unarmed Fist is folded into the SAME multiplier model (PC-113, Spahrep 2026-10-13): `fist_speed × rollMultiplier(fist_prepare_time_multiplier | fist_cooldown_time_multiplier)` — no special additive code path for the fist; its timing columns are multipliers in `game_config` (migration 20261013120000_fist_timing_multipliers.sql, flat fist_prepare_time/cooldown_time columns dropped). Docs-synced across combat-engine-plan.md, battle-status-ui.md, action-visual-lifecycle.md, attack-queue-animation-testing.md, current-design-status.md. Decided by Spahrep, 2026-10-13.
 
 ## Open
 
