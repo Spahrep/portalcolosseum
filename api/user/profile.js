@@ -11,6 +11,7 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { ensureDailyAp } from '../lib/ap-daily.js';
 
 const CORS = {
   'Content-Type': 'application/json',
@@ -55,16 +56,25 @@ export async function GET(request) {
   if (auth.error) return json({ error: auth.error }, auth.status);
   const { admin, user } = auth;
 
+  const url = new URL(request.url);
+  const isTransition = url.searchParams.get('transition') === '1';
+  if (isTransition) {
+    try { await ensureDailyAp(admin, user.id); } catch (e) { /* non-fatal for profile load */ }
+  }
+
   try {
     const { data, error } = await admin
       .from('profiles')
-      .select('settings')
+      .select('settings, ap, last_daily_ap')
       .eq('id', user.id)
       .maybeSingle();
 
     if (error) return json({ error: 'Database error' }, 500);
     if (!data) return json({ error: 'Profile not found' }, 404);
 
+    if (isTransition) {
+      return json({ settings: data.settings || {}, ap: data.ap, last_daily_ap: data.last_daily_ap });
+    }
     return json({ settings: data.settings || {} });
   } catch (err) {
     return json({ error: err.message || 'Internal server error' }, 500);

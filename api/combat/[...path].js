@@ -30,6 +30,7 @@ import {
   buildPotionLoadout as buildPotionLoadoutShared,
   startingHp as startingHpShared,
 } from '../../lib/combat-run.js';
+import { ensureDailyAp } from '../lib/ap-daily.js';
 
 /**
  * rollStat(base, range)
@@ -88,6 +89,7 @@ export function entryCosts(template) {
 export async function chargeRunEntry(admin, userId, template) {
   const { ap: apCost, gold: goldCost } = entryCosts(template);
   if (apCost === 0 && goldCost === 0) return { ok: true, charged: null };
+  try { await ensureDailyAp(admin, userId); } catch (e) { console.error('daily ap grant failed on run entry', e); return { ok: false, status: 500, error: 'Internal server error' }; }
   let profile;
   try {
     const res = await admin.from('profiles').select('gold, ap').eq('id', userId).maybeSingle();
