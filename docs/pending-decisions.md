@@ -164,8 +164,8 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Source: Discord thread "Ensure players keep one weapon" (1549499851736350781)
   Speaker: Spahrep
   Verbatim: "Starting gold = 0, Starting AP=10"
-  Status: DECIDED
-  Notes: First values in the new game_config table (shipped e593b7e, verified live). Max AP and Daily AP Gain remain open (docs have max = 3× daily gain).
+  Status: SUPERSEDED (by PC-DEC-073) — AP component only
+  Notes: First values in the new game_config table (shipped e593b7e, verified live). Max AP and Daily AP Gain were open (docs had max = 3× daily gain). The Starting AP=10 component is REPLACED by PC-DEC-073 (starting floor = 250, fixed 00:00 GMT daily reset). Starting gold = 0 remains in force.
 
 - ID: PC-DEC-019
   Date: 2026-09-16
@@ -599,9 +599,22 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: LOCKS the attack-timing formula as MULTIPLIER (speed × rolled multiplier), not additive (speed + flat ticks). This supersedes the additive formula in PC-DEC-034 and PC-DEC-055. The multiplier model had already shipped in code before this lock — player weapons at api/combat/[...path].js:833-834 (`weaponSpeed × rollMultiplier(prepare_time_multiplier | cooldown_time_multiplier)`, floored, min 1) and monsters at js/combat/engine.js:174-177, 321 (`mon.speed × rollMultiplier(prepare|cooldown_time_multiplier)`, floored, min 1), with the flat `prepare_time`/`cooldown_time` columns dropped by migrations 20260930190000_attack_timing_multipliers.sql + 20261001000000_drop_flat_attack_timing.sql. ONE formula for both player and monster windup + cooldown. Range 0 consumes no RNG and returns base exactly. The unarmed Fist is folded into the SAME multiplier model (PC-113, Spahrep 2026-10-13): `fist_speed × rollMultiplier(fist_prepare_time_multiplier | fist_cooldown_time_multiplier)` — no special additive code path for the fist; its timing columns are multipliers in `game_config` (migration 20261013120000_fist_timing_multipliers.sql, flat fist_prepare_time/cooldown_time columns dropped). Docs-synced across combat-engine-plan.md, battle-status-ui.md, action-visual-lifecycle.md, attack-queue-animation-testing.md, current-design-status.md. Decided by Spahrep, 2026-10-13.
 
+- ID: PC-DEC-073
+  Date: 2026-10-15
+  Source: CLI session (AP daily-reset — morning design session, followed by docs/ap-daily-reset.md draft)
+  Speaker: Spahrep
+  Verbatim: "My original thought was every day at 0:00 GMT everyoen would get X AP" ... "This is super easy to change later, start at 250 for now because we want them to..." ... "from the config, its the only thing that makes sense" ... "stand alone"
+  Status: DECIDED
+  Notes: RESOLVES the open "Max AP and Daily AP Gain" items carried from PC-DEC-018. Decision (locked 2026-10-15, coding not yet written — safe to change later):
+  - Reset cadence = FIXED daily reset at 00:00 GMT (top-up to a floor), NOT a rolling per-24h timer. Quote: "every day at 0:00 GMT everyoen would get X AP".
+  - Starting / floor AP for a NEW player = 250. Quote: "start at 250 for now" (verbatim tail truncated in the session log after "because we want them to" — the draft doc docs/ap-daily-reset.md records the fuller values; treat this heading as provisional, easy to change).
+  - AP values live in the existing `game_config` table (consistent with PC-DEC-017). Quote: "from the config, its the only thing that makes sense".
+  - AP economics live in a STANDALONE doc (docs/ap-daily-reset.md), not folded into another doc. Quote: "stand alone".
+  The draft's daily-grant amount (100/day) and cap (500) are recorded in docs/ap-daily-reset.md and attributed to this session, but the session log truncates the verbatim where they would be pinned — flag them as OPEN (see review 2026-10-15-midday.md) until a full quote is on record and the value is coded. SUPERSEDES the "Starting AP=10" component of PC-DEC-018 (gold=0 stays). Decided by Spahrep, 2026-10-15.
+
 ## Open
 
-> No open items. Everything previously listed has been decided or superseded (see ## Rejected / Superseded).
+- OPEN (carried from PC-DEC-073): AP daily-grant amount and max cap. Draft docs/ap-daily-reset.md records 100/day and cap 500, attributed to Spahrep 2026-10-15, but the source session log truncates the verbatim where those values would be pinned. Awaiting a full quote on record + the value being coded. (PC-DEC-073 locks cadence = fixed 00:00 GMT and starting floor = 250; the grant/cap stay OPEN.)
 
 ## Rejected / Superseded
 

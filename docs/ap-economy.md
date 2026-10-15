@@ -1,12 +1,12 @@
 # AP Economy
 
-**Updated:** 2026-09-16 — Starting AP=10 + gold 0 via game_config (PC-DEC-018), bottom-dock AP/gold HUD confirmed (PC-DEC-009); 3× cap, sink split, entry costs, leaderboard rationale, wizard tent (TBD)
+**Updated:** 2026-10-15 — AP daily reset decided (PC-DEC-073): fixed 00:00 GMT top-up, starting AP=250; supersedes the rolling "X per 24h / 3× cap" model and the AP=10 start. See `ap-daily-reset.md` for the mechanism + values. (Prior updates 2026-09-16: bottom-dock AP/gold HUD confirmed PC-DEC-009; entry costs, leaderboard rationale, wizard tent TBD.)
 
 ## The Resource
 
-- **Starting AP = 10** (Spahrep 2026-09-16: "Starting AP=10"; stored in game_config).
-- Action Points regenerate **X per 24-hour period** (exact X TBD).
-- **Max holdable = 3X.** The cap exists so players don't have to log in daily worrying about falling behind. Log in every 3 days, drain to zero, and you're on equal footing with a daily player. No FOMO pressure.
+- **Starting AP = 250** (Spahrep 2026-10-15: "start at 250 for now"; PC-DEC-073 — supersedes the earlier AP=10 from PC-DEC-018. Stored in game_config.)
+- Action Points reset on a **fixed daily cadence at 00:00 GMT — top-up to floor, never take away** (PC-DEC-073; daily allotment amount + cap OPEN pending verbatim quote, see `ap-daily-reset.md`). Full mechanism: `docs/ap-daily-reset.md`.
+- **Cap / floor model:** the old "max holdable = 3X, log in every 3 days and stay on equal footing" framing is replaced by the fixed-reset top-up in `ap-daily-reset.md`. The no-FOMO intent is preserved: players never lose AP to the clock, they start each day at a guaranteed floor.
 - **Bottom dock HUD** — AP + gold live in a transparent bar at the bottom of every real screen (AP meter like `24/30`, gold counter, player name). Shipped (PC-52); confirmed: "we do wean [want] the ap/gold transparent bar at the bottom" (Spahrep 2026-09-16).
 
 ## Why AP Meters the Game

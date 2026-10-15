@@ -49,9 +49,10 @@ This file captures the current state of design decisions for Portal Colosseum. I
 - **Rerolls: exponential cost** (2gc base × multiplier^N, both TBD) + **1 AP resets cost to base**. Button shows next cost. Two-currency decision.
 - D/E/F tiers sell for little — the gold drip
 
-## AP Economy (documented in ap-economy.md) — UPDATED 2026-09-08
+## AP Economy (documented in ap-economy.md + ap-daily-reset.md) — UPDATED 2026-10-15
 
-- AP regenerates X per 24h; **max holdable = 3X** (skip 2 days without falling behind a daily player)
+- AP daily reset: **FIXED reset at 00:00 GMT, top-up to floor, never take away** (supersedes the rolling "X per 24h" model). Full mechanism + values in `docs/ap-daily-reset.md`. Decided by Spahrep, 2026-10-15 (PC-DEC-073). Starting floor for a new player = **250 AP** (supersedes the earlier starting AP=10, PC-DEC-018). Daily allotment + cap: see ap-daily-reset.md (OPEN until a verbatim quote is on record — review 2026-10-15-midday.md).
+- Old rolling model (retired): "AP regenerates X per 24h; max holdable = 3X" — replaced by the fixed 00:00 GMT reset above.
 - Leaderboard = **deepest run** only — banking AP gives no advantage; hoarding is pointless
 - Sinks: **portal runs** (X AP + Y gold, deeper portals cost more) + **shop reroll resets** (1 AP)
 - Gold is the secondary meter
