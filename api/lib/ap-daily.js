@@ -49,8 +49,13 @@ export async function ensureDailyAp(admin, userId) {
     .eq('id', userId)
     .maybeSingle();
 
-  if (profErr) throw profErr;
-  if (!prof) throw new Error(`Profile not found for ${userId}`);
+  if (profErr) {
+    // Profile read failed (e.g. unmigrated DB missing wallet columns, or a
+    // transient error). The daily grant is a bonus — never block the caller
+    // (run entry, profile fetch) on it. Return a safe no-op.
+    return { ap: 0, last_daily_ap: null };
+  }
+  if (!prof) return { ap: 0, last_daily_ap: null };
 
   const today = utcDateString(); // 'YYYY-MM-DD'
 
