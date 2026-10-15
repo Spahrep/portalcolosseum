@@ -51,7 +51,7 @@ This file captures the current state of design decisions for Portal Colosseum. I
 
 ## AP Economy (documented in ap-economy.md + ap-daily-reset.md) — UPDATED 2026-10-15
 
-- AP daily reset: **FIXED reset at 00:00 GMT, top-up to floor, never take away** (supersedes the rolling "X per 24h" model). Full mechanism + values in `docs/ap-daily-reset.md`. Decided by Spahrep, 2026-10-15 (PC-DEC-073). Starting floor for a new player = **250 AP** (supersedes the earlier starting AP=10, PC-DEC-018). Daily allotment + cap: see ap-daily-reset.md (OPEN until a verbatim quote is on record — review 2026-10-15-midday.md).
+- AP daily reset: **FIXED reset at 00:00 GMT — accrue 100 AP per elapsed day, clamped at a 500 cap** (PC-DEC-073). Missed days accumulate (3 missed days at 0 AP → 300, capped at 500); never decreases AP. Full mechanism + values in `docs/ap-daily-reset.md`. Decided by Spahrep, 2026-10-15. New player starts at **250 AP** (supersedes the earlier starting AP=10, PC-DEC-018). Daily gain = `game_config.daily_ap_gain` (100); cap = `game_config.max_ap` (500); lazy grant-on-access + client backstop, no cron.
 - Old rolling model (retired): "AP regenerates X per 24h; max holdable = 3X" — replaced by the fixed 00:00 GMT reset above.
 - Leaderboard = **deepest run** only — banking AP gives no advantage; hoarding is pointless
 - Sinks: **portal runs** (X AP + Y gold, deeper portals cost more) + **shop reroll resets** (1 AP)

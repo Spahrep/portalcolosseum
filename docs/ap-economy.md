@@ -1,12 +1,12 @@
 # AP Economy
 
-**Updated:** 2026-10-15 — AP daily reset decided (PC-DEC-073): fixed 00:00 GMT top-up, starting AP=250; supersedes the rolling "X per 24h / 3× cap" model and the AP=10 start. See `ap-daily-reset.md` for the mechanism + values. (Prior updates 2026-09-16: bottom-dock AP/gold HUD confirmed PC-DEC-009; entry costs, leaderboard rationale, wizard tent TBD.)
+**Updated:** 2026-10-15 — AP daily reset decided (PC-DEC-073): **accrue 100 AP per elapsed day to a 500 cap**, starting AP=250; supersedes the rolling "X per 24h / 3× cap" model and the AP=10 start. See `ap-daily-reset.md` for the mechanism + values. (Prior updates 2026-09-16: bottom-dock AP/gold HUD confirmed PC-DEC-009; entry costs, leaderboard rationale, wizard tent TBD.)
 
 ## The Resource
 
 - **Starting AP = 250** (Spahrep 2026-10-15: "start at 250 for now"; PC-DEC-073 — supersedes the earlier AP=10 from PC-DEC-018. Stored in game_config.)
-- Action Points reset on a **fixed daily cadence at 00:00 GMT — top-up to floor, never take away** (PC-DEC-073; daily allotment amount + cap OPEN pending verbatim quote, see `ap-daily-reset.md`). Full mechanism: `docs/ap-daily-reset.md`.
-- **Cap / floor model:** the old "max holdable = 3X, log in every 3 days and stay on equal footing" framing is replaced by the fixed-reset top-up in `ap-daily-reset.md`. The no-FOMO intent is preserved: players never lose AP to the clock, they start each day at a guaranteed floor.
+- Action Points reset on a **fixed daily cadence at 00:00 GMT — accrue 100 AP per elapsed day, capped at 500** (PC-DEC-073). Missed days accumulate (3 missed days → 300, capped at 500). Full mechanism: `docs/ap-daily-reset.md`.
+- **Cap model:** each elapsed day adds 100 AP to the pool, clamped at the 500 cap. The no-FOMO intent is preserved — a returning player banks every missed day's allowance up to the cap — while the cap bounds hoarding.
 - **Bottom dock HUD** — AP + gold live in a transparent bar at the bottom of every real screen (AP meter like `24/30`, gold counter, player name). Shipped (PC-52); confirmed: "we do wean [want] the ap/gold transparent bar at the bottom" (Spahrep 2026-09-16).
 
 ## Why AP Meters the Game
@@ -14,7 +14,7 @@
 - The leaderboard tracks each player's **deepest run** (e.g., "Portal 5, fight 3") — not total AP spent or volume of runs.
 - Banking AP and dumping it in bulk gives **no leaderboard advantage** → no incentive to hoard.
 - The AP cap limits grind attempts; the flat leaderboard makes hoarding pointless. Together they kill both grinding and FOMO.
-- **The cap also makes AP "use it or lose it" at the margin** — a player sitting near the cap is happy to spend AP on shop rerolls (or anything else), because that AP would otherwise evaporate on the next tick. This makes non-run AP spending feel like found money and keeps players willing to engage with the shop economy instead of hoarding for runs only.
+- **The cap makes AP "use it or lose it" only at the margin — and only near the cap.** A player at 480 AP accrues +20 (to the 500 cap) rather than +100, so the surplus above the cap is what "evaporates." That pressure keeps a cap-sitting player willing to spend AP on shop rerolls instead of hoarding. Below the cap, nobody loses AP to the clock — missed days bank forward — so there is no FOMO pressure on casuals.
 
 ## AP Sinks (MVP)
 

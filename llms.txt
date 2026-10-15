@@ -26,8 +26,8 @@ Do not rebuild llms-full.txt. Follow the links and fetch one mechanic doc.
 - [Potion contract](docs/potion-contract.md): Effect schema and timing the engine, API, and tests implement. Design rules live in consumables.md.
 - [Run UX flow](docs/run-ux-flow.md): Web run start as a three-phase gate, including the hand-weapon entry rule.
 - [Battle status UI](docs/battle-status-ui.md): Vertical action-queue column that replaced the horizontal tic-track bar.
-- [AP economy](docs/ap-economy.md): Action Points as the primary meter (fixed 00:00 GMT daily reset, top-up to floor, sinks, entry costs). Gold is secondary.
-- [AP daily reset](docs/ap-daily-reset.md): Daily-reset mechanism + values (fixed 00:00 GMT top-up, start 250; allotment + cap OPEN). Companion to ap-economy.md.
+- [AP economy](docs/ap-economy.md): Action Points as the primary meter (fixed 00:00 GMT daily reset, 100 AP/day accrued to a 500 cap, sinks, entry costs). Gold is secondary.
+- [AP daily reset](docs/ap-daily-reset.md): Daily-reset mechanism + values (fixed 00:00 GMT, start 250, 100 AP/day accrued per elapsed day, cap 500). Companion to ap-economy.md.
 - [Encounter system](docs/encounter-system.md): Zombie-dice encounter generation — portal dice pool, point budget, 1–5 monsters per battle.
 - [Inventory slots](docs/inventory-slots.md): 20-slot backpack and the 5-item run loadout (Hand L/R, belt loop, Potion A/B). Loadout locks at entry.
 - [Portal runs](docs/portal-runs.md): Push-your-luck run loop — N fights (config, default 5), continue or stop, portal tiers as item power tiers.
