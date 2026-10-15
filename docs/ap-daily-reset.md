@@ -175,6 +175,8 @@ const res = await admin.from('profiles').select('gold, ap').eq('id', userId).may
 
 **Ordering:** grant → read → check → deduct. Never deduct before granting.
 
+**Non-fatal contract:** the grant is a *bonus* — it must never block run entry. If `ensureDailyAp` fails (e.g. an unmigrated DB missing the wallet columns, or a transient read error), `chargeRunEntry` must still proceed with the run (graceful degradation, matching the pre-existing behavior where a missing-wallet-columns DB still creates runs). `ensureDailyAp` itself returns a safe no-op `{ ap: 0, last_daily_ap: null }` on a profile-read error rather than throwing; the caller's catch is a last-resort backstop, not the primary path.
+
 ### 6.2 Store / screen entry + player read — RECOMMENDED
 
 `GET /api/user/profile` (`api/user/profile.js`) returns the player's profile to the HUD. It should call `ensureDailyAp` **only when it represents a genuine screen transition** (e.g. `?transition=1` on the request, set by the client when it navigates to a screen that consumes/shows AP as a primary meter — store, run start, dashboard). A passive HUD poll that just keeps the meter fresh returns the cached balance without granting; the grant fires on the next real transition. The bottom-dock HUD shows `AP 24/30`-style meters per `ap-economy.md` line 10 — the **displayed cap should read from `max_ap` config**, not a hardcoded 30.
