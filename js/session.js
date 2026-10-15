@@ -18,6 +18,7 @@
 
 import { supabaseClient } from './utils.js';
 import { setScreenshakeOn, setUxSpeed } from './settings-controller.js';
+import { startApHeartbeat } from './ap-heartbeat.js';
 
 /**
  * POST /api/session — persist the refresh token in an HttpOnly cookie.
@@ -186,6 +187,26 @@ export async function loadServerSettings(tokenForHeader) {
 }
 
 /**
+ * Fetch profile with transition=1 flag to trigger daily AP grant on screen entry.
+ * Used by run-equip and game/dashboard screens (real navigation, not passive polls).
+ * @param {string} token
+ * @returns {Promise<object|null>}
+ */
+export async function fetchProfileTransition(token) {
+  if (!token) return null;
+  try {
+    const res = await fetch('/api/user/profile?transition=1', {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    console.error('Transition profile fetch failed (soft):', e);
+    return null;
+  }
+}
+
+/**
  * Town and mobile shared bootstrap: session, hud name, active-run bounce,
  * settings fetch. Callers assign supabaseClient() before awaiting this so
  * logout can see the client while these awaits are in flight.
@@ -201,6 +222,9 @@ export async function bootstrapTownSession({ redirectTo = '/login' } = {}) {
   fillHudName(session);
   if (await redirectIfActiveRun(session.access_token)) return null;
   loadServerSettings(session.access_token);
+  // Start the lightweight UTC rollover backstop for daily AP grant (P4 client card)
+  // Fires ?transition=1 profile fetch on date change; HUD refresh is page-specific.
+  startApHeartbeat(session.access_token);
   return session;
 }
 
