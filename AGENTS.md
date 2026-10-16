@@ -90,6 +90,13 @@ and tests exempt, split at seams not line counts. Auto-loaded in Hermes sessions
 copy of the same rules.
 
 ## Verification & scope (Spahrep 2026-09-16)
+- Deploy is automatic and NOT out of scope. Portal Colosseum runs on Vercel,
+  which auto-deploys on push to `main` — a pushed commit IS the production
+  deployment to https://portalcolosseum.com. Never tell a human "deploy is
+  outside my control" or "I'll deploy when you say the word": if the change is
+  committed and pushed, it is already live. A ticket-branch push ships a Vercel
+  *preview* URL (SSO-walled, see below) instead of production — push the branch
+  and post the preview link; still don't wait for a human gate to ship the preview.
 - Vercel preview/branch deployment URLs are SSO-walled: they 302 to
   vercel.com/sso-api. NEVER verify, curl, or browse against them, and never try
   to work around the SSO gate. It is platform auth, not app code, and not the
@@ -102,6 +109,8 @@ copy of the same rules.
   only valid result is a pass against the LIVE site (commit + push first, then
   verify live). Hitting an auth wall during verification is a STOP signal:
   switch to the known-good path or ask — don't chase the wall.
-- A UI/feature task does not include Vercel, deployment, SSO, or auth work.
-  If you don't know the verification path, ask Spahrep instead of improvising
-  one.
+- A UI/feature task does not include ad-hoc Vercel *platform* work (SSO
+  configuration, branch-management settings, plan changes). Normal deploys do
+  not need any of that: push to `main` and Vercel ships it. If the deploy is
+  genuinely broken and auto-push is not enough, ask Spahrep instead of
+  improvising platform work.
