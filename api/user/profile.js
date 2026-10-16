@@ -65,7 +65,7 @@ export async function GET(request) {
   try {
     const { data, error } = await admin
       .from('profiles')
-      .select('settings, ap, last_daily_ap')
+      .select('settings, ap, last_daily_ap, gold')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -73,7 +73,25 @@ export async function GET(request) {
     if (!data) return json({ error: 'Profile not found' }, 404);
 
     if (isTransition) {
-      return json({ settings: data.settings || {}, ap: data.ap, last_daily_ap: data.last_daily_ap });
+      // PC-HUD: include the wallet + AP cap so the bottom dock can render
+      // current/max AP and current gold in one fetch. game_config.max_ap is
+      // the AP cap; default 500 mirrors the fallback in api/lib/ap-daily.js.
+      let max_ap = 500;
+      try {
+        const { data: cfg } = await admin
+          .from('game_config')
+          .select('max_ap')
+          .eq('id', 1)
+          .maybeSingle();
+        if (cfg && typeof cfg.max_ap === 'number') max_ap = cfg.max_ap;
+      } catch { /* non-fatal: HUD falls back to 500 */ }
+      return json({
+        settings: data.settings || {},
+        ap: data.ap,
+        max_ap,
+        gold: typeof data.gold === 'number' ? data.gold : 0,
+        last_daily_ap: data.last_daily_ap,
+      });
     }
     return json({ settings: data.settings || {} });
   } catch (err) {

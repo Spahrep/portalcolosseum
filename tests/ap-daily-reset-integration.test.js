@@ -96,45 +96,53 @@ function profileReq(transition) {
 // A template with a known AP entry cost.
 const tmpl = { ap_cost: 150, entry_gold_cost: 0 };
 
+// "N days before today (UTC)" as an ISO date — keeps every date-aware test robust
+// no matter when it runs, instead of pinning one hardcoded "today".
+const daysAgo = (n) => {
+  const d = new Date(Date.now() - n * 86400000);
+  return d.toISOString().slice(0, 10);
+};
+const TODAY = daysAgo(0);
+
 describe('GET /api/user/profile?transition=1 — daily grant', () => {
   beforeEach(resetDb);
 
   it('grants accrued AP and returns updated ap + last_daily_ap', async () => {
-    seedProfile('user-1', { ap: 0, last_daily_ap: '2026-10-12' }); // 3 days ago
+    seedProfile('user-1', { ap: 0, last_daily_ap: daysAgo(3) }); // 3 days ago
     const res = await GET(profileReq(true));
     assert.equal(res.status, 200, await res.clone().text());
     const body = await res.json();
     assert.equal(body.ap, 300); // 0 + 100*3
-    assert.equal(body.last_daily_ap, '2026-10-15'); // today (UTC)
+    assert.equal(body.last_daily_ap, TODAY); // today (UTC)
   });
 
   it('caps at max_ap (500) and never exceeds it', async () => {
-    seedProfile('user-1', { ap: 480, last_daily_ap: '2026-10-14' }); // 1 day ago
+    seedProfile('user-1', { ap: 480, last_daily_ap: daysAgo(1) }); // 1 day ago
     const res = await GET(profileReq(true));
     const body = await res.json();
     assert.equal(body.ap, 500); // min(480+100, 500)
   });
 
   it('accrues missed days: 3 days at 0 → 300', async () => {
-    seedProfile('user-1', { ap: 0, last_daily_ap: '2026-10-12' });
+    seedProfile('user-1', { ap: 0, last_daily_ap: daysAgo(3) });
     const body = await (await GET(profileReq(true))).json();
     assert.equal(body.ap, 300);
   });
 
   it('accrues missed days: 5 days at 0 → capped 500', async () => {
-    seedProfile('user-1', { ap: 0, last_daily_ap: '2026-10-10' }); // 5 days ago
+    seedProfile('user-1', { ap: 0, last_daily_ap: daysAgo(5) }); // 5 days ago
     const body = await (await GET(profileReq(true))).json();
     assert.equal(body.ap, 500); // min(0+100*5, 500)
   });
 
   it('is idempotent: two ?transition=1 calls same UTC day grant once', async () => {
-    seedProfile('user-1', { ap: 0, last_daily_ap: '2026-10-12' });
+    seedProfile('user-1', { ap: 0, last_daily_ap: daysAgo(3) });
     const first = await (await GET(profileReq(true))).json();
     assert.equal(first.ap, 300);
     // Second call same day: last_daily_ap is now today → no elapsed days → no grant.
     const second = await (await GET(profileReq(true))).json();
     assert.equal(second.ap, 300);
-    assert.equal(second.last_daily_ap, '2026-10-15');
+    assert.equal(second.last_daily_ap, TODAY);
   });
 
   it('treats NULL last_daily_ap as today — no retroactive grant', async () => {
@@ -143,13 +151,22 @@ describe('GET /api/user/profile?transition=1 — daily grant', () => {
     assert.equal(body.ap, 10); // unchanged
     assert.equal(body.last_daily_ap, null); // no grant fired, still NULL
   });
+
+  it('returns max_ap (AP cap) and current gold for the HUD dock', async () => {
+    // last_daily_ap = today (UTC) → no grant fires → ap/gold pass through untouched.
+    seedProfile('user-1', { ap: 120, last_daily_ap: TODAY, gold: 3470 });
+    const body = await (await GET(profileReq(true))).json();
+    assert.equal(body.ap, 120); // no grant (last_daily_ap is today)
+    assert.equal(body.max_ap, 500); // game_config.max_ap in mock
+    assert.equal(body.gold, 3470); // wallet forwarded to the HUD
+  });
 });
 
 describe('GET /api/user/profile (passive) — no grant', () => {
   beforeEach(resetDb);
 
   it('returns cached AP without granting and without advancing last_daily_ap', async () => {
-    seedProfile('user-1', { ap: 0, last_daily_ap: '2026-10-12' });
+    seedProfile('user-1', { ap: 0, last_daily_ap: daysAgo(3) });
     const res = await GET(profileReq(false));
     assert.equal(res.status, 200);
     const body = await res.json();
@@ -158,7 +175,7 @@ describe('GET /api/user/profile (passive) — no grant', () => {
     // And the DB was NOT touched: still 0 AP, still 3 days stale.
     const row = db.profiles.get('user-1');
     assert.equal(row.ap, 0);
-    assert.equal(row.last_daily_ap, '2026-10-12');
+    assert.equal(row.last_daily_ap, daysAgo(3));
   });
 });
 
@@ -167,7 +184,7 @@ describe('chargeRunEntry — grant before AP-sufficiency check', () => {
 
   it('grants a stale balance up to >= ap_cost, then lets the run start', async () => {
     // 0 AP, last grant 3 days ago → grant fires +300 → 300 >= 150 cost → run starts.
-    seedProfile('user-1', { ap: 0, last_daily_ap: '2026-10-12', gold: 0 });
+    seedProfile('user-1', { ap: 0, last_daily_ap: daysAgo(3), gold: 0 });
     const out = await chargeRunEntry({ from: (t) => chain(t) }, 'user-1', tmpl);
     assert.equal(out.ok, true, JSON.stringify(out));
     assert.equal(out.charged.ap, 150);
@@ -177,7 +194,7 @@ describe('chargeRunEntry — grant before AP-sufficiency check', () => {
 
   it('blocks a player still below cost after the grant', async () => {
     // 0 AP, last grant 1 day ago → grant fires +100 → 100 < 150 cost → blocked.
-    seedProfile('user-1', { ap: 0, last_daily_ap: '2026-10-14', gold: 0 });
+    seedProfile('user-1', { ap: 0, last_daily_ap: daysAgo(1), gold: 0 });
     const out = await chargeRunEntry({ from: (t) => chain(t) }, 'user-1', tmpl);
     assert.equal(out.ok, false);
     assert.equal(out.status, 400);

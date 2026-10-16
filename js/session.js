@@ -19,6 +19,7 @@
 import { supabaseClient } from './utils.js';
 import { setScreenshakeOn, setUxSpeed } from './settings-controller.js';
 import { startApHeartbeat } from './ap-heartbeat.js';
+import { refreshHudWallet, renderHudWallet } from './hud-resources.js';
 
 /**
  * POST /api/session — persist the refresh token in an HttpOnly cookie.
@@ -129,6 +130,11 @@ export function fillHudName(session) {
     const meta = session.user.user_metadata || {};
     hudName.textContent = meta.username || meta.full_name || (session.user.email ? session.user.email.split('@')[0] : 'PLAYER');
   }
+  // Refresh the AP/gold wallet into the dock (no-op when the dock or its
+  // value spans are absent). Fire-and-forget — the caller does not await.
+  if (session && session.access_token) {
+    refreshHudWallet(session.access_token);
+  }
 }
 
 /**
@@ -223,8 +229,9 @@ export async function bootstrapTownSession({ redirectTo = '/login' } = {}) {
   if (await redirectIfActiveRun(session.access_token)) return null;
   loadServerSettings(session.access_token);
   // Start the lightweight UTC rollover backstop for daily AP grant (P4 client card)
-  // Fires ?transition=1 profile fetch on date change; HUD refresh is page-specific.
-  startApHeartbeat(session.access_token);
+  // Fires ?transition=1 profile fetch on date change; the onGrant re-renders the
+  // AP/gold dock from the fresh payload.
+  startApHeartbeat(session.access_token, renderHudWallet);
   return session;
 }
 
