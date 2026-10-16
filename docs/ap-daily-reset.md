@@ -1,6 +1,6 @@
 # AP Daily Reset — Detailed Design
 
-**Status:** CORE DECIDED — all values and mechanism locked by Spahrep 2026-10-15 (PC-DEC-073): fixed 00:00 GMT cadence, starting AP 250, daily allotment 100 (config), cap 500 (config), lazy grant-on-access **with a mid-session client backstop** (no cron). Ready for dispatch.
+**Status:** IMPLEMENTED — all values and mechanism locked by Spahrep 2026-10-15 (PC-DEC-073): fixed 00:00 GMT cadence, starting AP 250, daily allotment 100 (config), cap 500 (config), lazy grant-on-access **with a mid-session client backstop** (no cron). Shipped (migration 20261015192836 + api/lib/ap-daily.js, merged 2026-10-15) — no longer "ready for dispatch". Values config-driven via game_config (starting_ap=250, daily_ap_gain=100, max_ap=500).
 **Author:** Hermes Agent, 2026-10-15
 **Supersedes:** the "X per 24-hour period (exact X TBD)" placeholder in `docs/ap-economy.md` (line 8) and the 3× cap (line 9). This doc pins the numbers and the mechanism.
 

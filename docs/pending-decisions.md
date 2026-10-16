@@ -610,11 +610,11 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   - Starting / floor AP for a NEW player = 250. Quote: "start at 250 for now" (verbatim tail truncated in the session log after "because we want them to" — the draft doc docs/ap-daily-reset.md records the fuller values; treat this heading as provisional, easy to change).
   - AP values live in the existing `game_config` table (consistent with PC-DEC-017). Quote: "from the config, its the only thing that makes sense".
   - AP economics live in a STANDALONE doc (docs/ap-daily-reset.md), not folded into another doc. Quote: "stand alone".
-  The draft's daily-grant amount (100/day) and cap (500) are recorded in docs/ap-daily-reset.md and attributed to this session, but the session log truncates the verbatim where they would be pinned — flag them as OPEN (see review 2026-10-15-midday.md) until a full quote is on record and the value is coded. SUPERSEDES the "Starting AP=10" component of PC-DEC-018 (gold=0 stays). Decided by Spahrep, 2026-10-15.
+  The daily-grant amount (100/day) and cap (500) are now RESOLVED by the code and a verbatim quote. The committed migration header (supabase/migrations/20261015192836_ap_daily_reset.sql) records the full quote verbatim: Spahrep 2026-10-15: "cadence 00:00 GMT, start 250, 100/day (config), cap 500 (config), missed days accumulate. Checks fire only on screen switches (store, run start). All decided." — and the values are coded: starting_ap=250, max_ap=500, daily_ap_gain=100 (migration + api/lib/ap-daily.js), with tests merged. See review 2026-10-16.md. SUPERSEDES the "Starting AP=10" component of PC-DEC-018 (gold=0 stays). Decided by Spahrep, 2026-10-15.
 
 ## Open
 
-- OPEN (carried from PC-DEC-073): AP daily-grant amount and max cap. Draft docs/ap-daily-reset.md records 100/day and cap 500, attributed to Spahrep 2026-10-15, but the source session log truncates the verbatim where those values would be pinned. Awaiting a full quote on record + the value being coded. (PC-DEC-073 locks cadence = fixed 00:00 GMT and starting floor = 250; the grant/cap stay OPEN.)
+- AP daily-grant amount and max cap — RESOLVED 2026-10-16 by code + verbatim quote (see PC-DEC-073 Notes): Spahrep verbatim "cadence 00:00 GMT, start 250, 100/day (config), cap 500 (config), missed days accumulate. Checks fire only on screen switches (store, run start). All decided." Coded: starting_ap=250, max_ap=500, daily_ap_gain=100 (migration 20261015192836 + api/lib/ap-daily.js), merged with tests.
 
 ## Rejected / Superseded
 
