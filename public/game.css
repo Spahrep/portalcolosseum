@@ -423,3 +423,133 @@ body.game-page {
 .dock-right { color:#ffcc66; }
 .ap-meter-small { width:80px; height:3px; background:rgba(0,0,0,0.5); border:1px solid #334466; position:relative; display:inline-block; }
 .ap-fill-small { position:absolute; left:0; top:0; bottom:0; width:80%; background:#66ccff; }
+
+/* ADMIN overlay (dev-panel.js) — matches the .not-ready-modal pattern.
+ * The overlay is built with no inline styles, so without these rules it
+ * renders as an unstyled block at the bottom of the page and is invisible
+ * when unhidden. The [hidden] rule must win over display:flex below,
+ * otherwise the panel renders open on every page load. */
+.admin-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.admin-overlay[hidden] {
+  display: none;
+}
+.admin-panel {
+  min-width: 300px;
+  padding: 18px 22px;
+  background: #1a1a2e;
+  border: 6px double #ffcc66;
+  outline: 3px solid #000;
+  box-shadow: 0 0 40px rgba(255, 204, 102, 0.35);
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  cursor: default;
+}
+.admin-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+.admin-head .panel-title {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #ffcc66;
+  text-shadow: 0 0 12px rgba(255, 204, 102, 0.5);
+}
+.admin-head .cancel-btn {
+  background: #2a0a0a;
+  color: #ff6666;
+  border: 2px solid #5c1a1a;
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 12px;
+  padding: 4px 12px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.15s ease;
+}
+.admin-head .cancel-btn:hover {
+  background: #4a1a1a;
+  border-color: #ff6666;
+  color: #ff8888;
+}
+.admin-status {
+  font-size: 12px;
+  color: #88aaff;
+  min-height: 16px;
+  margin-bottom: 12px;
+}
+.admin-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #66ccff;
+  margin-bottom: 8px;
+}
+.admin-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.admin-row label {
+  font-size: 13px;
+  color: #ffcc66;
+  width: 48px;
+  flex-shrink: 0;
+}
+.admin-row input[type='number'] {
+  flex: 1;
+  background: #0a1a2e;
+  color: #ccddff;
+  border: 2px solid #334466;
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 13px;
+  padding: 5px 8px;
+}
+.admin-row input[type='number']:focus {
+  outline: none;
+  border-color: #66ccff;
+}
+.admin-row button {
+  background: #0a1a2e;
+  color: #88aaff;
+  border: 2px solid #334466;
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 12px;
+  padding: 5px 14px;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  transition: all 0.15s ease;
+}
+.admin-row button:hover {
+  background: #1a3a5e;
+  border-color: #66ccff;
+  color: #ccddff;
+}
+
+/* ADMIN button on the status dock (dev-panel.js) */
+.admin-btn {
+  background: rgba(58, 26, 26, 0.8);
+  color: #f87171;
+  border: 1px solid #5c2a2a;
+  font-family: 'Pixeloid Mono', 'Courier New', monospace;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  letter-spacing: 1px;
+  transition: all 0.15s ease;
+}
+.admin-btn:hover {
+  background: rgba(92, 42, 42, 0.9);
+  color: #ff5555;
+  transform: scale(1.05);
+}
