@@ -619,6 +619,13 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Verbatim: "I've read and approve of the PRD for the weapons store."
   Status: DECIDED
   Notes: SIGNS OFF the weapons store PRD (docs/prds/weapon-shop-prd.md), moving it from "Draft for review — not yet signed off" to APPROVED. The PRD's three §8 open decisions were already RESOLVED by Spahrep (per-player shop stock; no-sell-last-weapon = always ≥1 weapon, hand or belt; daily refresh resets reroll counter). The two flagged [ASSUMPTION] items (buy-price multiplier curve, sell-price discount %) remain tuning-table values to fill at build time, not blockers to approval. The shop is a consumer of the existing instance + game_config patterns (PC-DEC-017/019/053) and the store screen is already an AP-check trigger point (PC-DEC-073). Decided by Spahrep, 2026-10-19.
+- ID: PC-DEC-075
+  Date: 2026-10-19
+  Source: AGENTS.md §9 ruling (enacted + committed fe12a6b, provenance Spahrep 2026-10-19); primary Discord sentence not independently recovered this sweep — provenance via committed AGENTS.md *application* of the ruling
+  Speaker: Spahrep
+  Verbatim: "`docs/reviews/` is OFF-LIMITS to reasoning (Spahrep 2026-10-19). The dated review logs (`docs/reviews/2026-*.md`) are historical snapshots of what a sweep found on a given day — NOT a source of design truth and NOT an authority for any go-forward decision; a warning copied review-to-review is a phantom rule, never a standing one."
+  Status: DECIDED
+  Notes: GOVERNS every agent's reasoning class-wide: past review warnings are never standing rules; docs/reviews/ is for verification against, never decision authority. Background (AGENTS.md §9): a "no 'axes' reintroduced" warning got copied review-to-review and became a phantom rule that wasted reasoning time. Provenance honesty: the verbatim primary Discord sentence was not recovered this sweep (session/connector gaps); capture quotes the §9 governance prose that AGENTS.md attributes to Spahrep 2026-10-19 and enacts verbatim. This closes a capture gap — the ruling landed in AGENTS.md §9 (10:47, fe12a6b) but was never indexed as a PC-DEC in pending-decisions.md until now. Precedent: PC-DEC C-rules (review-triage governance) and this same causal pattern was flagged in prior sweeps' review-triage material. The AGENTS.md §9 rule text IS the permanent-doc application (AGENTS.md is a permanent doc); this entry registers the decision ID and provenance so the nightly conflict sweep and future agents reason by ID. Decided by Spahrep, 2026-10-19.
 
 ## Open
 
