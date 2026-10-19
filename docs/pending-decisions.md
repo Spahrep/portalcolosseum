@@ -612,6 +612,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   - AP economics live in a STANDALONE doc (docs/ap-daily-reset.md), not folded into another doc. Quote: "stand alone".
   The daily-grant amount (100/day) and cap (500) are now RESOLVED by the code and a verbatim quote. The committed migration header (supabase/migrations/20261015192836_ap_daily_reset.sql) records the full quote verbatim: Spahrep 2026-10-15: "cadence 00:00 GMT, start 250, 100/day (config), cap 500 (config), missed days accumulate. Checks fire only on screen switches (store, run start). All decided." — and the values are coded: starting_ap=250, max_ap=500, daily_ap_gain=100 (migration + api/lib/ap-daily.js), with tests merged. See review 2026-10-16.md. SUPERSEDES the "Starting AP=10" component of PC-DEC-018 (gold=0 stays). Decided by Spahrep, 2026-10-15.
 
+- ID: PC-DEC-074
+  Date: 2026-10-19
+  Source: CLI session (weapons store PRD review)
+  Speaker: Spahrep
+  Verbatim: "I've read and approve of the PRD for the weapons store."
+  Status: DECIDED
+  Notes: SIGNS OFF the weapons store PRD (docs/prds/weapon-shop-prd.md), moving it from "Draft for review — not yet signed off" to APPROVED. The PRD's three §8 open decisions were already RESOLVED by Spahrep (per-player shop stock; no-sell-last-weapon = always ≥1 weapon, hand or belt; daily refresh resets reroll counter). The two flagged [ASSUMPTION] items (buy-price multiplier curve, sell-price discount %) remain tuning-table values to fill at build time, not blockers to approval. The shop is a consumer of the existing instance + game_config patterns (PC-DEC-017/019/053) and the store screen is already an AP-check trigger point (PC-DEC-073). Decided by Spahrep, 2026-10-19.
+
 ## Open
 
 - AP daily-grant amount and max cap — RESOLVED 2026-10-16 by code + verbatim quote (see PC-DEC-073 Notes): Spahrep verbatim "cadence 00:00 GMT, start 250, 100/day (config), cap 500 (config), missed days accumulate. Checks fire only on screen switches (store, run start). All decided." Coded: starting_ap=250, max_ap=500, daily_ap_gain=100 (migration 20261015192836 + api/lib/ap-daily.js), merged with tests.
