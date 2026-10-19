@@ -186,7 +186,7 @@ export async function mountAdminButton(dockEl, { token, onRefreshWallet } = {}) 
   btn.onclick = () => {
     overlay.hidden = false;
     setStatus('');
-    // Prefill current values from HUD if possible
+    // Prefill current values from HUD so the admin sees the live amounts
     const apText = document.getElementById('hud-ap');
     if (apText && apInput) {
       const m = apText.textContent.match(/(\d+)/);
@@ -194,7 +194,8 @@ export async function mountAdminButton(dockEl, { token, onRefreshWallet } = {}) 
     }
     const gText = document.getElementById('hud-gold');
     if (gText && goldInput) {
-      const m = gText.textContent.match(/(\d+)/);
+      // gold renders as "◉ 1,240gc" — strip commas so 1,240 → 1240
+      const m = gText.textContent.replace(/,/g, '').match(/(\d+)/);
       if (m) goldInput.value = m[1];
     }
   };
