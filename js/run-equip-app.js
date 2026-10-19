@@ -949,11 +949,8 @@ async function init() {
     console.error('Data load failed', e);
     // fallback to empty
   }
-  // Admin button is injected only after /dev/grant confirms is_admin.
-  // Non-admins: no button, no panel, no /dev/templates fetch.
-  try { await setupAdminPanel(); } catch (e) {
-    console.error('Admin panel setup failed', e);
-  }
+  // Admin button now mounted on #status-dock via shared dev-panel (session bootstrap).
+  // The GENERATE WEAPON / GENERATE CONSUMABLE / DELETE INVENTORY sections remain here.
   renderAll();
   setupKeyboard();
   setupDismiss();

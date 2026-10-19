@@ -20,6 +20,7 @@ import { supabaseClient } from './utils.js';
 import { setScreenshakeOn, setUxSpeed } from './settings-controller.js';
 import { startApHeartbeat } from './ap-heartbeat.js';
 import { refreshHudWallet, renderHudWallet } from './hud-resources.js';
+import { mountAdminButton } from './admin/dev-panel.js';
 
 /**
  * POST /api/session — persist the refresh token in an HttpOnly cookie.
@@ -232,6 +233,12 @@ export async function bootstrapTownSession({ redirectTo = '/login' } = {}) {
   // Fires ?transition=1 profile fetch on date change; the onGrant re-renders the
   // AP/gold dock from the fresh payload.
   startApHeartbeat(session.access_token, renderHudWallet);
+  // Mount ADMIN button on the persistent status-dock (one place covers town/loadout/portal-select)
+  // Passes renderHudWallet as the refresh hook so set-ap-gold echoes update the labels.
+  mountAdminButton(document.getElementById('status-dock'), {
+    token: session.access_token,
+    onRefreshWallet: (payload) => renderHudWallet(payload)
+  }).catch(() => {});
   return session;
 }
 

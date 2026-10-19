@@ -810,6 +810,30 @@ export async function handleCombatDev({ request, path, method, admin, user, json
         return json({ deleted: true, kind, instance_id: instanceId });
       }
 
+      // 18. POST /dev/set-ap-gold (admin test tool) — self-service set own AP/gold, no caps except >=0, last_daily_ap untouched
+      if (path === '/dev/set-ap-gold' && method === 'POST') {
+        const body = await request.json().catch(() => ({}));
+        const ap = body.ap;
+        const gold = body.gold;
+        const hasAp = typeof ap === 'number' && Number.isInteger(ap);
+        const hasGold = typeof gold === 'number' && Number.isInteger(gold);
+        if (!hasAp && !hasGold) return json({ error: 'ap or gold (or both) required' }, 400);
+        const finalAp = hasAp ? ap : undefined;
+        const finalGold = hasGold ? gold : undefined;
+        if ((hasAp && finalAp < 0) || (hasGold && finalGold < 0)) return json({ error: 'ap and gold must be >= 0' }, 400);
+        try {
+          const update = {};
+          if (hasAp) update.ap = finalAp;
+          if (hasGold) update.gold = finalGold;
+          const { data: updated, error } = await admin.from('profiles').update(update).eq('id', user.id).select('ap, gold').single();
+          if (error) throw error;
+          return json({ ap: updated.ap, gold: updated.gold });
+        } catch (e) {
+          console.error('set-ap-gold error', e);
+          return json({ error: 'Internal server error' }, 500);
+        }
+      }
+
       return json({ error: 'unknown dev command' }, 404);
     }
 
