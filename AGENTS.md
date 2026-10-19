@@ -75,6 +75,17 @@ How work fits without spilling context — applies to Hermes, Grok, Claude, ALL 
      Do NOT grep source files to locate symbols.
    - Decisions: grep `docs/pending-decisions.md` by PC-DEC-### ID only;
      do not read it whole.
+9. **`docs/reviews/` is OFF-LIMITS to reasoning (Spahrep 2026-10-19).** The
+   dated review logs (`docs/reviews/2026-*.md`) are historical snapshots of
+   what a sweep found on a given day — NOT a source of design truth and NOT
+   an authority for any go-forward decision. Do not read them, cite them, or
+   let them influence reasoning unless the task is *specifically* asking for
+   historical information. Design decisions come only from
+   `docs/pending-decisions.md` (PC-DEC entries) and Spahrep's rulings. A past
+   review's warning is never a standing rule — reviews verify against live
+   decisions, they do not create them. (This rule exists because a "no 'axes'
+   reintroduced" warning got copied review-to-review and became a phantom
+   rule that wasted reasoning time.)
 
 Full brief template + worked example: `portal-colosseum-agent-team` skill →
 `references/context-budget-discipline.md`.

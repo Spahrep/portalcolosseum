@@ -32,6 +32,7 @@ Do not rebuild llms-full.txt. Follow the links and fetch one mechanic doc.
 - [Inventory slots](docs/inventory-slots.md): 20-slot backpack and the 5-item run loadout (Hand L/R, belt loop, Potion A/B). Loadout locks at entry.
 - [Portal runs](docs/portal-runs.md): Push-your-luck run loop — N fights (config, default 5), continue or stop, portal tiers as item power tiers.
 - [Shops and economy](docs/shops-and-economy.md): Output-based shop pricing, portal-gated tiers, exponential rerolls, and the three anti-grind gates.
+- [Weapon shop PRD](docs/prds/weapon-shop-prd.md): Product definition for the weapon shop feature — player-facing scope, user stories, implementation/testing decisions, open questions. Living for the implementation window.
 - [Progression gating](docs/progression-gating.md): Portal unlocks, the three-active-portals limit, and shop tiering. Old portals stay farmable.
 
 ## Decisions
