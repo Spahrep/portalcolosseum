@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS public.shop_stock (
   slot integer NOT NULL CHECK (slot BETWEEN 1 AND 4),
   kind text NOT NULL CHECK (kind IN ('weapon','consumable')),
   template_id bigint NOT NULL,
+  name text,
   stock_date date NOT NULL,
   -- denormalized rolled stats (weapons)
   damage integer,

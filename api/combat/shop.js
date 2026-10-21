@@ -189,6 +189,7 @@ async function persistStock(admin, userId, stock) {
     slot: s.slot,
     kind: s.kind,
     template_id: s.template_id,
+    name: s.name ?? null,
     stock_date: today,
     damage: s.damage ?? null,
     speed: s.speed ?? null,
@@ -245,15 +246,16 @@ function decorateStock(rows, cfg) {
   return rows.map(r => {
     const qm = Number(r.quality_multiplier) || 1;
     const buy = buyPriceOf(Number(r.base_price) || 45, qm);
+    const name = r.name || r.weapon_template?.name || 'Unknown';
     if (r.kind === 'weapon') {
       return {
-        slot: r.slot, kind: 'weapon', template_id: r.template_id, name: r.name,
+        slot: r.slot, kind: 'weapon', template_id: r.template_id, name,
         tier: r.tier, quality_multiplier: Number(r.quality_multiplier), buy_price: buy,
         damage: r.damage, speed: r.speed, accuracy: r.accuracy, crit_chance: r.crit_chance,
       };
     }
     return {
-      slot: r.slot, kind: 'consumable', template_id: r.template_id, name: r.name,
+      slot: r.slot, kind: 'consumable', template_id: r.template_id, name,
       tier: r.tier, quality_multiplier: Number(r.quality_multiplier), buy_price: buy,
       rolled_floor: r.rolled_floor, rolled_window: r.rolled_window,
     };
@@ -327,20 +329,23 @@ export async function handleShop({ request, path, method, admin, user, json }) {
     if (gold < buyPrice) return json({ error: 'insufficient_gold' }, 400);
     // grant instance
     try {
+      let instanceId = null;
       if (item.kind === 'weapon') {
         const rpcRes = await admin.rpc('generate_weapon', { p_template_id: item.template_id, p_user_id: userId });
         if (rpcRes.error) throw rpcRes.error;
         if (!rpcRes.data || !rpcRes.data.id) throw new Error('generate_weapon returned no id');
-        await admin.from('profiles').update({ gold: gold - buyPrice }).eq('id', userId);
-        return json({ ok: true, instance_id: rpcRes.data.id, new_gold: gold - buyPrice });
+        instanceId = rpcRes.data.id;
       } else {
         const rpcRes = await admin.rpc('generate_consumable_instance', { p_template_id: item.template_id, p_user_id: userId });
         if (rpcRes.error) throw rpcRes.error;
         const cid = rpcRes.data && (rpcRes.data.id ?? rpcRes.data);
         if (!cid) throw new Error('generate_consumable_instance returned no id');
-        await admin.from('profiles').update({ gold: gold - buyPrice }).eq('id', userId);
-        return json({ ok: true, instance_id: cid, new_gold: gold - buyPrice });
+        instanceId = cid;
       }
+      // charge gold and remove the sold slot from today's stock so it leaves the store
+      await admin.from('profiles').update({ gold: gold - buyPrice }).eq('id', userId);
+      await admin.from('shop_stock').delete().eq('user_id', userId).eq('stock_date', utcToday()).eq('slot', slot);
+      return json({ ok: true, instance_id: instanceId, new_gold: gold - buyPrice });
     } catch (e) {
       console.error('shop buy error', e);
       return json({ error: 'Internal server error' }, 500);

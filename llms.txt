@@ -34,6 +34,7 @@ Do not rebuild llms-full.txt. Follow the links and fetch one mechanic doc.
 - [Shops and economy](docs/shops-and-economy.md): Output-based shop pricing, portal-gated tiers, exponential rerolls, and the three anti-grind gates.
 - [Weapon shop PRD](docs/prds/weapon-shop-prd.md): Product definition for the weapon shop feature — player-facing scope, user stories, implementation/testing decisions, open questions. Living for the implementation window.
 - [Progression gating](docs/progression-gating.md): Portal unlocks, the three-active-portals limit, and shop tiering. Old portals stay farmable.
+- [Audio / SFX backlog](docs/design/audio-sfx-backlog.md): Master worklist of what needs sounds — combat impacts, shop buy/sell/reroll, inventory, town. No assets exist yet.
 
 ## Decisions
 

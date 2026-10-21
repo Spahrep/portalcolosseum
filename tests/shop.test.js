@@ -177,6 +177,9 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
     // generate_weapon RPC was called
     const rpc = admin.calls.find(c => c.table === 'rpc:generate_weapon');
     assert.ok(rpc, 'generate_weapon RPC called');
+    // the sold slot is removed from today's shop_stock so it leaves the store
+    const del = admin.calls.find(c => c.table === 'shop_stock' && c.op === 'delete' && c.filters.some(f => f[0] === 'eq' && f[1] === 'slot' && f[2] === 1));
+    assert.ok(del, 'sold slot 1 deleted from shop_stock');
   });
 
   it('POST /shop/buy rejects insufficient gold', async () => {
