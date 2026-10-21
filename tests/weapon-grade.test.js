@@ -71,7 +71,18 @@ function template(over = {}) {
   };
 }
 
-async function gradeFromHandler(stats, tmpl = template()) {
+// PC-DEC-076: quality_multiplier = max(power_score / base_power, 0.25) ^ 0.78
+// power_score = d * (100/s) * (a/100) * (1 + c/100); base_power = base_damage * (100/base_speed) * (base_accuracy/100) * 1.05
+function expectedQm(d, s, a, c, tmpl) {
+  const powerScore = d * (100.0 / s) * (a / 100.0) * (1.0 + (c / 100.0));
+  const basePower = tmpl.base_damage * (100.0 / tmpl.base_speed) * (tmpl.base_accuracy / 100.0) * 1.05;
+  return Math.pow(Math.max(powerScore / basePower, 0.25), 0.78);
+}
+function expectedTier(qm) {
+  return qm >= 1.11 ? 'S' : qm >= 1.075 ? 'A' : qm >= 1.04 ? 'B' : qm >= 0.985 ? 'C' : qm >= 0.94 ? 'D' : 'E';
+}
+
+async function resultFromHandler(stats, tmpl = template()) {
   const admin = mockAdmin((snap) => {
     if (snap.table === 'profiles') return { data: { is_admin: true } };
     if (snap.table === 'weapon_instance' && snap.op === 'select') return { data: INSTANCE };
@@ -84,75 +95,49 @@ async function gradeFromHandler(stats, tmpl = template()) {
   assert.equal(res.status, 200, await res.clone().text());
   const body = await res.json();
   const upd = admin.calls.find(c => c.table === 'weapon_instance' && c.op === 'update');
-  assert.equal(upd.payload.grade, body.grade, 'persisted grade is the handler grade');
-  return body.grade;
+  return { body, upd };
 }
 
-describe('weapon grade from set-weapon-stats', () => {
-  it('z >= 3 grades S', async () => {
-    assert.equal(await gradeFromHandler({ damage: 13, speed: 7, accuracy: 13 }), 'S');
-    assert.equal(await gradeFromHandler(
-      { damage: 41, speed: 9, accuracy: 41 },
-      template({ base_speed: 40, damage_range: 10, speed_range: 10, accuracy_range: 10 })
-    ), 'S');
+describe('weapon quality_multiplier + tier from set-weapon-stats (PC-DEC-076)', () => {
+  it('persists quality_multiplier, tier, and grade mirror matching the power_score formula', async () => {
+    const { body, upd } = await resultFromHandler({ damage: 13, speed: 7, accuracy: 13 });
+    const qm = expectedQm(13, 7, 13, INSTANCE.crit_chance, template());
+    assert.ok(Math.abs(body.quality_multiplier - qm) < 1e-9, `qm ${body.quality_multiplier} != ${qm}`);
+    assert.equal(body.tier, expectedTier(qm));
+    assert.equal(upd.payload.quality_multiplier, qm);
+    assert.equal(upd.payload.tier, body.tier);
+    assert.equal(upd.payload.grade, body.tier, 'grade mirrors tier for legacy readers');
   });
 
-  it('z = 2 and z = 2.5 grade A', async () => {
-    assert.equal(await gradeFromHandler({ damage: 12, speed: 8, accuracy: 12 }), 'A');
-    assert.equal(await gradeFromHandler(
-      { damage: 15, speed: 5, accuracy: 15 },
-      template({ damage_range: 2, speed_range: 2, accuracy_range: 2 })
-    ), 'A');
+  it('a god roll (high damage, fast, accurate) grades S', async () => {
+    const { body } = await resultFromHandler({ damage: 13, speed: 7, accuracy: 13 });
+    assert.equal(body.tier, 'S');
   });
 
-  it('z = 0 and z = 0.9 grade C', async () => {
-    assert.equal(await gradeFromHandler({ damage: 10, speed: 10, accuracy: 10 }), 'C');
-    assert.equal(await gradeFromHandler(
-      { damage: 19, speed: 1, accuracy: 19 },
-      template({ damage_range: 10, speed_range: 10, accuracy_range: 10 })
-    ), 'C');
+  it('an average roll grades C', async () => {
+    const { body } = await resultFromHandler({ damage: 10, speed: 10, accuracy: 10 });
+    assert.equal(body.tier, 'C');
   });
 
-  it('z = -1 and z = -0.5 grade D', async () => {
-    assert.equal(await gradeFromHandler({ damage: 9, speed: 11, accuracy: 9 }), 'D');
-    assert.equal(await gradeFromHandler(
-      { damage: 9, speed: 11, accuracy: 9 },
-      template({ damage_range: 2, speed_range: 2, accuracy_range: 2 })
-    ), 'D');
+  it('a poor roll grades E', async () => {
+    const { body } = await resultFromHandler({ damage: 8, speed: 12, accuracy: 8 });
+    assert.equal(body.tier, 'E');
   });
 
-  it('z = -2 grades E; z < -2 grades F', async () => {
-    assert.equal(await gradeFromHandler({ damage: 8, speed: 12, accuracy: 8 }), 'E');
-    assert.equal(await gradeFromHandler(
-      { damage: 11, speed: 32, accuracy: 11 },
-      template({ base_damage: 32, base_speed: 11, base_accuracy: 32, damage_range: 10, speed_range: 10, accuracy_range: 10 })
-    ), 'F');
-    assert.equal(await gradeFromHandler(
-      { damage: 10, speed: 40, accuracy: 10 },
-      template({ base_damage: 40, base_speed: 10, base_accuracy: 40, damage_range: 10, speed_range: 10, accuracy_range: 10 })
-    ), 'F');
-  });
-
-  it('a zero range contributes z=0; uniform ±range extremes are B and D', async () => {
-    assert.equal(await gradeFromHandler(
-      { damage: 25, speed: 18, accuracy: 88 },
-      template({ base_damage: 25, damage_range: 0, base_speed: 18, speed_range: 2, base_accuracy: 88, accuracy_range: 4 })
-    ), 'C');
-    assert.equal(await gradeFromHandler(
-      { damage: 30, speed: 16, accuracy: 92 },
-      template({ base_damage: 25, damage_range: 5, base_speed: 18, speed_range: 2, base_accuracy: 88, accuracy_range: 4 })
-    ), 'B');
-    assert.equal(await gradeFromHandler(
-      { damage: 20, speed: 20, accuracy: 84 },
-      template({ base_damage: 25, damage_range: 5, base_speed: 18, speed_range: 2, base_accuracy: 88, accuracy_range: 4 })
-    ), 'D');
-  });
-
-  it('setting crit does not change the grade the stats already earned', async () => {
+  it('crit IS part of the power_score formula — raising crit can push a roll up a tier', async () => {
     const tmpl = template();
-    const without = await gradeFromHandler({ damage: 13, speed: 7, accuracy: 13 }, tmpl);
-    const withCrit = await gradeFromHandler({ damage: 13, speed: 7, accuracy: 13, crit: 40 }, tmpl);
-    assert.equal(without, 'S');
-    assert.equal(withCrit, without);
+    const low = await resultFromHandler({ damage: 10, speed: 10, accuracy: 10, crit: 0 }, tmpl);
+    const high = await resultFromHandler({ damage: 10, speed: 10, accuracy: 10, crit: 60 }, tmpl);
+    const qmLow = expectedQm(10, 10, 10, 0, tmpl);
+    const qmHigh = expectedQm(10, 10, 10, 60, tmpl);
+    assert.ok(qmHigh > qmLow, 'higher crit must raise quality_multiplier');
+    assert.ok(expectedTier(qmHigh) >= expectedTier(qmLow), 'higher crit must not lower tier');
+  });
+
+  it('identical stats always yield the same quality_multiplier (no source-dependent value)', async () => {
+    const a = await resultFromHandler({ damage: 12, speed: 8, accuracy: 12 });
+    const b = await resultFromHandler({ damage: 12, speed: 8, accuracy: 12 });
+    assert.equal(a.body.quality_multiplier, b.body.quality_multiplier);
+    assert.equal(a.body.tier, b.body.tier);
   });
 });

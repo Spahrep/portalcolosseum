@@ -558,23 +558,25 @@ export async function handleCombatDev({ request, path, method, admin, user, json
         if (damage !== undefined) { update.damage = damage; d = damage; }
         if (speed !== undefined) { update.speed = speed; s = speed; }
         if (accuracy !== undefined) { update.accuracy = accuracy; a = accuracy; }
-        // PC-72: optional crit param writes crit_chance; crit is NOT part of the
-        // grade formula this pass — setting crit must NOT change grade.
+        // PC-72: optional crit param writes crit_chance; crit IS part of the
+        // power_score formula this pass (PC-DEC-076) — setting crit changes tier.
         if (crit !== undefined) { update.crit_chance = crit; c = crit; }
-        // recompute grade exactly as in give-weapon (zs inverted for speed)
-        const zd = tmpl.damage_range ? (d - tmpl.base_damage) / tmpl.damage_range : 0;
-        const zs = tmpl.speed_range ? (tmpl.base_speed - s) / tmpl.speed_range : 0;
-        const za = tmpl.accuracy_range ? (a - tmpl.base_accuracy) / tmpl.accuracy_range : 0;
-        const z = (zd + zs + za) / 3;
-        const grade = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
-        update.grade = grade;
+        // PC-DEC-076: recompute quality_multiplier + tier exactly as generate_weapon
+        // (power_score / base_power, ^0.78, floor 0.25). grade mirrors tier for legacy readers.
+        const powerScore = d * (100.0 / s) * (a / 100.0) * (1.0 + (c / 100.0));
+        const basePower = tmpl.base_damage * (100.0 / tmpl.base_speed) * (tmpl.base_accuracy / 100.0) * 1.05;
+        const qm = Math.pow(Math.max(powerScore / basePower, 0.25), 0.78);
+        const tier = qm >= 1.11 ? 'S' : qm >= 1.075 ? 'A' : qm >= 1.04 ? 'B' : qm >= 0.985 ? 'C' : qm >= 0.94 ? 'D' : 'E';
+        update.quality_multiplier = qm;
+        update.tier = tier;
+        update.grade = tier;
         try {
           await admin.from('weapon_instance').update(update).eq('id', instance_id);
         } catch (e) {
           console.error('set-weapon-stats update error', e);
           return json({ error: 'Internal server error' }, 500);
         }
-        return json({ instance_id, template_name: tmpl.name, damage: d, speed: s, accuracy: a, crit_chance: c, grade });
+        return json({ instance_id, template_name: tmpl.name, damage: d, speed: s, accuracy: a, crit_chance: c, quality_multiplier: qm, tier, grade: tier });
       }
 
       // 14. POST /dev/set-consumable-stats (PC-69, ported from wt/pc-69 0ddc83e + PC-72 crit) — overwrite stats on any existing consumable_instance, recompute grade

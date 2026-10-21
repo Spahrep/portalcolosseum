@@ -59,9 +59,11 @@ Everything happens **in the shop screen** until the player leaves.
 - **Sell:** consumes a player-owned instance, grants gold (sell formula below). Respect the no-sell-last-weapon rule.
 - **Reroll:** costs gold (exponential); decrements nothing else. On success, re-rolls the visible stock; **does NOT reset AP**.
 - **AP reset:** costs X AP (config); resets the reroll gold counter to base. Decrements AP.
-- **Pricing:** two formulas.
-  - **Buy price** = f(grade/roll) × category multiplier (weapons steep ~100× D→S; consumables shallow ~10% better = ~25% more). [ASSUMPTION: exact multiplier curve is a tuning table, not fixed here]
-  - **Sell price** = template-based cost × discount (~25% suggested). [Assumption: 25% is tuning]
+- **Pricing:** driven by continuous `quality_multiplier` (from real power_score), not discrete grade.
+  - See `docs/design/weapon-pricing-and-grading.md` (accepted PC-DEC-076).
+  - Buy = `template.base_price × quality_multiplier × 1.40`
+  - Sell = `template.base_price × quality_multiplier × 0.42`
+  - Tier (S/A/B/C/D) is aesthetic only. S ≤ 5% rarity (target ~1.5%).
 - **Schema note:** `game_config` single-row table holds global tunables (per the established pattern) — reroll base, reroll multiplier, AP-reset X, sell discount, refresh hour. No new config file.
 - **Seam + cascade (pc-coding-standards):** the shop is a new screen/flow. No import-back-up: the shop UI module must not import `battle-app.js`/`cli-app.js`/`admin-app.js`; it renders through its own leaf module and state flows via bind* hooks. Target ≤3 files touched, cascade ≤40k tokens. No code snippets/paths in this PRD (they go stale).
 
