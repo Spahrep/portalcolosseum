@@ -90,8 +90,8 @@ function defaultResponder(over = {}) {
 describe('weapon shop backend (PC-DEC-074/076)', () => {
   it('tier gating: only weapons mapped to portals <= best unlocked portal are stocked', async () => {
     // Player has completed portal 1 -> best unlocked = 2. portal_loot_mapping
-    // returns weapons for portals 1 and 2; weapon 3 (Greatsword) is portal-1-only,
-    // weapon 4 (Battle Axe) is portal-2. Both should be eligible.
+    // returns weapons for portals 1 and 2 (ids 3,4). weapon 5 (Warhammer) is
+    // NOT mapped -> must never be stocked regardless of roll RNG.
     const admin = mockAdmin((snap) => {
       const base = defaultResponder()(snap);
       if (snap.table === 'portal_run') return { data: [{ portal_template_id: 1 }] };
@@ -99,6 +99,7 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
       if (snap.table === 'weapon_template') return { data: [
         { id: 3, name: 'Greatsword', base_damage: 55, damage_range: 8, base_speed: 35, speed_range: 4, base_accuracy: 82, accuracy_range: 6, crit_base: 5, crit_range: 0, base_price: 45 },
         { id: 4, name: 'Battle Axe', base_damage: 50, damage_range: 7, base_speed: 38, speed_range: 4, base_accuracy: 80, accuracy_range: 6, crit_base: 5, crit_range: 0, base_price: 45 },
+        { id: 5, name: 'Warhammer', base_damage: 42, damage_range: 6, base_speed: 33, speed_range: 3, base_accuracy: 83, accuracy_range: 5, crit_base: 5, crit_range: 0, base_price: 45 },
       ] };
       return base;
     });
@@ -106,9 +107,12 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
     const res = await GET(req('/shop'));
     assert.equal(res.status, 200, await res.clone().text());
     const body = await res.json();
-    const names = new Set(body.stock.filter(i => i.kind === 'weapon').map(i => i.name));
-    assert.ok(names.has('Greatsword'), 'portal-1 weapon available');
-    assert.ok(names.has('Battle Axe'), 'portal-2 weapon available');
+    const gated = new Set([3, 4]);
+    const stocked = body.stock.filter(i => i.kind === 'weapon');
+    assert.equal(stocked.length, 2, '2 weapons stocked');
+    for (const w of stocked) {
+      assert.ok(gated.has(w.template_id), `stocked weapon id ${w.template_id} must be in gated set {3,4}`);
+    }
     // the portal_loot_mapping query used lte(portal_template_id, bestUnlocked=2)
     const lootCall = admin.calls.find(c => c.table === 'portal_loot_mapping');
     assert.ok(lootCall, 'portal_loot_mapping queried');
@@ -141,7 +145,11 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
     assert.equal(res.status, 200, await res.clone().text());
     const body = await res.json();
     assert.ok(Array.isArray(body.stock), 'stock is an array');
-    assert.ok(body.stock.length >= 4, 'stock has weapon slots');
+    const weapons = body.stock.filter(i => i.kind === 'weapon');
+    const potions = body.stock.filter(i => i.kind === 'consumable');
+    assert.equal(weapons.length, 2, 'exactly 2 weapons in stock');
+    assert.equal(potions.length, 2, 'exactly 2 potions in stock');
+    assert.equal(body.stock.length, 4, '4 total stock slots');
     assert.equal(typeof body.reroll_cost, 'number');
     assert.equal(body.reroll_cost, 50, 'base reroll cost at count 0');
     assert.equal(body.gold, 1000);

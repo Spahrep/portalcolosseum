@@ -149,7 +149,7 @@ async function bestUnlockedPortal(admin, userId) {
   }
 }
 
-// roll a full 6-slot stock: 4 weapons + 2 consumables.
+// roll a full 4-slot stock: 2 weapons + 2 potions.
 // Weapons are gated to templates mapped to portals <= maxPortalId (tier gating).
 async function rollStock(admin, maxPortalId = 1) {
   const [wRes, cRes, lootRes] = await Promise.all([
@@ -166,14 +166,14 @@ async function rollStock(admin, maxPortalId = 1) {
   const gatedIds = new Set((lootRes.data || []).map(r => r.weapon_template_id));
   const weapons = allWeapons.filter(w => gatedIds.has(w.id));
   const stock = [];
-  // 4 weapons
-  for (let slot = 1; slot <= 4; slot++) {
+  // 2 weapons (slots 1-2)
+  for (let slot = 1; slot <= 2; slot++) {
     const t = weapons.length ? weapons[Math.floor(Math.random() * weapons.length)] : null;
     if (!t) continue;
     stock.push({ slot, ...rollWeaponStock(t), name: t.name });
   }
-  // 2 consumables
-  for (let slot = 5; slot <= 6; slot++) {
+  // 2 potions (slots 3-4)
+  for (let slot = 3; slot <= 4; slot++) {
     const t = consumables.length ? consumables[Math.floor(Math.random() * consumables.length)] : null;
     if (!t) continue;
     stock.push({ slot, ...rollConsumableStock(t), name: t.name });
@@ -317,7 +317,7 @@ export async function handleShop({ request, path, method, admin, user, json }) {
   if (path === '/shop/buy' && method === 'POST') {
     const b = await body();
     const slot = parseInt(b.slot, 10);
-    if (isNaN(slot) || slot < 1 || slot > 6) return json({ error: 'invalid_slot' }, 400);
+    if (isNaN(slot) || slot < 1 || slot > 4) return json({ error: 'invalid_slot' }, 400);
     const { stock } = await ensureStock(admin, userId);
     const item = (stock || []).find(r => r.slot === slot);
     if (!item) return json({ error: 'slot_not_in_stock' }, 400);
