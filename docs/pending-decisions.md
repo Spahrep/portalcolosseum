@@ -631,6 +631,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
 
 - AP daily-grant amount and max cap — RESOLVED 2026-10-16 by code + verbatim quote (see PC-DEC-073 Notes): Spahrep verbatim "cadence 00:00 GMT, start 250, 100/day (config), cap 500 (config), missed days accumulate. Checks fire only on screen switches (store, run start). All decided." Coded: starting_ap=250, max_ap=500, daily_ap_gain=100 (migration 20261015192836 + api/lib/ap-daily.js), merged with tests.
 
+- ID: PC-DEC-076
+  Date: 2026-10-21
+  Source: Desktop session "Review weapons store PRD pricing tiers" (20261021_124750_f9ddb2)
+  Speaker: Spahrep
+  Verbatim: "I think we need that for the pricing formula before we implment the shop do we not?" / "I would like you to do thyat, but I think we also need to figure out how we do our D->S rankings also dont we?"
+  Status: OPEN
+  Notes: Spahrep reopened the weapons-store buy-price formula and tier-grading BEFORE shop implementation. The PRD's two [ASSUMPTION] tuning values (buy-price multiplier curve, sell-price discount %) were already flagged open at PC-DEC-074 sign-off (2026-10-19), and today's session confirms Spahrep wants the formula AND the D→S grade method settled before the shop ships. Session ends on the assistant's full proposal (grading fix + buy/sell price formula) awaiting Spahrep's sign-off; no ruling was given (messages_after: 0). Not applied as design until Spahrep picks the numbers. The proposal text and "would you like me to: 1/write up / 2/update docs / 3/tweak numbers" request lives in that session for recovery.
+
 ## Rejected / Superseded
 
 - ID: PC-DEC-004
