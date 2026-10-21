@@ -13,6 +13,7 @@ import { getHpWord } from '../../js/combat/hp-words.js';
 import { drawRandomDie, rollDieFace, selectMonsterGroup } from '../../js/combat/dice.js';
 import { generateLoot } from '../../js/combat/loot.js';
 import { handleCombatDev } from './dev/[...path].js';
+import { handleShop } from './shop.js';
 import {
   json,
   CORS,
@@ -272,6 +273,11 @@ async function handle(request) {
     if (path.startsWith('/dev/')) {
       const devRes = await handleCombatDev({ request, path, method, admin, user, json });
       if (devRes) return devRes;
+    }
+    // /shop* routes live in ./shop.js (PC-DEC-074/076 weapon shop).
+    if (path.startsWith('/shop')) {
+      const shopRes = await handleShop({ request, path, method, admin, user, json });
+      if (shopRes) return shopRes;
     }
     // Helper: generateOneMonster (reused by dice wiring + dev routes; defined early for scope)
     async function generateOneMonster(templateId, usedLabels) {

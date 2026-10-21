@@ -23,6 +23,7 @@ import {
 import {
   showNotReadyModal, showMenuSettings, initMenuSettings,
 } from './settings-menu.js';
+import { openShop, closeShop, isShopOpen } from './shop-app.js';
 
 // === SUPABASE CONFIGURATION ===
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
@@ -123,9 +124,11 @@ function enterLocation() {
   } else if (loc.name === 'menu') {
     // Menu / Settings panel — replaces the drunk-jester placeholder
     showMenuSettings();
+  } else if (loc.name === 'store') {
+    // Store: real shop frontend (PC shop screen)
+    openShop();
   } else {
-    // Store, Wizard Hut and Leaderboards are not built yet —
-    // show the default "not yet ready" placeholder (DrunkJester image).
+    // Wizard Hut and Leaderboards are not built yet —
     showNotReadyModal();
   }
 }
@@ -410,6 +413,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // While the "not ready" modal is open, only Escape is handled —
     // arrows/Enter must not navigate or re-trigger behind the modal.
     if (isNotReadyModalOpen() && e.key !== 'Escape') return;
+    if (isShopOpen() && e.key !== 'Escape') return;
     // When the settings modal is open, route keys through the modal handler first.
     // Arrow keys, Enter, and Escape are handled; other keys pass through.
     if (isMenuSettingsOpen()) {
@@ -446,6 +450,8 @@ document.addEventListener('DOMContentLoaded', () => {
         hideNotReadyModal();
         // Dismiss the menu/settings modal if open
         hideMenuSettings();
+        // Dismiss shop if open
+        if (isShopOpen()) closeShop();
         break;
     }
   });
@@ -455,6 +461,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('wheel', (e) => {
     // Don't navigate behind an open "not ready" modal
     if (isNotReadyModalOpen()) return;
+    if (isShopOpen()) return;
     // Same guard for the menu/settings modal
     if (isMenuSettingsOpen()) return;
     // Only handle vertical scroll, ignore horizontal
