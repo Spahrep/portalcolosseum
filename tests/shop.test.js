@@ -19,6 +19,7 @@ function mockAdmin(responder) {
       update(payload) { ctx.op = 'update'; ctx.payload = payload; return api; },
       delete() { ctx.op = 'delete'; return api; },
       eq(k, v) { ctx.filters.push(['eq', k, v]); return api; },
+      lte(k, v) { ctx.filters.push(['lte', k, v]); return api; },
       order() { return api; },
       limit() { return api; },
       single() { return finish(true); },
@@ -73,6 +74,8 @@ function defaultResponder(over = {}) {
     if (snap.table === 'weapon_template') return { data: [
       { id: 3, name: 'Greatsword', base_damage: 55, damage_range: 8, base_speed: 35, speed_range: 4, base_accuracy: 82, accuracy_range: 6, crit_base: 5, crit_range: 0, base_price: 45 },
     ] };
+    if (snap.table === 'portal_loot_mapping') return { data: [{ weapon_template_id: 3 }] };
+    if (snap.table === 'portal_run') return { data: [] };
     if (snap.table === 'consumable_template') return { data: [
       { id: 1, name: 'Potion', floor_base: 10, floor_delta: 2, window_base: 4, window_delta: 2, speed_base: 5, speed_delta: 1, crit_base: 0, crit_range: 0 },
     ] };
@@ -85,6 +88,52 @@ function defaultResponder(over = {}) {
 }
 
 describe('weapon shop backend (PC-DEC-074/076)', () => {
+  it('tier gating: only weapons mapped to portals <= best unlocked portal are stocked', async () => {
+    // Player has completed portal 1 -> best unlocked = 2. portal_loot_mapping
+    // returns weapons for portals 1 and 2; weapon 3 (Greatsword) is portal-1-only,
+    // weapon 4 (Battle Axe) is portal-2. Both should be eligible.
+    const admin = mockAdmin((snap) => {
+      const base = defaultResponder()(snap);
+      if (snap.table === 'portal_run') return { data: [{ portal_template_id: 1 }] };
+      if (snap.table === 'portal_loot_mapping') return { data: [{ weapon_template_id: 3 }, { weapon_template_id: 4 }] };
+      if (snap.table === 'weapon_template') return { data: [
+        { id: 3, name: 'Greatsword', base_damage: 55, damage_range: 8, base_speed: 35, speed_range: 4, base_accuracy: 82, accuracy_range: 6, crit_base: 5, crit_range: 0, base_price: 45 },
+        { id: 4, name: 'Battle Axe', base_damage: 50, damage_range: 7, base_speed: 38, speed_range: 4, base_accuracy: 80, accuracy_range: 6, crit_base: 5, crit_range: 0, base_price: 45 },
+      ] };
+      return base;
+    });
+    __setAdminClientForTests(admin);
+    const res = await GET(req('/shop'));
+    assert.equal(res.status, 200, await res.clone().text());
+    const body = await res.json();
+    const names = new Set(body.stock.filter(i => i.kind === 'weapon').map(i => i.name));
+    assert.ok(names.has('Greatsword'), 'portal-1 weapon available');
+    assert.ok(names.has('Battle Axe'), 'portal-2 weapon available');
+    // the portal_loot_mapping query used lte(portal_template_id, bestUnlocked=2)
+    const lootCall = admin.calls.find(c => c.table === 'portal_loot_mapping');
+    assert.ok(lootCall, 'portal_loot_mapping queried');
+    assert.ok(lootCall.filters.some(f => f[0] === 'lte' && f[1] === 'portal_template_id' && f[2] === 2), 'gated to portals <= 2');
+  });
+
+  it('tier gating: a weapon NOT in any portal loot mapping is never stocked', async () => {
+    const admin = mockAdmin((snap) => {
+      const base = defaultResponder()(snap);
+      if (snap.table === 'portal_loot_mapping') return { data: [{ weapon_template_id: 3 }] };
+      if (snap.table === 'weapon_template') return { data: [
+        { id: 3, name: 'Greatsword', base_damage: 55, damage_range: 8, base_speed: 35, speed_range: 4, base_accuracy: 82, accuracy_range: 6, crit_base: 5, crit_range: 0, base_price: 45 },
+        { id: 5, name: 'Warhammer', base_damage: 42, damage_range: 6, base_speed: 33, speed_range: 3, base_accuracy: 83, accuracy_range: 5, crit_base: 5, crit_range: 0, base_price: 45 },
+      ] };
+      return base;
+    });
+    __setAdminClientForTests(admin);
+    const res = await GET(req('/shop'));
+    assert.equal(res.status, 200, await res.clone().text());
+    const body = await res.json();
+    const names = new Set(body.stock.filter(i => i.kind === 'weapon').map(i => i.name));
+    assert.ok(names.has('Greatsword'), 'mapped weapon available');
+    assert.ok(!names.has('Warhammer'), 'unmapped weapon excluded');
+  });
+
   it('GET /shop returns stock, reroll_cost, gold, ap, can_sell_last_weapon', async () => {
     const admin = mockAdmin(defaultResponder());
     __setAdminClientForTests(admin);

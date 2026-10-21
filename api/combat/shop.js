@@ -15,6 +15,9 @@
  *
  * Stock is per-player, rolled lazily on shop open when the UTC date changes.
  * Same lazy pattern as api/lib/ap-daily.js (no cron — fires on screen switch).
+ *
+ * Tier gating: shop weapons are gated to templates mapped in portal_loot_mapping
+ * for portals <= the player's best unlocked portal (Spahrep 2026-10-21).
  */
 
 // --- config reads ---
@@ -123,16 +126,45 @@ function rollConsumableStock(tmpl) {
   };
 }
 
-// roll a full 6-slot stock: 4 weapons + 2 consumables
-async function rollStock(admin) {
-  const [wRes, cRes] = await Promise.all([
+// Determine the player's best unlocked portal (mirrors /portals PC-75 logic):
+// Portal 1 always unlocked; N>1 requires a completed run on portal N-1.
+// (Gold-unlock purchase not yet implemented, so today that means Portal 1 only —
+// but the chain logic is future-proof for when gold unlocks ship.)
+async function bestUnlockedPortal(admin, userId) {
+  try {
+    const { data: completedRuns } = await admin.from('portal_run')
+      .select('portal_template_id')
+      .eq('user_id', userId)
+      .eq('status', 'completed');
+    const completedIds = new Set((completedRuns || []).map(r => r.portal_template_id));
+    // highest portal id whose predecessor is completed (or id 1)
+    let best = 1;
+    for (let id = 2; id <= 20; id++) {
+      if (completedIds.has(id - 1)) best = id;
+      else break;
+    }
+    return best;
+  } catch (e) {
+    return 1;
+  }
+}
+
+// roll a full 6-slot stock: 4 weapons + 2 consumables.
+// Weapons are gated to templates mapped to portals <= maxPortalId (tier gating).
+async function rollStock(admin, maxPortalId = 1) {
+  const [wRes, cRes, lootRes] = await Promise.all([
     admin.from('weapon_template').select('id,name,base_damage,damage_range,base_speed,speed_range,base_accuracy,accuracy_range,crit_base,crit_range,base_price').order('id'),
     admin.from('consumable_template').select('id,name,floor_base,floor_delta,window_base,window_delta,speed_base,speed_delta,crit_base,crit_range').order('id'),
+    admin.from('portal_loot_mapping').select('weapon_template_id').lte('portal_template_id', maxPortalId),
   ]);
   if (wRes.error) throw wRes.error;
   if (cRes.error) throw cRes.error;
-  const weapons = wRes.data || [];
+  if (lootRes.error) throw lootRes.error;
+  const allWeapons = wRes.data || [];
   const consumables = cRes.data || [];
+  // tier gate: only weapons mapped to portals <= maxPortalId are shop-eligible
+  const gatedIds = new Set((lootRes.data || []).map(r => r.weapon_template_id));
+  const weapons = allWeapons.filter(w => gatedIds.has(w.id));
   const stock = [];
   // 4 weapons
   for (let slot = 1; slot <= 4; slot++) {
@@ -192,7 +224,8 @@ async function ensureStock(admin, userId) {
     const existing = await loadStock(admin, userId, today);
     if (existing) return { stock: existing, fresh: false };
   }
-  const stock = await rollStock(admin);
+  const maxPortal = await bestUnlockedPortal(admin, userId);
+  const stock = await rollStock(admin, maxPortal);
   await persistStock(admin, userId, stock);
   return { stock, fresh: true };
 }
@@ -210,7 +243,6 @@ async function countWeapons(admin, userId) {
 // decorate persisted stock rows into the API contract shape
 function decorateStock(rows, cfg) {
   return rows.map(r => {
-    const base = r.base_price ?? Number(r.base_price) ?? 45;
     const qm = Number(r.quality_multiplier) || 1;
     const buy = buyPriceOf(Number(r.base_price) || 45, qm);
     if (r.kind === 'weapon') {
@@ -282,15 +314,14 @@ export async function handleShop({ request, path, method, admin, user, json }) {
   }
 
   // POST /shop/buy {slot}
-    if (path === '/shop/buy' && method === 'POST') {
-      const b = await body();
-      const slot = parseInt(b.slot, 10);
+  if (path === '/shop/buy' && method === 'POST') {
+    const b = await body();
+    const slot = parseInt(b.slot, 10);
     if (isNaN(slot) || slot < 1 || slot > 6) return json({ error: 'invalid_slot' }, 400);
-    const today = utcToday();
     const { stock } = await ensureStock(admin, userId);
     const item = (stock || []).find(r => r.slot === slot);
     if (!item) return json({ error: 'slot_not_in_stock' }, 400);
-    const { gold, ap } = await getGoldAp(admin, userId);
+    const { gold } = await getGoldAp(admin, userId);
     const qm = Number(item.quality_multiplier) || 1;
     const buyPrice = buyPriceOf(Number(item.base_price) || 45, qm);
     if (gold < buyPrice) return json({ error: 'insufficient_gold' }, 400);
@@ -342,9 +373,8 @@ export async function handleShop({ request, path, method, admin, user, json }) {
     const rerollCount = Number(profRes.data?.shop_reroll_count) || 0;
     const rerollCost = Math.round(cfg.reroll_base_price * Math.pow(cfg.reroll_price_multiplier, rerollCount));
     if (gold < rerollCost) return json({ error: 'insufficient_gold' }, 400);
-    const today = utcToday();
-    const { stock } = await ensureStock(admin, userId);
-    const fresh = await rollStock(admin);
+    const maxPortal = await bestUnlockedPortal(admin, userId);
+    const fresh = await rollStock(admin, maxPortal);
     await persistStock(admin, userId, fresh);
     await admin.from('profiles').update({ gold: gold - rerollCost }).eq('id', userId);
     const nextCount = rerollCount + 1;
