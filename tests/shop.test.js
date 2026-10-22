@@ -247,6 +247,7 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
       assert.equal(body.items[0].sell_price, Math.round(45 * 1.0 * 0.42));
       assert.equal(body.items[1].sell_price, Math.round(45 * 1.2 * 0.42));
       assert.ok(body.items[0].instance_id, 'has instance_id for sell');
+      assert.equal(body.gold, 1000, 'includes current gold for the sell header');
     });
 
     it('POST /shop/sell grants gold and deletes the instance', async () => {

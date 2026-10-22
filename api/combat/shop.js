@@ -300,6 +300,7 @@ export async function handleShop({ request, path, method, admin, user, json }) {
       .eq('user_id', userId).order('id');
     if (error) return json({ error: 'Internal server error' }, 500);
     const weaponCount = await countWeapons(admin, userId);
+    const { gold } = await getGoldAp(admin, userId);
     const items = (instances || []).map(inst => {
       const basePrice = Number(inst.weapon_template?.base_price) || 45;
       const qm = Number(inst.quality_multiplier) || 1;
@@ -312,7 +313,7 @@ export async function handleShop({ request, path, method, admin, user, json }) {
         sell_price: sellPriceOf(basePrice, qm, cfg.sell_recovery_rate),
       };
     });
-    return json({ items, can_sell_last_weapon: weaponCount > 1 });
+    return json({ items, can_sell_last_weapon: weaponCount > 1, gold });
   }
 
   // POST /shop/buy {slot}

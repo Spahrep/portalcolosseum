@@ -1,6 +1,7 @@
 /**
  * Portal Colosseum - Shop Screen (leaf module)
  * Renders vendor1.jpg backdrop + text item cards for weapons/consumables.
+ * Two views: buy (the daily stock) and sell (your owned weapons).
  * Uses apiCall to /combat/shop* endpoints. No imports from battle-app, cli-app, admin-app.
  * Exports: initShop, openShop, closeShop, isShopOpen
  */
@@ -23,7 +24,8 @@ let focusIndex = -1;
 let focusables = [];
 
 // --- keyboard navigation (mouse-free, matches the game's arrow-key feel) ---
-// Focusable order after each render: [card1..card4, reroll, apreset, sell].
+// Focusable order after each render: the item/sell cards, then the header
+// action buttons (reroll, AP reset) and the sell/back button.
 // ArrowLeft/Up = prev, ArrowRight/Down = next, Enter = activate, Escape = close.
 function collectFocusables() {
   if (!modal) return [];
@@ -31,16 +33,18 @@ function collectFocusables() {
   const reroll = modal.querySelector('#shop-reroll-btn');
   const apreset = modal.querySelector('#shop-apreset-btn');
   const sell = modal.querySelector('.shop-sell-btn');
+  const back = modal.querySelector('.shop-back-btn');
   const list = [...cards];
   if (reroll) list.push(reroll);
   if (apreset) list.push(apreset);
   if (sell) list.push(sell);
+  if (back) list.push(back);
   return list;
 }
 
 function applyFocus() {
   if (!modal) return;
-  modal.querySelectorAll('.shop-item-card, .shop-buy-btn, #shop-reroll-btn, #shop-apreset-btn, .shop-sell-btn')
+  modal.querySelectorAll('.shop-item-card, .shop-buy-btn, .shop-sell-item-btn, #shop-reroll-btn, #shop-apreset-btn, .shop-sell-btn, .shop-back-btn')
     .forEach(el => el.classList.remove('shop-focused'));
   if (focusIndex < 0 || focusIndex >= focusables.length) return;
   const el = focusables[focusIndex];
@@ -59,8 +63,8 @@ function activateFocused() {
   const el = focusables[focusIndex];
   if (!el) return;
   if (el.classList.contains('shop-item-card')) {
-    const buyBtn = el.querySelector('.shop-buy-btn');
-    if (buyBtn) buyBtn.click();
+    const btn = el.querySelector('.shop-buy-btn') || el.querySelector('.shop-sell-item-btn');
+    if (btn) btn.click();
   } else if (typeof el.click === 'function') {
     el.click();
   }
@@ -112,20 +116,18 @@ function tierBadge(tier) {
   return `<span class="shop-tier-badge" style="color:${color};border-color:${color}">${tier}</span>`;
 }
 
+function statsLine(item) {
+  if (item.kind === 'weapon' || (item.damage != null && item.speed != null)) {
+    return `<div class="shop-stats">DMG ${item.damage} • SPD ${item.speed} • ACC ${item.accuracy} • CRIT ${item.crit_chance}%</div>`;
+  }
+  return `<div class="shop-stats">Floor ${item.rolled_floor} • Window ${item.rolled_window}</div>`;
+}
+
 function renderItemCard(item) {
   const isWeapon = item.kind === 'weapon';
-  let statsHtml = '';
-  if (isWeapon) {
-    statsHtml = `
-      <div class="shop-stats">DMG ${item.damage} • SPD ${item.speed} • ACC ${item.accuracy} • CRIT ${item.crit_chance}%</div>
-    `;
-  } else {
-    statsHtml = `
-      <div class="shop-stats">Floor ${item.rolled_floor} • Window ${item.rolled_window}</div>
-    `;
-  }
+  const statsHtml = statsLine(item);
   return `
-    <div class="shop-item-card" data-slot="${item.slot}" tabindex="0">
+    <div class="shop-item-card" data-slot="${item.slot}" data-kind="${item.kind}" tabindex="0">
       <div class="shop-item-header">
         <span class="shop-item-name">${item.name}</span>
         ${tierBadge(item.tier)}
@@ -137,14 +139,82 @@ function renderItemCard(item) {
   `;
 }
 
+function renderSellCard(item) {
+  return `
+    <div class="shop-item-card" data-instance="${item.instance_id}" data-kind="weapon" tabindex="0">
+      <div class="shop-item-header">
+        <span class="shop-item-name">${item.name}</span>
+        ${tierBadge(item.tier)}
+      </div>
+      <div class="shop-stats">DMG ${item.damage} • SPD ${item.speed} • ACC ${item.accuracy}</div>
+      <div class="shop-item-price">${item.sell_price}g <span class="shop-qmult">×${item.quality_multiplier}</span></div>
+      <button class="shop-sell-item-btn" data-instance="${item.instance_id}">SELL</button>
+    </div>
+  `;
+}
+
 function renderSellSection(canSell) {
   if (!canSell) return '<div class="shop-sell-section">No weapons to sell</div>';
   return `
     <div class="shop-sell-section">
       <button class="shop-sell-btn">SELL A WEAPON</button>
-      <span class="shop-sell-note">(opens your backpack to sell)</span>
+      <span class="shop-sell-note">(sell one of your owned weapons)</span>
     </div>
   `;
+}
+
+// --- SELL VIEW ---
+async function openSellView() {
+  if (!stockGrid) return;
+  try {
+    const inv = await apiCall('/shop/inventory');
+    const items = (inv.items || []).filter(i => i.instance_id);
+    headerEl.innerHTML = `
+      <span>SELLING — GOLD: ${inv.gold ?? currentData?.gold ?? '?'}</span>
+      <button class="shop-back-btn">← BACK</button>
+    `;
+    let body;
+    if (!items.length) {
+      body = '<div class="shop-sell-section">No weapons to sell</div>';
+    } else {
+      body = items.map(renderSellCard).join('');
+    }
+    stockGrid.innerHTML = body;
+    attachSellListeners();
+    focusables = collectFocusables();
+    focusIndex = focusables.length ? 0 : -1;
+    applyFocus();
+  } catch (e) {
+    if (stockGrid) stockGrid.innerHTML = `<div class="shop-error">Failed to load inventory: ${e.message}</div>`;
+  }
+}
+
+function attachSellListeners() {
+  if (!modal) return;
+  // Each sell card's button sells that weapon, then re-shows the sell view.
+  modal.querySelectorAll('.shop-sell-item-btn').forEach(btn => {
+    btn.onclick = async () => {
+      const instanceId = btn.dataset.instance;
+      btn.disabled = true;
+      try {
+        const res = await apiCall('/shop/sell', 'POST', { instance_id: instanceId });
+        if (res.ok) {
+          await openSellView(); // re-render list (sold one gone, gold updated)
+        } else {
+          alert(res.error || 'Sell failed');
+        }
+      } catch (e) {
+        alert('Sell error: ' + e.message);
+      }
+    };
+  });
+  // Back to the buy view.
+  const backBtn = modal.querySelector('.shop-back-btn');
+  if (backBtn) {
+    backBtn.onclick = async () => {
+      await refreshShop();
+    };
+  }
 }
 
 function attachActionListeners() {
@@ -168,34 +238,11 @@ function attachActionListeners() {
       }
     };
   });
-  // Sell
-    const sellBtn = modal.querySelector('.shop-sell-btn');
-    if (sellBtn) {
-      sellBtn.onclick = async () => {
-        sellBtn.disabled = true;
-        try {
-          const inv = await apiCall('/shop/inventory');
-          const items = (inv.items || []).filter(i => i.instance_id);
-          if (!items.length) { alert('No weapons to sell'); return; }
-          const lines = items.map(i => `${i.name} [${i.tier}] — ${i.sell_price}g (id ${i.instance_id})`).join('\n');
-          const pick = prompt(`Sell which weapon? (enter instance id)\n\n${lines}`);
-          if (!pick) return;
-          const instanceId = parseInt(pick, 10);
-          if (isNaN(instanceId)) { alert('Invalid id'); return; }
-          const res = await apiCall('/shop/sell', 'POST', { instance_id: instanceId });
-          if (res.ok) {
-            alert(`Sold for ${res.gold_gained}g`);
-            await refreshShop();
-          } else {
-            alert(res.error || 'Sell failed');
-          }
-        } catch (e) {
-          alert('Sell error: ' + e.message);
-        } finally {
-          sellBtn.disabled = false;
-        }
-      };
-    }
+  // Sell (entry to the sell view)
+  const sellBtn = modal.querySelector('.shop-sell-btn');
+  if (sellBtn) {
+    sellBtn.onclick = openSellView;
+  }
   // Reroll
   const rerollBtn = modal.querySelector('#shop-reroll-btn');
   if (rerollBtn) {
