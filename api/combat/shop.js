@@ -358,17 +358,26 @@ export async function handleShop({ request, path, method, admin, user, json }) {
     const b = await body();
     const instanceId = parseInt(b.instance_id, 10);
     if (isNaN(instanceId) || instanceId <= 0) return json({ error: 'invalid_instance_id' }, 400);
-    const { data: wInst } = await admin.from('weapon_instance').select('id, user_id, template_id, quality_multiplier, tier, damage').eq('id', instanceId).eq('user_id', userId).maybeSingle();
-    if (!wInst) return json({ error: 'not_owned' }, 400);
+    // no-sell-last-weapon: player must keep at least 1 weapon (cheap check before the delete)
     const weaponCount = await countWeapons(admin, userId);
     if (weaponCount <= 1) return json({ error: 'no_sell_last_weapon' }, 400);
+    // DELETE first and atomically: only the request that actually deletes a row
+    // grants gold. A duplicate/replayed request finds the row already gone and
+    // returns not_owned — it cannot double-pay.
+    const { data: deleted, error: delErr } = await admin.from('weapon_instance')
+      .delete().eq('id', instanceId).eq('user_id', userId).select('id, template_id, quality_multiplier');
+    if (delErr) {
+      console.error('shop sell delete error', delErr);
+      return json({ error: 'Internal server error' }, 500);
+    }
+    const wInst = Array.isArray(deleted) ? deleted[0] : deleted;
+    if (!wInst) return json({ error: 'not_owned' }, 400);
     const tmplRes = await admin.from('weapon_template').select('base_price').eq('id', wInst.template_id).maybeSingle();
     const basePrice = Number(tmplRes.data?.base_price) || 45;
     const qm = Number(wInst.quality_multiplier) || 1;
     const sellPrice = sellPriceOf(basePrice, qm, cfg.sell_recovery_rate);
     const { gold } = await getGoldAp(admin, userId);
     await admin.from('profiles').update({ gold: gold + sellPrice }).eq('id', userId);
-    await admin.from('weapon_instance').delete().eq('id', instanceId);
     return json({ ok: true, gold_gained: sellPrice, new_gold: gold + sellPrice });
   }
 

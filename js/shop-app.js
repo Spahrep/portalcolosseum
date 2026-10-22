@@ -205,6 +205,8 @@ function attachSellListeners() {
         }
       } catch (e) {
         alert('Sell error: ' + e.message);
+      } finally {
+        btn.disabled = false;
       }
     };
   });

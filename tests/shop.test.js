@@ -253,7 +253,8 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
     it('POST /shop/sell grants gold and deletes the instance', async () => {
       const admin = mockAdmin((snap) => {
         const base = defaultResponder()(snap);
-        if (snap.table === 'weapon_instance' && snap.op === 'select' && snap.filters.some(f => f[0] === 'eq' && f[1] === 'id')) {
+        // the sell handler now deletes and returns the deleted row (atomic double-pay guard)
+        if (snap.table === 'weapon_instance' && snap.op === 'delete' && snap.filters.some(f => f[0] === 'eq' && f[1] === 'id')) {
           return { data: { id: 5, user_id: 'user-1', template_id: 3, quality_multiplier: 1.0, tier: 'C', damage: 50 } };
         }
         if (snap.table === 'weapon_instance' && snap.op === 'select') return { data: [{ id: 5 }, { id: 6 }], count: 2 };
@@ -269,6 +270,34 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
       assert.equal(body.new_gold, 1000 + Math.round(45 * 1.0 * 0.42));
       const del = admin.calls.find(c => c.table === 'weapon_instance' && c.op === 'delete');
       assert.ok(del, 'instance deleted');
+    });
+
+    it('POST /shop/sell returns not_owned on a duplicate sell (double-pay guard)', async () => {
+      // First call deletes and returns the weapon; a replayed call must NOT return
+      // it again (row gone) so the handler returns not_owned and does not double-pay.
+      const deleteCount = { n: 0 };
+      const admin = mockAdmin((snap) => {
+        const base = defaultResponder()(snap);
+        if (snap.table === 'weapon_instance' && snap.op === 'delete' && snap.filters.some(f => f[0] === 'eq' && f[1] === 'id')) {
+          deleteCount.n += 1;
+          return deleteCount.n === 1
+            ? { data: { id: 5, user_id: 'user-1', template_id: 3, quality_multiplier: 1.0, tier: 'C', damage: 50 } }
+            : { data: null }; // 2nd delete finds the row already gone
+        }
+        if (snap.table === 'weapon_instance' && snap.op === 'select') return { data: [{ id: 5 }], count: 2 };
+        if (snap.table === 'weapon_template') return { data: { id: 3, name: 'Greatsword', base_price: 45 } };
+        return base;
+      });
+      __setAdminClientForTests(admin);
+      // two rapid sells of the same instance
+      const r1 = await POST(req('/shop/sell', 'POST', { instance_id: 5 }));
+      const r2 = await POST(req('/shop/sell', 'POST', { instance_id: 5 }));
+      const b1 = await r1.json();
+      const b2 = await r2.json();
+      assert.equal(r1.status, 200, JSON.stringify(b1));
+      assert.ok(b1.ok, 'first sell succeeds');
+      assert.equal(r2.status, 400, 'duplicate sell must be rejected');
+      assert.equal(b2.error, 'not_owned');
     });
 
     it('POST /shop/ap-reset resets reroll cost and spends AP', async () => {
