@@ -19,6 +19,76 @@ let modal = null;
 let stockGrid = null;
 let headerEl = null;
 let currentData = null;
+let focusIndex = -1;
+let focusables = [];
+
+// --- keyboard navigation (mouse-free, matches the game's arrow-key feel) ---
+// Focusable order after each render: [card1..card4, reroll, apreset, sell].
+// ArrowLeft/Up = prev, ArrowRight/Down = next, Enter = activate, Escape = close.
+function collectFocusables() {
+  if (!modal) return [];
+  const cards = Array.from(modal.querySelectorAll('.shop-item-card'));
+  const reroll = modal.querySelector('#shop-reroll-btn');
+  const apreset = modal.querySelector('#shop-apreset-btn');
+  const sell = modal.querySelector('.shop-sell-btn');
+  const list = [...cards];
+  if (reroll) list.push(reroll);
+  if (apreset) list.push(apreset);
+  if (sell) list.push(sell);
+  return list;
+}
+
+function applyFocus() {
+  if (!modal) return;
+  modal.querySelectorAll('.shop-item-card, .shop-buy-btn, #shop-reroll-btn, #shop-apreset-btn, .shop-sell-btn')
+    .forEach(el => el.classList.remove('shop-focused'));
+  if (focusIndex < 0 || focusIndex >= focusables.length) return;
+  const el = focusables[focusIndex];
+  if (!el) return;
+  el.classList.add('shop-focused');
+  if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+}
+
+function moveFocus(delta) {
+  if (!focusables.length) return;
+  focusIndex = (focusIndex + delta + focusables.length) % focusables.length;
+  applyFocus();
+}
+
+function activateFocused() {
+  const el = focusables[focusIndex];
+  if (!el) return;
+  if (el.classList.contains('shop-item-card')) {
+    const buyBtn = el.querySelector('.shop-buy-btn');
+    if (buyBtn) buyBtn.click();
+  } else if (typeof el.click === 'function') {
+    el.click();
+  }
+}
+
+function handleShopKeydown(e) {
+  if (!isShopOpen()) return;
+  switch (e.key) {
+    case 'ArrowLeft':
+    case 'ArrowUp':
+      e.preventDefault();
+      moveFocus(-1);
+      break;
+    case 'ArrowRight':
+    case 'ArrowDown':
+      e.preventDefault();
+      moveFocus(1);
+      break;
+    case 'Enter':
+      e.preventDefault();
+      activateFocused();
+      break;
+    case 'Escape':
+      e.preventDefault();
+      closeShop();
+      break;
+  }
+}
 
 function createModalIfNeeded() {
   if (modal) return;
@@ -55,7 +125,7 @@ function renderItemCard(item) {
     `;
   }
   return `
-    <div class="shop-item-card" data-slot="${item.slot}">
+    <div class="shop-item-card" data-slot="${item.slot}" tabindex="0">
       <div class="shop-item-header">
         <span class="shop-item-name">${item.name}</span>
         ${tierBadge(item.tier)}
@@ -172,6 +242,10 @@ function renderShop(data) {
   const sellHtml = renderSellSection(data.can_sell_last_weapon);
   stockGrid.innerHTML = cards + sellHtml;
   attachActionListeners();
+  // rebuild keyboard focus list and land on the first item
+  focusables = collectFocusables();
+  focusIndex = focusables.length ? 0 : -1;
+  applyFocus();
 }
 
 async function refreshShop() {
@@ -198,6 +272,8 @@ export function openShop() {
 export function closeShop() {
   if (modal) {
     modal.hidden = true;
+    focusIndex = -1;
+    focusables = [];
     // clear selection like other modals
     document.querySelectorAll('.location-marker').forEach(m => m.classList.remove('selected', 'visited'));
   }
@@ -206,11 +282,7 @@ export function closeShop() {
 export function initShop() {
   createModalIfNeeded();
   // global esc support if needed (game-app already wires Escape to call close if open)
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && isShopOpen()) {
-      closeShop();
-    }
-  });
+  document.addEventListener('keydown', handleShopKeydown);
 }
 
 // Auto-init on module load for convenience (DOM ready later)
