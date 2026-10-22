@@ -1,6 +1,6 @@
 # Weapon Pricing & Grading System
 
-**Status:** Proposed — ready for Spahrep review and sign-off  
+**Status:** ✅ Accepted — signed off by Spahrep (PC-DEC-076, 2026-10-21)  
 **Date:** 2026-10-21  
 **Audience:** Implementation of the weapon shop (docs/prds/weapon-shop-prd.md)
 
@@ -103,4 +103,4 @@ This resolves the two [ASSUMPTION] items left in the weapon shop PRD and aligns 
 **Next:** Update PRD, add to pending-decisions.md, implement grading fix + power-based pricing in weapon generation and shop.
 
 ---
-Approved model pending Spahrep sign-off.
+Accepted by Spahrep 2026-10-21 (PC-DEC-076).
