@@ -353,52 +353,29 @@ export async function handleShop({ request, path, method, admin, user, json }) {
     }
   }
 
-  // POST /shop/sell {instance_id}
-    if (path === '/shop/sell' && method === 'POST') {
-      const b = await body();
-      const instanceId = parseInt(b.instance_id, 10);
-      if (isNaN(instanceId) || instanceId <= 0) return json({ error: 'invalid_instance_id' }, 400);
-      // no-sell-last-weapon: player must keep at least 1 weapon (cheap check before the delete)
-      const weaponCount = await countWeapons(admin, userId);
-      if (weaponCount <= 1) return json({ error: 'no_sell_last_weapon' }, 400);
-      // can't sell a weapon that's equipped in an ACTIVE run (it's in use)
-      const { data: activeRef, error: activeErr } = await admin.from('portal_run')
-        .select('id').eq('user_id', userId).eq('status', 'active')
-        .or(`hand_l_weapon_id.eq.${instanceId},hand_r_weapon_id.eq.${instanceId},belt_weapon_id.eq.${instanceId}`)
-        .maybeSingle();
-      if (activeErr) {
-        console.error('shop sell active-run check error', activeErr);
-        return json({ error: 'Internal server error' }, 500);
-      }
-      if (activeRef) return json({ error: 'weapon_in_active_run' }, 400);
-      // clear the weapon's references in non-active runs so the FK doesn't block the delete
-      const { error: clearErr } = await admin.from('portal_run')
-        .update({ hand_l_weapon_id: null, hand_r_weapon_id: null, belt_weapon_id: null })
-        .eq('user_id', userId)
-        .or(`hand_l_weapon_id.eq.${instanceId},hand_r_weapon_id.eq.${instanceId},belt_weapon_id.eq.${instanceId}`);
-      if (clearErr) {
-        console.error('shop sell clear-run-refs error', clearErr);
-        return json({ error: 'Internal server error' }, 500);
-      }
-      // DELETE first and atomically: only the request that actually deletes a row
-      // grants gold. A duplicate/replayed request finds the row already gone and
-      // returns not_owned — it cannot double-pay.
-      const { data: deleted, error: delErr } = await admin.from('weapon_instance')
-        .delete().eq('id', instanceId).eq('user_id', userId).select('id, template_id, quality_multiplier');
-      if (delErr) {
-        console.error('shop sell delete error', delErr);
-        return json({ error: 'Internal server error' }, 500);
-      }
-      const wInst = Array.isArray(deleted) ? deleted[0] : deleted;
-      if (!wInst) return json({ error: 'not_owned' }, 400);
-      const tmplRes = await admin.from('weapon_template').select('base_price').eq('id', wInst.template_id).maybeSingle();
-      const basePrice = Number(tmplRes.data?.base_price) || 45;
-      const qm = Number(wInst.quality_multiplier) || 1;
-      const sellPrice = sellPriceOf(basePrice, qm, cfg.sell_recovery_rate);
-      const { gold } = await getGoldAp(admin, userId);
-      await admin.from('profiles').update({ gold: gold + sellPrice }).eq('id', userId);
-      return json({ ok: true, gold_gained: sellPrice, new_gold: gold + sellPrice });
+  // POST /shop/sell {instance_id} — atomic single-RPC sell (fast: 1 DB round-trip)
+  if (path === '/shop/sell' && method === 'POST') {
+    const b = await body();
+    const instanceId = parseInt(b.instance_id, 10);
+    if (isNaN(instanceId) || instanceId <= 0) return json({ error: 'invalid_instance_id' }, 400);
+    // one RPC does ownership + no-sell-last + active-run checks, clears run FK refs,
+    // deletes, and pays gold inside a single transaction.
+    let rpc;
+    try {
+      const rpcRes = await admin.rpc('sell_weapon', {
+        p_user_id: userId,
+        p_instance_id: instanceId,
+        p_recovery_rate: cfg.sell_recovery_rate,
+      });
+      if (rpcRes.error) throw rpcRes.error;
+      rpc = rpcRes.data;
+    } catch (e) {
+      console.error('shop sell RPC error', e);
+      return json({ error: 'Internal server error' }, 500);
     }
+    if (!rpc || rpc.error) return json({ error: rpc?.error || 'sell_failed' }, 400);
+    return json(rpc);
+  }
 
   // POST /shop/reroll
   if (path === '/shop/reroll' && method === 'POST') {

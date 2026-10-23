@@ -84,6 +84,7 @@ function defaultResponder(over = {}) {
     if (snap.table === 'weapon_instance' && snap.op === 'delete') return { data: null };
     if (snap.table === 'rpc:generate_weapon') return { data: { id: 99, damage: 50, speed: 30, accuracy: 80, grade: 'C' } };
     if (snap.table === 'rpc:generate_consumable_instance') return { data: { id: 88 } };
+    if (snap.table === 'rpc:sell_weapon') return { data: { ok: true, gold_gained: 18, new_gold: 1018 } };
     return { data: null };
   };
 }
@@ -200,11 +201,7 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
   it('POST /shop/sell rejects selling the last weapon (no_sell_last_weapon)', async () => {
     const admin = mockAdmin((snap) => {
       const base = defaultResponder()(snap);
-      // exactly 1 owned weapon -> cannot sell
-      if (snap.table === 'weapon_instance' && snap.op === 'select') return { data: [{ id: 5, user_id: 'user-1' }] };
-      if (snap.table === 'weapon_instance' && snap.op === 'select' && snap.filters.some(f => f[0] === 'eq' && f[1] === 'id')) {
-        return { data: { id: 5, user_id: 'user-1', template_id: 3, quality_multiplier: 1, tier: 'C', damage: 50 } };
-      }
+      if (snap.table === 'rpc:sell_weapon') return { data: { error: 'no_sell_last_weapon' } };
       return base;
     });
     __setAdminClientForTests(admin);
@@ -251,62 +248,40 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
       assert.equal(body.gold, 1000, 'includes current gold for the sell header');
     });
 
-    it('POST /shop/sell grants gold and deletes the instance', async () => {
-      const admin = mockAdmin((snap) => {
-        const base = defaultResponder()(snap);
-        // the sell handler now deletes and returns the deleted row (atomic double-pay guard)
-        if (snap.table === 'weapon_instance' && snap.op === 'delete' && snap.filters.some(f => f[0] === 'eq' && f[1] === 'id')) {
-          return { data: { id: 5, user_id: 'user-1', template_id: 3, quality_multiplier: 1.0, tier: 'C', damage: 50 } };
-        }
-        if (snap.table === 'weapon_instance' && snap.op === 'select') return { data: [{ id: 5 }, { id: 6 }], count: 2 };
-        if (snap.table === 'weapon_template') return { data: { id: 3, name: 'Greatsword', base_price: 45 } };
-        return base;
-      });
+  it('POST /shop/sell calls the sell_weapon RPC and returns its result', async () => {
+      const admin = mockAdmin(defaultResponder());
       __setAdminClientForTests(admin);
       const res = await POST(req('/shop/sell', 'POST', { instance_id: 5 }));
       assert.equal(res.status, 200, await res.clone().text());
       const body = await res.json();
       assert.equal(body.ok, true);
-      assert.equal(body.gold_gained, Math.round(45 * 1.0 * 0.42));
-      assert.equal(body.new_gold, 1000 + Math.round(45 * 1.0 * 0.42));
-      const del = admin.calls.find(c => c.table === 'weapon_instance' && c.op === 'delete');
-      assert.ok(del, 'instance deleted');
+      assert.equal(body.gold_gained, 18);
+      assert.equal(body.new_gold, 1018);
+      // a single sell_weapon RPC was called (not a multi-query chain)
+      const rpc = admin.calls.filter(c => c.table === 'rpc:sell_weapon');
+      assert.equal(rpc.length, 1, 'sell_weapon RPC called exactly once');
+      assert.equal(rpc[0].payload.p_user_id, 'user-1');
+      assert.equal(rpc[0].payload.p_instance_id, 5);
     });
 
-    it('POST /shop/sell returns not_owned on a duplicate sell (double-pay guard)', async () => {
-      // First call deletes and returns the weapon; a replayed call must NOT return
-      // it again (row gone) so the handler returns not_owned and does not double-pay.
-      const deleteCount = { n: 0 };
+    it('POST /shop/sell returns the RPC error (e.g. not_owned on duplicate/replay)', async () => {
       const admin = mockAdmin((snap) => {
         const base = defaultResponder()(snap);
-        if (snap.table === 'weapon_instance' && snap.op === 'delete' && snap.filters.some(f => f[0] === 'eq' && f[1] === 'id')) {
-          deleteCount.n += 1;
-          return deleteCount.n === 1
-            ? { data: { id: 5, user_id: 'user-1', template_id: 3, quality_multiplier: 1.0, tier: 'C', damage: 50 } }
-            : { data: null }; // 2nd delete finds the row already gone
-        }
-        if (snap.table === 'weapon_instance' && snap.op === 'select') return { data: [{ id: 5 }], count: 2 };
-        if (snap.table === 'weapon_template') return { data: { id: 3, name: 'Greatsword', base_price: 45 } };
+        if (snap.table === 'rpc:sell_weapon') return { data: { error: 'not_owned' } };
         return base;
       });
       __setAdminClientForTests(admin);
-      // two rapid sells of the same instance
-      const r1 = await POST(req('/shop/sell', 'POST', { instance_id: 5 }));
-      const r2 = await POST(req('/shop/sell', 'POST', { instance_id: 5 }));
-      const b1 = await r1.json();
-      const b2 = await r2.json();
-      assert.equal(r1.status, 200, JSON.stringify(b1));
-      assert.ok(b1.ok, 'first sell succeeds');
-      assert.equal(r2.status, 400, 'duplicate sell must be rejected');
-      assert.equal(b2.error, 'not_owned');
+      // a replay where the row is already gone
+      const res = await POST(req('/shop/sell', 'POST', { instance_id: 5 }));
+      assert.equal(res.status, 400);
+      const body = await res.json();
+      assert.equal(body.error, 'not_owned');
     });
 
-    it('POST /shop/sell rejects a weapon equipped in an active run', async () => {
+    it('POST /shop/sell surfaces weapon_in_active_run from the RPC', async () => {
       const admin = mockAdmin((snap) => {
         const base = defaultResponder()(snap);
-        // the weapon is referenced by an ACTIVE run -> sell must be rejected
-        if (snap.table === 'portal_run' && snap.op === 'select') return { data: { id: 240, status: 'active' } };
-        if (snap.table === 'weapon_instance' && snap.op === 'select') return { data: [{ id: 5 }, { id: 6 }], count: 2 };
+        if (snap.table === 'rpc:sell_weapon') return { data: { error: 'weapon_in_active_run' } };
         return base;
       });
       __setAdminClientForTests(admin);

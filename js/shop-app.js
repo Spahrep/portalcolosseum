@@ -195,18 +195,26 @@ function attachSellListeners() {
   modal.querySelectorAll('.shop-sell-item-btn').forEach(btn => {
     btn.onclick = async () => {
       const instanceId = btn.dataset.instance;
+      const card = btn.closest('.shop-item-card');
       btn.disabled = true;
+      const orig = btn.textContent;
+      btn.textContent = 'SELLING…';
+      if (card) card.classList.add('shop-selling');
       try {
         const res = await apiCall('/shop/sell', 'POST', { instance_id: instanceId });
         if (res.ok) {
           await openSellView(); // re-render list (sold one gone, gold updated)
         } else {
+          btn.textContent = orig;
+          btn.disabled = false;
+          if (card) card.classList.remove('shop-selling');
           alert(res.error || 'Sell failed');
         }
       } catch (e) {
-        alert('Sell error: ' + e.message);
-      } finally {
+        btn.textContent = orig;
         btn.disabled = false;
+        if (card) card.classList.remove('shop-selling');
+        alert('Sell error: ' + e.message);
       }
     };
   });
