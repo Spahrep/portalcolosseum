@@ -198,11 +198,16 @@ function attachSellListeners() {
       const card = btn.closest('.shop-item-card');
       btn.disabled = true;
       const orig = btn.textContent;
+      // INSTANT visual cue — always show BEFORE the network call returns
       btn.textContent = 'SELLING…';
       if (card) card.classList.add('shop-selling');
       try {
         const res = await apiCall('/shop/sell', 'POST', { instance_id: instanceId });
         if (res.ok) {
+          // hold a clear success confirmation so even an instant response is seen
+          btn.textContent = 'SOLD ✓';
+          if (card) { card.classList.remove('shop-selling'); card.classList.add('shop-sold'); }
+          await new Promise(r => setTimeout(r, 380));
           await openSellView(); // re-render list (sold one gone, gold updated)
         } else {
           btn.textContent = orig;
@@ -233,18 +238,31 @@ function attachActionListeners() {
   modal.querySelectorAll('.shop-buy-btn').forEach(btn => {
     btn.onclick = async () => {
       const slot = btn.dataset.slot;
+      const card = btn.closest('.shop-item-card');
       btn.disabled = true;
+      const orig = btn.textContent;
+      // INSTANT visual cue before the network call returns
+      btn.textContent = 'BUYING…';
+      if (card) card.classList.add('shop-selling');
       try {
         const res = await apiCall('/shop/buy', 'POST', { slot });
         if (res.ok) {
+          // hold a clear success confirmation so even an instant response is seen
+          btn.textContent = 'BOUGHT ✓';
+          if (card) { card.classList.remove('shop-selling'); card.classList.add('shop-sold'); }
+          await new Promise(r => setTimeout(r, 380));
           await refreshShop();
         } else {
+          btn.textContent = orig;
+          btn.disabled = false;
+          if (card) card.classList.remove('shop-selling');
           alert(res.error || 'Buy failed');
         }
       } catch (e) {
-        alert('Buy error: ' + e.message);
-      } finally {
+        btn.textContent = orig;
         btn.disabled = false;
+        if (card) card.classList.remove('shop-selling');
+        alert('Buy error: ' + e.message);
       }
     };
   });
