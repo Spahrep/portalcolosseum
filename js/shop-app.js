@@ -130,6 +130,46 @@ function clearShopMessage() {
   if (messageEl) messageEl.hidden = true;
 }
 
+// Map a backend error object to player-facing prose (in the vendor's voice).
+// The backend keeps stable codes (API/tests); this layer makes them human.
+function shopErrorMessage(err) {
+  if (!err || typeof err === 'string') return err || 'Something went wrong.';
+  const code = err.error || err.code;
+  const need = err.need, have = err.have;
+  switch (code) {
+    case 'insufficient_gold':
+      return `That costs ${need} gold — you only have ${have}. Run a portal or sell something to raise the funds.`;
+    case 'insufficient_ap':
+      return `You need ${need} AP — you only have ${have}. It refreshes at midnight.`;
+    case 'no_sell_last_weapon':
+      return "Ye can't sell yer last weapon — ye'd be fighting bare-handed!";
+    case 'weapon_in_active_run':
+      return "That weapon's in a run right now — finish or abandon it first.";
+    case 'not_owned':
+      return "That weapon isn't yours to sell.";
+    case 'slot_not_in_stock':
+      return "That's already gone.";
+    case 'invalid_slot':
+    case 'invalid_instance_id':
+      return 'That selection is no longer valid.';
+    default:
+      return err.message || 'Something went wrong.';
+  }
+}
+
+// apiCall throws on non-2xx with the raw JSON body as e.message. Parse it back
+// into an object so shopErrorMessage can map it; fall back to the raw message.
+function shopErrorFromException(e) {
+  if (!e) return 'Something went wrong.';
+  if (e && e.error) return shopErrorMessage(e);
+  const msg = e.message || String(e);
+  try {
+    const parsed = JSON.parse(msg);
+    if (parsed && parsed.error) return shopErrorMessage(parsed);
+  } catch (_) { /* not JSON — plain message */ }
+  return msg;
+}
+
 function statsLine(item) {
   if (item.kind === 'weapon' || (item.damage != null && item.speed != null)) {
     return `<div class="shop-stats">DMG ${item.damage} • SPD ${item.speed} • ACC ${item.accuracy} • CRIT ${item.crit_chance}%</div>`;
@@ -227,13 +267,13 @@ function attachSellListeners() {
           btn.textContent = orig;
           btn.disabled = false;
           if (card) card.classList.remove('shop-selling');
-          showShopMessage(res.error || 'Sell failed', true);
+          showShopMessage(shopErrorMessage(res) || 'Sell failed', true);
         }
       } catch (e) {
         btn.textContent = orig;
         btn.disabled = false;
         if (card) card.classList.remove('shop-selling');
-        showShopMessage('Sell error: ' + e.message, true);
+        showShopMessage(shopErrorFromException(e), true);
       }
     };
   });
@@ -270,13 +310,13 @@ function attachActionListeners() {
           btn.textContent = orig;
           btn.disabled = false;
           if (card) card.classList.remove('shop-selling');
-          showShopMessage(res.error || 'Buy failed', true);
+          showShopMessage(shopErrorMessage(res) || 'Buy failed', true);
         }
       } catch (e) {
         btn.textContent = orig;
         btn.disabled = false;
         if (card) card.classList.remove('shop-selling');
-        showShopMessage('Buy error: ' + e.message, true);
+        showShopMessage(shopErrorFromException(e), true);
       }
     };
   });
@@ -294,8 +334,8 @@ function attachActionListeners() {
         const res = await apiCall('/shop/reroll', 'POST');
         if (res.ok) {
           await refreshShop(); // full fetch: header gold/AP/reroll-cost + new stock
-        } else showShopMessage(res.error || 'Reroll failed', true);
-      } catch (e) { showShopMessage(e.message, true); }
+        } else showShopMessage(shopErrorMessage(res) || 'Reroll failed', true);
+      } catch (e) { showShopMessage(shopErrorFromException(e), true); }
       finally { rerollBtn.disabled = false; }
     };
   }
@@ -308,8 +348,8 @@ function attachActionListeners() {
         const res = await apiCall('/shop/ap-reset', 'POST');
         if (res.ok) {
           await refreshShop(); // full fetch: header gold/AP/reroll-cost all current
-        } else showShopMessage(res.error || 'AP reset failed', true);
-      } catch (e) { showShopMessage(e.message, true); }
+        } else showShopMessage(shopErrorMessage(res) || 'AP reset failed', true);
+      } catch (e) { showShopMessage(shopErrorFromException(e), true); }
       finally { apBtn.disabled = false; }
     };
   }

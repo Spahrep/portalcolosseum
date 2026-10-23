@@ -196,6 +196,8 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
     assert.equal(res.status, 400);
     const body = await res.json();
     assert.equal(body.error, 'insufficient_gold');
+    assert.ok(body.need > 0, 'error carries the gold needed');
+    assert.equal(body.have, 1, 'error carries the gold held');
   });
 
   it('POST /shop/sell rejects selling the last weapon (no_sell_last_weapon)', async () => {

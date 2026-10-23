@@ -327,7 +327,7 @@ export async function handleShop({ request, path, method, admin, user, json }) {
     const { gold } = await getGoldAp(admin, userId);
     const qm = Number(item.quality_multiplier) || 1;
     const buyPrice = buyPriceOf(Number(item.base_price) || 45, qm);
-    if (gold < buyPrice) return json({ error: 'insufficient_gold' }, 400);
+    if (gold < buyPrice) return json({ error: 'insufficient_gold', need: buyPrice, have: gold }, 400);
     // grant instance
     try {
       let instanceId = null;
@@ -383,7 +383,7 @@ export async function handleShop({ request, path, method, admin, user, json }) {
     const profRes = await admin.from('profiles').select('shop_reroll_count').eq('id', userId).maybeSingle();
     const rerollCount = Number(profRes.data?.shop_reroll_count) || 0;
     const rerollCost = Math.round(cfg.reroll_base_price * Math.pow(cfg.reroll_price_multiplier, rerollCount));
-    if (gold < rerollCost) return json({ error: 'insufficient_gold' }, 400);
+    if (gold < rerollCost) return json({ error: 'insufficient_gold', need: rerollCost, have: gold }, 400);
     const maxPortal = await bestUnlockedPortal(admin, userId);
     const fresh = await rollStock(admin, maxPortal);
     await persistStock(admin, userId, fresh);
@@ -397,7 +397,7 @@ export async function handleShop({ request, path, method, admin, user, json }) {
   // POST /shop/ap-reset
   if (path === '/shop/ap-reset' && method === 'POST') {
     const { ap } = await getGoldAp(admin, userId);
-    if (ap < cfg.ap_reset_cost) return json({ error: 'insufficient_ap' }, 400);
+    if (ap < cfg.ap_reset_cost) return json({ error: 'insufficient_ap', need: cfg.ap_reset_cost, have: ap }, 400);
     await admin.from('profiles').update({ ap: ap - cfg.ap_reset_cost, shop_reroll_count: 0 }).eq('id', userId);
     const rerollCost = Math.round(cfg.reroll_base_price * Math.pow(cfg.reroll_price_multiplier, 0));
     return json({ ok: true, shop_reroll_count: 0, reroll_cost: rerollCost, new_ap: ap - cfg.ap_reset_cost });
