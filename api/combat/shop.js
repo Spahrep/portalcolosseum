@@ -9,9 +9,10 @@
  *   POST /shop/reroll          — deduct gold, re-roll stock, increment reroll counter
  *   POST /shop/ap-reset        — deduct AP, reset reroll counter to 0
  *
- * Pricing (PC-DEC-076): buy = round(tmpl.base_price * qm * 1.40);
- *                        sell = round(tmpl.base_price * qm * 0.42).
- * qm = quality_multiplier (0.80–1.23 typical). Tier is aesthetic.
+ * Pricing (PC-DEC-076): buy = round(tmpl.base_price * qm * 1.40) for weapons;
+ *                        buy = round(tmpl.base_price * qm * 1.40 * cfg.consumable_price_multiplier) for consumables (default 0.22).
+ *                        sell = round(tmpl.base_price * qm * 0.42) for weapons only.
+ * qm = quality_multiplier (0.80–1.23 typical). Tier is aesthetic. Consumables use a discounted base relative to weapons.
  *
  * Stock is per-player, rolled lazily on shop open when the UTC date changes.
  * Same lazy pattern as api/lib/ap-daily.js (no cron — fires on screen switch).
@@ -27,12 +28,13 @@ const DEFAULT_CFG = {
   ap_reset_cost: 10,
   sell_recovery_rate: 0.42,
   shop_refresh_hour: 0,
+  consumable_price_multiplier: 0.22,
 };
 
 async function getConfig(admin) {
   try {
     const { data } = await admin.from('game_config')
-      .select('reroll_base_price, reroll_price_multiplier, ap_reset_cost, sell_recovery_rate, shop_refresh_hour')
+      .select('reroll_base_price, reroll_price_multiplier, ap_reset_cost, sell_recovery_rate, shop_refresh_hour, consumable_price_multiplier')
       .eq('id', 1).maybeSingle();
     if (data) return { ...DEFAULT_CFG, ...data };
   } catch (e) { /* fall through */ }
@@ -110,7 +112,7 @@ function rollConsumableStock(tmpl) {
   const sigma = Math.max((Number(tmpl.window_base) + Number(tmpl.window_delta)) / 2, 1);
   const z = ((floor + window / 2) - expEV) / sigma;
   const grade = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
-  const basePrice = 45;
+  const basePrice = 45; // notional weapon-relative base; actual consumable discount applied in decorateStock via cfg.consumable_price_multiplier
   const qm = Math.pow(Math.max((floor + window / 2) / Math.max(expEV, 1), 0.25), 0.78);
   return {
     kind: 'consumable',
@@ -245,7 +247,11 @@ async function countWeapons(admin, userId) {
 function decorateStock(rows, cfg) {
   return rows.map(r => {
     const qm = Number(r.quality_multiplier) || 1;
-    const buy = buyPriceOf(Number(r.base_price) || 45, qm);
+    let buy = buyPriceOf(Number(r.base_price) || 45, qm);
+    if (r.kind === 'consumable') {
+      const mult = Number(cfg?.consumable_price_multiplier) || 0.22;
+      buy = Math.round(buy * mult);
+    }
     const name = r.name || r.weapon_template?.name || 'Unknown';
     if (r.kind === 'weapon') {
       return {

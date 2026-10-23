@@ -17,9 +17,10 @@
 
 - **Dropped items are costed by TEMPLATE** for LP purposes — a short sword costs the same LP whether it rolled great or terribly.
 - **All items are priced by the ROLL** — both buy price and sell price are continuous in a single **`quality_multiplier`** derived from combat power: `quality_multiplier = (power_score / template.base_power_score) ^ 0.78` (see `docs/design/weapon-pricing-and-grading.md`, PC-DEC-076).
-  - **`buy_price = round(template.base_price × quality_multiplier × 1.40)`** (shop premium)
-  - **`sell_price = round(template.base_price × quality_multiplier × 0.42)`** (sell recovery)
-- **Same bell curve drives price for both categories**, but a consumable's `base_price` is far smaller than a weapon's — the "steep vs shallow" difference from the earlier design was superseded by the single continuous multiplier per item (PC-DEC-076).
+  - Weapons: `buy_price = round(template.base_price × quality_multiplier × 1.40)`
+  - Consumables: `buy_price = round(template.base_price × quality_multiplier × 1.40 × cfg.consumable_price_multiplier)` (default 0.22, ~1/5th of weapons)
+  - Sell (weapons only): `sell_price = round(template.base_price × quality_multiplier × 0.42)`
+- Consumables use a dedicated `consumable_price_multiplier` config (default 0.22) so one-time-use items cost a fraction of weapons; weapons unchanged.
 - **Tier (S/A/B/C/D) is purely a visual label** — S-tier ≤ 5% of rolls (target ~1.5%, live-calibrated 2026-10-21). It does not drive price; the multiplier does.
 - **Identical weapons (same rolls) always sell for the same value**, whether they dropped or were bought — no arbitrage between drop and shop.
 - **D/E/F tiers sell for very little** — they're the gold drip that keeps the economy liquid. Every run yields something sellable, even if it's pennies.
