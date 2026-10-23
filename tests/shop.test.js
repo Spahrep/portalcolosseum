@@ -20,6 +20,7 @@ function mockAdmin(responder) {
       delete() { ctx.op = 'delete'; return api; },
       eq(k, v) { ctx.filters.push(['eq', k, v]); return api; },
       lte(k, v) { ctx.filters.push(['lte', k, v]); return api; },
+      or(f) { ctx.filters.push(['or', f]); return api; },
       order() { return api; },
       limit() { return api; },
       single() { return finish(true); },
@@ -298,6 +299,21 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
       assert.ok(b1.ok, 'first sell succeeds');
       assert.equal(r2.status, 400, 'duplicate sell must be rejected');
       assert.equal(b2.error, 'not_owned');
+    });
+
+    it('POST /shop/sell rejects a weapon equipped in an active run', async () => {
+      const admin = mockAdmin((snap) => {
+        const base = defaultResponder()(snap);
+        // the weapon is referenced by an ACTIVE run -> sell must be rejected
+        if (snap.table === 'portal_run' && snap.op === 'select') return { data: { id: 240, status: 'active' } };
+        if (snap.table === 'weapon_instance' && snap.op === 'select') return { data: [{ id: 5 }, { id: 6 }], count: 2 };
+        return base;
+      });
+      __setAdminClientForTests(admin);
+      const res = await POST(req('/shop/sell', 'POST', { instance_id: 5 }));
+      assert.equal(res.status, 400);
+      const body = await res.json();
+      assert.equal(body.error, 'weapon_in_active_run');
     });
 
     it('POST /shop/ap-reset resets reroll cost and spends AP', async () => {
