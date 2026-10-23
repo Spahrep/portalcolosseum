@@ -16,10 +16,12 @@
 ## Output-Based Pricing (key principle)
 
 - **Dropped items are costed by TEMPLATE** for LP purposes — a short sword costs the same LP whether it rolled great or terribly.
-- **Shop items are priced by the ROLL** — cost is based on how good/rare the item is. Formula TBD.
-- Same standard-deviation grade system (D–S) drives rarity AND price labels for both categories, but **price multipliers scale per category**:
-  - **Weapons: steep curve** (S-tier ≈ 100× base — exact TBD). Status economy at the top: a max-roll sword is a durable luxury.
-  - **Consumables: shallow curve** (e.g., 10% better ≈ 25% more — exact TBD). They're one-use; the flex shouldn't cost like a sword.
+- **All items are priced by the ROLL** — both buy price and sell price are continuous in a single **`quality_multiplier`** derived from combat power: `quality_multiplier = (power_score / template.base_power_score) ^ 0.78` (see `docs/design/weapon-pricing-and-grading.md`, PC-DEC-076).
+  - **`buy_price = round(template.base_price × quality_multiplier × 1.40)`** (shop premium)
+  - **`sell_price = round(template.base_price × quality_multiplier × 0.42)`** (sell recovery)
+- **Same bell curve drives price for both categories**, but a consumable's `base_price` is far smaller than a weapon's — the "steep vs shallow" difference from the earlier design was superseded by the single continuous multiplier per item (PC-DEC-076).
+- **Tier (S/A/B/C/D) is purely a visual label** — S-tier ≤ 5% of rolls (target ~1.5%, live-calibrated 2026-10-21). It does not drive price; the multiplier does.
+- **Identical weapons (same rolls) always sell for the same value**, whether they dropped or were bought — no arbitrage between drop and shop.
 - **D/E/F tiers sell for very little** — they're the gold drip that keeps the economy liquid. Every run yields something sellable, even if it's pennies.
 - **The shop price of a weapon IS the value of a weapon drop.** Drop tables and shop prices must be designed together — one economy, two faucets. (Diablo 3 launch lesson: if the shop out-gears drops, nobody cares about loot.)
 
@@ -54,3 +56,5 @@
 - **Three gates against grinding**: portal tier gates loot pools (can't farm your way to better gear), shop tier gates purchases (can't buy your way past content), per-portal entry costs tax deep-portal farming
 - **Anti-soft-lock**: portals stay farmable after unlocking later ones — a player must always have at least one portal they can profitably clear (see portal-runs.md)
 - **AP** gates runs; **gold** gates shops. Two meters, clean split.
+
+Item valuation / tier-as-label resolved by PC-DEC-076. Decided by Spahrep, 2026-10-21.

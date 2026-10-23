@@ -106,9 +106,9 @@ Eligible attacks (from weapon_template_attack_mapping):
 
 **The grade is computed *after* all stats are rolled**, not as an input to generation. Each stat range is rolled independently using the Base + Delta formula. The resulting grade is a **UI/UX label** that tells the player "how good" their weapon is without making them do the math.
 
-- **Grade bands are D/E/F → S**, assigned from the standard deviation curve of the roll (S-tier ≈ 0.15%, A-tier ≈ 2.1%, etc.)
-- The same grading system applies to **all items** (weapons and consumables) — one bell curve drives rarity → grade → price
-- Price multipliers scale **per category**: weapons steep (S ≈ 100× base), consumables shallow (10% better ≈ 25% more). See `shops-and-economy.md`.
+- **Tier (S/A/B/C/D) is purely an aesthetic label** — the real value driver is a continuous **`quality_multiplier`** calculated from actual combat power (`power_score`, expected damage per tick incl. crit): `quality_multiplier = (power_score / template.base_power_score) ^ 0.78` (PC-DEC-076).
+- Tier percentile thresholds are tuned from the live roll distribution so **S-tier is ≤ 5%** of rolls (target ~1.5%; live-calibrated cutoffs 2026-10-21 verified S ≈ 2.4%). See `docs/design/weapon-pricing-and-grading.md` for the exact cutoffs.
+- **Identical weapons (same stats/rolls) always sell for the same value**, whether they dropped or were bought — `buy_price` and `sell_price` are both `template.base_price × quality_multiplier × (shop premium / sell recovery)`. See `shops-and-economy.md`.
 - D/E/F tiers are the gold drip — cheap junk keeps the economy liquid and every run yields something sellable.
 
 ## Post-MVP Features (Deferred)
@@ -122,5 +122,4 @@ Eligible attacks (from weapon_template_attack_mapping):
 - The generation logic persists rolled stats and granted attacks to `weapon_instance`
 - Different weapon types (Sword vs Staff) may have different slot rules or stat ranges.
 
----
-*Document generated from Jester notes for easy reference. Cleaned and structured for maintainability.*
+Tier-as-label + quality_multiplier pricing resolved by PC-DEC-076. Decided by Spahrep, 2026-10-21.

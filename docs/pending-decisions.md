@@ -639,6 +639,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: ACCEPTS the model in docs/design/weapon-pricing-and-grading.md. Tier is purely aesthetic. Continuous quality_multiplier (from power_score) drives all buy/sell pricing. S-tier ≤5% rarity (target ~1.5%). Identical weapons have identical sell value regardless of source. New migration will add base_price to weapon_template + quality_multiplier + tier to weapon_instance. Resolves the two open [ASSUMPTION] items from PC-DEC-074 (weapon shop PRD). Decided by Spahrep, 2026-10-21.
 
+|- ID: PC-DEC-077
+  Date: 2026-10-23
+  Source: Desktop session "Review weapons store PRD pricing tiers" (midday sweep)
+  Speaker: Spahrep
+  Verbatim: "putyoru game design hat on, is this a good erro message? \"{\"error\":\"insufficient_gold\"}\""
+  Status: OPEN
+  Notes: OPEN QUESTION — is the raw `{"error":"insufficient_gold"}` string a good player-facing error message? Assistant recommended a mapping layer: keep stable backend codes (API + tests), convert each to player-facing prose on the frontend — put the actual numbers in (need/have gold, AP refresh), use the shopkeeper's voice for the flavorful ones (no-sell-last, weapon-in-active-run), extend error payloads with `need`/`have` fields. No ruling from Spahrep yet; the assistant ended by asking "Want me to implement the mapping layer...?" — awaiting go/no-go. Also carried from the same session: Spahrep re-confirmed "the visual que should happen right away" (instant click feedback regardless of latency) — already captured as a standing rule in the pc-coding-standards skill and already implemented (commit 76aaa1f), so not a new PC-DEC; recorded here for the record.
+
 ## Rejected / Superseded
 
 - ID: PC-DEC-004
