@@ -116,6 +116,20 @@ function tierBadge(tier) {
   return `<span class="shop-tier-badge" style="color:${color};border-color:${color}">${tier}</span>`;
 }
 
+// --- in-game message (no browser alerts) ---
+let messageEl = null;
+function showShopMessage(text, isError = false) {
+  if (!messageEl) messageEl = document.getElementById('shop-message');
+  if (!messageEl) return;
+  messageEl.textContent = text;
+  messageEl.className = 'shop-message' + (isError ? ' shop-message-error' : '');
+  messageEl.hidden = false;
+}
+function clearShopMessage() {
+  if (!messageEl) messageEl = document.getElementById('shop-message');
+  if (messageEl) messageEl.hidden = true;
+}
+
 function statsLine(item) {
   if (item.kind === 'weapon' || (item.damage != null && item.speed != null)) {
     return `<div class="shop-stats">DMG ${item.damage} • SPD ${item.speed} • ACC ${item.accuracy} • CRIT ${item.crit_chance}%</div>`;
@@ -213,13 +227,13 @@ function attachSellListeners() {
           btn.textContent = orig;
           btn.disabled = false;
           if (card) card.classList.remove('shop-selling');
-          alert(res.error || 'Sell failed');
+          showShopMessage(res.error || 'Sell failed', true);
         }
       } catch (e) {
         btn.textContent = orig;
         btn.disabled = false;
         if (card) card.classList.remove('shop-selling');
-        alert('Sell error: ' + e.message);
+        showShopMessage('Sell error: ' + e.message, true);
       }
     };
   });
@@ -256,13 +270,13 @@ function attachActionListeners() {
           btn.textContent = orig;
           btn.disabled = false;
           if (card) card.classList.remove('shop-selling');
-          alert(res.error || 'Buy failed');
+          showShopMessage(res.error || 'Buy failed', true);
         }
       } catch (e) {
         btn.textContent = orig;
         btn.disabled = false;
         if (card) card.classList.remove('shop-selling');
-        alert('Buy error: ' + e.message);
+        showShopMessage('Buy error: ' + e.message, true);
       }
     };
   });
@@ -280,8 +294,8 @@ function attachActionListeners() {
         const res = await apiCall('/shop/reroll', 'POST');
         if (res.ok) {
           await refreshShop(); // full fetch: header gold/AP/reroll-cost + new stock
-        } else alert(res.error || 'Reroll failed');
-      } catch (e) { alert(e.message); }
+        } else showShopMessage(res.error || 'Reroll failed', true);
+      } catch (e) { showShopMessage(e.message, true); }
       finally { rerollBtn.disabled = false; }
     };
   }
@@ -294,8 +308,8 @@ function attachActionListeners() {
         const res = await apiCall('/shop/ap-reset', 'POST');
         if (res.ok) {
           await refreshShop(); // full fetch: header gold/AP/reroll-cost all current
-        } else alert(res.error || 'AP reset failed');
-      } catch (e) { alert(e.message); }
+        } else showShopMessage(res.error || 'AP reset failed', true);
+      } catch (e) { showShopMessage(e.message, true); }
       finally { apBtn.disabled = false; }
     };
   }
@@ -304,6 +318,7 @@ function attachActionListeners() {
 function renderShop(data) {
   if (!stockGrid || !headerEl) return;
   currentData = data;
+  clearShopMessage();
   headerEl.innerHTML = `
     <span>GOLD: ${data.gold}</span>
     <span>AP: ${data.ap}</span>

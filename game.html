@@ -153,6 +153,7 @@
       <button id="shop-close" class="not-ready-close" aria-label="Close">&times;</button>
       <div class="shop-backdrop" style="background-image: url('/public/pictures/ui/vendor1.jpg');"></div>
       <div class="shop-header" id="shop-header"></div>
+      <div class="shop-message" id="shop-message" hidden></div>
       <div class="shop-stock-grid" id="shop-stock-grid"></div>
       <div class="shop-footer">Pixel shop • fixed stock • reroll costs gold • AP resets cost</div>
     </div>
@@ -175,6 +176,8 @@
     .shop-backdrop { position: absolute; inset: 0; background-size: cover; background-position: center; opacity: 0.25; z-index: 0; border-radius: 2px; }
     .shop-header { position: relative; z-index: 1; display: flex; gap: 16px; align-items: center; padding: 12px 16px; background: rgba(0,0,0,0.85); font-family: 'Pixeloid Mono', monospace; font-size: 14px; color: #ffcc66; }
     .shop-header button { font-family: 'Pixeloid Mono', monospace; background: #222; color: #ffcc66; border: 2px solid #ffcc66; padding: 2px 10px; cursor: pointer; }
+    .shop-message { position: relative; z-index: 1; margin: 8px 16px 0; padding: 10px 14px; background: rgba(0,0,0,0.85); border: 2px solid #ffcc66; color: #ffcc66; font-family: 'Pixeloid Mono', monospace; font-size: 14px; text-align: center; }
+    .shop-message.shop-message-error { border-color: #ff5555; color: #ff7777; }
     .shop-stock-grid { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; padding: 24px; margin-top: auto; max-height: 55vh; overflow: auto; }
     .shop-item-card { background: rgba(20,20,20,0.95); border: 2px solid #444; padding: 18px; font-family: 'Pixeloid Mono', monospace; color: #f8f8f0; }
     .shop-item-card.shop-focused, .shop-item-card:focus { border-color: #ffcc66; outline: 2px solid #ffcc66; box-shadow: 0 0 12px rgba(255, 204, 102, 0.5); }
