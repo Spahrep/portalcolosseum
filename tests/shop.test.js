@@ -232,7 +232,7 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
         if (snap.table === 'weapon_instance' && snap.op === 'select') {
           return { data: [
             { id: 5, template_id: 3, quality_multiplier: 1.0, tier: 'C', damage: 50, speed: 30, accuracy: 80, weapon_template: { name: 'Greatsword', base_price: 45 } },
-            { id: 6, template_id: 3, quality_multiplier: 1.2, tier: 'B', damage: 60, speed: 28, accuracy: 85, weapon_template: { name: 'Greatsword', base_price: 45 } },
+            { id: 6, template_id: 3, quality_multiplier: 1.2, tier: 'S', damage: 60, speed: 28, accuracy: 85, weapon_template: { name: 'Greatsword', base_price: 45 } },
           ] , count: 2 };
         }
         return base;
@@ -243,9 +243,12 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
       const body = await res.json();
       assert.equal(body.items.length, 2);
       assert.equal(body.can_sell_last_weapon, true);
-      // sell price = round(45 * qm * 0.42)
+      // sell price = round(45 * rarityFactor(qm) * 0.42), rarity curve flat below qm 1.02 (PC-DEC-076 + steep top-S tail)
+      // qm 1.0 sits in the flat region -> unchanged from the old formula.
       assert.equal(body.items[0].sell_price, Math.round(45 * 1.0 * 0.42));
-      assert.equal(body.items[1].sell_price, Math.round(45 * 1.2 * 0.42));
+      // qm 1.2 is a top-tail roll; rarityFactor ramps steeply above 1.02 so a jackpot-quality
+      // weapon sells for materially more than a flat-rate old formula allowed (23g -> 129g).
+      assert.equal(body.items[1].sell_price, 129);
       assert.ok(body.items[0].instance_id, 'has instance_id for sell');
       assert.equal(body.gold, 1000, 'includes current gold for the sell header');
     });

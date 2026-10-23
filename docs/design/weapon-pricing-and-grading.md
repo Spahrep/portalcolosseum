@@ -40,15 +40,26 @@ The exponent (0.78) keeps extreme rolls from becoming absurdly expensive while s
 
 **Shop Buy Price:**
 ```js
-buy_price = round(template.base_price × quality_multiplier × 1.40)
+buy_price = round(template.base_price × rarityFactor(qm) × 1.40)
 ```
 
 **Vendor Sell Price:**
 ```js
-sell_price = round(template.base_price × quality_multiplier × 0.42)
+sell_price = round(template.base_price × rarityFactor(qm) × 0.42)
 ```
 
-The 1.40× shop premium and 0.42× sell recovery create healthy spread. A god-roll S will sell back for significantly more raw gold than a poor D-roll of the same template.
+`rarityFactor(qm)` is the rarity-aware quality curve: **flat below qm 1.02** (common rolls keep the old linear price), then **ramps steeply into the top-S tail** to ~5× base at qm 1.18. This makes the *rarity of the roll* drive the premium, not the tier label:
+- low-S (qm ~1.11) ≈ high-A (qm ~1.105) — nearly the same quality, nearly the same price (no tier jump).
+- mid-S (qm ~1.145) ≈ **2×** mid-A (qm ~1.095) — a mid-S is a rarer, higher-quality roll, so it commands the premium.
+- top-S (qm ~1.18, the top-1% jackpot) ≈ 4.8× a mid-B.
+- B/C/D/E sit on the flat section, so common gear stays at today's prices.
+
+```js
+rarityFactor = qm <= 1.02 ? qm
+             : 1.02 * (1 + (5.0 - 1) * ((qm - 1.02) / (1.18 - 1.02)) ** 3)
+```
+
+The same curve feeds both buy and sell, so an identical weapon sells back for the same fraction of its buy price whether it came from a drop or the shop (PC-DEC-076: identical weapons sell identically, source-agnostic). The 1.40× shop premium and 0.42× sell recovery keep the buy/sell margin constant. A god-roll S now sells back for materially more raw gold than a poor D-roll of the same template — because it is rare, not because it is labeled S.
 
 ## 4. Tier Assignment (Aesthetic Label Only)
 

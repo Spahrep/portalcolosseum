@@ -9,10 +9,12 @@
  *   POST /shop/reroll          — deduct gold, re-roll stock, increment reroll counter
  *   POST /shop/ap-reset        — deduct AP, reset reroll counter to 0
  *
- * Pricing (PC-DEC-076): buy = round(tmpl.base_price * qm * 1.40) for weapons;
- *                        buy = round(tmpl.base_price * qm * 1.40 * cfg.consumable_price_multiplier) for consumables (default 0.22).
- *                        sell = round(tmpl.base_price * qm * 0.42) for weapons only.
- * qm = quality_multiplier (0.80–1.23 typical). Tier is aesthetic. Consumables use a discounted base relative to weapons.
+ * Pricing (PC-DEC-076 + rarity curve): buy = round(tmpl.base_price * rarityFactor(qm) * 1.40) for weapons;
+ *                        buy = round(tmpl.base_price * rarityFactor(qm) * 1.40 * cfg.consumable_price_multiplier) for consumables (default 0.22).
+ *                        sell = round(tmpl.base_price * rarityFactor(qm) * 0.42) for weapons only.
+ * rarityFactor(qm) is flat (=qm) below qm 1.02 then ramps steeply into the top-S tail (~5x base at qm 1.18),
+ * so a mid-S weapon costs ~2x a mid-A purely from rarity-of-roll, while low-S ≈ high-A and B/C/D/E stay flat.
+ * Tier is aesthetic; quality_multiplier drives price continuously.
  *
  * Stock is per-player, rolled lazily on shop open when the UTC date changes.
  * Same lazy pattern as api/lib/ap-daily.js (no cron — fires on screen switch).
@@ -72,11 +74,24 @@ function qualityFor(tmpl, damage, speed, accuracy, crit) {
   return { quality_multiplier: Math.round(qm * 10000) / 10000, tier };
 }
 
+// Rarity-aware quality curve (PC-DEC-076 + steep top-S tail).
+// Flat (=qm) below the upper-B anchor (qm 1.02) so common rolls keep today's price;
+// above it, a power ramp to ~5x base at the top-S roll (qm 1.18). Continuous, no tier jump:
+// low-S ≈ high-A (both near 1.11), while a mid-S roll is ~2x a mid-A roll by rarity alone.
+const RARITY_ANCHOR_QM = 1.02;
+const RARITY_TOP_QM = 1.18;
+const RARITY_TOP_MULT = 5.0;
+const RARITY_POWER = 3.0;
+function rarityFactor(qm) {
+  if (qm <= RARITY_ANCHOR_QM) return qm;
+  const t = (qm - RARITY_ANCHOR_QM) / (RARITY_TOP_QM - RARITY_ANCHOR_QM);
+  return RARITY_ANCHOR_QM * (1.0 + (RARITY_TOP_MULT - 1.0) * Math.pow(t, RARITY_POWER));
+}
 function buyPriceOf(basePrice, qm) {
-  return Math.round(basePrice * qm * 1.40);
+  return Math.round(basePrice * rarityFactor(qm) * 1.40);
 }
 function sellPriceOf(basePrice, qm, rate) {
-  return Math.round(basePrice * qm * rate);
+  return Math.round(basePrice * rarityFactor(qm) * rate);
 }
 
 // roll one weapon stock item from a template (does NOT persist)

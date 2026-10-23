@@ -17,11 +17,11 @@
 
 - **Dropped items are costed by TEMPLATE** for LP purposes — a short sword costs the same LP whether it rolled great or terribly.
 - **All items are priced by the ROLL** — both buy price and sell price are continuous in a single **`quality_multiplier`** derived from combat power: `quality_multiplier = (power_score / template.base_power_score) ^ 0.78` (see `docs/design/weapon-pricing-and-grading.md`, PC-DEC-076).
-  - Weapons: `buy_price = round(template.base_price × quality_multiplier × 1.40)`
-  - Consumables: `buy_price = round(template.base_price × quality_multiplier × 1.40 × cfg.consumable_price_multiplier)` (default 0.22, ~1/5th of weapons)
-  - Sell (weapons only): `sell_price = round(template.base_price × quality_multiplier × 0.42)`
+  - Weapons: `buy_price = round(template.base_price × rarityFactor(qm) × 1.40)`
+  - Consumables: `buy_price = round(template.base_price × rarityFactor(qm) × 1.40 × cfg.consumable_price_multiplier)` (default 0.22, ~1/5th of weapons)
+  - Sell (weapons only): `sell_price = round(template.base_price × rarityFactor(qm) × 0.42)`
 - Consumables use a dedicated `consumable_price_multiplier` config (default 0.22) so one-time-use items cost a fraction of weapons; weapons unchanged.
-- **Tier (S/A/B/C/D) is purely a visual label** — S-tier ≤ 5% of rolls (target ~1.5%, live-calibrated 2026-10-21). It does not drive price; the multiplier does.
+- **Tier (S/A/B/C/D) is purely a visual label** — S-tier ≤ 5% of rolls (target ~1.5%, live-calibrated 2026-10-21). It does not drive price; `rarityFactor(qm)` does, and that curve is *calibrated to the roll's rarity*: it stays linear for common rolls (< qm 1.02) but ramps steeply into the top-S tail so a rarer, higher-quality roll genuinely costs more (mid-S ≈ 2× mid-A; low-S ≈ high-A — no tier jump).
 - **Identical weapons (same rolls) always sell for the same value**, whether they dropped or were bought — no arbitrage between drop and shop.
 - **D/E/F tiers sell for very little** — they're the gold drip that keeps the economy liquid. Every run yields something sellable, even if it's pennies.
 - **The shop price of a weapon IS the value of a weapon drop.** Drop tables and shop prices must be designed together — one economy, two faucets. (Diablo 3 launch lesson: if the shop out-gears drops, nobody cares about loot.)
