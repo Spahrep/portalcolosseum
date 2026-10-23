@@ -279,8 +279,7 @@ function attachActionListeners() {
       try {
         const res = await apiCall('/shop/reroll', 'POST');
         if (res.ok) {
-          currentData = res;
-          renderShop(currentData);
+          await refreshShop(); // full fetch: header gold/AP/reroll-cost + new stock
         } else alert(res.error || 'Reroll failed');
       } catch (e) { alert(e.message); }
       finally { rerollBtn.disabled = false; }
@@ -294,8 +293,7 @@ function attachActionListeners() {
       try {
         const res = await apiCall('/shop/ap-reset', 'POST');
         if (res.ok) {
-          currentData = { ...currentData, ...res };
-          renderShop(currentData);
+          await refreshShop(); // full fetch: header gold/AP/reroll-cost all current
         } else alert(res.error || 'AP reset failed');
       } catch (e) { alert(e.message); }
       finally { apBtn.disabled = false; }
