@@ -58,4 +58,4 @@
 - **Anti-soft-lock**: portals stay farmable after unlocking later ones — a player must always have at least one portal they can profitably clear (see portal-runs.md)
 - **AP** gates runs; **gold** gates shops. Two meters, clean split.
 
-Item valuation / tier-as-label resolved by PC-DEC-076. Decided by Spahrep, 2026-10-21.
+Item valuation / tier-as-label resolved by PC-DEC-076; rarity-aware price curve + consumable ~1/5 cost resolved by PC-DEC-078. Decided by Spahrep, 2026-10-21 and 2026-10-23.

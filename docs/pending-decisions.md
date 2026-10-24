@@ -644,8 +644,17 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Source: Desktop session "Review weapons store PRD pricing tiers" (midday sweep)
   Speaker: Spahrep
   Verbatim: "putyoru game design hat on, is this a good erro message? \"{\"error\":\"insufficient_gold\"}\""
-  Status: OPEN
+  Status: RESOLVED-IN-CODE — the mapping layer this item asked about SHIPPED in commit 849444c ("Shop: player-facing error messages (vendor voice) with real numbers", 2026-10-23): backend error payloads now carry `need`/`have` fields, and the frontend maps each code to vendor-voice prose with the real numbers. The premise resolved by shipped code rather than a spoken ruling, per the sweep rule "a carried flag may be resolvable by checking the code." Closed as resolved, not left open.
   Notes: OPEN QUESTION — is the raw `{"error":"insufficient_gold"}` string a good player-facing error message? Assistant recommended a mapping layer: keep stable backend codes (API + tests), convert each to player-facing prose on the frontend — put the actual numbers in (need/have gold, AP refresh), use the shopkeeper's voice for the flavorful ones (no-sell-last, weapon-in-active-run), extend error payloads with `need`/`have` fields. No ruling from Spahrep yet; the assistant ended by asking "Want me to implement the mapping layer...?" — awaiting go/no-go. Also carried from the same session: Spahrep re-confirmed "the visual que should happen right away" (instant click feedback regardless of latency) — already captured as a standing rule in the pc-coding-standards skill and already implemented (commit 76aaa1f), so not a new PC-DEC; recorded here for the record.
+  Resolved-in-code by: commit 849444c, 2026-10-23.
+
+- ID: PC-DEC-078
+  Date: 2026-10-23
+  Source: Desktop session "Adjust weapon and potion pricing" (message 170928, 13:58)
+  Speaker: Spahrep
+  Verbatim: "if you look in the shared folder at SRoll.jpg, you can see 2 weapons, one is S and one is B, and those are barely different in price. I think this needs to be much much greater. Also potions are oen time use, so they should be a faction of the cost of the weapons. Maybe 1/5th or so. Please put your game designer hat on and have a look at that image and tell me what you think"
+  Status: DECIDED
+  Notes: Refines PC-DEC-076 (tier-is-aesthetic + quality_multiplier drives price) without superseding it: Spahrep accepted, per the SRoll.jpg comparison, that the price gap between an S weapon and a B weapon was "barely different" and ruled it "needs to be much much greater" — so the quality_multiplier→price curve must ramp steeply into the top-S tail (a rare roll genuinely costs more; mid-S ≈ 2× mid-A, low-S ≈ high-A — no tier jump, matching the "tier is aesthetic, rarity is priced" model). Separately, potions are one-time use so they "should be a faction of the cost of the weapons. Maybe 1/5th or so" — implemented as `cfg.consumable_price_multiplier = 0.22` (~1/5 of weapons). Implemented in code: ac7e7f8 (rarity-aware weapon price curve), 7b8897d (consumable 0.22 multiplier). Applied to shops-and-economy.md. Decided by Spahrep, 2026-10-23.
 
 ## Rejected / Superseded
 
