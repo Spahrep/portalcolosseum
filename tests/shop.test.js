@@ -244,11 +244,11 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
       assert.equal(body.items.length, 2);
       assert.equal(body.can_sell_last_weapon, true);
       // sell price = round(45 * priceFactor(qm) * 0.42). Continuous monotonic curve
-      // (PC-PL-2026-10-26): qm 1.0 -> 1.03x, qm 1.2 (interp 1.15/1.23) -> 4.35x.
+      // (PC-PL-2026-10-26): qm 1.0 -> 1.03x, qm 1.2 (interp 1.15/1.23) -> 4.7125x.
       assert.equal(body.items[0].sell_price, Math.round(45 * 1.03 * 0.42));   // 19
-      // qm 1.2 is a top-tail S roll; the curve pays ~4.35x a base C here (vs the old
-      // flat-rate 23g), so a jackpot-quality weapon sells for far more.
-      assert.equal(body.items[1].sell_price, 82);
+      // qm 1.2 is a mid-S roll; the S band sits ~3-5x a C so a jackpot-quality
+      // weapon sells far above the old flat-rate 23g.
+      assert.equal(body.items[1].sell_price, 89);
       assert.ok(body.items[0].instance_id, 'has instance_id for sell');
       assert.equal(body.gold, 1000, 'includes current gold for the sell header');
     });
