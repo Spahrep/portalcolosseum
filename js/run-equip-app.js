@@ -176,7 +176,9 @@ function buildPopupHtml(item) {
     const w = weaponsById[item.id];
     if (w) {
       html += `<div class="type">WEAPON</div>`;
-      html += `<div class="stat-line">Damage: ${w.damage ?? '??'} · Speed: ${w.speed ?? '??'} · Accuracy: ${w.accuracy ?? '??'} · Crit: ${w.crit_chance ?? 5}%</div>`;
+      const wCrit = w.crit_chance ?? 5;
+      const wDps = Math.round(w.damage * (100 / w.speed) * ((w.accuracy ?? 100) / 100) * (1 + wCrit / 100));
+      html += `<div class="stat-line">Damage: ${w.damage ?? '??'} · Speed: ${w.speed ?? '??'} · Accuracy: ${w.accuracy ?? '??'} · Crit: ${wCrit}% · Estimated DPS: ${w.damage != null && w.speed != null ? wDps : '??'}</div>`;
       if (w.attacks && w.attacks.length) {
         const rows = w.attacks.map(a => {
           const bits = [];

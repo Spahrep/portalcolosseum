@@ -9,12 +9,13 @@
  *   POST /shop/reroll          — deduct gold, re-roll stock, increment reroll counter
  *   POST /shop/ap-reset        — deduct AP, reset reroll counter to 0
  *
- * Pricing (PC-DEC-076 + rarity curve): buy = round(tmpl.base_price * rarityFactor(qm) * 1.40) for weapons;
- *                        buy = round(tmpl.base_price * rarityFactor(qm) * 1.40 * cfg.consumable_price_multiplier) for consumables (default 0.22).
- *                        sell = round(tmpl.base_price * rarityFactor(qm) * 0.42) for weapons only.
- * rarityFactor(qm) is flat (=qm) below qm 1.02 then ramps steeply into the top-S tail (~5x base at qm 1.18),
- * so a mid-S weapon costs ~2x a mid-A purely from rarity-of-roll, while low-S ≈ high-A and B/C/D/E stay flat.
- * Tier is aesthetic; quality_multiplier drives price continuously.
+ * Pricing (PC-DEC-076 + continuous premium curve): buy  = round(tmpl.base_price * priceFactor(qm) * 1.40) for weapons;
+ *                                       buy  = round(tmpl.base_price * priceFactor(qm) * 1.40 * cfg.consumable_price_multiplier) for consumables (default 0.22).
+ *                                       sell = round(tmpl.base_price * priceFactor(qm) * 0.42) for weapons only.
+ * priceFactor(qm) is a single continuous monotonic curve across ALL qm — no flat par floor, no tier step.
+ * E/D/C rise gently off ~0.78, curve steepens hard through B/A/S (B ~1.5x, A ~2.3x, S ~3.1x a C at entry),
+ * reaching ~4.8x at the S cap. Slope carries the premium, so every tier is on the curve
+ * (Spahrep 2026-10-26: "they are all on a curve"; supersedes PC-DEC-076's flat low tiers + no-tier-jump).
  *
  * Stock is per-player, rolled lazily on shop open when the UTC date changes.
  * Same lazy pattern as api/lib/ap-daily.js (no cron — fires on screen switch).
@@ -74,24 +75,40 @@ function qualityFor(tmpl, damage, speed, accuracy, crit) {
   return { quality_multiplier: Math.round(qm * 10000) / 10000, tier };
 }
 
-// Rarity-aware quality curve (PC-DEC-076 + steep top-S tail).
-// Flat (=qm) below the upper-B anchor (qm 1.02) so common rolls keep today's price;
-// above it, a power ramp to ~5x base at the top-S roll (qm 1.18). Continuous, no tier jump:
-// low-S ≈ high-A (both near 1.11), while a mid-S roll is ~2x a mid-A roll by rarity alone.
-const RARITY_ANCHOR_QM = 1.02;
-const RARITY_TOP_QM = 1.18;
-const RARITY_TOP_MULT = 5.0;
-const RARITY_POWER = 3.0;
-function rarityFactor(qm) {
-  if (qm <= RARITY_ANCHOR_QM) return qm;
-  const t = (qm - RARITY_ANCHOR_QM) / (RARITY_TOP_QM - RARITY_ANCHOR_QM);
-  return RARITY_ANCHOR_QM * (1.0 + (RARITY_TOP_MULT - 1.0) * Math.pow(t, RARITY_POWER));
+// Continuous price curve over the whole qm range (supersedes PC-DEC-076).
+// Mirrors public.price_factor(qm) in the price_factor RPC — keep BOTH byte-identical.
+// "They are all on a curve" (Spahrep 2026-10-26): no flat par for low tiers and no
+// tier step — E/D/C rise gently, then the curve steepens hard through B/A/S so the
+// premium the label carries comes from slope, not a jump. Strictly monotonic in qm.
+const PF_ANCH = [  // (qm, factor)
+  [0.80, 0.78],
+  [0.90, 0.90],
+  [0.94, 0.95],
+  [0.985, 1.00],
+  [1.00, 1.03],
+  [1.04, 1.55],
+  [1.055, 1.90],
+  [1.075, 2.30],
+  [1.09, 2.60],
+  [1.11, 3.10],
+  [1.15, 3.60],
+  [1.23, 4.80],
+  [1.30, 5.60],
+];
+function priceFactor(qm) {
+  const q = Math.max(qm, PF_ANCH[0][0]);
+  for (let i = 0; i < PF_ANCH.length - 1; i++) {
+    const [x0, y0] = PF_ANCH[i];
+    const [x1, y1] = PF_ANCH[i + 1];
+    if (q <= x1) return y0 + (q - x0) / (x1 - x0) * (y1 - y0);
+  }
+  return PF_ANCH[PF_ANCH.length - 1][1];
 }
 function buyPriceOf(basePrice, qm) {
-  return Math.round(basePrice * rarityFactor(qm) * 1.40);
+  return Math.round(basePrice * priceFactor(qm) * 1.40);
 }
 function sellPriceOf(basePrice, qm, rate) {
-  return Math.round(basePrice * rarityFactor(qm) * rate);
+  return Math.round(basePrice * priceFactor(qm) * rate);
 }
 
 // roll one weapon stock item from a template (does NOT persist)

@@ -170,9 +170,15 @@ function shopErrorFromException(e) {
   return msg;
 }
 
+function estimatedDps(item) {
+  if (item.kind !== 'weapon' && (item.damage == null || item.speed == null)) return null;
+  const c = item.crit_chance ?? 5;
+  return Math.round(item.damage * (100 / item.speed) * ((item.accuracy ?? 100) / 100) * (1 + c / 100));
+}
 function statsLine(item) {
   if (item.kind === 'weapon' || (item.damage != null && item.speed != null)) {
-    return `<div class="shop-stats">DMG ${item.damage} • SPD ${item.speed} • ACC ${item.accuracy} • CRIT ${item.crit_chance}%</div>`;
+    const dps = estimatedDps(item);
+    return `<div class="shop-stats">DMG ${item.damage} • SPD ${item.speed} • ACC ${item.accuracy} • CRIT ${item.crit_chance}%${dps != null ? ` • <span class="shop-dps">DPS ${dps}</span>` : ''}</div>`;
   }
   return `<div class="shop-stats">Floor ${item.rolled_floor} • Window ${item.rolled_window}</div>`;
 }
@@ -194,13 +200,14 @@ function renderItemCard(item) {
 }
 
 function renderSellCard(item) {
+  const dps = estimatedDps(item);
   return `
     <div class="shop-item-card" data-instance="${item.instance_id}" data-kind="weapon" tabindex="0">
       <div class="shop-item-header">
         <span class="shop-item-name">${item.name}</span>
         ${tierBadge(item.tier)}
       </div>
-      <div class="shop-stats">DMG ${item.damage} • SPD ${item.speed} • ACC ${item.accuracy}</div>
+      <div class="shop-stats">DMG ${item.damage} • SPD ${item.speed} • ACC ${item.accuracy} • CRIT ${item.crit_chance}%${dps != null ? ` • <span class="shop-dps">DPS ${dps}</span>` : ''}</div>
       <div class="shop-item-price">${item.sell_price}g <span class="shop-qmult">×${item.quality_multiplier}</span></div>
       <button class="shop-sell-item-btn" data-instance="${item.instance_id}">SELL</button>
     </div>
