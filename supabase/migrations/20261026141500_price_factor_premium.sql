@@ -16,13 +16,20 @@ IMMUTABLE
 SET search_path = public, pg_temp
 AS $pf$
   -- anchor points (qm, factor); same table as the JS PF_ANCH array
-  SELECT y0 + (p_qm - x0) / (x1 - x0) * (y1 - y0)
+  -- Division-safe: on an exact anchor x1 - x0 = 0, and the NULLIF denominator
+  -- forces the interpolation to NULL so coalesce falls back to that anchor's own y.
+  -- Clamps on BOTH ends (least/greatest), mirroring the JS interior clamps.
+  SELECT coalesce(
+    max(y0 + (q - x0) / NULLIF(x1 - x0, 0) * (y1 - y0)),
+    max(y0)
+  )
   FROM (
     SELECT
-      max(a.x) FILTER (WHERE a.x <= p_qm)            AS x0,
-      max(a.y) FILTER (WHERE a.x <= p_qm)            AS y0,
-      min(a.x) FILTER (WHERE a.x >= p_qm)            AS x1,
-      min(a.y) FILTER (WHERE a.x >= p_qm)            AS y1
+      least(greatest(p_qm, 0.80), 1.30)                 AS q,
+      max(a.x) FILTER (WHERE a.x <= least(greatest(p_qm, 0.80), 1.30)) AS x0,
+      max(a.y) FILTER (WHERE a.x <= least(greatest(p_qm, 0.80), 1.30)) AS y0,
+      min(a.x) FILTER (WHERE a.x >= least(greatest(p_qm, 0.80), 1.30)) AS x1,
+      min(a.y) FILTER (WHERE a.x >= least(greatest(p_qm, 0.80), 1.30)) AS y1
     FROM (
       VALUES
         (0.80, 0.78),
@@ -40,10 +47,6 @@ AS $pf$
         (1.30, 5.80)
     ) AS a(x, y)
   ) b
-  -- clamp below the first anchor to its leftmost value (mirrors Math.max in JS)
-  WHERE p_qm >= 0.80
-  UNION ALL
-  SELECT 0.78 WHERE p_qm < 0.80
 $pf$;
 
 COMMENT ON FUNCTION public.price_factor(numeric) IS
