@@ -22,6 +22,10 @@
  *
  * Tier gating: shop weapons are gated to templates mapped in portal_loot_mapping
  * for portals <= the player's best unlocked portal (Spahrep 2026-10-21).
+ *
+ * Rolls come only from generate_weapon / generate_consumable_instance.
+ * Stock calls them with p_persist false and stores that roll. Buy calls them
+ * again with p_spec set to the stored roll, so the granted row is the card.
  */
 
 // --- config reads ---
@@ -46,33 +50,6 @@ async function getConfig(admin) {
 
 function utcToday() {
   return new Date().toISOString().slice(0, 10);
-}
-
-// Box-Muller normal_int — mirrors public.normal_int(base, range) in SQL so shop
-// rolls match generate_weapon's distribution exactly.
-function normalInt(base, range) {
-  const b = Number(base) || 1;
-  const r = Number(range) || 0;
-  if (r === 0) return b;
-  const mean = b;
-  const stddev = r / 3.0;
-  const low = mean - r;
-  const high = mean + r;
-  let u1 = Math.random();
-  while (u1 === 0) u1 = Math.random();
-  const u2 = Math.random();
-  const z0 = Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
-  const res = mean + stddev * z0;
-  return Math.round(Math.min(high, Math.max(low, res)));
-}
-
-// compute quality_multiplier + tier from rolled stats (matches generate_weapon PC-DEC-076)
-function qualityFor(tmpl, damage, speed, accuracy, crit) {
-  const powerScore = damage * (100.0 / speed) * (accuracy / 100.0) * (1.0 + (crit / 100.0));
-  const basePower = tmpl.base_damage * (100.0 / tmpl.base_speed) * (tmpl.base_accuracy / 100.0) * 1.05;
-  const qm = Math.pow(Math.max(powerScore / basePower, 0.25), 0.78);
-  const tier = qm >= 1.11 ? 'S' : qm >= 1.075 ? 'A' : qm >= 1.04 ? 'B' : qm >= 0.985 ? 'C' : qm >= 0.94 ? 'D' : 'E';
-  return { quality_multiplier: Math.round(qm * 10000) / 10000, tier };
 }
 
 // Continuous price curve over the whole qm range (supersedes PC-DEC-076).
@@ -112,82 +89,100 @@ function sellPriceOf(basePrice, qm, rate) {
 }
 
 // roll one weapon stock item from a template (does NOT persist)
-function rollWeaponStock(tmpl) {
-  const damage = Math.max(1, normalInt(tmpl.base_damage, tmpl.damage_range));
-  const speed = Math.max(1, normalInt(tmpl.base_speed, tmpl.speed_range));
-  const accuracy = Math.max(0, normalInt(tmpl.base_accuracy, tmpl.accuracy_range));
-  const crit = (Number(tmpl.crit_range) || 0) <= 0
-    ? Math.max(0, Number(tmpl.crit_base) || 5)
-    : Math.max(0, (Number(tmpl.crit_base) || 5)
-        + Math.floor(Math.random() * (tmpl.crit_range * 2 + 1)) - tmpl.crit_range);
-  const { quality_multiplier, tier } = qualityFor(tmpl, damage, speed, accuracy, crit);
-  const basePrice = Number(tmpl.base_price) || 45;
+// Attack id from a generate_weapon slot object. Does not roll or recompute stats.
+function attackId(row) {
+  if (row && row.id != null && row.id !== '') return Number(row.id);
+  return null;
+}
+
+// Map a generate_weapon roll (p_persist false) onto a shop_stock row.
+async function rollWeaponFromGenerator(admin, tmpl) {
+  const res = await admin.rpc('generate_weapon', {
+    p_template_id: tmpl.id,
+    p_user_id: null,
+    p_spec: null,
+    p_persist: false,
+  });
+  if (!res || res.error) throw res?.error || new Error('generate_weapon failed');
+  const roll = res.data;
+  if (!roll || roll.damage == null || roll.tier == null) {
+    throw new Error('generate_weapon returned no roll');
+  }
   return {
     kind: 'weapon',
     template_id: tmpl.id,
-    damage, speed, accuracy, crit_chance: crit,
-    quality_multiplier, tier, base_price: basePrice,
+    name: tmpl.name,
+    damage: roll.damage,
+    speed: roll.speed,
+    accuracy: roll.accuracy,
+    crit_chance: roll.crit_chance,
+    quality_multiplier: roll.quality_multiplier,
+    tier: roll.tier,
+    base_price: Number(tmpl.base_price) || 45,
+    slot_0_attack_id: roll.slot_0_attack_id ?? attackId(roll.slot_0_attack),
+    slot_1_attack_id: roll.slot_1_attack_id ?? attackId(roll.slot_1_attack),
+    slot_2_attack_id: roll.slot_2_attack_id ?? attackId(roll.slot_2_attack),
+    slot_3_attack_id: roll.slot_3_attack_id ?? attackId(roll.slot_3_attack),
+    slot_4_attack_id: roll.slot_4_attack_id ?? attackId(roll.slot_4_attack),
   };
 }
 
-// Roll a weapon's slot attacks at STOCK time so the shop card is the complete
-// instance the buyer receives ("display is a promise"). Uses the same SQL RPC
-// that mirrors generate_weapon's identical sequential chain — slot 0 always
-// from template.slot_0_attack_id, slots 1-4 chain-gated by slot_N_chance. The
-// RPC returns the full attack rows; we reduce to the 5 slot_attack_id columns.
-// Returns { slot_attack_ids: { slot_0: id|null, ..., slot_4: id|null } }.
-async function rollWeaponAttacks(admin, templateId) {
-  const empty = { slot_0: null, slot_1: null, slot_2: null, slot_3: null, slot_4: null };
-  if (!templateId) return { slot_attack_ids: empty };
-  let res;
-  try {
-    res = await admin.rpc('roll_shop_stock_attacks', { p_template_id: templateId });
-  } catch (e) {
-    console.error('shop roll_shop_stock_attacks rpc error', e);
-    return { slot_attack_ids: empty };
-  }
-  if (res.error) {
-    console.error('shop roll_shop_stock_attacks rpc error', res.error);
-    return { slot_attack_ids: empty };
-  }
-  const a = res.data || {};
-  const ids = { ...empty };
-  for (let i = 0; i <= 4; i++) {
-    const row = a[`slot_${i}_attack`];
-    if (row && row.id) ids[`slot_${i}`] = row.id;
-  }
-  return { slot_attack_ids: ids, slot_attack_rows: a };
+function weaponSpecFromStock(item) {
+  return {
+    damage: item.damage,
+    speed: item.speed,
+    accuracy: item.accuracy,
+    crit_chance: item.crit_chance,
+    quality_multiplier: item.quality_multiplier,
+    tier: item.tier,
+    slot_0_attack_id: item.slot_0_attack_id ?? null,
+    slot_1_attack_id: item.slot_1_attack_id ?? null,
+    slot_2_attack_id: item.slot_2_attack_id ?? null,
+    slot_3_attack_id: item.slot_3_attack_id ?? null,
+    slot_4_attack_id: item.slot_4_attack_id ?? null,
+  };
 }
 
-// roll one consumable stock item (floor/window model) — does NOT persist
-function rollConsumableStock(tmpl) {
-  const floor = Math.max(1, Number(tmpl.floor_base) + Math.floor(Math.random() * ((Number(tmpl.floor_delta) || 0) + 1)));
-  const window = Math.max(1, Number(tmpl.window_base) + Math.floor(Math.random() * ((Number(tmpl.window_delta) || 0) + 1)));
-  const speed = Math.max(1, Number(tmpl.speed_base) + Math.floor(Math.random() * ((Number(tmpl.speed_delta) || 0) + 1)));
-  const crit = (Number(tmpl.crit_range) || 0) <= 0
-    ? Math.max(0, Number(tmpl.crit_base) || 0)
-    : Math.max(0, (Number(tmpl.crit_base) || 0)
-        + Math.floor(Math.random() * (tmpl.crit_range * 2 + 1)) - tmpl.crit_range);
-  // consumable tier from EV/sigma vs template (matches generate_consumable_instance)
-  const expEV = Number(tmpl.floor_base) + (Number(tmpl.floor_delta) / 2) + ((Number(tmpl.window_base) + Number(tmpl.window_delta)) / 2) / 2;
-  const sigma = Math.max((Number(tmpl.window_base) + Number(tmpl.window_delta)) / 2, 1);
-  const z = ((floor + window / 2) - expEV) / sigma;
-  const grade = z >= 3 ? 'S' : z >= 2 ? 'A' : z >= 1 ? 'B' : z >= 0 ? 'C' : z >= -1 ? 'D' : z >= -2 ? 'E' : 'F';
-  const basePrice = 45; // notional weapon-relative base; actual consumable discount applied in decorateStock via cfg.consumable_price_multiplier
-  const qm = Math.pow(Math.max((floor + window / 2) / Math.max(expEV, 1), 0.25), 0.78);
+// Map a generate_consumable_instance roll (p_persist false) onto a shop_stock row.
+async function rollConsumableFromGenerator(admin, tmpl) {
+  const res = await admin.rpc('generate_consumable_instance', {
+    p_template_id: tmpl.id,
+    p_user_id: null,
+    p_spec: null,
+    p_persist: false,
+  });
+  if (!res || res.error) throw res?.error || new Error('generate_consumable_instance failed');
+  const roll = res.data;
+  if (!roll || roll.rolled_floor == null || (roll.tier == null && roll.grade == null)) {
+    throw new Error('generate_consumable_instance returned no roll');
+  }
   return {
     kind: 'consumable',
     template_id: tmpl.id,
-    rolled_floor: floor,
-    rolled_window: window,
-    rolled_speed: speed,
-    crit_chance: crit,
-    tier: grade,
-    quality_multiplier: Math.round(qm * 10000) / 10000,
-    base_price: basePrice,
-    _expEV: expEV,
+    name: tmpl.name,
+    rolled_floor: roll.rolled_floor,
+    rolled_window: roll.rolled_window,
+    rolled_speed: roll.rolled_speed,
+    crit_chance: roll.crit_chance,
+    tier: roll.tier || roll.grade,
+    quality_multiplier: roll.quality_multiplier,
+    // Notional weapon-relative base. The consumable discount is applied in decorateStock.
+    base_price: 45,
   };
 }
+
+function consumableSpecFromStock(item) {
+  return {
+    rolled_floor: item.rolled_floor,
+    rolled_window: item.rolled_window,
+    rolled_speed: item.rolled_speed,
+    crit_chance: item.crit_chance,
+    grade: item.tier,
+    tier: item.tier,
+    quality_multiplier: item.quality_multiplier,
+  };
+}
+
 
 // Determine the player's best unlocked portal (mirrors /portals PC-75 logic):
 // Portal 1 always unlocked; N>1 requires a completed run on portal N-1.
@@ -233,16 +228,15 @@ async function rollStock(admin, maxPortalId = 1) {
   for (let slot = 1; slot <= 2; slot++) {
     const t = weapons.length ? weapons[Math.floor(Math.random() * weapons.length)] : null;
     if (!t) continue;
-    const item = rollWeaponStock(t);
-    // roll + persist the weapon's slot attacks at STOCK time (complete instance)
-    const attacks = await rollWeaponAttacks(admin, t.id);
-    stock.push({ slot, ...item, ...attacks, name: t.name });
+    const item = await rollWeaponFromGenerator(admin, t);
+    stock.push({ slot, ...item });
   }
   // 2 potions (slots 3-4)
   for (let slot = 3; slot <= 4; slot++) {
     const t = consumables.length ? consumables[Math.floor(Math.random() * consumables.length)] : null;
     if (!t) continue;
-    stock.push({ slot, ...rollConsumableStock(t), name: t.name });
+    const item = await rollConsumableFromGenerator(admin, t);
+    stock.push({ slot, ...item });
   }
   return stock;
 }
@@ -252,7 +246,6 @@ async function persistStock(admin, userId, stock) {
   const today = utcToday();
   const rows = [];
   for (const s of stock) {
-    const sai = s.slot_attack_ids || {};
     rows.push({
       user_id: userId,
       slot: s.slot,
@@ -269,11 +262,11 @@ async function persistStock(admin, userId, stock) {
       rolled_floor: s.rolled_floor ?? null,
       rolled_window: s.rolled_window ?? null,
       rolled_speed: s.rolled_speed ?? null,
-      slot_0_attack_id: sai.slot_0 ?? null,
-      slot_1_attack_id: sai.slot_1 ?? null,
-      slot_2_attack_id: sai.slot_2 ?? null,
-      slot_3_attack_id: sai.slot_3 ?? null,
-      slot_4_attack_id: sai.slot_4 ?? null,
+      slot_0_attack_id: s.slot_0_attack_id ?? null,
+      slot_1_attack_id: s.slot_1_attack_id ?? null,
+      slot_2_attack_id: s.slot_2_attack_id ?? null,
+      slot_3_attack_id: s.slot_3_attack_id ?? null,
+      slot_4_attack_id: s.slot_4_attack_id ?? null,
     });
   }
   await admin.from('shop_stock').delete().eq('user_id', userId).eq('stock_date', today);

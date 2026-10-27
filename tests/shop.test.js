@@ -20,6 +20,7 @@ function mockAdmin(responder) {
       delete() { ctx.op = 'delete'; return api; },
       eq(k, v) { ctx.filters.push(['eq', k, v]); return api; },
       lte(k, v) { ctx.filters.push(['lte', k, v]); return api; },
+      in(k, v) { ctx.filters.push(['in', k, v]); return api; },
       or(f) { ctx.filters.push(['or', f]); return api; },
       order() { return api; },
       limit() { return api; },
@@ -94,8 +95,32 @@ function defaultResponder(over = {}) {
     ] };
     if (snap.table === 'weapon_instance' && snap.op === 'select') return { data: [] };
     if (snap.table === 'weapon_instance' && snap.op === 'delete') return { data: null };
-    if (snap.table === 'rpc:generate_weapon') return { data: { id: 99, damage: 50, speed: 30, accuracy: 80, grade: 'C' } };
-    if (snap.table === 'rpc:generate_consumable_instance') return { data: { id: 88 } };
+    if (snap.table === 'rpc:generate_weapon') {
+      // Single-generator contract: full pre-rolled spec on a p_persist=false call
+      // (stock time). Return a complete, stable roll so buy-grant matches what shown.
+      if (snap.payload && snap.payload.p_persist === false) {
+        return { data: {
+          template_id: snap.payload.p_template_id,
+          damage: 51, speed: 31, accuracy: 81, crit_chance: 5,
+          quality_multiplier: 1.05, tier: 'B',
+          slot_0_attack_id: 101, slot_1_attack_id: 102, slot_2_attack_id: null,
+          slot_3_attack_id: null, slot_4_attack_id: null,
+          slot_0_attack: { id: 101 }, slot_1_attack: { id: 102 },
+        } };
+      }
+      // persist path (buy): just an id
+      return { data: { id: 99, damage: 51, speed: 31, accuracy: 81, tier: 'B' } };
+    }
+    if (snap.table === 'rpc:generate_consumable_instance') {
+      if (snap.payload && snap.payload.p_persist === false) {
+        return { data: {
+          template_id: snap.payload.p_template_id,
+          rolled_floor: 11, rolled_window: 5, rolled_speed: 5, crit_chance: 0,
+          grade: 'C', tier: 'C', quality_multiplier: 0.9,
+        } };
+      }
+      return { data: { id: 88 } };
+    }
     if (snap.table === 'rpc:sell_weapon') return { data: { ok: true, gold_gained: 18, new_gold: 1018 } };
     return { data: null };
   };
