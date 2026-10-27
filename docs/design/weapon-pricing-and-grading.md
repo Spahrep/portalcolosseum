@@ -1,7 +1,7 @@
 # Weapon Pricing & Grading System
 
-**Status:** ✅ Accepted — signed off by Spahrep (PC-DEC-076, 2026-10-21)  
-**Date:** 2026-10-21  
+**Status:** ✅ Accepted — signed off by Spahrep (PC-DEC-076, 2026-10-21); price-curve refined by Spahrep (PC-DEC-079, 2026-10-26 — premium on B/A/S)  
+**Date:** 2026-10-21 (updated 2026-10-26)  
 **Audience:** Implementation of the weapon shop (docs/prds/weapon-shop-prd.md)
 
 This document locks in the final model for weapon valuation and tier labeling based on the discussion between Spahrep and Hermes.
@@ -48,18 +48,42 @@ buy_price = round(template.base_price × rarityFactor(qm) × 1.40)
 sell_price = round(template.base_price × rarityFactor(qm) × 0.42)
 ```
 
-`rarityFactor(qm)` is the rarity-aware quality curve: **flat below qm 1.02** (common rolls keep the old linear price), then **ramps steeply into the top-S tail** to ~5× base at qm 1.18. This makes the *rarity of the roll* drive the premium, not the tier label:
-- low-S (qm ~1.11) ≈ high-A (qm ~1.105) — nearly the same quality, nearly the same price (no tier jump).
-- mid-S (qm ~1.145) ≈ **2×** mid-A (qm ~1.095) — a mid-S is a rarer, higher-quality roll, so it commands the premium.
-- top-S (qm ~1.18, the top-1% jackpot) ≈ 4.8× a mid-B.
-- B/C/D/E sit on the flat section, so common gear stays at today's prices.
+`rarityFactor(qm)` is `price_factor(qm)` — a **single continuous, strictly monotonic anchor curve across the whole qm range, with no flat par floor and no tier step** (PC-DEC-079). E/D/C rise gently off ~0.78, then the curve steepens hard through B/A/S — the premium comes from the *slope*, not the tier label. Both the shop UI (`priceFactor` + `PF_ANCH` in `api/combat/shop.js`) and the SQL `public.price_factor()` use the SAME anchor table, byte-identical, so an identical weapon buys and sells on the same curve. Exact anchors (qm → factor):
 
-```js
-rarityFactor = qm <= 1.02 ? qm
-             : 1.02 * (1 + (5.0 - 1) * ((qm - 1.02) / (1.18 - 1.02)) ** 3)
+| qm | factor |
+|----|--------|
+| 0.80 | 0.78 |
+| 0.90 | 0.90 |
+| 0.94 | 0.95 |
+| 0.985 (C) | 1.00 |
+| 1.00 | 1.03 |
+| 1.04 (B entry) | 1.55 (~1.5× a C) |
+| 1.055 | 1.90 |
+| 1.075 (A entry) | 2.30 (~2.2×) |
+| 1.09 | 2.60 |
+| 1.11 (S entry) | 3.30 (~3.2×) |
+| 1.15 | 3.90 |
+| 1.23 (S cap) | 5.20 (~5×) |
+| 1.30 | 5.80 |
+
+Values between anchors are linear interpolation; both ends clamp (≤0.80 → 0.78, ≥1.30 → 5.80).
+
+```sql
+-- public.price_factor(p_qm), mirrored 1:1 by priceFactor in api/combat/shop.js
+SELECT coalesce(
+  max(y0 + (q - x0) / NULLIF(x1 - x0, 0) * (y1 - y0)), max(y0))
+FROM ( SELECT
+         least(greatest(p_qm, 0.80), 1.30) AS q,
+         max(a.x) FILTER (WHERE a.x <= least(greatest(p_qm, 0.80), 1.30)) AS x0,
+         max(a.y) FILTER (WHERE a.x <= least(greatest(p_qm, 0.80), 1.30)) AS y0,
+         min(a.x) FILTER (WHERE a.x >= least(greatest(p_qm, 0.80), 1.30)) AS x1,
+         min(a.y) FILTER (WHERE a.x >= least(greatest(p_qm, 0.80), 1.30)) AS y1
+       FROM (VALUES (0.80,0.78),(0.90,0.90),(0.94,0.95),(0.985,1.00),(1.00,1.03),
+                    (1.04,1.55),(1.055,1.90),(1.075,2.30),(1.09,2.60),(1.11,3.30),
+                    (1.15,3.90),(1.23,5.20),(1.30,5.80)) AS a(x,y) ) b ;
 ```
 
-The same curve feeds both buy and sell, so an identical weapon sells back for the same fraction of its buy price whether it came from a drop or the shop (PC-DEC-076: identical weapons sell identically, source-agnostic). The 1.40× shop premium and 0.42× sell recovery keep the buy/sell margin constant. A god-roll S now sells back for materially more raw gold than a poor D-roll of the same template — because it is rare, not because it is labeled S.
+The same curve feeds both buy and sell, so an identical weapon sells back for the same fraction of its buy price whether it came from a drop or the shop (PC-DEC-076: identical weapons sell identically, source-agnostic). The 1.40× shop premium and 0.42× sell recovery keep the buy/sell margin constant. A god-roll S now sells back for materially more raw gold than a poor D-roll of the same template — because it is rare, not because it is labeled S. The S band carries a firm premium over C (~3.2× at entry, ~5× at cap) per PC-DEC-079 — this replaced the earlier "flat below qm 1.02 / low-S ≈ high-A, no tier jump" intent from PC-DEC-078.
 
 ## 4. Tier Assignment (Aesthetic Label Only)
 
@@ -114,4 +138,4 @@ This resolves the two [ASSUMPTION] items left in the weapon shop PRD and aligns 
 **Next:** Update PRD, add to pending-decisions.md, implement grading fix + power-based pricing in weapon generation and shop.
 
 ---
-Accepted by Spahrep 2026-10-21 (PC-DEC-076).
+Accepted by Spahrep 2026-10-21 (PC-DEC-076). Price curve superseded by continuous monotonic anchor curve per PC-DEC-079. Decided by Spahrep, 2026-10-26.
