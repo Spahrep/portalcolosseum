@@ -130,6 +130,35 @@ function rollWeaponStock(tmpl) {
   };
 }
 
+// Roll a weapon's slot attacks at STOCK time so the shop card is the complete
+// instance the buyer receives ("display is a promise"). Uses the same SQL RPC
+// that mirrors generate_weapon's identical sequential chain — slot 0 always
+// from template.slot_0_attack_id, slots 1-4 chain-gated by slot_N_chance. The
+// RPC returns the full attack rows; we reduce to the 5 slot_attack_id columns.
+// Returns { slot_attack_ids: { slot_0: id|null, ..., slot_4: id|null } }.
+async function rollWeaponAttacks(admin, templateId) {
+  const empty = { slot_0: null, slot_1: null, slot_2: null, slot_3: null, slot_4: null };
+  if (!templateId) return { slot_attack_ids: empty };
+  let res;
+  try {
+    res = await admin.rpc('roll_shop_stock_attacks', { p_template_id: templateId });
+  } catch (e) {
+    console.error('shop roll_shop_stock_attacks rpc error', e);
+    return { slot_attack_ids: empty };
+  }
+  if (res.error) {
+    console.error('shop roll_shop_stock_attacks rpc error', res.error);
+    return { slot_attack_ids: empty };
+  }
+  const a = res.data || {};
+  const ids = { ...empty };
+  for (let i = 0; i <= 4; i++) {
+    const row = a[`slot_${i}_attack`];
+    if (row && row.id) ids[`slot_${i}`] = row.id;
+  }
+  return { slot_attack_ids: ids, slot_attack_rows: a };
+}
+
 // roll one consumable stock item (floor/window model) — does NOT persist
 function rollConsumableStock(tmpl) {
   const floor = Math.max(1, Number(tmpl.floor_base) + Math.floor(Math.random() * ((Number(tmpl.floor_delta) || 0) + 1)));
@@ -204,7 +233,10 @@ async function rollStock(admin, maxPortalId = 1) {
   for (let slot = 1; slot <= 2; slot++) {
     const t = weapons.length ? weapons[Math.floor(Math.random() * weapons.length)] : null;
     if (!t) continue;
-    stock.push({ slot, ...rollWeaponStock(t), name: t.name });
+    const item = rollWeaponStock(t);
+    // roll + persist the weapon's slot attacks at STOCK time (complete instance)
+    const attacks = await rollWeaponAttacks(admin, t.id);
+    stock.push({ slot, ...item, ...attacks, name: t.name });
   }
   // 2 potions (slots 3-4)
   for (let slot = 3; slot <= 4; slot++) {
@@ -218,23 +250,32 @@ async function rollStock(admin, maxPortalId = 1) {
 // persist a rolled stock for the player for today
 async function persistStock(admin, userId, stock) {
   const today = utcToday();
-  const rows = stock.map(s => ({
-    user_id: userId,
-    slot: s.slot,
-    kind: s.kind,
-    template_id: s.template_id,
-    name: s.name ?? null,
-    stock_date: today,
-    damage: s.damage ?? null,
-    speed: s.speed ?? null,
-    accuracy: s.accuracy ?? null,
-    crit_chance: s.crit_chance ?? null,
-    quality_multiplier: s.quality_multiplier ?? null,
-    tier: s.tier ?? null,
-    rolled_floor: s.rolled_floor ?? null,
-    rolled_window: s.rolled_window ?? null,
-    rolled_speed: s.rolled_speed ?? null,
-  }));
+  const rows = [];
+  for (const s of stock) {
+    const sai = s.slot_attack_ids || {};
+    rows.push({
+      user_id: userId,
+      slot: s.slot,
+      kind: s.kind,
+      template_id: s.template_id,
+      name: s.name ?? null,
+      stock_date: today,
+      damage: s.damage ?? null,
+      speed: s.speed ?? null,
+      accuracy: s.accuracy ?? null,
+      crit_chance: s.crit_chance ?? null,
+      quality_multiplier: s.quality_multiplier ?? null,
+      tier: s.tier ?? null,
+      rolled_floor: s.rolled_floor ?? null,
+      rolled_window: s.rolled_window ?? null,
+      rolled_speed: s.rolled_speed ?? null,
+      slot_0_attack_id: sai.slot_0 ?? null,
+      slot_1_attack_id: sai.slot_1 ?? null,
+      slot_2_attack_id: sai.slot_2 ?? null,
+      slot_3_attack_id: sai.slot_3 ?? null,
+      slot_4_attack_id: sai.slot_4 ?? null,
+    });
+  }
   await admin.from('shop_stock').delete().eq('user_id', userId).eq('stock_date', today);
   if (rows.length) await admin.from('shop_stock').insert(rows);
   await admin.from('profiles')
@@ -275,9 +316,26 @@ async function countWeapons(admin, userId) {
   return count || 0;
 }
 
-// decorate persisted stock rows into the API contract shape
-function decorateStock(rows, cfg) {
-  return rows.map(r => {
+// decorate persisted stock rows into the API contract shape.
+// Async: for weapons, the persisted slot attack ids are hydrated into a full
+// attacks array so the card can show every attack the buyer will receive.
+async function decorateStock(rows, cfg, admin) {
+  const weaponIds = new Set();
+  for (const r of rows) {
+    if (r.kind === 'weapon') {
+      for (const key of ['slot_0_attack_id', 'slot_1_attack_id', 'slot_2_attack_id', 'slot_3_attack_id', 'slot_4_attack_id']) {
+        if (r[key]) weaponIds.add(Number(r[key]));
+      }
+    }
+  }
+  const attackById = {};
+  if (weaponIds.size && admin) {
+    const { data: attackRows } = await admin.from('attack')
+      .select('id,name,description,base_damage_multiplier,base_damage_multiplier_range,crit_multiplier,prepare_time_multiplier,cooldown_time_multiplier,is_multi_target')
+      .in('id', [...weaponIds]);
+    (attackRows || []).forEach(a => { attackById[Number(a.id)] = a; });
+  }
+  return Promise.all(rows.map(async r => {
     const qm = Number(r.quality_multiplier) || 1;
     let buy = buyPriceOf(Number(r.base_price) || 45, qm);
     if (r.kind === 'consumable') {
@@ -286,10 +344,18 @@ function decorateStock(rows, cfg) {
     }
     const name = r.name || r.weapon_template?.name || 'Unknown';
     if (r.kind === 'weapon') {
+      const attacks = [];
+      for (let i = 0; i <= 4; i++) {
+        const idKey = `slot_${i}_attack_id`;
+        const aid = Number(r[idKey]);
+        if (aid && attackById[aid]) attacks.push(attackById[aid]);
+      }
       return {
         slot: r.slot, kind: 'weapon', template_id: r.template_id, name,
         tier: r.tier, quality_multiplier: Number(r.quality_multiplier), buy_price: buy,
         damage: r.damage, speed: r.speed, accuracy: r.accuracy, crit_chance: r.crit_chance,
+        attack_count: attacks.length,
+        attacks,
       };
     }
     return {
@@ -297,7 +363,7 @@ function decorateStock(rows, cfg) {
       tier: r.tier, quality_multiplier: Number(r.quality_multiplier), buy_price: buy,
       rolled_floor: r.rolled_floor, rolled_window: r.rolled_window,
     };
-  });
+  }));
 }
 
 // --- route handlers ---
@@ -322,7 +388,7 @@ export async function handleShop({ request, path, method, admin, user, json }) {
     const rerollCost = Math.round(cfg.reroll_base_price * Math.pow(cfg.reroll_price_multiplier, rerollCount));
     const weaponCount = await countWeapons(admin, userId);
     return json({
-      stock: decorateStock(stockRows, cfg),
+      stock: await decorateStock(stockRows, cfg, admin),
       reroll_cost: rerollCost,
       ap_reset_cost: cfg.ap_reset_cost,
       gold,
@@ -386,6 +452,12 @@ export async function handleShop({ request, path, method, admin, user, json }) {
             quality_multiplier: item.quality_multiplier,
             tier: item.tier,
             grade: item.tier,
+            // grant EXACTLY the stock-displayed slot attacks (display is a promise)
+            slot_0_attack_id: item.slot_0_attack_id ?? null,
+            slot_1_attack_id: item.slot_1_attack_id ?? null,
+            slot_2_attack_id: item.slot_2_attack_id ?? null,
+            slot_3_attack_id: item.slot_3_attack_id ?? null,
+            slot_4_attack_id: item.slot_4_attack_id ?? null,
           })
           .eq('id', instanceId);
         if (upd.error) throw upd.error;
@@ -455,7 +527,7 @@ export async function handleShop({ request, path, method, admin, user, json }) {
     const nextCount = rerollCount + 1;
     await admin.from('profiles').update({ shop_reroll_count: nextCount }).eq('id', userId);
     const nextCost = Math.round(cfg.reroll_base_price * Math.pow(cfg.reroll_price_multiplier, nextCount));
-    return json({ ok: true, stock: decorateStock(fresh, cfg), reroll_cost: nextCost, new_gold: gold - rerollCost });
+    return json({ ok: true, stock: await decorateStock(fresh, cfg, admin), reroll_cost: nextCost, new_gold: gold - rerollCost });
   }
 
   // POST /shop/ap-reset

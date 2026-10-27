@@ -30,11 +30,12 @@ let focusables = [];
 function collectFocusables() {
   if (!modal) return [];
   const cards = Array.from(modal.querySelectorAll('.shop-item-card'));
+  const chips = Array.from(modal.querySelectorAll('.shop-attack-chip'));
   const reroll = modal.querySelector('#shop-reroll-btn');
   const apreset = modal.querySelector('#shop-apreset-btn');
   const sell = modal.querySelector('.shop-sell-btn');
   const back = modal.querySelector('.shop-back-btn');
-  const list = [...cards];
+  const list = [...cards, ...chips];
   if (reroll) list.push(reroll);
   if (apreset) list.push(apreset);
   if (sell) list.push(sell);
@@ -44,13 +45,32 @@ function collectFocusables() {
 
 function applyFocus() {
   if (!modal) return;
-  modal.querySelectorAll('.shop-item-card, .shop-buy-btn, .shop-sell-item-btn, #shop-reroll-btn, #shop-apreset-btn, .shop-sell-btn, .shop-back-btn')
-    .forEach(el => el.classList.remove('shop-focused'));
-  if (focusIndex < 0 || focusIndex >= focusables.length) return;
+  const all = modal.querySelectorAll('.shop-item-card, .shop-buy-btn, .shop-sell-item-btn, .shop-attack-chip, #shop-reroll-btn, #shop-apreset-btn, .shop-sell-btn, .shop-back-btn');
+  all.forEach(el => el.classList.remove('shop-focused'));
+  // clear attack info from every card before re-highlighting
+  if (focusIndex < 0 || focusIndex >= focusables.length) {
+    modal.querySelectorAll('.shop-attack-info').forEach(info => {
+      info.classList.remove('shop-attack-info-active');
+      info.innerHTML = '';
+    });
+    return;
+  }
   const el = focusables[focusIndex];
   if (!el) return;
   el.classList.add('shop-focused');
   if (typeof el.focus === 'function') el.focus({ preventScroll: true });
+  // arrow-selecting an attack chip reveals its details in the card's info line
+  if (el.classList.contains('shop-attack-chip')) {
+    const card = el.closest('.shop-item-card');
+    showAttackInfo(card, el.dataset.attackIdx);
+  } else if (!el.classList.contains('shop-item-card')) {
+    // leaving chips/headers hides any lingering chip tooltip (card stays focused)
+    const card = el.closest('.shop-item-card');
+    if (card) {
+      const info = card.querySelector('.shop-attack-info');
+      if (info) info.classList.remove('shop-attack-info-active');
+    }
+  }
 }
 
 function moveFocus(delta) {
@@ -108,6 +128,24 @@ function createModalIfNeeded() {
   if (closeBtn) closeBtn.addEventListener('click', closeShop);
   modal.addEventListener('click', (e) => {
     if (e.target === modal) closeShop();
+  });
+  // Attack-detail tooltip: hovering an attack chip reveals it in the card info
+  // line. Delegation survives stockGrid re-renders (chips are re-created each
+  // refresh/reroll, so per-chip listeners would need re-attaching every time).
+  modal.addEventListener('mouseover', (e) => {
+    const chip = e.target.closest('.shop-attack-chip');
+    if (!chip) return;
+    showAttackInfo(chip.closest('.shop-item-card'), chip.dataset.attackIdx);
+  });
+  modal.addEventListener('mouseout', (e) => {
+    const chip = e.target.closest('.shop-attack-chip');
+    if (!chip) return;
+    const leavingIt = chip.contains(e.relatedTarget);
+    if (!leavingIt) {
+      const card = chip.closest('.shop-item-card');
+      const info = card?.querySelector('.shop-attack-info');
+      if (info) info.classList.remove('shop-attack-info-active');
+    }
   });
 }
 
@@ -183,9 +221,52 @@ function statsLine(item) {
   return `<div class="shop-stats">Floor ${item.rolled_floor} • Window ${item.rolled_window}</div>`;
 }
 
+function attackDetailHtml(a) {
+  if (!a) return 'Hover or arrow-select an attack to see its details.';
+  const parts = [];
+  if (a.base_damage_multiplier != null) parts.push(`DMG ×${a.base_damage_multiplier}`);
+  if (a.prepare_time_multiplier != null) parts.push(`Prep ×${a.prepare_time_multiplier}`);
+  if (a.cooldown_time_multiplier != null) parts.push(`CD ×${a.cooldown_time_multiplier}`);
+  if (a.crit_multiplier != null) parts.push(`Crit ×${a.crit_multiplier}`);
+  if (a.is_multi_target) parts.push('<span class="shop-attack-multi">MULTI-TARGET</span>');
+  const desc = a.description ? `<span class="shop-attack-desc">${a.description}</span>` : '';
+  return `<b>${a.name}</b><br>${parts.length ? parts.join(' • ') + '<br>' : ''}${desc}`;
+}
+
+// Weapon cards expose their rolled attacks as focusable chips. Hovering or
+// arrow-selecting a chip fills the card's info line with that attack's details.
+function attackRowHtml(item) {
+  if (item.kind !== 'weapon') return '';
+  const attacks = item.attacks || [];
+  if (!attacks.length) {
+    return '<div class="shop-attack-row"><span class="shop-attack-count">0 attacks</span></div>';
+  }
+  const chips = attacks.map((a, i) =>
+    `<span class="shop-attack-chip" tabindex="0" data-attack-idx="${i}" data-card-slot="${item.slot}">${a.name}</span>`
+  ).join('');
+  return `<div class="shop-attack-row"><span class="shop-attack-count">${attacks.length} attack${attacks.length > 1 ? 's' : ''}:</span> ${chips}<div class="shop-attack-info"></div></div>`;
+}
+
+function findStockItem(slot) {
+  return (currentData?.stock || []).find(s => String(s.slot) === String(slot));
+}
+
+// Populate a card's attack-info line from the given attack index.
+function showAttackInfo(card, idx) {
+  const info = card?.querySelector('.shop-attack-info');
+  if (!info) return;
+  const slot = card?.dataset.slot;
+  const item = findStockItem(slot);
+  const a = idx != null ? (item?.attacks?.[Number(idx)]) : null;
+  info.innerHTML = attackDetailHtml(a);
+  if (a) info.classList.add('shop-attack-info-active');
+  else info.classList.remove('shop-attack-info-active');
+}
+
 function renderItemCard(item) {
   const isWeapon = item.kind === 'weapon';
   const statsHtml = statsLine(item);
+  const attacksHtml = isWeapon ? attackRowHtml(item) : '';
   return `
     <div class="shop-item-card" data-slot="${item.slot}" data-kind="${item.kind}" tabindex="0">
       <div class="shop-item-header">
@@ -193,6 +274,7 @@ function renderItemCard(item) {
         ${tierBadge(item.tier)}
       </div>
       ${statsHtml}
+      ${attacksHtml}
       <div class="shop-item-price">${item.buy_price}g <span class="shop-qmult">×${item.quality_multiplier}</span></div>
       <button class="shop-buy-btn" data-slot="${item.slot}">BUY</button>
     </div>

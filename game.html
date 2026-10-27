@@ -155,7 +155,6 @@
       <div class="shop-header" id="shop-header"></div>
       <div class="shop-message" id="shop-message" hidden></div>
       <div class="shop-stock-grid" id="shop-stock-grid"></div>
-      <div class="shop-footer">Pixel shop • fixed stock • reroll costs gold • AP resets cost</div>
     </div>
   </div>
 
@@ -189,6 +188,15 @@
     .shop-dps { color: #ffcc66; font-weight: 700; }
     .shop-item-price { color: #ffcc66; font-size: 17px; margin: 6px 0 12px; }
     .shop-qmult { font-size: 12px; color: #888; }
+    .shop-attack-row { font-size: 13px; color: #ccc; margin: 6px 0 8px; line-height: 1.5; }
+    .shop-attack-count { color: #888; margin-right: 6px; }
+    .shop-attack-chip { display: inline-block; background: #1d1d1d; border: 1px solid #666; color: #ffcc66; padding: 1px 8px; margin: 0 4px 3px 0; cursor: pointer; font-family: 'Pixeloid Mono', monospace; font-size: 12px; }
+    .shop-attack-chip.shop-focused, .shop-attack-chip:focus { border-color: #ffcc66; background: #2a2418; outline: 2px solid #ffcc66; }
+    .shop-attack-chip:hover { border-color: #ffcc66; background: #2a2418; }
+    .shop-attack-info { display: none; margin-top: 6px; padding: 8px 10px; background: rgba(0,0,0,0.6); border: 1px dashed #ffcc66; font-size: 12px; color: #f8f8f0; line-height: 1.5; }
+    .shop-attack-info-active { display: block; }
+    .shop-attack-desc { color: #aaa; font-style: italic; }
+    .shop-attack-multi { color: #ff7b7b; font-weight: 700; }
     .shop-buy-btn, .shop-sell-btn { width: 100%; font-family: 'Pixeloid Mono', monospace; background: #222; color: #0f0; border: 2px solid #0f0; padding: 8px; cursor: pointer; font-size: 15px; }
     .shop-sell-item-btn { width: 100%; font-family: 'Pixeloid Mono', monospace; background: #222; color: #ff7b7b; border: 2px solid #ff7b7b; padding: 8px; cursor: pointer; font-size: 15px; }
     .shop-sell-item-btn:disabled { cursor: wait; }
