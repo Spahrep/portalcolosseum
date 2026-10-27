@@ -4,6 +4,14 @@
  * Two views: buy (the daily stock) and sell (your owned weapons).
  * Uses apiCall to /combat/shop* endpoints. No imports from battle-app, cli-app, admin-app.
  * Exports: initShop, openShop, closeShop, isShopOpen
+ *
+ * Keyboard model (mouse-free, matching the game's arrow-key feel):
+ *   - Top-level: arrows move across item cards + header action buttons.
+ *   - Enter on a card SELECTS it (highlights it) and drops focus into that card,
+ *     defaulting to its BUY button — hit Enter again to buy. While inside a
+ *     card, arrows walk BUY -> attack chips -> BUY..., and Escape steps back
+ *     out to card-level. Selecting/hovering an attack chip pops a floating
+ *     info node (does NOT expand the card itself).
  */
 
 import { apiCall } from './combat/combat-api.js';
@@ -22,20 +30,21 @@ let headerEl = null;
 let currentData = null;
 let focusIndex = -1;
 let focusables = [];
+let cardDetailIndex = -1; // >=0 = inside a selected card, index into its BUY/chips
+let popEl = null;         // floating attack-info node
 
-// --- keyboard navigation (mouse-free, matches the game's arrow-key feel) ---
-// Focusable order after each render: the item/sell cards, then the header
-// action buttons (reroll, AP reset) and the sell/back button.
-// ArrowLeft/Up = prev, ArrowRight/Down = next, Enter = activate, Escape = close.
+// --- keyboard navigation ---
+// Top-level focusables: item/sell cards, then the header action buttons
+// (reroll, AP reset) and the sell/back button. Attack chips are NOT top-level;
+// they are reached only after Entering a card (see cardDetailFocusables).
 function collectFocusables() {
   if (!modal) return [];
   const cards = Array.from(modal.querySelectorAll('.shop-item-card'));
-  const chips = Array.from(modal.querySelectorAll('.shop-attack-chip'));
   const reroll = modal.querySelector('#shop-reroll-btn');
   const apreset = modal.querySelector('#shop-apreset-btn');
   const sell = modal.querySelector('.shop-sell-btn');
   const back = modal.querySelector('.shop-back-btn');
-  const list = [...cards, ...chips];
+  const list = [...cards];
   if (reroll) list.push(reroll);
   if (apreset) list.push(apreset);
   if (sell) list.push(sell);
@@ -43,37 +52,62 @@ function collectFocusables() {
   return list;
 }
 
+// The sub-elements reachable inside a SELECTED card: its action button (BUY in
+// the buy view, SELL in the sell view) first, then its attack chips.
+function cardDetailFocusables(card) {
+  if (!card) return [];
+  const action = card.querySelector('.shop-buy-btn') || card.querySelector('.shop-sell-item-btn');
+  const chips = Array.from(card.querySelectorAll('.shop-attack-chip'));
+  const list = [];
+  if (action) list.push(action);
+  list.push(...chips);
+  return list;
+}
+
 function applyFocus() {
   if (!modal) return;
   const all = modal.querySelectorAll('.shop-item-card, .shop-buy-btn, .shop-sell-item-btn, .shop-attack-chip, #shop-reroll-btn, #shop-apreset-btn, .shop-sell-btn, .shop-back-btn');
-  all.forEach(el => el.classList.remove('shop-focused'));
-  // clear attack info from every card before re-highlighting
-  if (focusIndex < 0 || focusIndex >= focusables.length) {
-    modal.querySelectorAll('.shop-attack-info').forEach(info => {
-      info.classList.remove('shop-attack-info-active');
-      info.innerHTML = '';
-    });
+  all.forEach(el => {
+    el.classList.remove('shop-focused');
+    el.classList.remove('shop-child-active');
+  });
+  const card = focusables[focusIndex];
+  if (focusIndex < 0 || focusIndex >= focusables.length || !card) {
+    hideAttackPop();
     return;
   }
-  const el = focusables[focusIndex];
-  if (!el) return;
-  el.classList.add('shop-focused');
-  if (typeof el.focus === 'function') el.focus({ preventScroll: true });
-  // arrow-selecting an attack chip reveals its details in the card's info line
-  if (el.classList.contains('shop-attack-chip')) {
-    const card = el.closest('.shop-item-card');
-    showAttackInfo(card, el.dataset.attackIdx);
-  } else if (!el.classList.contains('shop-item-card')) {
-    // leaving chips/headers hides any lingering chip tooltip (card stays focused)
-    const card = el.closest('.shop-item-card');
-    if (card) {
-      const info = card.querySelector('.shop-attack-info');
-      if (info) info.classList.remove('shop-attack-info-active');
+  card.classList.add('shop-focused');
+  if (typeof card.focus === 'function') card.focus({ preventScroll: true });
+  if (cardDetailIndex >= 0) {
+    // inside the card — mark it selected and highlight the active child
+    card.classList.add('shop-selected');
+    const children = cardDetailFocusables(card);
+    const child = children[cardDetailIndex];
+    if (child) {
+      child.classList.add('shop-child-active');
+      // selecting an attack chip pops its floating info node
+      if (child.classList.contains('shop-attack-chip')) {
+        showAttackPop(card, child.dataset.attackIdx);
+      } else {
+        hideAttackPop();
+      }
     }
   }
 }
 
 function moveFocus(delta) {
+  if (focusIndex < 0) return;
+  if (cardDetailIndex >= 0) {
+    const card = focusables[focusIndex];
+    const children = cardDetailFocusables(card);
+    if (!children.length) {
+      cardDetailIndex = -1;
+      return;
+    }
+    cardDetailIndex = (cardDetailIndex + delta + children.length) % children.length;
+    applyFocus();
+    return;
+  }
   if (!focusables.length) return;
   focusIndex = (focusIndex + delta + focusables.length) % focusables.length;
   applyFocus();
@@ -82,9 +116,26 @@ function moveFocus(delta) {
 function activateFocused() {
   const el = focusables[focusIndex];
   if (!el) return;
+  if (cardDetailIndex >= 0) {
+    const children = cardDetailFocusables(el);
+    const child = children[cardDetailIndex];
+    if (!child) {
+      cardDetailIndex = -1;
+      applyFocus();
+      return;
+    }
+    if (child.classList.contains('shop-buy-btn') || child.classList.contains('shop-sell-item-btn')) {
+      child.click(); // second Enter on the default BUY executes the purchase
+    } else if (child.classList.contains('shop-attack-chip')) {
+      showAttackPop(el, child.dataset.attackIdx); // re-affirm the floating node
+    }
+    return;
+  }
   if (el.classList.contains('shop-item-card')) {
-    const btn = el.querySelector('.shop-buy-btn') || el.querySelector('.shop-sell-item-btn');
-    if (btn) btn.click();
+    // Enter on an item SELECTS it (highlighted) and defaults to its BUY/SELECT
+    // button; a second Enter performs the action.
+    cardDetailIndex = 0;
+    applyFocus();
   } else if (typeof el.click === 'function') {
     el.click();
   }
@@ -107,11 +158,23 @@ function handleShopKeydown(e) {
       e.preventDefault();
       activateFocused();
       break;
-    case 'Escape':
-      e.preventDefault();
-      closeShop();
-      break;
+    // NOTE: Escape is owned by game-app.js (the single global Escape handler).
+    // It calls handleShopEscape() below; if that reports "consumed" (we stepped
+    // back out of a selected card), game-app skips closing the shop.
   }
+}
+
+// Called by game-app's global Escape handler. Returns true if the Escape was
+// consumed (stepped back out of a selected item card — do NOT close the shop),
+// false if the shop should close normally.
+export function handleShopEscape() {
+  if (!isShopOpen()) return false;
+  if (cardDetailIndex >= 0) {
+    cardDetailIndex = -1;
+    applyFocus();
+    return true;
+  }
+  return false;
 }
 
 function createModalIfNeeded() {
@@ -129,24 +192,28 @@ function createModalIfNeeded() {
   modal.addEventListener('click', (e) => {
     if (e.target === modal) closeShop();
   });
-  // Attack-detail tooltip: hovering an attack chip reveals it in the card info
-  // line. Delegation survives stockGrid re-renders (chips are re-created each
-  // refresh/reroll, so per-chip listeners would need re-attaching every time).
+  // Attack-detail floating node: hovering an attack chip pops an info node that
+  // floats over the screen (it may overlap other content, by design) instead of
+  // expanding the card itself. Delegation survives stockGrid re-renders (chips
+  // are re-created each refresh/reroll, so per-chip listeners would need
+  // re-attaching every time).
   modal.addEventListener('mouseover', (e) => {
     const chip = e.target.closest('.shop-attack-chip');
     if (!chip) return;
-    showAttackInfo(chip.closest('.shop-item-card'), chip.dataset.attackIdx);
+    showAttackPop(chip.closest('.shop-item-card'), chip.dataset.attackIdx);
   });
   modal.addEventListener('mouseout', (e) => {
     const chip = e.target.closest('.shop-attack-chip');
     if (!chip) return;
+    const enteringAnotherChip = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.shop-attack-chip');
+    if (enteringAnotherChip) return;
     const leavingIt = chip.contains(e.relatedTarget);
     if (!leavingIt) {
-      const card = chip.closest('.shop-item-card');
-      const info = card?.querySelector('.shop-attack-info');
-      if (info) info.classList.remove('shop-attack-info-active');
+      hideAttackPop();
     }
   });
+  // Hide the floating node when the mouse leaves the grid entirely.
+  stockGrid.addEventListener('mouseleave', hideAttackPop);
 }
 
 function tierBadge(tier) {
@@ -221,20 +288,65 @@ function statsLine(item) {
   return `<div class="shop-stats">Floor ${item.rolled_floor} • Window ${item.rolled_window}</div>`;
 }
 
+// --- floating attack-info node ---
+// Selectable/hoverable attack chips pop a detached node that floats over the
+// shop (it may overlap other cards — that is intended) instead of expanding
+// the selected card's own layout.
 function attackDetailHtml(a) {
-  if (!a) return 'Hover or arrow-select an attack to see its details.';
+  if (!a) return '';
   const parts = [];
   if (a.base_damage_multiplier != null) parts.push(`DMG ×${a.base_damage_multiplier}`);
   if (a.prepare_time_multiplier != null) parts.push(`Prep ×${a.prepare_time_multiplier}`);
   if (a.cooldown_time_multiplier != null) parts.push(`CD ×${a.cooldown_time_multiplier}`);
   if (a.crit_multiplier != null) parts.push(`Crit ×${a.crit_multiplier}`);
   if (a.is_multi_target) parts.push('<span class="shop-attack-multi">MULTI-TARGET</span>');
-  const desc = a.description ? `<span class="shop-attack-desc">${a.description}</span>` : '';
-  return `<b>${a.name}</b><br>${parts.length ? parts.join(' • ') + '<br>' : ''}${desc}`;
+  const desc = a.description ? `<div class="shop-attack-desc">${a.description}</div>` : '';
+  return `<div class="shop-attack-pop-stats">${parts.length ? parts.join(' • ') : 'No special stats'}</div>${desc}`;
 }
 
-// Weapon cards expose their rolled attacks as focusable chips. Hovering or
-// arrow-selecting a chip fills the card's info line with that attack's details.
+function ensurePopEl() {
+  if (popEl) return popEl;
+  popEl = document.createElement('div');
+  popEl.className = 'shop-attack-pop';
+  popEl.hidden = true;
+  document.body.appendChild(popEl);
+  return popEl;
+}
+
+function hideAttackPop() {
+  if (popEl) popEl.hidden = true;
+}
+
+// Float the attack-info node beside the owning card, clamped to the viewport.
+function positionPopNear(card, el) {
+  const r = card.getBoundingClientRect();
+  const popW = 340;
+  let left = Math.min(r.right + 12, window.innerWidth - popW - 8);
+  if (left < 8) left = Math.max(8, r.left - popW - 12);
+  const top = Math.max(8, Math.min(r.top, window.innerHeight - 90));
+  el.style.left = left + 'px';
+  el.style.top = top + 'px';
+  el.style.width = popW + 'px';
+}
+
+function showAttackPop(card, idx) {
+  const el = ensurePopEl();
+  const slot = card?.dataset.slot;
+  const item = findStockItem(slot);
+  const a = idx != null ? (item?.attacks?.[Number(idx)]) : null;
+  if (!a || !card) {
+    hideAttackPop();
+    return;
+  }
+  const name = item?.name ? `<div class="shop-attack-pop-item">${item.name}</div>` : '';
+  el.innerHTML = `<div class="shop-attack-pop-title">${a.name}</div>${name}${attackDetailHtml(a)}`;
+  el.hidden = false;
+  positionPopNear(card, el);
+}
+
+// Weapon cards expose their rolled attacks as focusable chips. Selecting an
+// attack chip (keyboard) or hovering it (mouse) pops the floating info node;
+// the card itself is never expanded.
 function attackRowHtml(item) {
   if (item.kind !== 'weapon') return '';
   const attacks = item.attacks || [];
@@ -244,23 +356,11 @@ function attackRowHtml(item) {
   const chips = attacks.map((a, i) =>
     `<span class="shop-attack-chip" tabindex="0" data-attack-idx="${i}" data-card-slot="${item.slot}">${a.name}</span>`
   ).join('');
-  return `<div class="shop-attack-row"><span class="shop-attack-count">${attacks.length} attack${attacks.length > 1 ? 's' : ''}:</span> ${chips}<div class="shop-attack-info"></div></div>`;
+  return `<div class="shop-attack-row"><span class="shop-attack-count">${attacks.length} attack${attacks.length > 1 ? 's' : ''}:</span> ${chips}</div>`;
 }
 
 function findStockItem(slot) {
   return (currentData?.stock || []).find(s => String(s.slot) === String(slot));
-}
-
-// Populate a card's attack-info line from the given attack index.
-function showAttackInfo(card, idx) {
-  const info = card?.querySelector('.shop-attack-info');
-  if (!info) return;
-  const slot = card?.dataset.slot;
-  const item = findStockItem(slot);
-  const a = idx != null ? (item?.attacks?.[Number(idx)]) : null;
-  info.innerHTML = attackDetailHtml(a);
-  if (a) info.classList.add('shop-attack-info-active');
-  else info.classList.remove('shop-attack-info-active');
 }
 
 function renderItemCard(item) {
@@ -324,8 +424,10 @@ async function openSellView() {
     }
     stockGrid.innerHTML = body;
     attachSellListeners();
+    hideAttackPop();
     focusables = collectFocusables();
     focusIndex = focusables.length ? 0 : -1;
+    cardDetailIndex = -1;
     applyFocus();
   } catch (e) {
     if (stockGrid) stockGrid.innerHTML = `<div class="shop-error">Failed to load inventory: ${e.message}</div>`;
@@ -485,9 +587,11 @@ function renderShop(data) {
   const sellHtml = renderSellSection(data.can_sell_last_weapon);
   stockGrid.innerHTML = cards + sellHtml;
   attachActionListeners();
+  hideAttackPop();
   // rebuild keyboard focus list and land on the first item
   focusables = collectFocusables();
   focusIndex = focusables.length ? 0 : -1;
+  cardDetailIndex = -1;
   applyFocus();
 }
 
@@ -517,6 +621,8 @@ export function closeShop() {
     modal.hidden = true;
     focusIndex = -1;
     focusables = [];
+    cardDetailIndex = -1;
+    hideAttackPop();
     // clear selection like other modals
     document.querySelectorAll('.location-marker').forEach(m => m.classList.remove('selected', 'visited'));
   }

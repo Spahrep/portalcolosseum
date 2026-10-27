@@ -23,7 +23,7 @@ import {
 import {
   showNotReadyModal, showMenuSettings, initMenuSettings,
 } from './settings-menu.js';
-import { openShop, closeShop, isShopOpen } from './shop-app.js';
+import { openShop, closeShop, isShopOpen, handleShopEscape } from './shop-app.js';
 
 // === SUPABASE CONFIGURATION ===
 const SUPABASE_URL = window.ENV.SUPABASE_URL;
@@ -450,8 +450,9 @@ document.addEventListener('DOMContentLoaded', () => {
         hideNotReadyModal();
         // Dismiss the menu/settings modal if open
         hideMenuSettings();
-        // Dismiss shop if open
-        if (isShopOpen()) closeShop();
+        // Dismiss shop if open — but if a card is selected, the first Escape
+        // steps back out of it (consumed) instead of closing the whole shop.
+        if (isShopOpen() && !handleShopEscape()) closeShop();
         break;
     }
   });

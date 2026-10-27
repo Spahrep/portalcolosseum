@@ -180,6 +180,8 @@
     .shop-stock-grid { position: relative; z-index: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; padding: 24px; margin-top: auto; max-height: 55vh; overflow: auto; }
     .shop-item-card { background: rgba(20,20,20,0.95); border: 2px solid #444; padding: 18px; font-family: 'Pixeloid Mono', monospace; color: #f8f8f0; }
     .shop-item-card.shop-focused, .shop-item-card:focus { border-color: #ffcc66; outline: 2px solid #ffcc66; box-shadow: 0 0 12px rgba(255, 204, 102, 0.5); }
+    .shop-item-card.shop-selected, .shop-item-card.shop-focused.shop-selected { border-color: #fff; outline: 3px solid #fff; box-shadow: 0 0 22px rgba(255, 255, 255, 0.6); }
+    .shop-child-active, .shop-buy-btn.shop-child-active, .shop-sell-item-btn.shop-child-active, .shop-attack-chip.shop-child-active { outline: 2px solid #7bc4ff !important; background: #2a2418; color: #fff; }
     .shop-buy-btn.shop-focused, #shop-reroll-btn.shop-focused, #shop-apreset-btn.shop-focused, .shop-sell-btn.shop-focused { outline: 2px solid #ffcc66; }
     .shop-item-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
     .shop-item-name { font-weight: 700; font-size: 18px; }
@@ -193,8 +195,12 @@
     .shop-attack-chip { display: inline-block; background: #1d1d1d; border: 1px solid #666; color: #ffcc66; padding: 1px 8px; margin: 0 4px 3px 0; cursor: pointer; font-family: 'Pixeloid Mono', monospace; font-size: 12px; }
     .shop-attack-chip.shop-focused, .shop-attack-chip:focus { border-color: #ffcc66; background: #2a2418; outline: 2px solid #ffcc66; }
     .shop-attack-chip:hover { border-color: #ffcc66; background: #2a2418; }
-    .shop-attack-info { display: none; margin-top: 6px; padding: 8px 10px; background: rgba(0,0,0,0.6); border: 1px dashed #ffcc66; font-size: 12px; color: #f8f8f0; line-height: 1.5; }
-    .shop-attack-info-active { display: block; }
+    .shop-attack-pop { position: fixed; z-index: 300; background: rgba(8,10,14,0.97); border: 3px double #7bc4ff; outline: 2px solid #000; box-shadow: 0 0 30px rgba(123, 196, 255, 0.5); padding: 14px 16px; font-family: 'Pixeloid Mono', monospace; color: #f8f8f0; font-size: 13px; line-height: 1.6; max-width: 90vw; }
+    .shop-attack-pop-title { font-size: 17px; font-weight: 700; color: #7bc4ff; margin-bottom: 4px; }
+    .shop-attack-pop-item { font-size: 12px; color: #888; margin-bottom: 8px; }
+    .shop-attack-pop-stats { color: #f8f8f0; margin: 4px 0 6px; }
+    .shop-attack-pop .shop-attack-desc { color: #aaa; font-style: italic; }
+    .shop-attack-pop .shop-attack-multi { color: #ff7b7b; font-weight: 700; }
     .shop-attack-desc { color: #aaa; font-style: italic; }
     .shop-attack-multi { color: #ff7b7b; font-weight: 700; }
     .shop-buy-btn, .shop-sell-btn { width: 100%; font-family: 'Pixeloid Mono', monospace; background: #222; color: #0f0; border: 2px solid #0f0; padding: 8px; cursor: pointer; font-size: 15px; }
