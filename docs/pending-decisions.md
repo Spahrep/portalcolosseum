@@ -665,6 +665,14 @@ and applied to the permanent docs in the same pass (Spahrep 2026-09-16).
   Status: DECIDED
   Notes: Overturns the flat-par pricing implied by PC-DEC-078. Rolling an A that price ~8% above a C (bottom-A qm 1.0879 vs base-C qm 1.0) read as "totally off what we landed on" — Spahrep ruled the premium on B/A/S must be real and added an estimated-DPS stat. Intermediate attempts (flat-below-1.02 from ac7e7f8, and an E/D/C-flat tier-step) were both rejected in-session: "they are all on a curve." Shipped as a SINGLE continuous strictly-monotonic anchor curve over the full qm range — no flat par floor, no tier step: E/D/C rise gently off ~0.78, then steepen hard through B/A/S, premium coming from the SLOPE not a label jump. Exact anchors (shared PF_ANCH, byte-identical in api/combat/shop.js and the SQL price_factor): 0.80→0.78, 0.90→0.90, 0.94→0.95, 0.985→1.00, 1.00→1.03, 1.04→1.55 (~1.5× a C), 1.075→2.30 (~2.2×), 1.11→3.30 (~3.2×), 1.23→5.20 (S cap, ~5×), 1.30→5.80. Estimated DPS stat (damage × (100/speed) × (accuracy/100) × (1+crit/100)) added to shop stock card, sell card, and equip inspect popup, gold-accented; sell card also gained the missing CRIT field. Buy/sell honesty fixed: shop.js priceFactor and the SQL sell_weapon RPC now share the same PF_ANCH curve (before, the RPC priced raw quality_multiplier while the shop UI showed the premium curve, so the sell header lied). Implemented in code: 97f51e8 (continuous curve + estimated DPS + buy/sell parity), 5026ea1 (firm S-band premium). Decided by Spahrep, 2026-10-26.
 
+- ID: PC-DEC-080
+  Date: 2026-10-27
+  Source: Desktop session "Show weapon attacks in shop screen" (message 173888)
+  Speaker: Spahrep
+  Verbatim: "by the time a weapon is in the shop, it shoudl be complete, including attcks"
+  Status: DECIDED
+  Notes: Extends display-is-a-promise (what you see is what you get) to the ATTACK slots of shop weapons. A stock weapon is a complete, finalized instance — attacks pre-rolled at stock time alongside its stats — NOT a template holding a range of possible attacks that are rolled fresh at purchase. The shown attack(s) on the shop card are exactly the attack(s) granted on buy. This is a distinct ruling from PC-DEC-079 (pricing); it governs completeness/generation, not cost. What changed in code: the shop-buy path must grant the exact attack slots the card displayed rather than re-rolling them via generate_weapon at purchase. Applied to weapon-generation.md (Attack Slots) and shops-and-economy.md (Role of Shops). Decided by Spahrep, 2026-10-27.
+
 ## Rejected / Superseded
 
 - ID: PC-DEC-004

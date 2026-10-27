@@ -52,6 +52,8 @@ No floor, no ceiling — swings of outrageous fortune design (Spahrep 2026-09-18
 
 Max attacks on a weapon = 1 (Slot 0) + up to 4 (Slots 1–4) = 5.
 
+**Shop weapons are complete, finalized instances at stock time** (PC-DEC-080, Spahrep 2026-10-27): when a weapon enters a shop, its attacks are pre-rolled alongside its stats. It is NOT a template holding a range of possible attacks to be re-rolled at purchase. The attack(s) shown on the shop card are exactly the attack(s) granted when the player buys it — display-is-a-promise extends to the attack slots. Decided by Spahrep, 2026-10-27.
+
 ### Stat Generation Formula
 ```
 Final Damage   = Base_Damage ± rand_normal(0..Damage_Range, mean=Base_Damage)

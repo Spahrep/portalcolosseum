@@ -10,6 +10,7 @@
 - **The SSS : Shitty Short Sword** is granted on account creation / season start and is the only way to acquire it. It IS sellable for now (it's a basic weapon that would clog inventory space); later that might be changed.
   - **Template stats (flat, zero deltas):** damage 5, speed 20, accuracy 70. It is the starter weapon template, defined once in the template table (not a per-row flag) and referenced by game_config as the account-creation grant (Spahrep 2026-09-16: "damage 5, delta zero. Speed 20, delta zero. Accuracy 70, delta zero").
 - **Starting gold = 0** (Spahrep 2026-09-16: "Starting gold = 0").
+- **Shop stock is a complete, finalized weapon instance** (PC-DEC-080, Spahrep 2026-10-27): a weapon in a shop is a fully generated instance — stats AND attacks pre-rolled at stock time. It is not a template promising a range of rolls. What the player sees on the card (including the attack slots) is exactly what they receive on purchase. Decided by Spahrep, 2026-10-27.
 - Shop upgrades (boosting quality, etc.) are PMVP.
 - Player-to-player **auction houses** are PMVP (a third source of potions/weapons beyond runs and shops — mentioned in the design conversation, 2026-09-08).
 
