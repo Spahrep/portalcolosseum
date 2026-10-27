@@ -64,7 +64,7 @@ function req(path, method = 'GET', body = null) {
 // profile with gold/ap, weapon templates, consumable templates, and RPC results.
 function defaultResponder(over = {}) {
   return (snap) => {
-    if (snap.table === 'game_config') return { data: { id: 1, reroll_base_price: 50, reroll_price_multiplier: 2, ap_reset_cost: 10, sell_recovery_rate: 0.42, shop_refresh_hour: 0 } };
+    if (snap.table === 'game_config') return { data: { id: 1, reroll_base_price: 10, reroll_price_multiplier: 2, ap_reset_cost: 10, sell_recovery_rate: 0.42, shop_refresh_hour: 0 } };
     if (snap.table === 'profiles' && snap.op === 'select') {
       return { data: { id: 'user-1', gold: 1000, ap: 50, shop_stock_date: null, shop_reroll_count: 0 } };
     }
@@ -153,7 +153,7 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
     assert.equal(potions.length, 2, 'exactly 2 potions in stock');
     assert.equal(body.stock.length, 4, '4 total stock slots');
     assert.equal(typeof body.reroll_cost, 'number');
-    assert.equal(body.reroll_cost, 50, 'base reroll cost at count 0');
+    assert.equal(body.reroll_cost, 10, 'base reroll cost at count 0');
     assert.equal(body.gold, 1000);
     assert.equal(body.ap, 50);
     assert.equal(typeof body.can_sell_last_weapon, 'boolean');
@@ -222,7 +222,7 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
     const body = await res.json();
     assert.equal(body.ok, true);
     assert.ok(Array.isArray(body.stock));
-    assert.equal(body.reroll_cost, 100, 'cost doubles after one reroll (50 * 2^1)');
+    assert.equal(body.reroll_cost, 20, 'cost doubles after one reroll (10 * 2^1)');
     assert.ok(body.new_gold < 1000, 'gold deducted for reroll');
   });
 
@@ -304,7 +304,7 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
     const body = await res.json();
     assert.equal(body.ok, true);
     assert.equal(body.shop_reroll_count, 0);
-    assert.equal(body.reroll_cost, 50, 'cost back to base');
+    assert.equal(body.reroll_cost, 10, 'cost back to base');
     assert.equal(body.new_ap, 40, 'AP deducted by ap_reset_cost (10)');
   });
 

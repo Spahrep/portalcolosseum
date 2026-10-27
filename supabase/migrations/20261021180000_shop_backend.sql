@@ -4,7 +4,7 @@
 
 -- 1. Shop tunables on the single-row game_config table
 ALTER TABLE public.game_config
-  ADD COLUMN IF NOT EXISTS reroll_base_price integer NOT NULL DEFAULT 50,
+  ADD COLUMN IF NOT EXISTS reroll_base_price integer NOT NULL DEFAULT 10,
   ADD COLUMN IF NOT EXISTS reroll_price_multiplier numeric NOT NULL DEFAULT 2.0,
   ADD COLUMN IF NOT EXISTS ap_reset_cost integer NOT NULL DEFAULT 10,
   ADD COLUMN IF NOT EXISTS sell_recovery_rate numeric NOT NULL DEFAULT 0.42,

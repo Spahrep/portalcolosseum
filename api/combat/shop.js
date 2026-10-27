@@ -26,7 +26,7 @@
 
 // --- config reads ---
 const DEFAULT_CFG = {
-  reroll_base_price: 50,
+  reroll_base_price: 10,
   reroll_price_multiplier: 2.0,
   ap_reset_cost: 10,
   sell_recovery_rate: 0.42,
@@ -37,7 +37,7 @@ const DEFAULT_CFG = {
 async function getConfig(admin) {
   try {
     const { data } = await admin.from('game_config')
-      .select('reroll_base_price, reroll_price_multiplier, ap_reset_cost, sell_recovery_rate, shop_refresh_hour, consumable_price_multiplier')
+      .select('reroll_base_price, reroll_price_multiplier, ap_reset_cost, sell_recovery_rate, shop_refresh_hour')
       .eq('id', 1).maybeSingle();
     if (data) return { ...DEFAULT_CFG, ...data };
   } catch (e) { /* fall through */ }
