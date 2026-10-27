@@ -288,13 +288,13 @@ function decorateStock(rows, cfg) {
     if (r.kind === 'weapon') {
       return {
         slot: r.slot, kind: 'weapon', template_id: r.template_id, name,
-        tier: r.tier, quality_multiplier: Number(r.quality_multiplier), buy_price: buy,
+        tier: r.tier, quality_multiplier: Number(r.quality_multiplier), price_factor: Math.round(priceFactor(qm) * 10000) / 10000, buy_price: buy,
         damage: r.damage, speed: r.speed, accuracy: r.accuracy, crit_chance: r.crit_chance,
       };
     }
     return {
       slot: r.slot, kind: 'consumable', template_id: r.template_id, name,
-      tier: r.tier, quality_multiplier: Number(r.quality_multiplier), buy_price: buy,
+      tier: r.tier, quality_multiplier: Number(r.quality_multiplier), price_factor: Math.round(priceFactor(qm) * 10000) / 10000, buy_price: buy,
       rolled_floor: r.rolled_floor, rolled_window: r.rolled_window,
     };
   });
@@ -347,6 +347,8 @@ export async function handleShop({ request, path, method, admin, user, json }) {
         name: inst.weapon_template?.name || 'Unknown',
         tier: inst.tier || 'C',
         quality_multiplier: Number(inst.quality_multiplier) || 1,
+        price_factor: Math.round(priceFactor(qm) * 10000) / 10000,
+        sell_multiplier: Math.round(priceFactor(qm) * Number(cfg.sell_recovery_rate) * 10000) / 10000,
         damage: inst.damage, speed: inst.speed, accuracy: inst.accuracy,
         sell_price: sellPriceOf(basePrice, qm, cfg.sell_recovery_rate),
       };
