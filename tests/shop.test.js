@@ -62,16 +62,28 @@ function req(path, method = 'GET', body = null) {
 
 // Default responder: config row, empty shop_stock (forces a fresh roll), a
 // profile with gold/ap, weapon templates, consumable templates, and RPC results.
+// shop_stock is modeled statefully (insert persists, select replays, delete removes)
+// so ensureStock reads back exactly what it rolled — mirroring the real DB.
 function defaultResponder(over = {}) {
+  const stockCache = [];
+  const today = new Date().toISOString().slice(0, 10);
   return (snap) => {
     if (snap.table === 'game_config') return { data: { id: 1, reroll_base_price: 10, reroll_price_multiplier: 2, ap_reset_cost: 10, sell_recovery_rate: 0.42, shop_refresh_hour: 0 } };
     if (snap.table === 'profiles' && snap.op === 'select') {
-      return { data: { id: 'user-1', gold: 1000, ap: 50, shop_stock_date: null, shop_reroll_count: 0 } };
+      return { data: { id: 'user-1', gold: 1000, ap: 50, shop_stock_date: today, shop_reroll_count: 0 } };
     }
     if (snap.table === 'profiles' && snap.op === 'update') return { data: null };
-    if (snap.table === 'shop_stock' && snap.op === 'select') return { data: [] };
-    if (snap.table === 'shop_stock' && snap.op === 'delete') return { data: null };
-    if (snap.table === 'shop_stock' && snap.op === 'insert') return { data: null };
+    if (snap.table === 'shop_stock' && snap.op === 'select') return { data: [...stockCache] };
+    if (snap.table === 'shop_stock' && snap.op === 'delete') {
+      // delete().eq(user_id).eq(stock_date) — clear all cached rows
+      stockCache.length = 0;
+      return { data: null };
+    }
+    if (snap.table === 'shop_stock' && snap.op === 'insert') {
+      const rows = Array.isArray(snap.payload) ? snap.payload : [snap.payload];
+      stockCache.push(...rows.map(r => ({ ...r })));
+      return { data: null };
+    }
     if (snap.table === 'weapon_template') return { data: [
       { id: 3, name: 'Greatsword', base_damage: 55, damage_range: 8, base_speed: 35, speed_range: 4, base_accuracy: 82, accuracy_range: 6, crit_base: 5, crit_range: 0, base_price: 45 },
     ] };
@@ -169,7 +181,9 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
     const admin = mockAdmin(defaultResponder());
     __setAdminClientForTests(admin);
     // GET first to establish stock, then buy slot 1
-    await GET(req('/shop'));
+    const getRes = await GET(req('/shop'));
+    const getBody = await getRes.json();
+    const shownSlot = getBody.stock.find(r => r.slot === 1);
     const res = await POST(req('/shop/buy', 'POST', { slot: 1 }));
     assert.equal(res.status, 200, await res.clone().text());
     const body = await res.json();
@@ -179,6 +193,20 @@ describe('weapon shop backend (PC-DEC-074/076)', () => {
     // generate_weapon RPC was called
     const rpc = admin.calls.find(c => c.table === 'rpc:generate_weapon');
     assert.ok(rpc, 'generate_weapon RPC called');
+    // PC-XXX: buyer gets EXACTLY the stock-shown roll — the fresh instance is overwritten
+    // with the displayed stats, not the generate_weapon re-roll. Assert the update payload
+    // mirrors slot 1's stock item.
+    const upd = admin.calls.find(c => c.table === 'weapon_instance' && c.op === 'update');
+    assert.ok(upd, 'weapon_instance update performed (grant-what-shown)');
+    const updPayload = upd.payload;
+    // the overwrite must mirror exactly what the stock showed for the bought slot
+    // (the slot 1 item captured from the initial GET /shop above)
+    assert.equal(updPayload.damage, shownSlot.damage);
+    assert.equal(updPayload.speed, shownSlot.speed);
+    assert.equal(updPayload.accuracy, shownSlot.accuracy);
+    assert.equal(updPayload.quality_multiplier, shownSlot.quality_multiplier);
+    assert.equal(updPayload.tier, shownSlot.tier);
+    assert.equal(updPayload.grade, shownSlot.tier);
     // the sold slot is removed from today's shop_stock so it leaves the store
     const del = admin.calls.find(c => c.table === 'shop_stock' && c.op === 'delete' && c.filters.some(f => f[0] === 'eq' && f[1] === 'slot' && f[2] === 1));
     assert.ok(del, 'sold slot 1 deleted from shop_stock');

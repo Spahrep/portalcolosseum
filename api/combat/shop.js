@@ -374,12 +374,38 @@ export async function handleShop({ request, path, method, admin, user, json }) {
         if (rpcRes.error) throw rpcRes.error;
         if (!rpcRes.data || !rpcRes.data.id) throw new Error('generate_weapon returned no id');
         instanceId = rpcRes.data.id;
+        // Buyer-fraud fix: grant EXACTLY the shown roll — the RPC re-rolls stats
+        // independently, so overwrite the fresh instance with the stock-displayed
+        // damage/speed/accuracy/crit/qm/tier (what the GET /shop card showed).
+        const upd = await admin.from('weapon_instance')
+          .update({
+            damage: item.damage,
+            speed: item.speed,
+            accuracy: item.accuracy,
+            crit_chance: item.crit_chance,
+            quality_multiplier: item.quality_multiplier,
+            tier: item.tier,
+            grade: item.tier,
+          })
+          .eq('id', instanceId);
+        if (upd.error) throw upd.error;
       } else {
         const rpcRes = await admin.rpc('generate_consumable_instance', { p_template_id: item.template_id, p_user_id: userId });
         if (rpcRes.error) throw rpcRes.error;
         const cid = rpcRes.data && (rpcRes.data.id ?? rpcRes.data);
         if (!cid) throw new Error('generate_consumable_instance returned no id');
         instanceId = cid;
+        // grant EXACTLY the shown roll for consumables too (same re-roll mismatch)
+        const upd = await admin.from('consumable_instance')
+          .update({
+            rolled_floor: item.rolled_floor,
+            rolled_window: item.rolled_window,
+            rolled_speed: item.rolled_speed,
+            crit_chance: item.crit_chance,
+            grade: item.tier,
+          })
+          .eq('id', instanceId);
+        if (upd.error) throw upd.error;
       }
       // charge gold and remove the sold slot from today's stock so it leaves the store
       await admin.from('profiles').update({ gold: gold - buyPrice }).eq('id', userId);
