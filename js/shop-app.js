@@ -193,7 +193,7 @@ function renderItemCard(item) {
         ${tierBadge(item.tier)}
       </div>
       ${statsHtml}
-      <div class="shop-item-price">${item.buy_price}g <span class="shop-qmult">QM ×${item.quality_multiplier}</span> <span class="shop-cmult">Cost ×${item.price_factor}</span></div>
+      <div class="shop-item-price">${item.buy_price}g <span class="shop-qmult">×${item.quality_multiplier}</span></div>
       <button class="shop-buy-btn" data-slot="${item.slot}">BUY</button>
     </div>
   `;
@@ -208,7 +208,7 @@ function renderSellCard(item) {
         ${tierBadge(item.tier)}
       </div>
       <div class="shop-stats">DMG ${item.damage} • SPD ${item.speed} • ACC ${item.accuracy} • CRIT ${item.crit_chance}%${dps != null ? ` • <span class="shop-dps">DPS ${dps}</span>` : ''}</div>
-      <div class="shop-item-price">${item.sell_price}g <span class="shop-qmult">QM ×${item.quality_multiplier}</span> <span class="shop-cmult">Cost ×${item.price_factor} (sell ×${item.sell_multiplier})</span></div>
+      <div class="shop-item-price">${item.sell_price}g <span class="shop-qmult">×${item.quality_multiplier}</span></div>
       <button class="shop-sell-item-btn" data-instance="${item.instance_id}">SELL</button>
     </div>
   `;
