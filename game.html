@@ -155,6 +155,7 @@
       <div class="shop-header" id="shop-header"></div>
       <div class="shop-message" id="shop-message" hidden></div>
       <div class="shop-stock-grid" id="shop-stock-grid"></div>
+      <div id="shop-attack-pop" class="shop-attack-pop" hidden></div>
     </div>
   </div>
 
@@ -195,7 +196,8 @@
     .shop-attack-chip { display: inline-block; background: #1d1d1d; border: 1px solid #666; color: #ffcc66; padding: 1px 8px; margin: 0 4px 3px 0; cursor: pointer; font-family: 'Pixeloid Mono', monospace; font-size: 12px; }
     .shop-attack-chip.shop-focused, .shop-attack-chip:focus { border-color: #ffcc66; background: #2a2418; outline: 2px solid #ffcc66; }
     .shop-attack-chip:hover { border-color: #ffcc66; background: #2a2418; }
-    .shop-attack-pop { position: fixed; z-index: 300; background: rgba(8,10,14,0.97); border: 3px double #7bc4ff; outline: 2px solid #000; box-shadow: 0 0 30px rgba(123, 196, 255, 0.5); padding: 14px 16px; font-family: 'Pixeloid Mono', monospace; color: #f8f8f0; font-size: 13px; line-height: 1.6; max-width: 90vw; }
+    .shop-attack-pop { position: absolute; z-index: 300; background: rgba(8,10,14,0.97); border: 3px double #7bc4ff; outline: 2px solid #000; box-shadow: 0 0 30px rgba(123, 196, 255, 0.5); padding: 14px 16px; font-family: 'Pixeloid Mono', monospace; color: #f8f8f0; font-size: 13px; line-height: 1.6; max-width: 90vw; }
+    .shop-attack-pop[hidden] { display: none; }
     .shop-attack-pop-title { font-size: 17px; font-weight: 700; color: #7bc4ff; margin-bottom: 4px; }
     .shop-attack-pop-item { font-size: 12px; color: #888; margin-bottom: 8px; }
     .shop-attack-pop-stats { color: #f8f8f0; margin: 4px 0 6px; }

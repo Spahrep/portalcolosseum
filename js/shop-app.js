@@ -31,7 +31,6 @@ let currentData = null;
 let focusIndex = -1;
 let focusables = [];
 let cardDetailIndex = -1; // >=0 = inside a selected card, index into its BUY/chips
-let popEl = null;         // floating attack-info node
 
 // --- keyboard navigation ---
 // Top-level focusables: item/sell cards, then the header action buttons
@@ -205,15 +204,20 @@ function createModalIfNeeded() {
   modal.addEventListener('mouseout', (e) => {
     const chip = e.target.closest('.shop-attack-chip');
     if (!chip) return;
-    const enteringAnotherChip = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.shop-attack-chip');
-    if (enteringAnotherChip) return;
-    const leavingIt = chip.contains(e.relatedTarget);
-    if (!leavingIt) {
-      hideAttackPop();
-    }
+    // Moving onto the floating node itself (or onto another chip) must NOT hide
+    // it — the pop sits beside the card and is a legitimate hover target.
+    const rt = e.relatedTarget;
+    if (rt && rt.closest && (rt.closest('.shop-attack-chip') || rt.closest('.shop-attack-pop'))) return;
+    const leavingIt = !rt || chip.contains(rt); // null relatedTarget (left window) => hide
+    if (leavingIt) hideAttackPop();
   });
   // Hide the floating node when the mouse leaves the grid entirely.
   stockGrid.addEventListener('mouseleave', hideAttackPop);
+  // Touch / tap: selecting an attack chip pops the node too (mobile has no hover).
+  modal.addEventListener('pointerdown', (e) => {
+    const chip = e.target.closest('.shop-attack-chip');
+    if (chip) showAttackPop(chip.closest('.shop-item-card'), chip.dataset.attackIdx);
+  });
 }
 
 function tierBadge(tier) {
@@ -304,12 +308,16 @@ function attackDetailHtml(a) {
   return `<div class="shop-attack-pop-stats">${parts.length ? parts.join(' • ') : 'No special stats'}</div>${desc}`;
 }
 
+// The floating pop is a persistent node inside the shop frame (declared in
+// game.html as #shop-attack-pop — mirrors combat's #action-readout). We only
+// fill + position it on hover/select; it never leaves the shop's stacking
+// context, so it can't be lost behind other layers or trigger hover-capture.
+let popEl = null;
+let popFrame = null;
 function ensurePopEl() {
   if (popEl) return popEl;
-  popEl = document.createElement('div');
-  popEl.className = 'shop-attack-pop';
-  popEl.hidden = true;
-  document.body.appendChild(popEl);
+  popEl = document.getElementById('shop-attack-pop');
+  popFrame = popEl ? popEl.parentElement : null; // .shop-frame (position:relative)
   return popEl;
 }
 
@@ -317,13 +325,17 @@ function hideAttackPop() {
   if (popEl) popEl.hidden = true;
 }
 
-// Float the attack-info node beside the owning card, clamped to the viewport.
+// Float the attack-info node beside the owning card, clamped within the frame.
+// The pop is position:absolute inside .shop-frame, so convert the card's
+// viewport rect into the frame's local coordinates.
 function positionPopNear(card, el) {
+  const frame = popFrame || ensurePopEl();
+  const fr = frame.getBoundingClientRect();
   const r = card.getBoundingClientRect();
   const popW = 340;
-  let left = Math.min(r.right + 12, window.innerWidth - popW - 8);
-  if (left < 8) left = Math.max(8, r.left - popW - 12);
-  const top = Math.max(8, Math.min(r.top, window.innerHeight - 90));
+  let left = Math.min(r.right - fr.left + 12, frame.clientWidth - popW - 8);
+  if (left < 8) left = Math.max(8, r.left - fr.left - popW - 12);
+  const top = Math.max(8, Math.min(r.top - fr.top, frame.clientHeight - 90));
   el.style.left = left + 'px';
   el.style.top = top + 'px';
   el.style.width = popW + 'px';
@@ -334,7 +346,7 @@ function showAttackPop(card, idx) {
   const slot = card?.dataset.slot;
   const item = findStockItem(slot);
   const a = idx != null ? (item?.attacks?.[Number(idx)]) : null;
-  if (!a || !card) {
+  if (!a || !card || !el) {
     hideAttackPop();
     return;
   }
