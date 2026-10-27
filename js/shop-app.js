@@ -337,13 +337,26 @@ function attachActionListeners() {
   if (rerollBtn) {
     rerollBtn.onclick = async () => {
       rerollBtn.disabled = true;
+      const orig = rerollBtn.textContent;
+      // INSTANT cue before the network returns — no wondering whether to re-click
+      rerollBtn.textContent = 'REROLLING…';
       try {
         const res = await apiCall('/shop/reroll', 'POST');
         if (res.ok) {
+          // hold a clear confirmation so even an instant response is seen
+          rerollBtn.textContent = 'REROLLED ✓';
+          await new Promise(r => setTimeout(r, 380));
           await refreshShop(); // full fetch: header gold/AP/reroll-cost + new stock
-        } else showShopMessage(shopErrorMessage(res) || 'Reroll failed', true);
-      } catch (e) { showShopMessage(shopErrorFromException(e), true); }
-      finally { rerollBtn.disabled = false; }
+        } else {
+          rerollBtn.textContent = orig;
+          rerollBtn.disabled = false;
+          showShopMessage(shopErrorMessage(res) || 'Reroll failed', true);
+        }
+      } catch (e) {
+        rerollBtn.textContent = orig;
+        rerollBtn.disabled = false;
+        showShopMessage(shopErrorFromException(e), true);
+      }
     };
   }
   // AP reset
@@ -351,13 +364,26 @@ function attachActionListeners() {
   if (apBtn) {
     apBtn.onclick = async () => {
       apBtn.disabled = true;
+      const orig = apBtn.textContent;
+      // INSTANT cue before the network returns — no wondering whether to re-click
+      apBtn.textContent = 'RESETTING…';
       try {
         const res = await apiCall('/shop/ap-reset', 'POST');
         if (res.ok) {
+          // hold a clear confirmation so even an instant response is seen
+          apBtn.textContent = 'RESET ✓';
+          await new Promise(r => setTimeout(r, 380));
           await refreshShop(); // full fetch: header gold/AP/reroll-cost all current
-        } else showShopMessage(shopErrorMessage(res) || 'AP reset failed', true);
-      } catch (e) { showShopMessage(shopErrorFromException(e), true); }
-      finally { apBtn.disabled = false; }
+        } else {
+          apBtn.textContent = orig;
+          apBtn.disabled = false;
+          showShopMessage(shopErrorMessage(res) || 'AP reset failed', true);
+        }
+      } catch (e) {
+        apBtn.textContent = orig;
+        apBtn.disabled = false;
+        showShopMessage(shopErrorFromException(e), true);
+      }
     };
   }
 }
